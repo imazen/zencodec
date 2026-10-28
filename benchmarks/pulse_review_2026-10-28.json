@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-28",
+  "scope": "Historical native correctness failures and subsequent qualified fixes; poll counts, not timing performance.",
+  "webp": {
+    "public_baseline": "872289ffd22065f02a58d3141feba57cf67b4a5f",
+    "executed_baseline": "33b75d3733d244384533a0f73f8692c46c0ce382",
+    "baseline_delta": "zensim git URL repair only, same dependency revisions",
+    "local_test_commit": "a6a57c7268a18df24170178d474093d70f182a68",
+    "test_file": "tests/pulse_polls.rs",
+    "command": "cargo test --no-fail-fast --color never --features inventory --test pulse_polls",
+    "result": "2 passed, 4 failed; three double-poll/equation witnesses and one timeout-reason mismatch",
+    "counts": {
+      "lossy_decode": {
+        "legacy": 6,
+        "quiet": 11,
+        "reporting": 11
+      },
+      "animation_render_next_frame": {
+        "legacy": 99,
+        "quiet": 193,
+        "reporting": 193
+      },
+      "lossy_encode": {
+        "native_stop": 24,
+        "native_pulse": 28,
+        "legacy": 24,
+        "quiet": 56,
+        "reporting": 56
+      }
+    },
+    "reason_failure": {
+      "route": "lossy decode, Legacy",
+      "poll": 5,
+      "total_polls": 6,
+      "expected": "Stopped(TimedOut)",
+      "observed": "Stopped(Cancelled)"
+    },
+    "whole_run_receipt": "run-heavy: done rc=1 345s | peak-RSS 0.67GiB | min-avail 5603MiB | peak-load 2.16",
+    "receipt_scope": "Whole run52, including builds and failing migrated-head/mutation gates; not native working-memory or throughput measurement",
+    "qualified_fix": {
+      "revision": "5a6cce275b84f2e56f81cfed0ebd59b9345b23b7",
+      "local_run": "52d",
+      "steps_passed": 14,
+      "ci": "https://github.com/imazen/zenwebp/actions/runs/40686426847",
+      "recompress_ci": "https://github.com/imazen/zenwebp/actions/runs/40686426806",
+      "ci_result": "20/20 CI jobs; 3/3 recompress jobs success",
+      "receipt": "run-heavy: done rc=0 339s | peak-RSS 0.66GiB | min-avail 4266MiB | peak-load 3.58",
+      "scope": "One-shot cancellation, original timeout reason, job/per-call and duplicate-poll controls; build/test resource receipt, not encoder memory or speed."
+    }
+  },
+  "gif": {
+    "revision": "efb7e43bee86df097f572589dc17b2a9903faa3f",
+    "ci": "https://github.com/imazen/zengif/actions/runs/40673732867",
+    "ci_result": "12/12 jobs success",
+    "poll_census": "11 native operations retain baseline counts; no throughput claim"
+  },
+  "pending": [
+    "Portable per-call progress composition with a retained job pulse",
+    "Exact stop reasons through zenpipe and native IMI",
+    "Zenpipe native dependency migrations and full CI qualification",
+    "Transcode sequence preservation and explicit selection",
+    "Cancellation latency and throughput measurements"
+  ],
+  "zenpipe": {
+    "revision": "363f7c50992e21ec18d99513585da30e5d91085b",
+    "request_pulse_fix": "b13e550f",
+    "imagejob_pulse_fix": "60127aaf",
+    "request_witness": "Before fix: GIF animation codec never polled request Pulse; after fix: pulse_retention 2 passed.",
+    "imagejob_witness": "Before fix: stopped operation rendered first frame and hit pixel limit; after fix: stopped at entry and every injected poll.",
+    "request_run_receipt": "run-heavy: done rc=0 58s | peak-RSS 0.38GiB | min-avail 4668MiB | peak-load 1.06",
+    "imagejob_run_receipt": "run-heavy: done rc=0 50s | peak-RSS 0.53GiB | min-avail 4593MiB | peak-load 2.99",
+    "frame_format_controls": "20 executed, 20 passed, 0 ignored; five failing-first behavioral controls",
+    "frame_run_receipt": "run-heavy: done rc=1 75s | peak-RSS 0.40GiB | min-avail 4910MiB | peak-load 1.19",
+    "frame_run_failures": [
+      "Latency step: 0 executed, 10 ignored; not measured",
+      "imageflow-compat strict Clippy: 65 existing lints, 0 new; not clean"
+    ],
+    "ci": "https://github.com/imazen/zenpipe/actions/runs/40693652904",
+    "ci_result": "FAIL: pinned native AVIF/HEIC/zenextras migrations incomplete; main test/clippy steps pass but later extras do not",
+    "sequence_issue": "https://github.com/imazen/zenpipe/issues/111"
+  }
+}

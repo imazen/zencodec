@@ -1,0 +1,33 @@
+{
+  "base": "11d61e8933fc689823c3391627db1246086f7105",
+  "command": "just spatial-placement-check <artifacts>",
+  "log": "zencodec-placement-qualified-2026-10-26.log",
+  "sha256": "e60c96ef50808f79e5187b3e2498e9d8814d6ce4f47612948a7386aa81d887ad",
+  "results": [
+    "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.10s",
+    "run-heavy: done rc=0 3s | peak-RSS 0.54GiB | min-avail 13360MiB | peak-load 0.18"
+  ],
+  "scope": "Private signed placement/local region intersection, independent exhaustive point membership, strided copying, coordinate extremes and actual libjxl raw-frame extents. One existing source-replacement control also matches the test filter.",
+  "limits": [
+    "Native raw-layer output remains unsupported",
+    "Negative origins qualified synthetically only",
+    "No orientation/blend/dependency composition contract",
+    "No performance or total-memory claim"
+  ],
+  "native_header_regression": "https://github.com/imazen/zenjxl-decoder/commit/2bb4d0c58c85aaa6075f2fa15db5f3f3959c8318",
+  "guide": {
+    "log": "zencodec-placement-guide-2026-10-26.log",
+    "sha256": "f231e107abf75967684398dabc96490867da3b6fb9b2570de73aa2ac5aef5af7",
+    "result": [
+      "run-heavy: done rc=1 5s | peak-RSS 0.17GiB | min-avail 13355MiB | peak-load 0.10"
+    ]
+  },
+  "guide_followthrough": {
+    "reason": "The new eighth improvement card exposed a fixed seven-card expectation. Update the expected count and exercise the new card with keyboard and scope assertions.",
+    "log": "zencodec-placement-guide-fixed-2026-10-26.log",
+    "sha256": "4af62bc5b0aece31ff4d30bd0243a28fd0fa405e60d8a2fe597112acfc3a8b9b",
+    "result": [
+      "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13195MiB | peak-load 0.45"
+    ]
+  }
+}

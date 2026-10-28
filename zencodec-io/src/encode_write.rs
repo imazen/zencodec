@@ -96,6 +96,9 @@ pub struct EncodeWriteReport {
 /// On an error after bytes were written, the output is a prefix of a file
 /// that will never be finished: abort the transport rather than end it
 /// normally.
+#[deprecated(
+    note = "Use row_encode::encode for policy-controlled rows, or Encoder::encode followed by writing its output for one-shot encoding"
+)]
 pub fn encode_to_writer<E: Encoder>(
     mut enc: E,
     pixels: PixelSlice<'_>,

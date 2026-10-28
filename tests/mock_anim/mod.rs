@@ -182,7 +182,7 @@ impl DecoderConfig for MockDecoderConfig {
 
 pub struct MockDecodeJob {
     limits: ResourceLimits,
-    stop: Option<zencodec::StopToken>,
+    stop: Option<zencodec::SharedPulse>,
     policy: Option<zencodec::decode::DecodePolicy>,
     crop: Option<(u32, u32, u32, u32)>,
     orientation: Option<zencodec::OrientationHint>,
@@ -196,7 +196,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
     type StreamDec = MockStreamDec<'a>;
     type AnimationFrameDec = MockAnimationFrameDec;
 
-    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
+    fn with_pulse(mut self, stop: zencodec::SharedPulse) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -415,7 +415,7 @@ impl AnimationFrameDecoder for MockAnimationFrameDec {
 
     fn render_next_frame(
         &mut self,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, MockError> {
         if let Some(s) = stop {
             s.check()?;
@@ -458,7 +458,7 @@ impl AnimationFrameDecoder for MockAnimationFrameDec {
 
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
         sink: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, MockError> {
         zencodec::helpers::copy_frame_to_sink(self, stop, sink)
@@ -585,7 +585,7 @@ impl EncoderConfig for MockEncoderConfig {
 
 pub struct MockEncodeJob {
     limits: ResourceLimits,
-    stop: Option<zencodec::StopToken>,
+    stop: Option<zencodec::SharedPulse>,
     metadata: Option<Metadata>,
     canvas_size: Option<(u32, u32)>,
     loop_count: Option<Option<u32>>,
@@ -598,7 +598,7 @@ impl EncodeJob for MockEncodeJob {
     type Enc = MockEnc;
     type AnimationFrameEnc = MockAnimationFrameEnc;
 
-    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
+    fn with_pulse(mut self, stop: zencodec::SharedPulse) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -766,7 +766,7 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), MockError> {
         if let Some(s) = stop {
             s.check()?;
@@ -782,7 +782,7 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
         Ok(())
     }
 
-    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, MockError> {
+    fn finish(self, stop: Option<&dyn zencodec::Pulse>) -> Result<EncodeOutput, MockError> {
         if let Some(s) = stop {
             s.check()?;
         }

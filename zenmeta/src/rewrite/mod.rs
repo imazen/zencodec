@@ -5,24 +5,24 @@ use alloc::{borrow::Cow, vec::Vec};
 use core::ops::Range;
 use zencodec::{
     Orientation, enough,
-    metadata_rewrite::{Action, Compression, Entry, Error, Plan, Request, Services},
+    metadata_rewrite::{Action, Compression, Entry, Error, Plan, RewriteRequest, Services},
 };
 mod exif;
 
 /// Shared request validation and metadata packet processing.
 #[derive(Clone)]
 pub struct Context<'a> {
-    request: Request<'a>,
+    request: RewriteRequest<'a>,
 }
 impl<'a> core::ops::Deref for Context<'a> {
-    type Target = Request<'a>;
+    type Target = RewriteRequest<'a>;
     fn deref(&self) -> &Self::Target {
         &self.request
     }
 }
 impl<'a> Context<'a> {
     /// Validate a metadata-only request before invoking a container walker.
-    pub fn new(request: &Request<'a>) -> Result<Self, Error> {
+    pub fn new(request: &RewriteRequest<'a>) -> Result<Self, Error> {
         let context = Self {
             request: request.clone(),
         };
@@ -34,7 +34,7 @@ impl<'a> Context<'a> {
     }
     /// Poll cancellation while preserving the caller's stop reason.
     pub fn check(&self) -> Result<(), Error> {
-        self.stop().check().map_err(|reason| match reason {
+        self.pulse().check().map_err(|reason| match reason {
             enough::StopReason::Cancelled => Error::Cancelled,
             other => Error::Stopped(other),
         })?;
@@ -85,7 +85,7 @@ impl<'a> Context<'a> {
         }
         let out = self
             .services()?
-            .rewrite_xmp(xml, self.max_metadata(), self.stop())?;
+            .rewrite_xmp(xml, self.max_metadata(), self.pulse())?;
         if let Some(ref bytes) = out {
             self.packet(bytes.len())?;
         }
@@ -105,7 +105,7 @@ impl<'a> Context<'a> {
         }
         let out = self
             .services()?
-            .normalize_icc(bytes, self.max_metadata(), self.stop())?;
+            .normalize_icc(bytes, self.max_metadata(), self.pulse())?;
         if let Some(ref bytes) = out {
             self.packet(bytes.len())?;
             if bytes.len() < 128 || bytes.get(36..40) != Some(b"acsp") {
@@ -120,7 +120,7 @@ impl<'a> Context<'a> {
         self.packet(bytes.len())?;
         let out = self
             .services()?
-            .decompress(kind, bytes, self.max_metadata(), self.stop())?;
+            .decompress(kind, bytes, self.max_metadata(), self.pulse())?;
         self.packet(out.len())?;
         self.check()?;
         Ok(out)

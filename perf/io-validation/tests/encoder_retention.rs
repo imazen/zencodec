@@ -115,6 +115,40 @@ fn fixture() -> Arc<[u8]> {
     // The original raw fixture is dropped before the observed drive starts.
 }
 
+#[tokio::test]
+async fn production_work_quotas_preserve_native_qoi_bytes() {
+    let encoded = fixture();
+    for quota in [1, 7, 64, usize::MAX] {
+        let decoder = QoiDecoderConfig::new()
+            .job()
+            .into_incremental_decoder(&[])
+            .unwrap();
+        let encoder = QoiEncoderConfig::new().job().encoder().unwrap();
+        let mut source = BytesSource(encoded.clone());
+        let mut output = Vec::new();
+        let options = DriveOptions::default()
+            .with_limits(zencodec_io::IoLimits::new(65536, 8, 2))
+            .with_work_quota(zencodec_io::WorkQuota::new(quota).unwrap());
+        let written = transcode_async(
+            decoder,
+            encoder,
+            &mut source,
+            &mut output,
+            Inline,
+            options,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(written as usize, encoded.len());
+        assert_eq!(
+            output.as_slice(),
+            encoded.as_ref(),
+            "quota {quota} changed native QOI bytes"
+        );
+    }
+}
+
 async fn observe(encoded: Arc<[u8]>, retain: bool, finish_first: bool) -> (Arc<State>, GateWriter) {
     let state = Arc::new(State::default());
     let encoder = Retaining {
@@ -209,7 +243,7 @@ mod policy;
 async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting() {
     use policy::*;
     use std::convert::Infallible;
-    use zencodec::{At, Unstoppable};
+    use zencodec::{At, NoPulse};
     let encoded = fixture();
     for retains_whole_raster in [true, false] {
         // This adapter knows which control wrapper it configured. A general
@@ -255,7 +289,7 @@ async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting
                 },
                 Context::default(),
                 &mut resolver,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         let finish_first = selected.alternative.action == Action::Execution(Execution::Buffered);

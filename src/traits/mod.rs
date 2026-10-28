@@ -21,6 +21,7 @@
 //! native pixels with ICC/CICP metadata. Encoders accept pixels as-is and
 //! embed the provided metadata. The caller handles CMS transforms.
 
+mod control;
 mod decoder;
 mod decoding;
 mod dyn_decoding;
@@ -30,6 +31,11 @@ mod encoding;
 mod incremental;
 mod unsupported;
 
+pub use control::{
+    BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+    DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
+    InterpretationUnavailable, erase_controlled,
+};
 pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{
@@ -40,7 +46,8 @@ pub use encoder::{AnimationFrameEncoder, Encoder};
 pub use encoding::{EncodeJob, EncoderConfig};
 pub use incremental::{
     BatchMeta, ByteRange, DynIncrementalDecoder, ErasedError, Event, Fused, IncrementalDecode,
-    IncrementalDecoderShim, Input, MetadataUpdate, Progress, Request, StepError, erase_incremental,
+    IncrementalDecoderShim, Input, InputRequest, MetadataUpdate, Progress, StepError,
+    erase_incremental,
 };
 pub use unsupported::Unsupported;
 
@@ -51,3 +58,8 @@ use alloc::boxed::Box;
 /// Used by [`EncodeJob::dyn_encoder`], [`DecodeJob::dyn_decoder`], and
 /// related methods that erase the concrete codec type.
 pub type BoxedError = Box<dyn core::error::Error + Send + Sync>;
+
+pub(crate) use dyn_encoding::erase_send_job;
+
+#[allow(deprecated)]
+pub use incremental::Request;

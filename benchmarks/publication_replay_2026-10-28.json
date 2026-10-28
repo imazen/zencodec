@@ -1,0 +1,229 @@
+{
+  "date": "2026-10-28",
+  "source": {
+    "base": "a478b91e641eb9d9f605b547b6ff00c76ee15e1d",
+    "tree": "363a08a00961689ef501537991046880ddb756d8",
+    "patch_sha256": {
+      "01-core-family-e59b3803.patch": "ae6441e681d4ef6a4c8319d6ffd57fa57e0218367ab9443cb9821bee93f1d3ae",
+      "02-publication-witness.patch": "d42b2c4015b26f3b3849bc7ab19379d7f4c359e03da9538b132de43b46c535f3",
+      "03-zensimx-edges-from-725d05c2.patch": "bfddaa6da8d36b6e7d3ec90936a1086bdfef7f895ab9700d17e6d269271d7412"
+    }
+  },
+  "core": "e59b3803fc5b212bf4c92648ead4299c4ff0640a",
+  "experiment": "zenpipe c2aa6106d89cc36e2a323acb7399610b496a9cec plus unchanged-revision zensim repository URL repair",
+  "scope": "Standalone experiment only; no public convenience API promoted",
+  "checks": {
+    "unit": 7,
+    "native": 23,
+    "ordinary_unchanged": 16,
+    "graphs_without_split_family": 5,
+    "strict_clippy": [
+      "ordinary",
+      "witness",
+      "witness+async"
+    ]
+  },
+  "receipt": "run-heavy: done rc=0 11s | peak-RSS 0.33GiB | min-avail 4726MiB | peak-load 0.65",
+  "resource_scope": "Build/test process, not native throughput or a retained-memory bound",
+  "first_attempt": "Harness required unused companion crates in every fuzz graph; stopped before tests. Corrected to require core and reject split sources for every present companion. Native assertions unchanged.",
+  "commands": [
+    "just publication-witness-prepare ZENPIPE_CHECKOUT NEW_EXPORT",
+    "just publication-witness-check NEW_EXPORT NEW_RESULTS"
+  ],
+  "helper_sha256": {
+    "prepare.py": "e413d0c3da7e92b65a98a4606f1d9fb5861464ab969caf9b07f932a0187c73d6",
+    "check.py": "b23de0ef5192fdccfb3f1ad106ae8f2c53dc5744cf1390708f78ff9c0022238b"
+  },
+  "outcomes": {
+    "unit": [
+      [
+        "checked_transcode::publication::tests::a_destination_failure_keeps_the_prefix_and_its_cause_without_retry",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::a_flush_failure_keeps_the_full_count_and_its_error_even_when_cancelled",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::cancellation_before_between_after_the_last_write_and_after_flush_keeps_effects",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::empty_cancelled_output_does_not_flush",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::interrupted_is_retried_with_the_pulse_checked_again",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::the_owner_moves_the_encoder_vec_while_the_private_witness_copies",
+        "ok"
+      ],
+      [
+        "checked_transcode::publication::tests::the_private_fixed_no_pulse_witness_runs_the_actual_prepared_job",
+        "ok"
+      ]
+    ],
+    "native": [
+      [
+        "a_real_encoder_that_ignores_metadata_cannot_publish_success",
+        "ok"
+      ],
+      [
+        "an_encoder_that_cannot_plan_rows_is_excluded_before_the_joint_question",
+        "ok"
+      ],
+      [
+        "callback_cancellation_and_publication_failure_preserve_reports_and_release_storage",
+        "ok"
+      ],
+      [
+        "callback_trace_and_unwind_release_prepared_native_routes",
+        "ok"
+      ],
+      [
+        "default_p3_preservation_keeps_authority_and_required_policies_still_win",
+        "ok"
+      ],
+      [
+        "discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enforced",
+        "ok"
+      ],
+      [
+        "file_and_range_sources_match_slice_and_preserve_native_source_errors",
+        "ok"
+      ],
+      [
+        "native_jpeg_to_png_matches_separate_cms_and_png_oracles",
+        "ok"
+      ],
+      [
+        "opaque_profile_policy_is_explicit_and_refusal_releases_all_managed_owners",
+        "ok"
+      ],
+      [
+        "png_source::native_png_batches_fit_independently_admitted_transcode_strips",
+        "ok"
+      ],
+      [
+        "png_source::png_profile_conversion_matches_separate_cms_and_drops_reported_descriptions",
+        "ok"
+      ],
+      [
+        "png_source::png_source_retains_alpha_depth_samples_and_icc_through_lossless_transcode",
+        "ok"
+      ],
+      [
+        "publication::a_raster_retaining_pulse_stays_alive_and_a_wait_cap_refuses_the_route",
+        "ok"
+      ],
+      [
+        "publication::callback_unwind_drops_prepared_route_without_a_publication_owner",
+        "ok"
+      ],
+      [
+        "publication::metadata_and_finish_first_share_one_retained_route_with_unknown_wait",
+        "ok"
+      ],
+      [
+        "publication::prepared_job_metadata_claim_still_needs_successful_postconditions",
+        "ok"
+      ],
+      [
+        "publication::routes_without_the_witness_still_offer_unknown_schedule_evidence",
+        "ok"
+      ],
+      [
+        "publication::selected_route_output_overflow_never_returns_a_publication_owner",
+        "ok"
+      ],
+      [
+        "publication::unsupported_schedule_wait_or_workspace_refuses_before_the_joint_callback",
+        "ok"
+      ],
+      [
+        "reported_physical_resolution_cannot_silently_disappear",
+        "ok"
+      ],
+      [
+        "resolution::native_jfif_density_is_converted_exactly_to_png_units",
+        "ok"
+      ],
+      [
+        "resolution::native_png_density_keeps_pixels_and_prepared_offers_across_strips",
+        "ok"
+      ],
+      [
+        "resolution::unqualified_duplicate_density_refuses_before_joint_policy_and_explicit_discard_still_works",
+        "ok"
+      ]
+    ],
+    "ordinary": [
+      [
+        "a_real_encoder_that_ignores_metadata_cannot_publish_success",
+        "ok"
+      ],
+      [
+        "an_encoder_that_cannot_plan_rows_is_excluded_before_the_joint_question",
+        "ok"
+      ],
+      [
+        "callback_cancellation_and_publication_failure_preserve_reports_and_release_storage",
+        "ok"
+      ],
+      [
+        "callback_trace_and_unwind_release_prepared_native_routes",
+        "ok"
+      ],
+      [
+        "default_p3_preservation_keeps_authority_and_required_policies_still_win",
+        "ok"
+      ],
+      [
+        "discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enforced",
+        "ok"
+      ],
+      [
+        "file_and_range_sources_match_slice_and_preserve_native_source_errors",
+        "ok"
+      ],
+      [
+        "native_jpeg_to_png_matches_separate_cms_and_png_oracles",
+        "ok"
+      ],
+      [
+        "opaque_profile_policy_is_explicit_and_refusal_releases_all_managed_owners",
+        "ok"
+      ],
+      [
+        "png_source::native_png_batches_fit_independently_admitted_transcode_strips",
+        "ok"
+      ],
+      [
+        "png_source::png_profile_conversion_matches_separate_cms_and_drops_reported_descriptions",
+        "ok"
+      ],
+      [
+        "png_source::png_source_retains_alpha_depth_samples_and_icc_through_lossless_transcode",
+        "ok"
+      ],
+      [
+        "reported_physical_resolution_cannot_silently_disappear",
+        "ok"
+      ],
+      [
+        "resolution::native_jfif_density_is_converted_exactly_to_png_units",
+        "ok"
+      ],
+      [
+        "resolution::native_png_density_keeps_pixels_and_prepared_offers_across_strips",
+        "ok"
+      ],
+      [
+        "resolution::unqualified_duplicate_density_refuses_before_joint_policy_and_explicit_discard_still_works",
+        "ok"
+      ]
+    ]
+  }
+}

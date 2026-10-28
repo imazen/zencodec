@@ -29,6 +29,15 @@ try {
     await page.locator('#entry-registry [data-direction="above"] summary').click();
     await page.locator('#entry-registry [data-direction="below"] summary').click();
     await page.locator('#entry-registry-example').screenshot({ path: `${output}/expanded-${width}.png` });
+    await page.goto(new URL('ideal.html#changes', url).href);
+    await page.locator('#changes').screenshot({ path: `${output}/changes-${width}.png` });
+    for (const id of ['video', 'resolution']) {
+      const change = page.locator(`#change-${id}`);
+      await change.locator(':scope>summary').click();
+      await change.screenshot({ path: `${output}/change-${id}-${width}.png` });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await change.locator(':scope>summary').click();
+    }
     await page.close();
   }
   await writeFile(`${output}/measurements.json`, JSON.stringify(measurements, null, 2) + '\n');

@@ -9,8 +9,12 @@ use core::task::{Context, Poll};
 
 use enough::StopReason;
 use zencodec::ImageInfo;
-use zencodec::decode::{BatchMeta, ByteRange, MetadataUpdate, Request, SinkError};
+use zencodec::decode::{
+    BatchMeta, BoundaryAction, BoundaryId, ByteRange, ControlError, DecodeBoundary, InputRequest,
+    InterpretationFacts, MetadataUpdate, SinkError,
+};
 use zencodec::source::SourceError;
+use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use crate::input::InputStore;
@@ -19,6 +23,19 @@ use crate::input::InputStore;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum CoroutineError {
+    /// Input payload, range index or row staging could not be admitted.
+    Storage(StorageError),
+    /// An absolute byte range overflowed the source address space.
+    InputRangeOverflow,
+    /// The admitted input range index cannot represent another disjoint span.
+    InputSpanLimit {
+        /// Maximum number of independently retained spans.
+        limit: usize,
+    },
+    /// A required interpretation boundary was violated.
+    Control(ControlError),
+    /// A row buffer size overflowed or its allocation failed.
+    RowAllocation,
     /// A read could not be satisfied (past the announced end).
     Source(SourceError),
     /// The sink refused rows.
@@ -45,6 +62,13 @@ pub enum CoroutineError {
 impl fmt::Display for CoroutineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Storage(e) => e.fmt(f),
+            Self::InputRangeOverflow => f.write_str("coroutine input range overflow"),
+            Self::InputSpanLimit { limit } => {
+                write!(f, "coroutine input exceeds its {limit}-span index")
+            }
+            Self::Control(e) => e.fmt(f),
+            Self::RowAllocation => f.write_str("coroutine row allocation failed"),
             Self::Source(e) => write!(f, "coroutine decode: {e}"),
             Self::Sink(e) => write!(f, "coroutine decode: sink: {e}"),
             Self::Cancelled(r) => write!(f, "coroutine decode cancelled: {r:?}"),
@@ -65,6 +89,8 @@ impl fmt::Display for CoroutineError {
 impl core::error::Error for CoroutineError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
+            Self::Storage(e) => Some(e),
+            Self::Control(e) => Some(e),
             Self::Source(e) => Some(e),
             Self::Sink(e) => Some(e.as_ref()),
             _ => None,
@@ -72,9 +98,68 @@ impl core::error::Error for CoroutineError {
     }
 }
 
+impl From<StorageError> for CoroutineError {
+    fn from(e: StorageError) -> Self {
+        Self::Storage(e)
+    }
+}
+
+pub(crate) enum RowStorage {
+    Legacy(Vec<u8>),
+    Admitted(OwnedStorage<u8>),
+}
+impl Default for RowStorage {
+    fn default() -> Self {
+        Self::Legacy(Vec::new())
+    }
+}
+impl RowStorage {
+    fn prepare(
+        &mut self,
+        len: usize,
+        budget: Option<&StorageBudget>,
+    ) -> Result<(), CoroutineError> {
+        if let Some(budget) = budget {
+            if matches!(self, Self::Admitted(data) if data.len() >= len) {
+                return Ok(());
+            }
+            // An unused spare is not live output. Release it before growing so
+            // growth does not require two simultaneous staging allocations.
+            *self = Self::default();
+            *self = Self::Admitted(budget.bytes(len)?);
+        } else {
+            let Self::Legacy(data) = self else {
+                unreachable!("storage mode is fixed at construction")
+            };
+            data.clear();
+            data.try_reserve_exact(len)
+                .map_err(|_| CoroutineError::RowAllocation)?;
+            data.resize(len, 0);
+        }
+        Ok(())
+    }
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Legacy(data) => data,
+            Self::Admitted(data) => data.as_slice(),
+        }
+    }
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            Self::Legacy(data) => data,
+            Self::Admitted(data) => data.as_mut_slice(),
+        }
+    }
+}
+
 impl From<SourceError> for CoroutineError {
     fn from(e: SourceError) -> Self {
         Self::Source(e)
+    }
+}
+impl From<ControlError> for CoroutineError {
+    fn from(error: ControlError) -> Self {
+        Self::Control(error)
     }
 }
 
@@ -94,7 +179,7 @@ impl From<StopReason> for CoroutineError {
 /// into the sink.
 pub(crate) struct PendingRows {
     pub(crate) meta: BatchMeta,
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: RowStorage,
     pub(crate) width: u32,
     pub(crate) rows: u32,
     pub(crate) stride: usize,
@@ -104,15 +189,21 @@ pub(crate) struct PendingRows {
 /// State shared between the decoder and the coroutine it polls. Only one
 /// side runs at a time, so the lock is never contended.
 pub(crate) struct Shared {
+    pub(crate) controlled: bool,
+    pub(crate) boundary: Option<DecodeBoundary>,
+    pub(crate) reply: Option<(BoundaryId, BoundaryAction)>,
+    pub(crate) adopted: Option<InterpretationFacts>,
+    pub(crate) control_failure: Option<ControlError>,
     pub(crate) input: InputStore,
-    pub(crate) need: Vec<Request>,
+    pub(crate) need: Vec<InputRequest>,
     /// Scratch for a read's satisfied spans and missing gaps, reused across polls.
     pub(crate) satisfied: Vec<(u64, usize)>,
     pub(crate) gaps: Vec<(u64, u64)>,
     pub(crate) rows: Option<PendingRows>,
     /// Strip buffer handed back after each `Rows` step, so steady state
     /// allocates nothing.
-    pub(crate) spare: Vec<u8>,
+    pub(crate) spare: RowStorage,
+    pub(crate) storage: Option<StorageBudget>,
     pub(crate) metadata: Option<MetadataUpdate>,
     pub(crate) info: Option<ImageInfo>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
@@ -125,12 +216,18 @@ pub(crate) struct Shared {
 impl Shared {
     pub(crate) fn new(cap: usize) -> Self {
         Self {
+            controlled: false,
+            boundary: None,
+            reply: None,
+            adopted: None,
+            control_failure: None,
             input: InputStore::new(cap),
             need: Vec::new(),
             satisfied: Vec::new(),
             gaps: Vec::new(),
             rows: None,
-            spare: Vec::new(),
+            spare: RowStorage::default(),
+            storage: None,
             metadata: None,
             info: None,
             info_generation: 0,
@@ -138,6 +235,15 @@ impl Shared {
             accepts_provisional: false,
             cancelled: None,
         }
+    }
+
+    pub(crate) fn with_storage(cap: usize, budget: StorageBudget) -> Result<Self, CoroutineError> {
+        let input = InputStore::with_storage(cap, &budget)?;
+        Ok(Self {
+            input,
+            storage: Some(budget),
+            ..Self::new(cap)
+        })
     }
 }
 
@@ -159,7 +265,7 @@ impl CoroutineContext {
 
     /// Read exactly `out.len()` bytes at `offset`.
     ///
-    /// Suspends with `Event::Need` (a `Request::Range`) until the driver
+    /// Suspends with `Event::Need` (a `InputRequest::Range`) until the driver
     /// offers the span. Fails with [`SourceError::UnexpectedEof`] once the
     /// announced length shows the span can never arrive.
     pub fn read_exact_at<'a>(
@@ -188,7 +294,7 @@ impl CoroutineContext {
     }
 
     /// Read the next `out.len()` bytes at the sequential cursor and
-    /// advance it. Suspends with one `Request::AtLeast` for the rest of the
+    /// advance it. Suspends with one `InputRequest::AtLeast` for the rest of the
     /// read, which stream pumps serve by reading forward. Bytes behind the
     /// cursor are released.
     pub async fn read_exact(&mut self, out: &mut [u8]) -> Result<(), CoroutineError> {
@@ -215,7 +321,7 @@ impl CoroutineContext {
         self.shared.lock().input.release_before(offset);
     }
 
-    /// Total source length. Suspends with `Request::Len` until a driver
+    /// Total source length. Suspends with `InputRequest::Len` until a driver
     /// offers an input carrying it.
     pub fn len(&mut self) -> impl Future<Output = Result<u64, CoroutineError>> + '_ {
         Len {
@@ -224,7 +330,10 @@ impl CoroutineContext {
     }
 
     /// Hand a strip of rows to the driver. Suspends until the decoder has
-    /// copied it into the sink (one `Event::Rows`).
+    /// copied it into the sink. Each `Event::Rows` delivers at most one buffer
+    /// allowed by the sink's `max_buffer_rows`; a larger batch stays retained
+    /// across steps until every row is delivered. This bounds queued sink
+    /// buffers, not the native batch's storage.
     ///
     /// Provisional rows (`!meta.is_final`) may be written only when
     /// [`accepts_provisional`](Self::accepts_provisional) is `true`.
@@ -233,18 +342,53 @@ impl CoroutineContext {
         meta: BatchMeta,
         rows: &PixelSlice<'_>,
     ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
+        let refusal = {
+            let shared = self.shared.lock();
+            shared.control_failure.or_else(|| {
+                (shared.controlled && (shared.adopted.is_none() || shared.boundary.is_some()))
+                    .then_some(ControlError::OutputBeforeInterpretation)
+            })
+        };
+        if let Some(error) = refusal {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(error.into()),
+            };
+        }
         let width = rows.width();
         let count = rows.rows();
         let descriptor = rows.descriptor();
-        let stride = width as usize * descriptor.bytes_per_pixel();
-        let mut data = core::mem::take(&mut self.shared.lock().spare);
-        data.clear();
-        data.reserve(stride * count as usize);
+        let size = (width as usize)
+            .checked_mul(descriptor.bytes_per_pixel())
+            .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
+        let Some((stride, len)) = size else {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(CoroutineError::RowAllocation),
+            };
+        };
+        let (mut data, prepared) = {
+            let mut shared = self.shared.lock();
+            let mut data = core::mem::take(&mut shared.spare);
+            let prepared = data.prepare(len, shared.storage.as_ref());
+            (data, prepared)
+        };
+        if let Err(error) = prepared {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(error),
+            };
+        }
         for r in 0..count {
-            data.extend_from_slice(&rows.row(r)[..stride]);
+            let at = r as usize * stride;
+            data.as_mut_slice()[at..at + stride].copy_from_slice(&rows.row(r)[..stride]);
         }
         WriteRows {
             shared: &self.shared,
+            error: None,
             pending: Some(PendingRows {
                 meta,
                 data,
@@ -272,13 +416,42 @@ impl CoroutineContext {
     /// Set image metadata (visible through `IncrementalDecode::info`).
     pub fn set_info(&mut self, info: ImageInfo) {
         let mut shared = self.shared.lock();
+        if shared.adopted.is_some()
+            && shared.info.as_ref().is_some_and(|old| {
+                old.width != info.width
+                    || old.height != info.height
+                    || old.orientation != info.orientation
+                    || old.source_color != info.source_color
+            })
+        {
+            shared.control_failure = Some(ControlError::FinalInterpretationChanged);
+        }
         shared.info = Some(info);
         shared.info_generation += 1;
     }
 
     /// Set the negotiated output descriptor.
     pub fn set_output_descriptor(&mut self, descriptor: PixelDescriptor) {
-        self.shared.lock().descriptor = Some(descriptor);
+        let mut shared = self.shared.lock();
+        if shared.adopted.is_some() && shared.descriptor != Some(descriptor) {
+            shared.control_failure = Some(ControlError::FinalInterpretationChanged);
+        }
+        shared.descriptor = Some(descriptor);
+    }
+
+    /// Suspend before work affected by these interpretation facts. Await this
+    /// before conversion or output. `ContinueReading` permits discovery only;
+    /// rows stay blocked until final interpretation is adopted. This future is
+    /// served only by the controlled protocol; legacy execution refuses it.
+    pub fn interpretation(
+        &mut self,
+        facts: InterpretationFacts,
+    ) -> impl Future<Output = Result<BoundaryAction, CoroutineError>> + '_ {
+        Interpret {
+            shared: &self.shared,
+            facts: Some(facts),
+            id: None,
+        }
     }
 
     /// Whether the driver's sink takes provisional (progressive) rows.
@@ -290,9 +463,64 @@ impl CoroutineContext {
 
     /// Check the driver's stop token without suspending.
     pub fn check_stop(&self) -> Result<(), CoroutineError> {
-        match self.shared.lock().cancelled {
+        let shared = self.shared.lock();
+        if let Some(error) = shared.control_failure {
+            return Err(error.into());
+        }
+        match shared.cancelled {
             Some(r) => Err(CoroutineError::Cancelled(r)),
             None => Ok(()),
+        }
+    }
+}
+
+struct Interpret<'a> {
+    shared: &'a SharedCell,
+    facts: Option<InterpretationFacts>,
+    id: Option<BoundaryId>,
+}
+impl Future for Interpret<'_> {
+    type Output = Result<BoundaryAction, CoroutineError>;
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut shared = this.shared.lock();
+        if let Some(reason) = shared.cancelled {
+            return Poll::Ready(Err(reason.into()));
+        }
+        if let Some(error) = shared.control_failure {
+            return Poll::Ready(Err(error.into()));
+        }
+        if !shared.controlled {
+            return Poll::Ready(Err(ControlError::UnhandledBoundary.into()));
+        }
+        if let Some(facts) = this.facts.take() {
+            if shared.boundary.is_some() || shared.reply.is_some() {
+                return Poll::Ready(Err(ControlError::InvalidReply.into()));
+            }
+            if let Some(adopted) = shared.adopted {
+                return Poll::Ready(if adopted == facts {
+                    Ok(BoundaryAction::AdoptInterpretation)
+                } else {
+                    Err(ControlError::FinalInterpretationChanged.into())
+                });
+            }
+            if facts.descriptor != shared.descriptor
+                || shared
+                    .info
+                    .as_ref()
+                    .is_none_or(|info| info.width != facts.width || info.height != facts.height)
+            {
+                return Poll::Ready(Err(ControlError::InconsistentFacts.into()));
+            }
+            let boundary = DecodeBoundary::new(facts)?;
+            this.id = Some(boundary.id());
+            shared.boundary = Some(boundary);
+            return Poll::Pending;
+        }
+        match shared.reply.take() {
+            Some((id, action)) if Some(id) == this.id => Poll::Ready(Ok(action)),
+            Some(_) => Poll::Ready(Err(ControlError::InvalidReply.into())),
+            None => Poll::Pending,
         }
     }
 }
@@ -327,6 +555,9 @@ impl Future for ReadMany<'_, '_> {
         satisfied.clear();
         gaps.clear();
         let mut check = |shared: &Shared, offset: u64, out: &mut [u8], sequential: bool| {
+            offset
+                .checked_add(out.len() as u64)
+                .ok_or(CoroutineError::InputRangeOverflow)?;
             if out.len() > shared.input.cap() {
                 return Err(CoroutineError::ReadExceedsInputCap {
                     len: out.len(),
@@ -355,11 +586,11 @@ impl Future for ReadMany<'_, '_> {
                     let first = gaps.get(before).map(|(o, _)| *o).unwrap_or(offset);
                     gaps.truncate(before);
                     let end = offset + out.len() as u64;
-                    missing.push(Request::at_least(first, (end - first) as usize));
+                    missing.push(InputRequest::at_least(first, (end - first) as usize));
                 } else {
                     missing.extend(
                         gaps.drain(before..)
-                            .map(|(o, l)| Request::Range(ByteRange::new(o, l))),
+                            .map(|(o, l)| InputRequest::Range(ByteRange::new(o, l))),
                     );
                 }
                 Ok(())
@@ -381,7 +612,11 @@ impl Future for ReadMany<'_, '_> {
         let ready = missing.is_empty();
         if ready && this.release {
             for (offset, len) in &satisfied {
-                shared.input.release(*offset, *len);
+                if let Err(error) = shared.input.release(*offset, *len) {
+                    shared.need = missing;
+                    shared.satisfied = satisfied;
+                    return Poll::Ready(Err(error));
+                }
             }
         }
         shared.need = missing;
@@ -410,7 +645,7 @@ impl Future for Len<'_> {
             Some(t) => Poll::Ready(Ok(t)),
             None => {
                 shared.need.clear();
-                shared.need.push(Request::Len);
+                shared.need.push(InputRequest::Len);
                 Poll::Pending
             }
         }
@@ -420,6 +655,7 @@ impl Future for Len<'_> {
 struct WriteRows<'a> {
     shared: &'a SharedCell,
     pending: Option<PendingRows>,
+    error: Option<CoroutineError>,
 }
 
 impl Future for WriteRows<'_> {
@@ -427,6 +663,9 @@ impl Future for WriteRows<'_> {
 
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+        if let Some(error) = this.error.take() {
+            return Poll::Ready(Err(error));
+        }
         let mut shared = this.shared.lock();
         if let Some(r) = shared.cancelled {
             return Poll::Ready(Err(CoroutineError::Cancelled(r)));

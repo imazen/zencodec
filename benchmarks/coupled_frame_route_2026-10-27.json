@@ -1,0 +1,48 @@
+{
+  "base_commit": "7e4923e28e32a64751664b860b51e6cbee4cfc87",
+  "kind": "coupled conversion/encoding native qualification; no performance claim",
+  "source_sha256": {
+    "src/operation/transition.rs": "33b0e456ffbce7214cab1c14a5c86150de0ecdefe7b74e886b36fe0ed01c523f",
+    "src/operation/policy.rs": "491b34c79d3f51874968cb648ca73bece61497a49bec4c70d092246c6183604a",
+    "perf/av1-policy-validation/src/coupled_route.rs": "0a8d9439c41a5b49b02463eddc7f7da7b0ba3513733dac812c3b0497c77f95ea",
+    "perf/av1-policy-validation/src/epoch_route.rs": "1df46197d8d808069b5b7219f518f761c06ee720836d880ebb4de9d5266c4f49",
+    "perf/av1-policy-validation/dependencies.lock": "b5d268d8eee7cf4c1c31097566da27af1bf399eae57b7bc9b0dd413f4ef6b588"
+  },
+  "checks": [
+    {
+      "log": "/home/lilith/tmp/zencodec-coupled-core-export-20261027.log",
+      "sha256": "e0745c9dc3468fbc48ceedddcbef2e1da22ed1f3a5bca02245b804b3d51b4f8d",
+      "resource_line": "run-heavy: done rc=0 24s | peak-RSS 0.52GiB | min-avail 11091MiB | peak-load 1.58"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-coupled-native-full-20261027.log",
+      "sha256": "a190170adc5dc4d19065a924fa1f154ca81625ffc071558d419ec8fdb41e70d2",
+      "resource_line": "run-heavy: done rc=0 43s | peak-RSS 0.57GiB | min-avail 11228MiB | peak-load 0.99"
+    }
+  ],
+  "result": "Shared all-feature workspace, strict lint, no-default-features and public API generation passed; 35 native AV1 tests plus strict lint and independent Gamma22 verification passed.",
+  "api_delta": {
+    "public_types": 1,
+    "constructors": 1,
+    "fields_added_to_existing_offer": 1,
+    "callback_methods_added": 0,
+    "dependency_packages_added": 0,
+    "zenpixels_changes_required": 0
+  },
+  "contract": [
+    "Actual decoded AV1 8-bit 420 full, 10-bit 422 limited and 12-bit 444 full inputs normalize to one committed RGB8 identity-matrix encoder.",
+    "Held source mapping and shared YCbcrToRgbF32 plan survive the callback alongside the native encoder and output reservations.",
+    "One frame-route decision discloses conversion target, preservation flags, siting assumption and scoped admission separately from encoder fidelity.",
+    "Required range and custom exact-sample policies refuse before conversion; encoder lossless mode does not conceal conversion losses.",
+    "Conversion error and target drift terminate before encoder acceptance and retain selected decision.",
+    "Independent FFmpeg/libdav1d output equals actual converted component codes."
+  ],
+  "limits": [
+    "Private native adapter, not packaged codec-agnostic transcode convenience.",
+    "Independent readback proves encoding fidelity to converted codes, not color conversion accuracy.",
+    "Only BT.709/sRGB matrix route; no HDR, resize, retime or in-band muxer reconfiguration.",
+    "FrameFacts snapshots bound diagnostics but omit complete plane-role lists.",
+    "The test retains converted frames for independent comparison; reservations exclude input and native workspace and do not prove whole-operation memory.",
+    "No comparative performance, allocation profile or compile-time measurement in this receipt."
+  ]
+}

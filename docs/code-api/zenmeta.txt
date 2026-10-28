@@ -1,0 +1,369 @@
+pub mod zenmeta
+pub mod zenmeta::apple
+pub mod zenmeta::apple::compatibility
+pub fn zenmeta::apple::compatibility::headroom_stops(info: &zenmeta::apple::AppleHdrInfo) -> core::option::Option<f64>
+pub fn zenmeta::apple::compatibility::parse_apple_makernote(maker: &[u8]) -> core::option::Option<zenmeta::apple::AppleHdrInfo>
+pub fn zenmeta::apple::compatibility::parse_exif_for_apple_hdr(exif: &[u8]) -> core::option::Option<zenmeta::apple::AppleHdrInfo>
+pub mod zenmeta::apple::tags
+pub const zenmeta::apple::tags::HDR_GAIN: u16
+pub const zenmeta::apple::tags::HDR_HEADROOM: u16
+pub const zenmeta::apple::tags::HDR_IMAGE_TYPE: u16
+pub struct zenmeta::apple::AppleHdrInfo
+pub zenmeta::apple::AppleHdrInfo::hdr_gain: f64
+pub zenmeta::apple::AppleHdrInfo::hdr_headroom: core::option::Option<f64>
+pub zenmeta::apple::AppleHdrInfo::hdr_image_type: core::option::Option<i32>
+impl zenmeta::apple::AppleHdrInfo
+pub fn zenmeta::apple::AppleHdrInfo::has_gain_map(&self) -> bool
+pub fn zenmeta::apple::AppleHdrInfo::headroom_stops(&self) -> core::option::Option<f64>
+pub fn zenmeta::apple::AppleHdrInfo::is_hdr(&self) -> bool
+pub struct zenmeta::apple::AppleMakerNote<'a>
+impl<'a> zenmeta::apple::AppleMakerNote<'a>
+pub fn zenmeta::apple::AppleMakerNote<'a>::byte_order(&self) -> zencodec::exif::ByteOrder
+pub fn zenmeta::apple::AppleMakerNote<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = core::result::Result<zenmeta::apple::MakerNoteEntry<'a>, zenmeta::apple::MakerNoteEntryError>> + '_
+pub fn zenmeta::apple::AppleMakerNote<'a>::parse(data: &'a [u8]) -> core::option::Option<Self>
+pub struct zenmeta::apple::MakerNoteEntry<'a>
+impl<'a> zenmeta::apple::MakerNoteEntry<'a>
+pub fn zenmeta::apple::MakerNoteEntry<'a>::count(&self) -> u32
+pub fn zenmeta::apple::MakerNoteEntry<'a>::kind(&self) -> u16
+pub fn zenmeta::apple::MakerNoteEntry<'a>::tag(&self) -> u16
+pub fn zenmeta::apple::MakerNoteEntry<'a>::value(&self) -> &'a [u8]
+#[non_exhaustive] pub struct zenmeta::apple::MakerNoteEntryError
+pub zenmeta::apple::MakerNoteEntryError::index: usize
+pub zenmeta::apple::MakerNoteEntryError::tag: core::option::Option<u16>
+pub fn zenmeta::apple::from_apple_headroom(info: &zenmeta::apple::AppleHdrInfo) -> core::option::Option<zencodec::gainmap::GainMapParams>
+pub fn zenmeta::apple::parse_apple_makernote(maker: &[u8]) -> core::option::Option<zenmeta::apple::AppleHdrInfo>
+pub fn zenmeta::apple::parse_exif_for_apple_hdr(exif: &[u8]) -> core::option::Option<zenmeta::apple::AppleHdrInfo>
+pub mod zenmeta::audit
+#[non_exhaustive] pub enum zenmeta::audit::Change<'a>
+pub zenmeta::audit::Change::Added(&'a zenmeta::audit::Entry)
+pub zenmeta::audit::Change::Modified
+pub zenmeta::audit::Change::Modified::after: &'a zenmeta::audit::Entry
+pub zenmeta::audit::Change::Modified::before: &'a zenmeta::audit::Entry
+pub zenmeta::audit::Change::Removed(&'a zenmeta::audit::Entry)
+#[non_exhaustive] pub enum zenmeta::audit::Finding
+pub zenmeta::audit::Finding::ExifCoverageLimited
+pub zenmeta::audit::Finding::InvalidExif
+pub zenmeta::audit::Finding::InvalidXmp(alloc::string::String)
+pub zenmeta::audit::Finding::Limit
+pub zenmeta::audit::Finding::MakerNote
+pub zenmeta::audit::Finding::MakerNote::bytes: usize
+pub zenmeta::audit::Finding::MakerNote::path: alloc::string::String
+#[non_exhaustive] pub struct zenmeta::audit::Entry
+impl zenmeta::audit::Entry
+pub fn zenmeta::audit::Entry::kind(&self) -> &str
+pub fn zenmeta::audit::Entry::path(&self) -> &str
+pub fn zenmeta::audit::Entry::value(&self) -> &str
+pub struct zenmeta::audit::Report
+impl zenmeta::audit::Report
+pub fn zenmeta::audit::Report::diff<'a>(&'a self, after: &'a Self) -> alloc::vec::Vec<zenmeta::audit::Change<'a>>
+pub fn zenmeta::audit::Report::entries(&self) -> &[zenmeta::audit::Entry]
+pub fn zenmeta::audit::Report::exif(bytes: &[u8]) -> Self
+pub fn zenmeta::audit::Report::findings(&self) -> &[zenmeta::audit::Finding]
+pub fn zenmeta::audit::Report::xmp(xml: &str) -> Self
+pub mod zenmeta::bplist
+pub enum zenmeta::bplist::PlistValue
+pub zenmeta::bplist::PlistValue::Array(alloc::vec::Vec<zenmeta::bplist::PlistValue>)
+pub zenmeta::bplist::PlistValue::Bool(bool)
+pub zenmeta::bplist::PlistValue::Data(alloc::vec::Vec<u8>)
+pub zenmeta::bplist::PlistValue::Date(f64)
+pub zenmeta::bplist::PlistValue::Dict(alloc::vec::Vec<(alloc::string::String, zenmeta::bplist::PlistValue)>)
+pub zenmeta::bplist::PlistValue::Integer(i64)
+pub zenmeta::bplist::PlistValue::Real(f64)
+pub zenmeta::bplist::PlistValue::String(alloc::string::String)
+pub zenmeta::bplist::PlistValue::Uid(u64)
+pub fn zenmeta::bplist::parse_bplist(data: &[u8]) -> core::option::Option<zenmeta::bplist::PlistValue>
+pub mod zenmeta::display
+#[non_exhaustive] pub enum zenmeta::display::Error
+pub zenmeta::display::Error::GainMap(zencodec::gainmap::GainMapParseError)
+pub zenmeta::display::Error::Removed(&'static str)
+impl core::error::Error for zenmeta::display::Error
+pub fn zenmeta::display::Error::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Display for zenmeta::display::Error
+pub fn zenmeta::display::Error::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn zenmeta::display::filter_for_gain_map(meta: &zencodec::metadata::Metadata, params: &zencodec::gainmap::GainMapParams, policy: &zencodec::metadata::MetadataPolicy) -> core::result::Result<zencodec::metadata::Metadata, zenmeta::display::Error>
+pub mod zenmeta::exif
+pub fn zenmeta::exif::filter<'a>(exif: &zencodec::exif::Exif<'a>, policy: &zencodec::exif::ExifPolicy) -> zencodec::exif::Exif<'a>
+pub fn zenmeta::exif::retain<'a>(bytes: &'a [u8], policy: &zencodec::exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
+pub fn zenmeta::exif::serialize(exif: &zencodec::exif::Exif<'_>) -> alloc::vec::Vec<u8>
+pub mod zenmeta::ifd
+pub mod zenmeta::ifd::tags
+pub fn zenmeta::ifd::tags::tag_known(kind: zenmeta::ifd::walk::Kind, tag: u16) -> bool
+pub fn zenmeta::ifd::tags::tag_name(kind: zenmeta::ifd::walk::Kind, tag: u16) -> alloc::borrow::Cow<'static, str>
+pub mod zenmeta::ifd::walk
+pub enum zenmeta::ifd::walk::Count
+pub zenmeta::ifd::walk::Count::Bytes(u64)
+pub zenmeta::ifd::walk::Count::JpegHuffman
+pub zenmeta::ifd::walk::Count::JpegQuantization
+pub zenmeta::ifd::walk::Count::Tag(u16)
+pub zenmeta::ifd::walk::Count::ToEnd
+pub enum zenmeta::ifd::walk::Kind
+pub zenmeta::ifd::walk::Kind::Exif
+pub zenmeta::ifd::walk::Kind::Gps
+pub zenmeta::ifd::walk::Kind::Interop
+pub zenmeta::ifd::walk::Kind::MakerNote
+pub zenmeta::ifd::walk::Kind::Page(u32)
+pub zenmeta::ifd::walk::Kind::Sub
+pub enum zenmeta::ifd::walk::Loc
+pub zenmeta::ifd::walk::Loc::At(u64, u64)
+pub zenmeta::ifd::walk::Loc::Empty
+pub zenmeta::ifd::walk::Loc::Inline
+pub zenmeta::ifd::walk::Loc::Overflow
+pub zenmeta::ifd::walk::Loc::UnknownType
+pub struct zenmeta::ifd::walk::Cand
+pub zenmeta::ifd::walk::Cand::body: core::option::Option<core::ops::range::Range<u64>>
+pub zenmeta::ifd::walk::Cand::children: alloc::vec::Vec<zenmeta::ifd::walk::Cand>
+pub zenmeta::ifd::walk::Cand::detail: alloc::string::String
+pub zenmeta::ifd::walk::Cand::disp: zencodec::inventory::Disposition
+pub zenmeta::ifd::walk::Cand::gap: core::option::Option<(zencodec::inventory::Disposition, alloc::string::String)>
+pub zenmeta::ifd::walk::Cand::kind: zencodec::inventory::PartKind
+pub zenmeta::ifd::walk::Cand::label: core::option::Option<alloc::string::String>
+pub zenmeta::ifd::walk::Cand::range: core::ops::range::Range<u64>
+pub zenmeta::ifd::walk::Cand::tag: zencodec::inventory::PartTag
+impl zenmeta::ifd::walk::Cand
+pub fn zenmeta::ifd::walk::Cand::new(range: core::ops::range::Range<u64>, kind: zencodec::inventory::PartKind, tag: zencodec::inventory::PartTag, disp: zencodec::inventory::Disposition, detail: alloc::string::String) -> Self
+pub fn zenmeta::ifd::walk::Cand::note(&mut self, text: &str)
+pub struct zenmeta::ifd::walk::ChunkGeom
+pub zenmeta::ifd::walk::ChunkGeom::pad_per_row: u64
+pub zenmeta::ifd::walk::ChunkGeom::row: u64
+pub zenmeta::ifd::walk::ChunkGeom::rows: u64
+pub zenmeta::ifd::walk::ChunkGeom::rows_in: u64
+impl zenmeta::ifd::walk::ChunkGeom
+pub fn zenmeta::ifd::walk::ChunkGeom::read(&self) -> core::option::Option<u64>
+pub struct zenmeta::ifd::walk::ChunkUse
+pub zenmeta::ifd::walk::ChunkUse::covered: bool
+pub zenmeta::ifd::walk::ChunkUse::note: core::option::Option<alloc::string::String>
+pub zenmeta::ifd::walk::ChunkUse::past_count: bool
+pub zenmeta::ifd::walk::ChunkUse::tail: &'static str
+pub zenmeta::ifd::walk::ChunkUse::unknown: core::option::Option<&'static str>
+pub zenmeta::ifd::walk::ChunkUse::unread: core::option::Option<&'static str>
+pub zenmeta::ifd::walk::ChunkUse::used: core::option::Option<u64>
+pub struct zenmeta::ifd::walk::Entry
+pub zenmeta::ifd::walk::Entry::at: u64
+pub zenmeta::ifd::walk::Entry::count: u64
+pub zenmeta::ifd::walk::Entry::field: u64
+pub zenmeta::ifd::walk::Entry::notes: alloc::vec::Vec<alloc::string::String>
+pub zenmeta::ifd::walk::Entry::tag: u16
+pub zenmeta::ifd::walk::Entry::typ: u16
+pub struct zenmeta::ifd::walk::ExtentRule
+pub zenmeta::ifd::walk::ExtentRule::counts: zenmeta::ifd::walk::Count
+pub zenmeta::ifd::walk::ExtentRule::fate: zenmeta::ifd::walk::Fate
+pub zenmeta::ifd::walk::ExtentRule::kind: zencodec::inventory::PartKind
+pub zenmeta::ifd::walk::ExtentRule::offsets: u16
+pub zenmeta::ifd::walk::ExtentRule::what: &'static str
+pub struct zenmeta::ifd::walk::Fate
+pub zenmeta::ifd::walk::Fate::d: zencodec::inventory::Disposition
+pub zenmeta::ifd::walk::Fate::note: core::option::Option<alloc::borrow::Cow<'static, str>>
+impl zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Fate::because(d: zencodec::inventory::Disposition, note: impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self
+pub fn zenmeta::ifd::walk::Fate::new(d: zencodec::inventory::Disposition) -> Self
+pub struct zenmeta::ifd::walk::Ifd
+pub zenmeta::ifd::walk::Ifd::at: u64
+pub zenmeta::ifd::walk::Ifd::depth: u8
+pub zenmeta::ifd::walk::Ifd::end: u64
+pub zenmeta::ifd::walk::Ifd::entries: alloc::vec::Vec<zenmeta::ifd::walk::Entry>
+pub zenmeta::ifd::walk::Ifd::first_unknown: core::option::Option<usize>
+pub zenmeta::ifd::walk::Ifd::followed: bool
+pub zenmeta::ifd::walk::Ifd::kind: zenmeta::ifd::walk::Kind
+pub zenmeta::ifd::walk::Ifd::last: alloc::collections::btree::map::BTreeMap<u16, usize>
+pub zenmeta::ifd::walk::Ifd::name: alloc::string::String
+pub zenmeta::ifd::walk::Ifd::next: u64
+pub zenmeta::ifd::walk::Ifd::notes: alloc::vec::Vec<alloc::string::String>
+pub zenmeta::ifd::walk::Ifd::parent: core::option::Option<(usize, usize)>
+pub zenmeta::ifd::walk::Ifd::problem: core::option::Option<alloc::string::String>
+pub zenmeta::ifd::walk::Ifd::roles: alloc::vec::Vec<(zenmeta::ifd::walk::Kind, bool)>
+impl zenmeta::ifd::walk::Ifd
+pub fn zenmeta::ifd::walk::Ifd::followed_as(&self, kind: zenmeta::ifd::walk::Kind) -> bool
+pub fn zenmeta::ifd::walk::Ifd::holds_image(&self) -> bool
+pub fn zenmeta::ifd::walk::Ifd::is(&self, kind: zenmeta::ifd::walk::Kind) -> bool
+pub fn zenmeta::ifd::walk::Ifd::page(&self) -> core::option::Option<u32>
+pub struct zenmeta::ifd::walk::Layout
+pub zenmeta::ifd::walk::Layout::big: bool
+pub zenmeta::ifd::walk::Layout::le: bool
+impl zenmeta::ifd::walk::Layout
+pub fn zenmeta::ifd::walk::Layout::count_len(self) -> u64
+pub fn zenmeta::ifd::walk::Layout::entry_len(self) -> u64
+pub fn zenmeta::ifd::walk::Layout::header_len(self) -> u64
+pub fn zenmeta::ifd::walk::Layout::inline_cap(self) -> u64
+pub fn zenmeta::ifd::walk::Layout::offset(self, d: &[u8], at: u64) -> core::option::Option<u64>
+pub fn zenmeta::ifd::walk::Layout::u16(self, d: &[u8], at: u64) -> core::option::Option<u16>
+pub fn zenmeta::ifd::walk::Layout::u32(self, d: &[u8], at: u64) -> core::option::Option<u32>
+pub fn zenmeta::ifd::walk::Layout::u64(self, d: &[u8], at: u64) -> core::option::Option<u64>
+pub struct zenmeta::ifd::walk::Placed
+impl zenmeta::ifd::walk::Placed
+pub fn zenmeta::ifd::walk::Placed::insert(&mut self, c: zenmeta::ifd::walk::Cand)
+pub fn zenmeta::ifd::walk::Placed::into_sorted(self) -> alloc::vec::Vec<zenmeta::ifd::walk::Cand>
+pub struct zenmeta::ifd::walk::Placement
+pub zenmeta::ifd::walk::Placement::budget_hit: bool
+pub zenmeta::ifd::walk::Placement::ifd0_ok: bool
+pub zenmeta::ifd::walk::Placement::logical_end: u64
+pub zenmeta::ifd::walk::Placement::parts: alloc::vec::Vec<zenmeta::ifd::walk::Cand>
+pub struct zenmeta::ifd::walk::Walk<'a>
+pub zenmeta::ifd::walk::Walk::base: u64
+pub zenmeta::ifd::walk::Walk::budget_hit: bool
+pub zenmeta::ifd::walk::Walk::cancelled: bool
+pub zenmeta::ifd::walk::Walk::d: &'a [u8]
+pub zenmeta::ifd::walk::Walk::entries_left: u64
+pub zenmeta::ifd::walk::Walk::fatal: core::option::Option<alloc::string::String>
+pub zenmeta::ifd::walk::Walk::header: core::ops::range::Range<u64>
+pub zenmeta::ifd::walk::Walk::header_ext: core::option::Option<(core::ops::range::Range<u64>, zencodec::inventory::Disposition, alloc::string::String)>
+pub zenmeta::ifd::walk::Walk::header_ok: bool
+pub zenmeta::ifd::walk::Walk::ifds: alloc::vec::Vec<zenmeta::ifd::walk::Ifd>
+pub zenmeta::ifd::walk::Walk::lay: zenmeta::ifd::walk::Layout
+pub zenmeta::ifd::walk::Walk::magic: u16
+pub zenmeta::ifd::walk::Walk::pointer_reads: u64
+impl zenmeta::ifd::walk::Walk<'_>
+pub fn zenmeta::ifd::walk::Walk<'_>::abs(&self, off: u64) -> core::option::Option<u64>
+pub fn zenmeta::ifd::walk::Walk<'_>::bytes(&self, e: &zenmeta::ifd::walk::Entry) -> core::option::Option<&[u8]>
+pub fn zenmeta::ifd::walk::Walk<'_>::find<'i>(&self, ifd: &'i zenmeta::ifd::walk::Ifd, tag: u16) -> core::option::Option<&'i zenmeta::ifd::walk::Entry>
+pub fn zenmeta::ifd::walk::Walk<'_>::limit(&self) -> u64
+pub fn zenmeta::ifd::walk::Walk<'_>::loc(&self, e: &zenmeta::ifd::walk::Entry) -> zenmeta::ifd::walk::Loc
+pub fn zenmeta::ifd::walk::Walk<'_>::single_uint(&self, e: &zenmeta::ifd::walk::Entry) -> core::option::Option<u64>
+pub fn zenmeta::ifd::walk::Walk<'_>::take_scan(&self, n: u64) -> bool
+pub fn zenmeta::ifd::walk::Walk<'_>::uints(&self, e: &zenmeta::ifd::walk::Entry, max: usize) -> alloc::vec::Vec<u64>
+pub const zenmeta::ifd::walk::BUDGET_GAP: &str
+pub const zenmeta::ifd::walk::EXIF_IFD: u16
+pub const zenmeta::ifd::walk::FREE_BYTE_COUNTS: u16
+pub const zenmeta::ifd::walk::FREE_OFFSETS: u16
+pub const zenmeta::ifd::walk::GPS_IFD: u16
+pub const zenmeta::ifd::walk::INTEROP_IFD: u16
+pub const zenmeta::ifd::walk::JPEG_AC_TABLES: u16
+pub const zenmeta::ifd::walk::JPEG_DC_TABLES: u16
+pub const zenmeta::ifd::walk::JPEG_IF_LENGTH: u16
+pub const zenmeta::ifd::walk::JPEG_IF_OFFSET: u16
+pub const zenmeta::ifd::walk::JPEG_Q_TABLES: u16
+pub const zenmeta::ifd::walk::STRIP_BYTE_COUNTS: u16
+pub const zenmeta::ifd::walk::STRIP_OFFSETS: u16
+pub const zenmeta::ifd::walk::SUB_IFDS: u16
+pub const zenmeta::ifd::walk::TILE_BYTE_COUNTS: u16
+pub const zenmeta::ifd::walk::TILE_OFFSETS: u16
+pub trait zenmeta::ifd::walk::Rules
+pub fn zenmeta::ifd::walk::Rules::cancelled(&self) -> bool
+pub fn zenmeta::ifd::walk::Rules::chunk_use(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, tiles: bool, offs: &[u64], cnts: &[u64]) -> alloc::vec::Vec<zenmeta::ifd::walk::ChunkUse>
+pub fn zenmeta::ifd::walk::Rules::entry(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, index: usize) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::extents(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd) -> alloc::vec::Vec<zenmeta::ifd::walk::ExtentRule>
+pub fn zenmeta::ifd::walk::Rules::follows(&self, w: &zenmeta::ifd::walk::Walk<'_>, parent: &zenmeta::ifd::walk::Ifd, kind: zenmeta::ifd::walk::Kind, e: &zenmeta::ifd::walk::Entry) -> bool
+pub fn zenmeta::ifd::walk::Rules::follows_next(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, kind: zenmeta::ifd::walk::Kind) -> bool
+pub fn zenmeta::ifd::walk::Rules::header_extension(&self, _w: &zenmeta::ifd::walk::Walk<'_>) -> core::option::Option<(u64, zenmeta::ifd::walk::Fate)>
+pub fn zenmeta::ifd::walk::Rules::ifd(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::image_data(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::jpeg_stream(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::jpeg_table(&self, _w: &zenmeta::ifd::walk::Walk<'_>, _ifd: &zenmeta::ifd::walk::Ifd, _tag: u16) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::magic(&self, _magic: u16) -> bool
+pub fn zenmeta::ifd::walk::Rules::pointer(&self, kind: zenmeta::ifd::walk::Kind, e: &zenmeta::ifd::walk::Entry) -> core::option::Option<(zenmeta::ifd::walk::Kind, &'static str)>
+pub fn zenmeta::ifd::walk::Rules::pointer_offsets(&self, w: &zenmeta::ifd::walk::Walk<'_>, e: &zenmeta::ifd::walk::Entry, max: usize) -> alloc::vec::Vec<u64>
+pub fn zenmeta::ifd::walk::Rules::rejects(&self, _w: &zenmeta::ifd::walk::Walk<'_>, _at: u64, _kind: zenmeta::ifd::walk::Kind) -> core::option::Option<&'static str>
+pub fn zenmeta::ifd::walk::Rules::value(&self, w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, index: usize) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::Rules::value_tail(&self, _w: &zenmeta::ifd::walk::Walk<'_>, _ifd: &zenmeta::ifd::walk::Ifd, _index: usize) -> core::option::Option<(u64, zenmeta::ifd::walk::Fate)>
+pub fn zenmeta::ifd::walk::add_note(notes: &mut alloc::vec::Vec<alloc::string::String>, text: alloc::string::String)
+pub fn zenmeta::ifd::walk::chunk_geometry(w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, tiles: bool, chunks: usize) -> core::option::Option<alloc::vec::Vec<zenmeta::ifd::walk::ChunkGeom>>
+pub fn zenmeta::ifd::walk::default_chunk_use(w: &zenmeta::ifd::walk::Walk<'_>, ifd: &zenmeta::ifd::walk::Ifd, tiles: bool, offs: &[u64], cnts: &[u64]) -> alloc::vec::Vec<zenmeta::ifd::walk::ChunkUse>
+pub fn zenmeta::ifd::walk::emit(inv: &mut zencodec::inventory::Inventory, parent: core::option::Option<zencodec::inventory::PartId>, c: zenmeta::ifd::walk::Cand) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn zenmeta::ifd::walk::emit_top(inv: &mut zencodec::inventory::Inventory, data: &[u8], parts: alloc::vec::Vec<zenmeta::ifd::walk::Cand>, logical_end: u64, gap: (zencodec::inventory::Disposition, core::option::Option<alloc::string::String>)) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn zenmeta::ifd::walk::get(d: &[u8], at: u64, n: u64) -> core::option::Option<&[u8]>
+pub fn zenmeta::ifd::walk::kind_name(kind: zenmeta::ifd::walk::Kind) -> alloc::string::String
+pub fn zenmeta::ifd::walk::place(w: &mut zenmeta::ifd::walk::Walk<'_>, rules: &dyn zenmeta::ifd::walk::Rules, first: alloc::vec::Vec<zenmeta::ifd::walk::Cand>) -> zenmeta::ifd::walk::Placement
+pub fn zenmeta::ifd::walk::push_note(detail: &mut alloc::string::String, text: &str)
+pub fn zenmeta::ifd::walk::type_name(typ: u16) -> alloc::borrow::Cow<'static, str>
+pub fn zenmeta::ifd::walk::type_size(typ: u16) -> core::option::Option<u64>
+pub fn zenmeta::ifd::walk::union_fate(ifd: &zenmeta::ifd::walk::Ifd, fate: impl core::ops::function::Fn(zenmeta::ifd::walk::Kind, bool) -> zenmeta::ifd::walk::Fate) -> zenmeta::ifd::walk::Fate
+pub fn zenmeta::ifd::walk::walk<'a>(data: &'a [u8], base: u64, limit: u64, rules: &dyn zenmeta::ifd::walk::Rules) -> zenmeta::ifd::walk::Walk<'a>
+pub fn zenmeta::ifd::walk::walk_ifd<'a>(data: &'a [u8], base: u64, limit: u64, lay: zenmeta::ifd::walk::Layout, at: u64, kind: zenmeta::ifd::walk::Kind, name: alloc::string::String, depth: u8, rules: &dyn zenmeta::ifd::walk::Rules) -> zenmeta::ifd::walk::Walk<'a>
+pub mod zenmeta::metadata
+pub fn zenmeta::metadata::filter(metadata: &zencodec::metadata::Metadata, policy: &zencodec::metadata::MetadataPolicy) -> zencodec::metadata::Metadata
+pub mod zenmeta::rewrite
+pub struct zenmeta::rewrite::Context<'a>
+impl<'a> zenmeta::rewrite::Context<'a>
+pub fn zenmeta::rewrite::Context<'a>::check(&self) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::decompress(&self, kind: zencodec::metadata_rewrite::Compression, bytes: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::exif(&self, bytes: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::icc(&self, bytes: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::new(request: &zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::packet(&self, size: usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::with_input(self, input: &'a [u8]) -> Self
+pub fn zenmeta::rewrite::Context<'a>::with_xmp_editing(self, enabled: bool) -> Self
+pub fn zenmeta::rewrite::Context<'a>::xmp(&self, xml: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+impl<'a> core::ops::deref::Deref for zenmeta::rewrite::Context<'a>
+pub type zenmeta::rewrite::Context<'a>::Target = zencodec::metadata_rewrite::RewriteRequest<'a>
+pub fn zenmeta::rewrite::Context<'a>::deref(&self) -> &Self::Target
+pub struct zenmeta::rewrite::PlanBuilder<'a>
+impl<'a> zenmeta::rewrite::PlanBuilder<'a>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::append(&mut self, req: &zenmeta::rewrite::Context<'a>, other: Self, offset: usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::finish(self) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::inject_after_first(&mut self, req: &zenmeta::rewrite::Context<'a>, bytes: alloc::vec::Vec<u8>, name: &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::keep(&mut self, req: &zenmeta::rewrite::Context<'a>, range: core::ops::range::Range<usize>, name: &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::new() -> Self
+pub fn zenmeta::rewrite::PlanBuilder<'a>::output_len(&self) -> usize
+pub fn zenmeta::rewrite::PlanBuilder<'a>::record(&mut self, req: &zenmeta::rewrite::Context<'a>, range: core::ops::range::Range<usize>, carrier: &'static str, action: zencodec::metadata_rewrite::Action, bytes: core::option::Option<alloc::borrow::Cow<'a, [u8]>>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::remove(&mut self, req: &zenmeta::rewrite::Context<'a>, range: core::ops::range::Range<usize>, name: &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::PlanBuilder<'a>::remove_kept_range(&mut self, req: &zenmeta::rewrite::Context<'a>, range: &core::ops::range::Range<usize>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub mod zenmeta::xmp
+pub mod zenmeta::xmp::container
+#[non_exhaustive] pub enum zenmeta::xmp::container::ItemSemantic
+pub zenmeta::xmp::container::ItemSemantic::ConfidenceMap
+pub zenmeta::xmp::container::ItemSemantic::DepthMap
+pub zenmeta::xmp::container::ItemSemantic::GainMap
+pub zenmeta::xmp::container::ItemSemantic::Other(alloc::string::String)
+pub zenmeta::xmp::container::ItemSemantic::Primary
+impl zenmeta::xmp::container::ItemSemantic
+pub fn zenmeta::xmp::container::ItemSemantic::as_xmp_str(&self) -> &str
+pub fn zenmeta::xmp::container::ItemSemantic::from_xmp(s: &str) -> Self
+#[non_exhaustive] pub struct zenmeta::xmp::container::ContainerItem
+pub zenmeta::xmp::container::ContainerItem::length: core::option::Option<usize>
+pub zenmeta::xmp::container::ContainerItem::mime: alloc::string::String
+pub zenmeta::xmp::container::ContainerItem::padding: core::option::Option<usize>
+pub zenmeta::xmp::container::ContainerItem::semantic: zenmeta::xmp::container::ItemSemantic
+impl zenmeta::xmp::container::ContainerItem
+pub fn zenmeta::xmp::container::ContainerItem::primary(mime: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn zenmeta::xmp::container::ContainerItem::secondary(semantic: zenmeta::xmp::container::ItemSemantic, mime: impl core::convert::Into<alloc::string::String>, length: usize) -> Self
+pub struct zenmeta::xmp::container::Directory<'a>
+impl<'a> zenmeta::xmp::container::Directory<'a>
+pub fn zenmeta::xmp::container::Directory<'a>::items(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = &zenmeta::xmp::container::ContainerItem>
+pub fn zenmeta::xmp::container::Directory<'a>::parse(xml: &'a str) -> core::result::Result<Self, zenmeta::xmp::Error>
+pub fn zenmeta::xmp::container::Directory<'a>::rewrite_item_lengths(&self, secondaries: &[(&str, usize)]) -> core::result::Result<alloc::string::String, zenmeta::xmp::Error>
+pub fn zenmeta::xmp::container::generate_container_directory(items: &[zenmeta::xmp::container::ContainerItem]) -> alloc::string::String
+pub fn zenmeta::xmp::container::parse_container_items(xmp: &str) -> alloc::vec::Vec<zenmeta::xmp::container::ContainerItem>
+pub mod zenmeta::xmp::gainmap
+#[non_exhaustive] pub enum zenmeta::xmp::gainmap::XmpError
+pub zenmeta::xmp::gainmap::XmpError::Invalid(alloc::string::String)
+pub zenmeta::xmp::gainmap::XmpError::LengthLimit
+pub zenmeta::xmp::gainmap::XmpError::LengthLimit::got: usize
+pub zenmeta::xmp::gainmap::XmpError::LengthLimit::max: usize
+pub zenmeta::xmp::gainmap::XmpError::NotUltraHdr
+impl core::error::Error for zenmeta::xmp::gainmap::XmpError
+impl core::fmt::Display for zenmeta::xmp::gainmap::XmpError
+pub fn zenmeta::xmp::gainmap::XmpError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub const zenmeta::xmp::gainmap::CONTAINER_NAMESPACE: &str
+pub const zenmeta::xmp::gainmap::HDRGM_NAMESPACE: &str
+pub const zenmeta::xmp::gainmap::ITEM_NAMESPACE: &str
+pub const zenmeta::xmp::gainmap::MAX_XMP_LENGTH: usize
+pub fn zenmeta::xmp::gainmap::generate_gainmap_xmp(metadata: &zencodec::gainmap::GainMapParams) -> alloc::string::String
+pub fn zenmeta::xmp::gainmap::generate_primary_xmp(gainmap_length: usize) -> alloc::string::String
+pub fn zenmeta::xmp::gainmap::generate_primary_xmp_with_items(items: &[zenmeta::xmp::container::ContainerItem]) -> alloc::string::String
+pub fn zenmeta::xmp::gainmap::generate_xmp(metadata: &zencodec::gainmap::GainMapParams, gainmap_length: usize) -> alloc::string::String
+pub fn zenmeta::xmp::gainmap::generate_xmp_with_items(metadata: &zencodec::gainmap::GainMapParams, items: &[zenmeta::xmp::container::ContainerItem]) -> alloc::string::String
+pub fn zenmeta::xmp::gainmap::parse_xmp(xmp: &str) -> core::result::Result<(zencodec::gainmap::GainMapParams, core::option::Option<usize>), zenmeta::xmp::gainmap::XmpError>
+pub fn zenmeta::xmp::gainmap::parse_xmp_full(xmp: &str) -> (core::option::Option<zencodec::gainmap::GainMapParams>, alloc::vec::Vec<zenmeta::xmp::container::ContainerItem>)
+#[non_exhaustive] pub enum zenmeta::xmp::Error
+pub zenmeta::xmp::Error::Duplicate(alloc::string::String)
+pub zenmeta::xmp::Error::Limit
+pub zenmeta::xmp::Error::Structure(alloc::string::String)
+pub zenmeta::xmp::Error::Xml(alloc::string::String)
+impl core::error::Error for zenmeta::xmp::Error
+impl core::fmt::Display for zenmeta::xmp::Error
+pub fn zenmeta::xmp::Error::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zenmeta::xmp::Field
+impl zenmeta::xmp::Field
+pub fn zenmeta::xmp::Field::path(&self) -> &str
+pub fn zenmeta::xmp::Field::value(&self) -> &str
+pub struct zenmeta::xmp::Packet<'a>
+impl<'a> zenmeta::xmp::Packet<'a>
+pub fn zenmeta::xmp::Packet<'a>::fields(&self) -> core::result::Result<alloc::vec::Vec<zenmeta::xmp::Field>, zenmeta::xmp::Error>
+pub fn zenmeta::xmp::Packet<'a>::parse(xml: &'a str) -> core::result::Result<Self, zenmeta::xmp::Error>
+pub fn zenmeta::xmp::Packet<'a>::property(&self, namespace: &str, name: &str) -> core::result::Result<core::option::Option<alloc::vec::Vec<alloc::string::String>>, zenmeta::xmp::Error>
+pub fn zenmeta::xmp::Packet<'a>::resource_sequence(&self, namespace: &str, name: &str, item_namespace: &str, item_name: &str) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<zenmeta::xmp::Property>>, zenmeta::xmp::Error>
+pub struct zenmeta::xmp::Property
+impl zenmeta::xmp::Property
+pub fn zenmeta::xmp::Property::name(&self) -> &str
+pub fn zenmeta::xmp::Property::namespace(&self) -> &str
+pub fn zenmeta::xmp::Property::value(&self) -> &str

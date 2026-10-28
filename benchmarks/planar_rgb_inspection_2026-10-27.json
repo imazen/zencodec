@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "b8c965967950cbc66f254cdb88bb3f116193d4e4",
+  "source_sha256": {
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "bb19eb5ec60471551013bd70c88d4fcb0fc73131faed54e5aa301779287d15d9",
+    "perf/av1-policy-validation/inspect_planar_rgb.py": "a71642af8b278e59bc4ee2536dcbed0efd3ec747cf8517aaf687fb2d56d3274c"
+  },
+  "scope": "Independent RGB comparison, not an accuracy acceptance gate or performance benchmark",
+  "presentations": 54,
+  "samples": 35802,
+  "source": "Native lossless AV1 boundary fixtures, 17x13, 8/10/12-bit, 4:2:0/4:2:2/4:4:4, full/limited range",
+  "oracle": "FFmpeg/libdav1d native sample oracle followed by FFmpeg/zimg explicit BT.709 matrix and unchanged sRGB transfer, center chroma and bilinear upsampling",
+  "oracle_adapter": "Direct zscale refuses odd subsampled extents (code 1027). Edge-extend native planes to the subsampling multiple without changing original codes; compare only the original rectangle. Source AV1 and independent decoded codes remain retained.",
+  "comparison_units": "Absolute normalized RGB difference after clipping independent float output into [0,1], versus zen RGB16 divided by 65535. No threshold has been accepted.",
+  "by_depth": [
+    {
+      "bits": 8,
+      "presentations": 18,
+      "max_abs_after_clipping": 0.0020102734659231958,
+      "below_zero": 1822,
+      "above_one": 1768
+    },
+    {
+      "bits": 10,
+      "presentations": 18,
+      "max_abs_after_clipping": 0.0005358431544267017,
+      "below_zero": 1525,
+      "above_one": 1842
+    },
+    {
+      "bits": 12,
+      "presentations": 18,
+      "max_abs_after_clipping": 0.00017896717106022364,
+      "below_zero": 1799,
+      "above_one": 1958
+    }
+  ],
+  "independent_float_minimum": -0.9929103851318359,
+  "independent_float_maximum": 1.983231544494629,
+  "raw_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/planar-inspection-zimg-2",
+  "provenance_sha256": "2dc40c6fb2054d0794adc1f0c74e22520f05f8c0283e434f3831f72aeddc6c20",
+  "comparison_sha256": "1a6815544c91e5671148207c49e3f5fd76e93d8b264923dd52bd7a914fdfd398",
+  "validation": [
+    {
+      "command": "just av1-planar-check <fresh-source>; direct zscale inspection",
+      "exit_code": 1,
+      "native_tests": "8 passed; 0 failed; strict lint passed",
+      "reason": "Independent zscale refused odd subsampled source dimensions; failed artifacts retained",
+      "run_heavy": "11s | peak-RSS 0.55GiB | min-avail 11370MiB | peak-load 0.54"
+    },
+    {
+      "command": "just av1-planar-rgb-inspect <source> <fresh-output>",
+      "exit_code": 0,
+      "log": "/home/lilith/tmp/zencodec-planar-zimg-inspection-2-20261027.log",
+      "run_heavy": "0s | peak-RSS 0.05GiB | min-avail 11747MiB | peak-load 0.15"
+    }
+  ],
+  "interpretation": [
+    "The integer route cannot preserve excursions observed outside nominal RGB range.",
+    "Differences remain after clipping; do not equate independent float conversion with native-depth quantization and U16 bit replication.",
+    "A public float route still needs a specified arithmetic/precision contract and independent acceptance tests."
+  ]
+}

@@ -1,10 +1,469 @@
 # Changelog
 
+## Native image selection (unreleased experiment)
+
+### QUEUED BREAKING CHANGES
+
+- Add `PolicySet::check_workspace` for adapter admission before native
+  preparation, using the same typed requirement diagnostics as joint selection.
+  `UnmetRequirements` now implements `core::error::Error`; early success never
+  clears later requirements or authorizes publication.
+
+- Carry canonical sample-depth assertions through encode declarations and row
+  sources; verify complete strips before native push, including typed/erased
+  routes. Exhaustive `row_encode::Description` literals add `exact_depth`.
+  Pair zenpixels `283655c5` and the approved 368-byte DecodeOutput layout;
+  lower-depth native fidelity remains separate from grid membership (`68e68503`).
+
+- Add optional output-schedule evidence to `TranscodeOffer`, admitting metadata
+  and publication requirements on the same retained route. Unknown still refuses;
+  native publication-owner qualification remains separate (`40f92ed4`).
+
+- Refuse staged video completion without an admitted frame, and refuse further
+  execution if the legacy preset is replaced after accepted input. Reject
+  controlled-decoder completion facts that contradict the adopted interpretation.
+
+- Review API: operation entry points accept `OperationPolicy`. Pass `PolicySet`
+  directly, or wrap a custom `PolicyResolver` in `BoundPolicy`. Mandatory
+  requirements are admitted outside callbacks and retain named diagnostics.
+  Deprecate separate `with_policy_set` placement; compatibility requirements
+  remain enforced. `Renderer::render` takes one policy argument, with
+  `render_with_preset` as the deprecated compatibility form.
+
+
+- Yield one admitted sink strip per coroutine progress event. Retain the
+  unfinished native batch without advancing the producer, preserve strided
+  samples/pass coordinates, and keep cancellation terminal between deliveries.
+  This bounds queued sink loans, not native workspace or batch storage.
+
+- Add job-to-writer/destination row adapters that admit policy before driver
+  allocation and native construction, bind current color at startup, and reject
+  changed source/destination/plan facts before pixel reads or publication.
+  Whole-raster/replay execution and checked registry convenience remain open.
+
+- Add explicit effective-job encode planning and declared startup, including
+  current color, actual destination access, input acquisition, bounded source
+  passes and materialized carrier evidence. Defaults refuse; erased forwarding
+  preserves native errors. Checked destination execution and native adoption
+  remain separate validation gates.
+
+- Refuse final interpretation adoption when a built-in preset has unproven
+  metadata, memory, range or output obligations. Provisional discovery remains
+  permitted; final facts no longer bypass requirements before sink output.
+
+- Deprecate generic and erased best-effort policy setters in favor of checked
+  policy methods or operation requests. Legacy behavior and its tests remain.
+
+- Default opaque-profile retention evidence to unknown in transcode offers.
+  Strict profile exclusion requires explicit negative evidence from the route;
+  descriptive metadata stripping alone cannot establish profile exclusion.
+
+- Negotiate actual raster output access through typed/dyn Encoder methods;
+  retain tail metadata and ordered patches. Execute seek-back through the row
+  driver with preflight and separate confirmed append/overwrite accounting.
+
+- Share output finish/patch types in the core and actual writer wrappers in
+  zencodec-io. Media aliases preserve existing native muxer/consumer paths.
+
+- Add explicit private disk staging to row encoding, with admitted chunk replay
+  after native release and staging facts in the existing schedule policy.
+  Preserve scratch prefixes, typed failures and confirmed destination appends.
+
+- Revalidate retained row-source interpretation and acquisition across policy
+  and writer callbacks; reject drift before reading rows and retain confirmed
+  output effects and selected decisions in the failure.
+
+- Add owned row-source encoding with admitted staging, explicit schedule policy,
+  strided raster convenience, preserved color context and located partial-write
+  errors. Deprecate encode_to_writer; retain its existing regression coverage.
+
+- Resolve prepared output schedules through the shared policy callback. Bind
+  actual source mechanism and byte timing, refuse unknown required wait-memory
+  bounds, and expose owned video finish-first guarantees automatically.
+
+- Add explicit disk staging for owned finite encoding with separate disk/index
+  caps and admitted replay. Expose the actual store to policy; spool I/O may
+  block while the encoder is alive. Preserve confirmed destination appends and
+  original causes on late replay failures.
+
+- Add prepared-instance video encoder fidelity evidence with an unknown default.
+  Forward it through shared wrappers, bind it in owned staging, and refuse drift
+  before publication; conversion preservation remains independent.
+
+- Add owned finite `StagedEncode`: retain encoder, conversion and prepared
+  destination through policy; stage compressed payloads and drop the encoder
+  before writer I/O. Preserve decision reports and concrete partial-write errors.
+
+- Expose retained destination layout/access/timing facts to frame-route policy
+  and its selected report. Derive them from prepared/active output drivers; byte
+  streaming does not imply safe encoder backpressure or bounded memory.
+
+- Add `Renderer::render_first` for checked first-image rendering without caller
+  discovery boilerplate. Preserve discovery/source failures and do not substitute
+  thumbnails or skip unsupported selections.
+
+- Prefer complete sample-preserving conversion plus lossless encoding before
+  encoder-only lossless evidence, without bypassing required route constraints.
+
+- Couple retained frame conversion evidence to encoder routes. Expose target
+  interpretation/timing, sample/range preservation, siting assumptions and
+  scoped admission; qualify fixed-output native AV1 conversion before acceptance.
+  This extends the unpublished review API, without a new callback method.
+
+- Replace the private float conversion kernel with the reviewed public
+  `CodePlane` / `YcbcrToRgbF32` mechanism. Preserve exact native outputs and
+  existing policy, admission and ownership behavior; capture actual shared
+  signatures and structured refusal facts in the guide.
+
+- Qualify native float processing through existing OutputPlan and owned-image
+  replacement. Preserve exact row-batch output, strided padding and video timing.
+  Measure continuous/IEC transfer differences and the clipping preset footgun
+  separately; no new public API or zenpixels source change.
+
+- Execute unclipped native AV1 float conversion through the existing policy and
+  owned-image contracts. Preserve sRGB interpretation, exact crop consistency
+  and admitted ownership; compare actual output with an independent float
+  converter under a fixed numerical gate. The public planar plan remains open.
+
+- Resolve retained image-conversion routes before destination initialization.
+  Disclose assumed chroma siting, extended-range preservation and scoped storage;
+  preserve selected records and original causes on failure. Add deferred
+  `StorageBudget::prepare_filled` reservations whose charge transfers on allocation
+  or releases on refusal. Qualify the private route with native AV1 strips/crops.
+
+- Add explicit converted-frame adoption with `ImageOutput::from_frame_pixels`.
+  Retain exact timing/presentation and separate original component facts through
+  `source_frame()` and `ImageFacts::source_frame`; current packed samples retain
+  their own descriptor/context. Adoption releases the consumed native picture,
+  preserves payload admission, and performs no hidden conversion or resizing.
+
+- Add `Muxer::begin_exact_timing`, including dyn dispatch. Unqualified
+  implementations refuse before legacy setup; qualified instances preserve
+  supplied packet timing or reject before packet output. Metadata, workspace
+  admission and future-packet validity are separate requirements.
+
+- Add `MuxFinish::validate` and `MuxFinish::apply_to`; immediately deprecate
+  `apply_finish` in favor of the method. Validate every patch before appending
+  the tail or changing bytes, and reserve output fallibly. Existing testkit
+  consumers use the replacement; the compatibility helper retains the fix.
+
+- Resolve prepared native frame encoding transitions through the existing
+  fallible policy resolver. Keep input epochs separate from output segments,
+  refuse fixed-output changes, preserve terminal failure/cancellation behavior,
+  and qualify exact native AV1 output with independent readback. Segmented
+  replacement does not establish continuous-container reconfiguration or a
+  whole-operation memory bound.
+
+- Require declared auxiliary alignment in the private canvas projection and
+  qualify the packaged JXL adapter with subsampled source extras and exact
+  odd-origin crops. Unknown alignment refuses before output admission.
+
+- Retain explicit emitted auxiliary registration through owned/native planes,
+  clones and separate color replacement. Registration defaults to unknown;
+  equal dimensions and source reduction factors never imply alignment.
+  `ColorSamples` checks dimensions and freezes the adapter's sample-center claim.
+
+- Retain the collection's selected composition view with each checked output
+  before publication policy. Preserve storage and existing clones; reject a
+  changed adapter view or conflicting owner claim with expected/actual facts.
+  Packed storage alone still does not establish display readiness.
+
+- Add `PlaneView::as_strided_samples` for existing plane kernels to borrow the
+  declared storage span without a full-plane copy. Keep raw word encoding,
+  mapping lifetime and inter-row padding; exclude trailing allocation space.
+
+- Add `ImageOutput::replace_packed_color`: retain original auxiliary mapping
+  guards and frozen source facts beside new color, with the existing publication
+  resolver. Charges follow both owners; repeated replacement releases
+  intermediate colors. Component codes refuse this same-coordinate operation.
+
+- Compare actual float ICC conversion for one JXL presentation and five raw
+  RGB/RGBA layers against independently executed Little CMS. Keep the original
+  color tolerance, exact alpha/padding and admitted destination cleanup. Pin
+  the converter's float/range and ICC-precedence corrections, execute the
+  example shown by the guide, and record the remaining preset and owner gaps.
+
+- Combine the existing output-plan and native-sample review dependency pins.
+  Validate borrowed JXL color input directly into admitted destination rows
+  across four CMYK and five RGB layers. Preserve exact color/context and
+  charges through retained output; discard unpublished storage on admission,
+  interpretation, late CMS failure and unwind. Complete auxiliary-plane
+  publication and owner-preserving identity remain outside this color stage.
+
+- Qualify profile-aware CMYK identity finalization with native JXL samples:
+  preserve exact samples and ICC, refuse unsupported RGB conversion and missing
+  current color context, and demonstrate that the required owned input and
+  final output copies remain outside the decode output pool. Keep this separate
+  from the descriptor-only row-converter refusal; track finalization ownership
+  in zenpixels issue 69.
+
+- Add operation-scoped output storage to `OpenRequest` and group resolved
+  factory requirements in `CollectionOpenContext`. JXL honors the shared request;
+  the private TIFF adapter refuses before source work. Remove the temporary
+  compatibility method after qualifying the native adapter; no capability query,
+  codec-specific storage setter or implicit fallback is required.
+
+- Qualify the packaged JXL output allowance across 147 presentations and nine
+  raw layers alongside ordinary allocation. Preserve exact samples, stride and
+  existing independent-reader gates; check shared charges through concurrent
+  retained outputs and after operation/input drop. Add the executing registration
+  example to the guide and record scope separately from native workspace.
+
+- Add `PackedImageOwner`, `ImageOutput::from_packed_owner` and borrowed
+  `ValueSlice` for native/admitted packed storage. Preserve charges through
+  mapping, policy waiting and clones without copying samples. Validate immutable
+  layout/color facts and keep original backend causes behind bounded diagnostics.
+  Native RGB/CMYK controls cover strided exact samples and rollback; identical
+  inverted-CMYK conversion still refuses with `NeedsCms`.
+
+### QUEUED BREAKING CHANGES
+
+- The review development version is now 0.2.0: required Pulse methods introduced
+  in `f51b6d22` cannot ship as a 0.1 patch. Workspace consumers require that
+  contract. Legacy cancellation adapters remain deprecated; no release has
+  been published. The published-baseline semver gates remain enforced.
+
+- Review API: borrowed codec, I/O, policy and media controls now accept `Pulse`;
+  jobs require `with_pulse(SharedPulse)` / `set_pulse`, and collection contexts
+  retain the complete pulse. Cancellation-only setters remain deprecated adapters.
+  Native codec implementations must migrate; pinned native qualification is pending.
+- Rename the bare byte-acquisition `Request` to `InputRequest` and metadata
+  rewrite `Request` to `RewriteRequest`; retain deprecated type aliases.
+
+
+- Rename review-only `PublicationOffer::PreserveNative` to `ReturnHeld`: an
+  explicitly converted image can be published through this same boundary. The
+  offer promises the current held samples, not the original pre-conversion ones
+  (`ab25c9d4`).
+
+- Review-only `OpenRequest` is now `Clone` instead of `Copy`: cloned requests
+  share the same retained-output storage allowance (`27cc94e3`). Native factories
+  now implement only `open_with(source, CollectionOpenContext)`, replacing the
+  review-only positional-argument opening method.
+
+- Review-only `Samples::Values` now carries `ValueSlice` by value instead of
+  borrowing the `Values` allocation container. This allows admitted auxiliary
+  storage to keep its owner and charge. No released API is removed (`1f46337b`).
+
+### Other changes
+
+- Validate experimental multipass reader/file geometry before input or sample
+  effects; bound padding discard and preserve typed cancellation causes.
+  Existing strided native parity remains qualified.
+
+- Enforce strict sample-grid declarations in the multipass experiment, retaining
+  typed refusal before successful row delivery (`310f7fa7`). Refuse unmapped
+  descriptor primaries/range in its native adapter before sRGB startup. Native
+  claimed/unclaimed byte parity passes; production protocol promotion remains open.
+
+- Qualify packaged JXL input-size limits through the registry: actual resident
+  length controls admission, both composition views retain exact native samples,
+  and mixed refusals exclude the handled field. This is not workspace admission.
+
+- Replace the duplicate JXL factory with the real optional `zenjxl::collection`
+  package from its API review PR. Qualify all 147 presentation selections and
+  nine raw layers through that package, retaining native bit-exact and pinned
+  independent-reader gates. Keep TIFF private and unqualified resource/policy
+  requirements explicit; update the source-extracted guide and receipt.
+
+- Retain unhandled limit and decode-policy fields in typed collection-opening
+  refusals. Callers can inspect bounded settings without knowing adapter-specific
+  causes or parsing text; handled fields are excluded and refusals never authorize
+  weaker retries. Show the exact error variants and fields in the source guide.
+
+- Register borrowed native collections with `CodecSet::with_collection` and
+  `open_collection`. Share one checked discovery/publication path; retain source
+  lifetimes, cursor ownership and first-registration-wins errors. Require adapters
+  to honor inherited limits/policy or refuse; preserve set, pulse and per-call
+  cancellation after registry drop. Concrete TIFF/JXL adapters remain in the
+  validation harness and refuse unqualified legacy configuration mappings.
+- Qualify TIFF stored width, height and pixel caps before compressed-pixel reads
+  and selected-output allocation. Keep over-limit inspection and smaller-child
+  decode available; a tiny ROI does not bypass a stored-image cap. Accept no-op
+  native defaults and exclude the explicitly encode-only output-byte field from
+  decoding. Other unqualified requirements still refuse before source I/O.
+
+- Make the unreleased `DynReadAt` protocol usable with thread-local sources.
+  Request `dyn DynReadAt + Send` explicitly when moving an erased source
+  between threads. Both boxed forms accept borrowed input. Native factories
+  reuse this protocol; remove their duplicate private `LocalSource` trait.
+
+- Add `CollectionOperationError::stop_reason()` (`2cdadc3c`) so callers can
+  inspect the operation token's first observed stop across native, policy and
+  wrapper failures. Preserve coincident source/application causes and traces,
+  including failed opening and later calls on a finished operation.
+
+- Add selected `ImageDescription` and `describe` to the shared collection and
+  checked consumer after native TIFF/JXL/HTTP qualification (`76edcca8`). Keep
+  source geometry distinct from rendered output and metadata completeness.
+  Validate returned geometry, preserve cancellation and source-replacement
+  failures, and charge repeated inspection against the discovery allowance.
+
+- Expose signed presentation placement in the immutable shared output and
+  publication facts. Validate it with the packed owner without clipping hidden
+  samples; preserve typed overflow/geometry causes. Native JXL layers use that
+  field, while blend/reference facts remain codec-specific. The image policy
+  question borrows its diagnostic facts instead of embedding another copy.
+
+- Promote the native-qualified collection mechanism to `zencodec::collection`
+  and its checked consumer to `operation::CheckedCollection`. TIFF/SubIFD,
+  JXL presentation/layer and conditional HTTP adapters now import those shared
+  contracts. Preserve source-scoped identity, exact regions, operation-wide
+  discovery-call accounting, traced errors and the first cancellation reason.
+  Adapter factories remain private; CodecSet registration and
+  native workspace admission are still separate work.
+
+- Update the native JXL validation dependency after CMS callback failures were
+  changed to return their original traced error. Recheck selected layers, TIFF
+  regions and conditional HTTP source identity against that implementation.
+
+- Qualify selected raw JXL F32 layers through the same checked consumer as TIFF
+  and presentations. Freeze complete local samples with signed placement and
+  source blend/reference facts; preserve native bits and allocation through
+  policy. Require explicit inverted CMYK and black-plane polarity, and use
+  fallible format lookup instead of panicking for unsupported representations.
+  The collection remains private; source facts do not promise lossless editing.
+
+- Qualify one operation stop token across private TIFF/JXL collection discovery
+  and selected decode. Check source I/O, graph traversal, cached/exhausted cursors
+  and final publication; pass the token into native JXL work. Inject cancellation
+  through the observed polls of real TIFF/SubIFD and JXL operations without
+  changing the common consumer signature.
+
+- Keep frame and decoder-boundary diagnostic facts once in `DecisionContext`;
+  `Selection` records only the publication or boundary action. This aligns the
+  unpublished report variants with selected images and removes duplicated
+  interpretation/timing from successful records.
+
+- Add `operation::resolve_image`: the existing fallible resolver admits the exact
+  held selected output or drops it on refusal, error, cancellation or unwind.
+  Share `PublicationOffer` with native-frame questions instead of introducing a
+  second publication option type. Native TIFF, JXL and AV1 exercise this boundary;
+  privacy and workspace requirements without evidence refuse.
+
+- Promote the native-qualified mapped output to `zencodec::image`. TIFF/JXL
+  and AV1 validation import the same implementation. Preserve immutable facts,
+  source/actual precision, auxiliary contribution and native ownership; expose
+  typed traced region/mapping failures and reject conflicting native plane
+  dimensions or code encoding. Collection discovery remains private.
+
+- Move native frame ownership and borrowed component-plane mappings into
+  `zencodec::frame`, retaining the existing media import paths as re-exports.
+  Core gains no media/I/O dependency; native selected-image and AV1 consumers
+  use one mapping contract. Accounted software allocations remain in media.
+
+- Disclose whether retained spot-color samples already contributed to the
+  returned color. Both native routes preserve identity and auxiliary bytes; an
+  exactly representable fixture matches independent libjxl F32 output.
+
+- Qualify subsampled auxiliary source shifts separately from emitted plane
+  dimensions for all seven named JXL roles. The real-codec loop found and fixed
+  native decoder issue 69; full independent decoding now validates generated
+  fixtures before selected/sequential sample comparison.
+
+- Carry complete native JXL auxiliary precision, spot/CFA parameters and selected
+  timecodes through the shared output. Native encoder fixtures qualify all seven
+  named auxiliary roles, half/float alpha, non-default source HDR/display facts
+  and reverse-selected timecodes, with independent libjxl metadata inspection.
+
+- Freeze interpretation with the private mapped output and validate packed
+  sample/region geometry at construction. Retain native JXL source precision,
+  HDR/display/preview and animation declarations separately from output color
+  and metadata retention permission; qualify them with independent libjxl
+  inspection and keep native AV1 ownership/timing tests passing.
+
+- Replace associated native samples in the private collection with one mapped
+  image output, exercised by TIFF, JXL and AV1. Preserve packed alpha, auxiliary
+  roles and native video code-depth/ownership; keep rendering and resource gates
+  explicit. Cross-check extra-channel facts with libjxl and AV1 samples with
+  FFmpeg. Published crates do not gain this experimental API.
+
+- Apply the WIC/OpenImageIO review to the private collection: attach region
+  requirements to each selected image, return TIFF canvas/region geometry,
+  and reject unsupported JXL regions explicitly. Preserve request-local
+  failures and test differently sized pages and shared SubIFDs.
+
+- Adopt native TIFF regions into the shared pixel owner with exact signed/wide
+  sample bytes, explicit stride and original allocation ownership. Retain each
+  selected directory's ICC and unapplied orientation; refuse unresolved alpha
+  association and malformed/over-budget metadata. The native consumer exposed
+  the external allocation constructor added in zenpixels PR 93.
+
+- Run one private collection consumer over native TIFF and JXL with traced
+  failures. Distinguish unsupported child discovery from successful exhaustion,
+  preserve source-replacement causes, and execute the guide's exact selection
+  example against both adapters. Native sample/interpretation differences remain
+  a public-API promotion gate.
+
+- Exercise native JXL presentation selection and dependency replay against
+  sequential samples, with independent libjxl discovery. Fix the view before
+  issuing identities; refuse required layers while the pinned native decoder
+  cannot honor them. Keep the candidate private until the common consumer path
+  and source-version/interpretation boundaries are qualified.
+
+- Exercise operation-bound identities, lazy directory discovery and arbitrary
+  nested/shared SubIFDs against native classic TIFF and BigTIFF. Keep image
+  containment separate from reduced-level selection and requested composition;
+  reject foreign cursors, cycles and exhausted discovery allowances explicitly.
+  This candidate is not yet part of the public API.
+
+## API guide (unreleased)
+
+- Keep a visible Changes & why record for video, required density, the shared
+  resolver and positional I/O, with each role’s consequences, extracted
+  signatures, qualification evidence and open scope. Execute the new required
+  density example against pinned native PNG/JPEG and checked-transcode adapters.
+
+## Native frame policy (unreleased)
+
+- Qualify native AV1 plane admission before publication policy. The executable
+  guide configures the decoder's scoped picture-byte allowance; refused native
+  allocations retain their original trace and invoke no publication callback.
+  Both native allocation modes preserve all 15 tested depth/layout combinations
+  under independent FFmpeg readback. Full decoder workspace remains unbounded.
+- Retain decision history in a circular buffer, keeping the latest 16 records
+  and chronological iteration/debugging without shifting every record for each
+  video presentation. [Measured API cost](benchmarks/frame_policy_2026-10-25.md).
+- Share immutable media interpretation/timing facts through `zencodec::frame`,
+  retaining the existing media import paths. Extend the shared resolver with
+  typed native-frame questions and bounded presentation diagnostics.
+- Add `zencodec_media::policy::PolicyDecoder`, which holds each decoded frame
+  until policy succeeds, preserves native samples/owners, and releases the
+  decoder and unpublished frames on terminal failure or unwind. This guards
+  publication after reconstruction; it adds no native workspace/privacy bound.
+- Use `with_policy_set` consistently for the new frame guard and the existing
+  still-image policy adapter. Native AV1 examples and independent re-encode
+  qualification accompany the source-extracted guide signatures.
+
+The required-resolution helpers also have an independent exact-rational oracle;
+see [the density contract](docs/resolution-contract.md#independent-arithmetic-oracle).
+
 Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 
 ## zencodec-testkit
 
 ### [Unreleased]
+
+- Enforce mandatory `PolicySet` constraints before custom callback selection;
+  preserve original offer indices and report named unknown/contradicted evidence.
+  Lossless preferences and disclosed chroma-siting decisions remain situational.
+
+
+- Qualify required unclipped Gamma22 conversion on real AV1-derived samples.
+  The regression fails against the old pixel revision and passes the fixed
+  internal steps. Save linear/encoded/restored traces and independently inspect
+  them, including deliberate clipping and missing-input controls.
+
+- Migrate native JPEG, AV1/video and TIFF/JXL conversion callers from deprecated
+  `forbid_lossy()` to `retain_channels()` without changing their policies. Exact
+  carriage continues to use `new_preserving_samples`. Pin all native pixel
+  consumers to one review revision and show the actual replacement signatures.
+
+- Native JXL now exercises the shared `OutputPlan::new_preserving_samples`:
+  unchanged rows borrow and opaque-alpha expansion preserves original sample
+  bits. The pinned conversion API and guide distinguish exact representation
+  changes from approximate unclipped color conversion.
+
 
 ### Fixed
 
@@ -196,12 +655,35 @@ removes that whole class).
 
 ### [Unreleased]
 
+#### Added
+
+- `row_encode::encode_dyn_job` and `encode_dyn_job_to_destination` accept retained
+  registry jobs directly. They share typed-job admission, declared color startup,
+  source validation, staging and seek-back patch execution, preserving native
+  error causes. Metadata/fidelity postconditions remain the caller's checked layer.
+
 #### QUEUED BREAKING CHANGES
 
-- None.
+- `FileReadAt` and `BufferedReadAt` return `StdSourceError`, preserving native
+  I/O errors alongside structured `SourceError` refusals. Their old concrete
+  error signatures discarded kind, OS code and custom payloads (`728b7f02`).
 
 #### Fixed
 
+- Drop the native controlled session on policy/native failure or unwind while retaining its report. Native JPEG qualification caught retained input after decline; whole-source baseline/progressive pixel parity and refusal before unqualified late-profile effects are tested.
+
+- Async image drivers bound their copied request alternatives before allocation.
+  Failed compute batches no longer drain newly pending output after the failure.
+
+- Check request address overflow before serving bytes. `ReadCursor::max_window`
+  now bounds prefetch and skipped-input buffering as well as contiguous requests.
+- Publish fetched ranges only after the complete batch succeeds; partial source
+  failures and async cancellation cannot expose unfilled cache bytes on retry.
+
+- Buffered sources reserve retained capacity fallibly before reads, reject
+  impossible exact spool requests before consuming input, and retain only the
+  declared window during large forward reads. Exact-cap EOF uses one stack-byte
+  probe; excess input makes the spool terminal without growing retained payload.
 - `FileReadAt` uses safe positional file reads on Unix/Windows, with seek/read
   retained for other targets. Construction reads metadata without moving the cursor.
 - Synchronous and async cursors reuse prefetched ranges, read only a missing
@@ -214,6 +696,37 @@ removes that whole class).
 
 #### Added
 
+- `ReadAtReader` bridges positional sources to synchronous `std::io::Read + Seek`
+  with an independent cursor, preserved native errors and no implicit buffering.
+  Native TIFF qualification exercises disk, direct and buffered range sources,
+  planar tiles, pages, reduced levels and wide samples.
+
+- `PolicyDecoder` serves actual controlled suspensions through the shared fallible resolver, preserves native failures and bounded reports, and poisons execution after callback failure or unwind. Existing transports drive the adapter.
+
+- `ControlledStepper` exposes mandatory suspensions through the existing byte
+  cursors so adapters can prepare a destination before approving pixel work.
+  Repeated calls at a pause do no I/O or native work; failed replies and native
+  failures release the held session even when the stepper remains alive.
+
+- `storage::StorageBudget`, `OwnedStorage` and `SharedStorage` admit typed,
+  fixed-size payload allocations before creating them and retain their charges
+  through clones and subviews until the last backing owner drops. Byte and object
+  limits are independent; native codec workspace and allocation overhead remain
+  outside this managed-payload scope. See `docs/storage-admission.md`.
+
+- `WorkQuota` and `DriveOptions::with_work_quota` bound async compute turns and
+  ready packet loops by complete codec steps. Quota yields do not drain encoded
+  output; CPU fairness remains separate from destination backpressure.
+
+- `IoLimits`, `InputError` and `DriveOptions::with_limits` provide retained-input
+  admission across synchronous and async incremental drivers. Optional range
+  prefetch/gap merging fits the allowance; required spans refuse before I/O.
+  Allocations are fallible, borrowed slices stay allocation-free, and source
+  errors retain their own types. Cursors expose retained input capacity.
+
+- `BufferPolicy::try_for_pattern` refuses insufficient required lookback instead
+  of clamping it. `BufferedReadAt::retained_bytes` reports cached payload separately
+  from consumed input. `StdSourceError::Allocation` preserves allocation refusals.
 - Observational I/O contract probes and a high-expansion transcode benchmark
   for output backpressure, spool admission, and one-shot encoder fallback.
   A pinned standalone harness adds positional-file comparisons, native QOI
@@ -245,6 +758,20 @@ removes that whole class).
   cancellation and progress. The input window is zeroed once and compacts only when
   its tail is full (`34346a05`).
 
+## zencodec-coroutine
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Added
+
+- `controlled_with_storage` admits input payload, a bounded range index and reusable row staging through the shared `StorageBudget`. Input/index admission precedes codec initialization; row admission precedes sink effects. Completion and failed policy sessions release owned buffers.
+
+- Controlled construction and awaited interpretation boundaries block affected output until final adoption, reject changed final facts, and poison failed/unwound sessions. Legacy execution refuses controlled sessions. Row copying now reserves fallibly and refuses unapproved output before allocation. This does not add a native or whole-operation memory bound.
+
 ## Workspace
 
 ### [Unreleased]
@@ -255,23 +782,125 @@ removes that whole class).
 
 #### Added
 
+- Native JPEG qualification calls the codec-owned controlled factory through stored requests, with exact pixels over slice/range drivers and typed late-ICC refusal before sink output. Pinned native implementation: zenjpeg PR 240 (`3e9050ef`).
+
 - CI and `just doc-default` check workspace and standalone I/O documentation with default features and warnings denied (`7e3c8666`).
 
 #### Fixed
+
+- The migration-page keyboard check waits for fragment navigation before
+  asserting its URL, retaining the existing skip-link expectation.
 
 - Apply accounting-scope validation to disk-only caps in the private policy
   experiment, with a failing-before/fixed-after regression. Public APIs are unchanged.
 - `zencodec-coroutine` delivers rows or metadata deposited during the future's final poll before reporting completion (`7cc3d3ec`).
 
+## zencodec-media
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- On the unpublished media API, `MapError::Backend` takes an owned
+  `Box<dyn Error + Send + Sync>` instead of `String`, retaining concrete causes
+  and location traces through mapping, adaptation and erasure (`6241cad4`).
+
+- `PlaneData` gains accounted 8/16-bit storage variants on the unpublished media
+  API. Exhaustive matches must handle the new variants (`5019a40a`).
+
+- `erase_video_encoder` now applies strict terminal-error handling, including
+  native validation errors. Callers deliberately using a backend's retryable
+  validation contract can use the error-only `VideoEncoderShim` (`ffaddb6b`).
+
+#### Added
+
+- Add `std`-enabled checked output drivers: `output::PreparedOutput` retains
+  the actual muxer/writer without publishing, and `output::Output` validates
+  packet clocks/epochs and finish patches with terminal failure semantics.
+  Exact timing is the default; `with_container_timing` explicitly opts into
+  the native muxer's ordinary timing. `Forward` and `SeekBack` derive access
+  from actual writers and preserve file prefixes. Native qualification now
+  imports this shared implementation instead of keeping a private copy.
+
+
+- `PumpError::source()` exposes upstream and downstream failures to standard
+  error-chain inspection. Typed and erased pump regressions also retain native
+  causes and terminal-session behavior.
+
+- Accounted packet payloads and native-word planes preserve storage charges
+  through packet take/clone, side data, frame clones, show-existing presentations
+  and old epochs. Legacy conversion to an ordinary vector remains explicitly
+  outside managed accounting.
+
+- `FusedEncoder` enforces cancellation before backend work and refuses all work
+  after failure. Both fused session wrappers remain failed across a caught
+  backend/stop unwind; a successful decoder reset still reopens the decoder.
+
 ## zencodec
 
 ## [Unreleased]
+
+- Add `CheckedCollection::decode_with` for adapter processing before the single
+  publication decision. Preserve concrete transform errors, recoverable request
+  refusal and terminal cancellation/unwind. The private renderer's
+  `render_selected` uses the hook for TIFF/SubIFDs and JXL.
+
+- Qualify a private combined held-image render operation over native TIFF and
+  JXL: exact required color, oriented regions, retained auxiliary values and
+  finished-output publication policy. The loop found and fixed a same-profile
+  sample change in zenpixels-convert; no new shared render API is claimed.
+
+### Native API validation
+
+- Pin the required-descriptor `OutputPlan` constructor and validate exact native
+  JXL premultiplication through borrowed identity and admitted strided output.
+  Preserve format-only behavior and the independent color/selection gates.
+
+### Added
+
+- Optional `PackedImageOwner::retain_auxiliaries` and `AuxiliaryImageOwner`
+  retain immutable auxiliary allocations independently of replaced color.
+  Inseparable owners keep existing behavior; errors preserve their typed cause.
+
+### Added
+
+- Required physical resolution on checked encode requests and generic/erased
+  jobs, with exact cross-unit and unknown-unit aspect comparison. Unsupported
+  jobs refuse before encoding; no implicit rounding or physical-unit loss.
+  [Contract and qualification scope](docs/resolution-contract.md).
+
+- `DecodeRowSink::max_buffer_rows` exposes admitted strip capacity. Shared copy
+  helpers and coroutine delivery divide native batches without growing sink
+  storage or changing samples, stride, coordinates or progress-event counts.
+
+- Checked encode adapter defaults fill only unspecified policy fields. Explicit caller requirements, including false gates, win in local and transferable preparation; unsupported defaults refuse before encoding.
+
+- Coupled transcode choices in the shared policy resolver, with typed metadata treatment, opaque-profile retention and scoped storage facts. Configurable presets reject unknown workspace bounds and missing privacy evidence; final interpretation and fresh choice tokens are required. Adapters retain the prepared route and validate output before constructing its outcome.
+
+- `CodecSet::with_send_encoder`, `EncodeRequest::prepare_send` and
+  `PreparedSendEncode` retain thread-transfer capability through job erasure.
+  Registration checks the concrete job's `Send` bound without restricting
+  existing thread-affine jobs. Preparation refuses unqualified registrations
+  before source consumption; shared configuration checking and exact retained
+  job identity are covered by a real thread-transfer test.
+- `EncodeRequest::prepare` retains checked jobs for an adapter's coupled decision.
+  Ordinary encoding uses the same preparation. `PreparedEncode` exposes the
+  confirmed offer and transfers the original job without reconstructing it.
+
+- Policy decision reports retain typed question context on refusal and callback failure; controlled decoders can report payload-free interpretation failure reasons (`184f1291`).
+
+- `DecodeRequest::start_controlled` binds required policy/output and inherited context to registered controlled jobs. Generic/erased job creation share one primitive; default refusal prevents silent fallback, and required output mismatch fails before adoption or sink effects (`fd132f55`).
+
+- Shared `storage` module for allocation admission in codecs and authoring helpers; `zencodec_io::storage` re-exports the identical types for compatibility.
 
 ### Fixed
 
 - `find_cause::<E>` inspects traced `At<E>` values before following their source
   links, preserving concrete native error lookup before and after erasure.
   Codec traits retain their associated error types.
+- With `std`, cause lookup enters custom `std::io::Error` payloads as well.
+  Native TIFF source-failure tests exposed the otherwise skipped transport
+  error; nested I/O and traced payloads remain downcastable after erasure.
 - The default `DynEncoder::begin` now refuses unsupported row encoding, matching
   `Encoder::begin`. This fixes handwritten dyn implementations; the ordinary
   typed-to-dyn shim already delegated correctly. Rejection preserves the
@@ -281,6 +910,22 @@ removes that whole class).
   row methods. A strided multi-strip regression checks exact output.
 
 ### Added
+
+- `ControlledIncrementalDecode` adds mandatory interpretation suspensions, scoped replies and fused enforcement independently of metadata events (`050069b1`). `Question::Boundary` supplies typed mechanisms and finality facts to the existing resolver; native codec qualification remains explicit.
+
+- `operation::{DecodeRequest, EncodeRequest, OperationError}` store required
+  policy, output descriptor and fidelity choices, then validate them automatically
+  during execution through `CodecSet` templates. Required policies use checked
+  setters, explicit descriptor preferences allow native fallback, and native
+  errors remain recoverable through the traced result. Requests are reusable.
+- `operation::PolicyResolver` selects prepared encoder configurations through
+  typed offers and opaque question-scoped choices. Callbacks return traced native
+  errors, can decline explicitly or delegate once to a configurable `PolicySet`.
+  Successful requests return `Outcome<T>` with bounded decision records; selected
+  native execution failures retain the report. Unsupported fidelity alternatives
+  are filtered before policy, malformed lists are refused, and native execution
+  is never retried automatically. This is the first production question domain;
+  late metadata and transcode decisions remain separate implementation work.
 
 - `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
   twin of `DecodePolicy::strict`: when set, an encode the target can only
@@ -1757,3 +2402,20 @@ which tracks `zenpixels 0.2.7`.
 
 - Drop unnecessary `imgref` feature from zenpixels dependency.
 - Add magic byte detection audit example.
+
+## zencodec-render
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- None; new unpublished companion API.
+
+#### Added
+
+- Shared `Renderer`, `RenderRequest` and `ColorTarget` for selected or decoded
+  images: full oriented sRGB RGBA8 canvas by default, explicit required output
+  and regions, aligned auxiliary retention and one final publication decision.
+  Geometry/color implementations moved from the native prototype; tests now
+  import the shared crate. Conversion remains outside core codec dependencies.
+  The review converter requires Rust 1.89; the core MSRV is unchanged.

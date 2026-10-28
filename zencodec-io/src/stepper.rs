@@ -16,11 +16,11 @@ use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::fmt;
 
-use enough::Stop;
-use zencodec::decode::{ByteRange, Input, Request};
+use zencodec::decode::{ByteRange, Input, InputRequest};
 use zencodec::source::ReadAt;
 
-use crate::drive::{DriveOptions, DriveStats, coalesce_into};
+use crate::admission::{self, InputError};
+use crate::drive::{DriveOptions, DriveStats};
 use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 /// A stage that consumes bytes through the sans-I/O dialogue.
@@ -35,11 +35,11 @@ pub trait ByteStepper {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Stepped<Self::Output>, Self::Error>;
 
     /// What the stage needs next, after a [`Step::Need`]. Never empty then.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 }
 
 /// The result of one [`ByteStepper::step`].
@@ -92,12 +92,14 @@ impl<O> Yield<O> {
 #[non_exhaustive]
 pub enum DriveFailure<E, SE> {
     /// The stage failed (for an image decoder: the decoder, its sink or the
-    /// stop).
+    /// pulse).
     Step(E),
     /// The source failed.
     Source(SE),
     /// The stage broke the protocol.
     Protocol(ProtocolViolation),
+    /// Input admission or allocation failed before a source read.
+    Input(InputError),
 }
 
 impl<E: fmt::Display, SE: fmt::Display> fmt::Display for DriveFailure<E, SE> {
@@ -106,6 +108,7 @@ impl<E: fmt::Display, SE: fmt::Display> fmt::Display for DriveFailure<E, SE> {
             Self::Step(e) => write!(f, "{e}"),
             Self::Source(e) => write!(f, "source: {e}"),
             Self::Protocol(e) => write!(f, "protocol: {e}"),
+            Self::Input(e) => write!(f, "input: {e}"),
         }
     }
 }
@@ -118,6 +121,7 @@ impl<E: core::error::Error + 'static, SE: core::error::Error + 'static> core::er
             Self::Step(e) => Some(e),
             Self::Source(e) => Some(e),
             Self::Protocol(e) => Some(e),
+            Self::Input(e) => Some(e),
         }
     }
 }
@@ -128,6 +132,7 @@ impl<E> DriveFailure<E, Infallible> {
         match self {
             Self::Step(e) => DriveFailure::Step(e),
             Self::Protocol(p) => DriveFailure::Protocol(p),
+            Self::Input(e) => DriveFailure::Input(e),
             Self::Source(never) => match never {},
         }
     }
@@ -147,14 +152,14 @@ pub(crate) fn slice_span(
     end: usize,
     window: usize,
     total: usize,
-    requests: &[Request],
+    requests: &[InputRequest],
 ) -> (usize, usize) {
     match requests[0] {
-        Request::AtLeast { offset, min_len } => {
+        InputRequest::AtLeast { offset, min_len } => {
             let s = offset as usize;
             (s, s.saturating_add(min_len.max(window)).min(total))
         }
-        Request::Range(r) => (r.offset as usize, r.end() as usize),
+        InputRequest::Range(r) => (r.offset as usize, r.end() as usize),
         // Every input carries the total; `check_need` reports a stage that
         // keeps asking.
         _ => (start, end),
@@ -211,7 +216,7 @@ impl SliceCursor {
 
     /// Point the next offer at the first of `requests` (post
     /// [`check_need`], so `requests` is never empty).
-    pub(crate) fn serve(&mut self, bytes: &[u8], requests: &[Request]) {
+    pub(crate) fn serve(&mut self, bytes: &[u8], requests: &[InputRequest]) {
         let (s, e) = slice_span(self.start, self.end, self.window, bytes.len(), requests);
         self.start = s;
         self.end = e;
@@ -226,11 +231,11 @@ impl SliceCursor {
         &mut self,
         bytes: &[u8],
         stage: &mut S,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Next<S, Infallible> {
         loop {
             let input = self.offer(bytes);
-            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             self.take(p.consumed);
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
@@ -263,7 +268,6 @@ pub struct ReadAtCursor {
     started: bool,
     /// Buffers fetched by the last range round, by absolute offset.
     fetched: Vec<(u64, Vec<u8>)>,
-    ranges: Vec<ByteRange>,
     coalesced: Vec<ByteRange>,
     /// Which input to offer next: the window, or a fetched buffer from `at`.
     from_fetched: Option<(usize, usize)>,
@@ -280,7 +284,6 @@ impl ReadAtCursor {
             window: Window::new(),
             started: false,
             fetched: Vec::new(),
-            ranges: Vec::new(),
             coalesced: Vec::new(),
             from_fetched: None,
             slice: None,
@@ -293,6 +296,13 @@ impl ReadAtCursor {
             Some(s) => s.stats(),
             None => self.stats,
         }
+    }
+
+    /// Retained driver-owned payload capacity; borrowed source bytes are excluded.
+    pub fn retained_input_capacity(&self) -> usize {
+        self.window
+            .capacity()
+            .saturating_add(admission::capacity(&self.fetched))
     }
 
     /// The input to offer the stage next: the fetched buffer in play, or
@@ -346,7 +356,7 @@ impl ReadAtCursor {
         &mut self,
         source: &mut Src,
         stage: &mut S,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Next<S, Src::Error>
     where
         S: ByteStepper + ?Sized,
@@ -358,11 +368,13 @@ impl ReadAtCursor {
         }
         if let Some(cursor) = &mut self.slice {
             let bytes = source.as_slice().expect("the source stays in memory");
-            return cursor.next(bytes, stage, stop).map_err(DriveFailure::widen);
+            return cursor
+                .next(bytes, stage, pulse)
+                .map_err(DriveFailure::widen);
         }
         loop {
             let input = self.offer(source);
-            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;
@@ -379,12 +391,14 @@ impl ReadAtCursor {
     /// Make the input for the first of `requests` available.
     pub(crate) fn serve<E, Src: ReadAt + ?Sized>(
         &mut self,
-        requests: &[Request],
+        requests: &[InputRequest],
         source: &mut Src,
     ) -> Result<(), DriveFailure<E, Src::Error>> {
         let window = &mut self.window;
-        match requests[0] {
-            Request::AtLeast { offset, min_len } => {
+        let limits = self.opts.limits;
+        let request = admission::select(requests, limits).map_err(DriveFailure::Input)?;
+        match request {
+            InputRequest::AtLeast { offset, min_len } => {
                 self.from_fetched = None;
                 window.position(offset, &mut self.fetched);
                 // Held bytes already satisfy the request; do not turn a cache
@@ -395,11 +409,21 @@ impl ReadAtCursor {
                 // Read until the window holds a whole number of requests at
                 // least `read_size` long, or the source ends (a short read
                 // marks the end).
-                let target = read_target(min_len, self.opts.read_size);
+                limits.reading().map_err(DriveFailure::Input)?;
+                let target = read_target(min_len, self.opts.read_size)
+                    .min(limits.max_input_bytes())
+                    .min(usize::try_from(u64::MAX - offset).unwrap_or(usize::MAX));
+                admission::make_room(window, &mut self.fetched, target, limits);
                 while window.len() < target && window.total != Some(window.end()) {
                     let end = window.end();
-                    let n_want = target - window.len();
-                    let spare = window.spare(n_want);
+                    let n_want = (target - window.len())
+                        .min(usize::try_from(u64::MAX - end).unwrap_or(usize::MAX));
+                    let spare = window
+                        .try_spare(
+                            n_want,
+                            limits.max_input_bytes() - admission::capacity(&self.fetched),
+                        )
+                        .map_err(DriveFailure::Input)?;
                     let n = source.read_at(end, spare).map_err(DriveFailure::Source)?;
                     window.commit(n);
                     self.stats.reads += 1;
@@ -409,7 +433,7 @@ impl ReadAtCursor {
                     }
                 }
             }
-            Request::Range(first) => {
+            InputRequest::Range(first) => {
                 if first.offset >= window.base() && first.end() <= window.end() {
                     self.from_fetched = None;
                     window.consume((first.offset - window.base()) as usize);
@@ -429,8 +453,16 @@ impl ReadAtCursor {
                     // refetching the prefix would break a forward-only source.
                     let missing = (first.end() - window.end()) as usize;
                     let offset = window.end();
+                    limits.reading().map_err(DriveFailure::Input)?;
+                    admission::make_room(window, &mut self.fetched, first.length as usize, limits);
+                    let spare = window
+                        .try_spare(
+                            missing,
+                            limits.max_input_bytes() - admission::capacity(&self.fetched),
+                        )
+                        .map_err(DriveFailure::Input)?;
                     source
-                        .read_exact_at(offset, window.spare(missing))
+                        .read_exact_at(offset, spare)
                         .map_err(DriveFailure::Source)?;
                     window.commit(missing);
                     self.stats.reads += 1;
@@ -438,30 +470,29 @@ impl ReadAtCursor {
                     return Ok(());
                 }
                 // New round: every range request, coalesced, one batch.
-                self.ranges.clear();
-                self.ranges.extend(requests.iter().filter_map(|r| match r {
-                    Request::Range(r) => Some(*r),
-                    _ => None,
-                }));
-                coalesce_into(&self.ranges, self.opts.max_gap, &mut self.coalesced);
-                self.fetched
-                    .resize_with(self.coalesced.len(), Default::default);
-                for (slot, r) in self.fetched.iter_mut().zip(&self.coalesced) {
-                    slot.0 = r.offset;
-                    slot.1.clear();
-                    slot.1.resize(r.length as usize, 0);
-                }
+                admission::plan(
+                    first,
+                    requests,
+                    self.opts.max_gap,
+                    limits,
+                    &mut self.coalesced,
+                )
+                .map_err(DriveFailure::Input)?;
+                window.release();
+                let mut pending = core::mem::take(&mut self.fetched);
+                admission::allocate_ranges(&self.coalesced, limits, &mut pending)
+                    .map_err(DriveFailure::Input)?;
                 {
-                    let mut reqs: Vec<(u64, &mut [u8])> = self
-                        .fetched
-                        .iter_mut()
-                        .map(|(off, buf)| (*off, &mut buf[..]))
-                        .collect();
-                    source
-                        .read_many_at(&mut reqs)
-                        .map_err(DriveFailure::Source)?;
+                    let mut reqs = Vec::new();
+                    admission::reserve(&mut reqs, pending.len()).map_err(DriveFailure::Input)?;
+                    reqs.extend(pending.iter_mut().map(|(off, buf)| (*off, &mut buf[..])));
+                    for batch in reqs.chunks_mut(limits.max_in_flight()) {
+                        source.read_many_at(batch).map_err(DriveFailure::Source)?;
+                        self.stats.reads += 1;
+                    }
                 }
-                self.stats.reads += 1;
+                // Publish only complete reads; an error leaves no partial cache.
+                self.fetched = pending;
                 self.stats.bytes_read += self.coalesced.iter().map(|r| r.length).sum::<u64>();
                 let i = self
                     .fetched
@@ -470,9 +501,10 @@ impl ReadAtCursor {
                     .expect("coalesced ranges cover every request");
                 self.from_fetched = Some((i, (first.offset - self.fetched[i].0) as usize));
             }
-            Request::Len => {
+            InputRequest::Len => {
                 self.from_fetched = None;
                 if window.total.is_none() {
+                    limits.reading().map_err(DriveFailure::Input)?;
                     window.total = Some(source.len().map_err(DriveFailure::Source)?);
                 }
             }
@@ -501,7 +533,7 @@ mod read {
         /// total length before the stream ended. A stream cannot serve
         /// either; wrap it in [`BufferedReadAt`](crate::BufferedReadAt) and
         /// use a [`ReadAtCursor`].
-        NeedsRandomAccess(Request),
+        NeedsRandomAccess(InputRequest),
         /// The stage needs more contiguous bytes than `max_window` allows.
         WindowLimit {
             /// Bytes the stage asked for in one input.
@@ -511,6 +543,8 @@ mod read {
         },
         /// The stage broke the protocol.
         Protocol(ProtocolViolation),
+        /// Fallible input allocation or address admission failed.
+        Input(InputError),
     }
 
     impl<E: fmt::Display> fmt::Display for PumpFailure<E> {
@@ -527,6 +561,7 @@ mod read {
                     "decoder needs {needed} contiguous bytes, over the {limit}-byte window limit"
                 ),
                 Self::Protocol(e) => write!(f, "protocol: {e}"),
+                Self::Input(e) => write!(f, "input: {e}"),
             }
         }
     }
@@ -537,6 +572,7 @@ mod read {
                 Self::Step(e) => Some(e),
                 Self::Io(e) => Some(e),
                 Self::Protocol(e) => Some(e),
+                Self::Input(e) => Some(e),
                 _ => None,
             }
         }
@@ -568,6 +604,11 @@ mod read {
             }
         }
 
+        /// Retained input allocation capacity, excluding the reader's own buffers.
+        pub fn retained_input_capacity(&self) -> usize {
+            self.window.capacity()
+        }
+
         /// The input to offer the stage next: the whole window.
         #[inline]
         pub(crate) fn offer(&self) -> Input<'_> {
@@ -585,7 +626,7 @@ mod read {
         pub(crate) fn serve<R, E>(
             &mut self,
             reader: &mut R,
-            requests: &[Request],
+            requests: &[InputRequest],
         ) -> Result<(), PumpFailure<E>>
         where
             R: std::io::Read + ?Sized,
@@ -599,16 +640,24 @@ mod read {
                 .find(|r| r.offset().is_some_and(|o| o >= window.base()))
                 .unwrap_or(requests[0]);
             let (offset, min_len) = match request {
-                Request::AtLeast { offset, min_len } => (offset, min_len),
-                Request::Range(r) => (r.offset, r.length as usize),
+                InputRequest::AtLeast { offset, min_len } => (offset, min_len),
+                InputRequest::Range(r) => (
+                    r.offset,
+                    usize::try_from(r.length).map_err(|_| {
+                        PumpFailure::Input(InputError::Limit {
+                            needed: r.length,
+                            limit: self.max_window,
+                        })
+                    })?,
+                ),
                 _ => return Err(PumpFailure::NeedsRandomAccess(request)),
             };
             if offset < window.base() {
                 return Err(PumpFailure::NeedsRandomAccess(request));
             }
-            if min_len > self.max_window {
+            if min_len.max(1) > self.max_window {
                 return Err(PumpFailure::WindowLimit {
-                    needed: min_len,
+                    needed: min_len.max(1),
                     limit: self.max_window,
                 });
             }
@@ -616,8 +665,13 @@ mod read {
             while offset > window.end() && window.total.is_none() {
                 let end = window.end();
                 window.reset_to(end);
-                let want = ((offset - end) as usize).min(self.read_size);
-                let spare = window.spare(want);
+                let want = usize::try_from(offset - end)
+                    .unwrap_or(usize::MAX)
+                    .min(self.read_size)
+                    .min(self.max_window);
+                let spare = window
+                    .try_spare(want, self.max_window)
+                    .map_err(PumpFailure::Input)?;
                 let n = reader.read(spare).map_err(PumpFailure::Io)?;
                 window.commit(n);
                 if n == 0 {
@@ -629,11 +683,15 @@ mod read {
             }
             // Read until `min_len` bytes from `offset` are held, or the
             // end.
-            let target = read_target(min_len, self.read_size);
+            let target = read_target(min_len, self.read_size)
+                .min(self.max_window)
+                .min(usize::try_from(u64::MAX - offset).unwrap_or(usize::MAX));
             while window.len() < min_len.max(1) && window.total.is_none() {
                 let end = window.end();
                 let want = target - window.len().min(target);
-                let spare = window.spare(want);
+                let spare = window
+                    .try_spare(want, self.max_window)
+                    .map_err(PumpFailure::Input)?;
                 let n = reader.read(spare).map_err(PumpFailure::Io)?;
                 window.commit(n);
                 if n == 0 {
@@ -650,7 +708,7 @@ mod read {
             &mut self,
             reader: &mut R,
             stage: &mut S,
-            stop: &dyn Stop,
+            pulse: &dyn zencodec::Pulse,
         ) -> Result<Yield<S::Output>, PumpFailure<S::Error>>
         where
             S: ByteStepper + ?Sized,
@@ -658,7 +716,7 @@ mod read {
         {
             loop {
                 let input = self.offer();
-                let p = stage.step(input, stop).map_err(PumpFailure::Step)?;
+                let p = stage.step(input, pulse).map_err(PumpFailure::Step)?;
                 if matches!(p.step, Step::Need) {
                     check_need(stage.requested(), &input, p.consumed)
                         .map_err(PumpFailure::Protocol)?;

@@ -4,7 +4,7 @@
 use crate::admission::{Identity, Lease, Limits, Refusal, Storage, Transfer};
 use crate::policy::*;
 use core::{error::Error, fmt, sync::atomic::AtomicUsize};
-use zencodec::{At, decode::ByteRange, enough::Stop};
+use zencodec::{At, decode::ByteRange};
 
 static NEXT_GATE: AtomicUsize = AtomicUsize::new(1);
 
@@ -200,7 +200,7 @@ impl Gate {
         &mut self,
         engine: &mut Engine,
         resolver: &mut R,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Receipt, At<ResolveFailure<R::Error>>> {
         if self.phase != Phase::Suspended {
             let code = if self.phase == Phase::Terminal {
@@ -303,7 +303,7 @@ impl Gate {
         &mut self,
         receipt: &Receipt,
         bytes: &[u8],
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), At<GateCode>> {
         self.check(receipt, Phase::Holding)?;
         let result = (|| {

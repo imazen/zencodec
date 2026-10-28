@@ -7,6 +7,9 @@ import { api, chapterApi, entries, supplementalExamples } from './site/api.mjs';
 import { declarations, example } from './site/source.mjs';
 import { highlight } from './site/highlight.mjs';
 import { migrationPage } from './site/migration.mjs';
+import { idealPage } from './site/ideal.mjs';
+import { gapsPage } from './site/gaps.mjs';
+import { codeFirstPage } from './site/code-first.mjs';
 const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
@@ -14,21 +17,37 @@ const source = await readFile(path.join(docs, 'examples/journeys.rs'), 'utf8');
 const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8');
 const jpegSource = await readFile(path.join(docs, 'examples/jpeg_policy.rs'), 'utf8');
 const pixelSource = await readFile(path.join(docs, 'examples/pixel_conversion.rs'), 'utf8');
+const checkedSource = await readFile(path.join(docs, 'examples/checked_operations.rs'), 'utf8');
+const videoSource = await readFile(path.join(docs, 'examples/checked_video.rs'), 'utf8');
+const positionalSource = await readFile(path.join(docs, 'examples/checked_source.rs'), 'utf8');
+const selectionSource = await readFile(path.join(root, 'perf/spatial-validation/src/collection.rs'), 'utf8');
+const storageSource = await readFile(path.join(root, 'perf/spatial-validation/src/jxl_packaged_storage.rs'), 'utf8');
+const colorSource = await readFile(path.join(root, 'perf/spatial-validation/src/jxl_color_oracle_tests.rs'), 'utf8');
+const layoutSource = await readFile(path.join(root, 'perf/spatial-validation/src/jxl_planned_color_tests.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const signatures = new Map();
+const signatures = new Map(), implementorSignatures = new Map();
 for (const [key, spec] of Object.entries(api)) {
-  signatures.set(key, declarations(await readFile(path.join(root, spec.file), 'utf8'), spec));
+  const source = await readFile(path.join(root, spec.file), 'utf8');
+  signatures.set(key, declarations(source, spec));
+  if(spec.scope?.startsWith('pub trait')) implementorSignatures.set(key, declarations(source, {...spec,includeRequired:true}));
 }
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
+  const video = file === 'docs/examples/checked_video.rs';
+  const positional = file === 'docs/examples/checked_source.rs';
+  const selection = file === 'perf/spatial-validation/src/collection.rs';
+  const storage = file === 'perf/spatial-validation/src/jxl_packaged_storage.rs';
+  const color = file === 'perf/spatial-validation/src/jxl_color_oracle_tests.rs';
+  const layout = file === 'perf/spatial-validation/src/jxl_planned_color_tests.rs';
+  const checked = storage || positional || video || file === 'docs/examples/checked_operations.rs';
   const jpeg = file === 'docs/examples/jpeg_policy.rs';
   const pixels = file === 'docs/examples/pixel_conversion.rs';
-  const proposed = file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
-  const parts = example(pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
-  const tests = pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
+  const proposed = layout || color || selection || file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
+  const parts = example(layout ? layoutSource : color ? colorSource : storage ? storageSource : selection ? selectionSource : positional ? positionalSource : video ? videoSource : checked ? checkedSource : pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
+  const tests = layout || color ? file : storage ? 'perf/spatial-validation/src/jxl_tests.rs' : selection || positional ? 'perf/spatial-validation/src/tests.rs' : video ? 'perf/av1-policy-validation/src/tests.rs' : checked ? 'perf/jpeg-policy-validation/src/checked_examples.rs' : pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
-    <div class="code-toolbar"><span>${proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
+    <div class="code-toolbar"><span>${checked ? 'Implemented · review PRs' : proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', 'Imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
     ${context('below', 'Return &amp; continuation')}
@@ -38,10 +57,12 @@ function codePanel(id, name, file = 'docs/examples/journeys.rs') {
 function apiPanels(id, keys) {
   if (!keys?.length) throw Error(`No API selection for ${id}`);
   return `<section class="api-section" aria-labelledby="${id}-api-title"><h4 id="${id}-api-title">Signatures <small>from this revision · bodies omitted</small></h4>${keys.map((key, i) => {
-    const spec = api[key], signature = signatures.get(key);
-    const kind = !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
-    const feature = spec.file === 'zencodec-io/src/tokio_io.rs' ? ' · zencodec-io feature: tokio' : spec.file === 'zencodec-io/src/file.rs' ? ' · zencodec-io feature: std' : '';
-    return `<details class="api-panel" data-api="${key}"${i === 0 ? ' open' : ''}><summary><span>${kind}${feature}</span><code>${escape(spec.path)}</code></summary><pre><code>${highlight(signature.code)}</code></pre><a class="api-source" href="https://github.com/imazen/zencodec/blob/${sha}/${spec.file}#L${signature.line}">Read defaults, imports and full contract ↗</a></details>`;
+    const spec = api[key], signature = (id.startsWith('codec-') && implementorSignatures.get(key)) || signatures.get(key);
+    const kind = spec.item ? 'Type definition' : !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
+    const selection = signature.omittedMethods?.length ? `<p class="api-selection">Selected methods · ${signature.omittedMethods.length} more in the full contract.</p>` : '';
+    const required = spec.scope?.startsWith('pub trait') && signature.requiredMethods?.length ? `<p class="api-required">Required methods: ${signature.requiredMethods.map(name=>`<code>${escape(name)}</code>`).join(', ')}. Other methods have defaults; read them before relying on their behavior.</p>` : '';
+    const feature = spec.file === 'zencodec-io/src/tokio_io.rs' ? ' · zencodec-io feature: tokio' : ['zencodec-io/src/file.rs','zencodec-io/src/row_encode.rs'].includes(spec.file) ? ' · zencodec-io feature: std' : '';
+    return `<details class="api-panel" data-api="${key}"${i === 0 ? ' open' : ''}><summary><span>${kind}${feature}</span><code>${escape(spec.path)}</code></summary><pre><code>${highlight(signature.code)}</code></pre>${selection}${required}<a class="api-source" href="https://github.com/imazen/zencodec/blob/${sha}/${spec.file}#L${signature.line}">Read defaults, imports and full contract ↗</a></details>`;
   }).join('')}</section>`;
 }
 const entryHtml = `<div class="entry-controls"><label for="entry-select">What do you have?</label><select id="entry-select" aria-controls="entry-panels">${entries.map(entry => `<option value="${entry.id}">${escape(entry.label)}</option>`).join('')}</select></div><div id="entry-panels">${entries.map(entry => `<article class="entry-panel consumer" id="entry-${entry.id}" data-entry="${entry.id}"><h3>${escape(entry.label)}</h3><p class="entry-summary">${escape(entry.summary)}</p><p class="example-context"><b>In scope.</b> ${escape(entry.context)}</p>${codePanel(`entry-${entry.id}`, entry.snippet)}${apiPanels(`entry-${entry.id}`, [entry.api])}${entry.id === 'transcode' ? '<p class="entry-issue">Fixture limitation: <a href="https://github.com/imazen/zenbitmaps/issues/28">zenbitmaps #28 — decoded color description</a>.</p>' : ''}</article>`).join('')}</div>`;
@@ -49,7 +70,7 @@ function mobileFlow(nodes) {
   return `<div class="graph-mobile">${nodes.map(([role,label,sub],i)=>`${i?'<div class="mobile-arrow" aria-hidden="true">↓</div>':''}<div class="mobile-node ${role}"><span>${role}</span><b>${escape(label)}</b><small>${escape(sub)}</small></div>`).join('')}</div>`;
 }
 function flow(id,nodes) {
-  return `<figure class="flow"><svg viewBox="0 0 1080 150" role="img" aria-labelledby="${id}-title"><title id="${id}-title">${escape(nodes.map(n=>n[1]+': '+n[2]).join(' → '))}</title><defs><marker id="${id}-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>${nodes.map(([role,label,sub],i)=>`<g class="${role}"><rect x="${i*370+1}" y="16" width="338" height="116" rx="12"/><text class="svg-role" x="${i*370+22}" y="43">${role.toUpperCase()}</text><text class="svg-label" x="${i*370+22}" y="77">${escape(label)}</text><text class="svg-sub" x="${i*370+22}" y="105">${escape(sub)}</text></g>${i<2?`<path class="connector" d="M${i*370+340} 74h27" marker-end="url(#${id}-arrow)"/>`:''}`).join('')}</svg>${mobileFlow(nodes)}<figcaption>${escape(nodes.map(n=>n[1]).join(' → '))}</figcaption></figure>`;
+  return `<figure class="flow"><svg viewBox="0 0 ${nodes.length*370-30} 150" role="img" aria-labelledby="${id}-title"><title id="${id}-title">${escape(nodes.map(n=>n[1]+': '+n[2]).join(' → '))}</title><defs><marker id="${id}-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>${nodes.map(([role,label,sub],i)=>`<g class="${role}"><rect x="${i*370+1}" y="16" width="338" height="116" rx="12"/><text class="svg-role" x="${i*370+22}" y="43">${role.toUpperCase()}</text><text class="svg-label" x="${i*370+22}" y="77">${escape(label)}</text><text class="svg-sub" x="${i*370+22}" y="105">${escape(sub)}</text></g>${i<nodes.length-1?`<path class="connector" d="M${i*370+340} 74h27" marker-end="url(#${id}-arrow)"/>`:''}`).join('')}</svg>${mobileFlow(nodes)}<figcaption>${escape(nodes.map(n=>n[1]).join(' → '))}</figcaption></figure>`;
 }
 const architecture = `<figure class="architecture-chart"><svg viewBox="0 0 1120 345" role="img" aria-labelledby="map-title map-desc"><title id="map-title">The consumer, adapter, and implementor boundaries</title><desc id="map-desc">The consumer passes intent to the adapter. The adapter offers bytes and destination rows to the codec implementor, who returns requests, progress and output. Pixels and frames go back to the consumer. Storage lifetime and cancellation cross these boundaries.</desc><defs><marker id="map-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#45566a"/></marker></defs>
 <g class="consumer"><rect x="12" y="55" width="300" height="205" rx="16"/><text class="svg-role" x="36" y="87">01 / CONSUMER</text><text class="map-label" x="36" y="124">The application</text><text class="svg-sub" x="36" y="159">Config → job → result</text><text class="svg-sub" x="36" y="190">Pixels · policy · presentation</text><text class="svg-sub" x="36" y="226">Owns the useful output</text></g>
@@ -107,8 +128,11 @@ html=html.replace('<!-- ENTRYPOINTS -->',entryHtml).replace('<!-- ARCHITECTURE -
 .replace('<!-- QUESTIONS -->',`<div class="question-list">${questions.map(q=>`<a href="https://github.com/imazen/zencodec/issues/${q.n}"><span class="issue-number">#${q.n}</span><div><h3>${q.title}</h3><p>${q.text}</p></div><span aria-hidden="true">↗</span></a>`).join('')}</div>`).replaceAll('BUILD_SHA',sha).replaceAll('BUILD_SHORT',sha.slice(0,8));
 await mkdir(dest,{recursive:true});
 await writeFile(path.join(dest,'index.html'),html);
+await writeFile(path.join(dest,'code.html'),await codeFirstPage({sha,apiPanels,docs,dest}));
 await writeFile(path.join(dest,'migration.html'),await migrationPage({sha,codePanel,apiPanels,flow}));
-for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
+await writeFile(path.join(dest,'ideal.html'),await idealPage({sha,codePanel,apiPanels,flow,docs}));
+await writeFile(path.join(dest,'gaps.html'),gapsPage({sha,apiPanels,flow,compile:await readFile(path.join(docs,'site/compile-time.html'),'utf8')}));
+for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs','ideal.css','ideal-ui.mjs','code-first.css','code-first-ui.mjs','catalog-search.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
 await copyFile(path.join(docs,'migration-baseline.json'),path.join(dest,'migration-baseline.json'));
 await copyFile(path.join(docs,'examples/journeys.rs'),path.join(dest,'journeys.rs'));
 await copyFile(path.join(docs,'examples/jpeg_policy.rs'),path.join(dest,'jpeg_policy.rs'));

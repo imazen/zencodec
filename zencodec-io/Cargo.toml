@@ -19,8 +19,8 @@ std = ["zencodec/std"]
 tokio = ["std", "dep:tokio"]
 
 [dependencies]
-zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
-zenpixels = { version = ">=0.2.14, <0.4.0" }
+zencodec = { path = "..", version = ">=0.2.0, <0.4.0" }
+zenpixels = { version = ">=0.2.17, <0.4.0" }
 enough = "0.4.4"
 how-far = { version = "0.1.0", default-features = false }
 tokio = { version = "1.53.3", default-features = false, features = ["sync", "io-util", "macros"], optional = true }
@@ -62,3 +62,7 @@ required-features = ["std"]
 name = "transcode"
 harness = false
 required-features = ["tokio"]
+
+[[bench]]
+name = "coroutine_admission"
+harness = false

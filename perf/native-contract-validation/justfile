@@ -1,0 +1,40 @@
+# Native contract validation recipes. Run from this directory, inside a heavy
+# slot: run-heavy --mem 4G --jobs 2 -- just <recipe> <export>.
+# Exports live outside any checkout; see candidate/prepare.py.
+
+git_dir := env_var_or_default("ZENCODEC_GIT_DIR", env_var("HOME") + "/work/zen/zencodec")
+
+# Fresh export: committed source, this directory, patched candidate prototype.
+export dir imij_rev:
+    python3 candidate/prepare.py "{{dir}}" --git-dir "{{git_dir}}" --imij-rev "{{imij_rev}}"
+
+# Same, with a local unpushed imij checkout (not reproducible elsewhere).
+export-local dir imij_path:
+    python3 candidate/prepare.py "{{dir}}" --git-dir "{{git_dir}}" --imij-path "{{imij_path}}"
+
+# Witnesses of the unpatched prototype's gaps.
+baseline dir:
+    cargo test --manifest-path "{{dir}}/perf/native-contract-validation/Cargo.toml"
+    cargo clippy --manifest-path "{{dir}}/perf/native-contract-validation/Cargo.toml" --all-targets -- -D warnings
+
+# Candidate prototype: existing controls plus the pass-plan tests.
+candidate dir:
+    cargo test --manifest-path "{{dir}}/perf/multipass-validation-candidate/Cargo.toml"
+    cargo clippy --manifest-path "{{dir}}/perf/multipass-validation-candidate/Cargo.toml" --all-targets -- -D warnings
+
+# Real IMI under the candidate (needs access to the private zqi repository).
+candidate-native dir:
+    mkdir -p "{{dir}}/scratch"
+    CARGO_NET_GIT_FETCH_WITH_CLI=true MULTIPASS_SCRATCH="{{dir}}/scratch" cargo test --manifest-path "{{dir}}/perf/multipass-validation-candidate/native/Cargo.toml" -- --test-threads=1
+    CARGO_NET_GIT_FETCH_WITH_CLI=true cargo clippy --manifest-path "{{dir}}/perf/multipass-validation-candidate/native/Cargo.toml" --all-targets -- -D warnings
+
+# Video encoder retention/delay witnesses: synthetic (fast) and native AV1.
+video dir:
+    cargo test --manifest-path "{{dir}}/perf/native-contract-validation/Cargo.toml" --test video_retention
+    cargo test --manifest-path "{{dir}}/perf/native-contract-validation/video-native/Cargo.toml" -- --nocapture
+    cargo clippy --manifest-path "{{dir}}/perf/native-contract-validation/video-native/Cargo.toml" --all-targets -- -D warnings
+
+# Region read planning over the native TIFF parser (large tiles, batched fetch).
+spatial dir:
+    cargo test --manifest-path "{{dir}}/perf/native-contract-validation/spatial-native/Cargo.toml" -- --nocapture
+    cargo clippy --manifest-path "{{dir}}/perf/native-contract-validation/spatial-native/Cargo.toml" --all-targets -- -D warnings

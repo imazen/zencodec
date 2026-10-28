@@ -1,0 +1,41 @@
+Native AV1 frame policy qualification; this is correctness evidence, not a benchmark.
+Date: 2026-10-25
+Host: r7900x, Rust 1.99.1
+Core source: 6df25999661e97565cc7853819818777a099e674 plus the adjacent harness.
+zenavif: ea055f7de6a34d2b9a9942b39a3166801d6972e3
+rav1d-safe: 5707a2e94ac88500892c9c7ad2ec77d5ab84fd59
+zenrav1e: 9057c4bacf1d8a23974e32de09fd4446a1cc525a
+zenpixels: 1d3ddd2131b22e9e3754c765d4ce45ce3901de59
+Resolved dependencies: perf/av1-policy-validation/dependencies.lock
+Oracle: FFmpeg 8.0.1-3ubuntu2 with libdav1d
+
+Command (standalone export outside local path overrides):
+run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 10m \
+  env TMPDIR=$HOME/tmp CARGO_TARGET_DIR=$HOME/tmp/io-contracts-2026-10-25/zenavif-source/target \
+  just av1-policy-check /mnt/v/output/zencodec/av1-policy-2026-10-25/run1
+
+Full local log: ~/tmp/zencodec-av1-policy2-2026-10-25.log
+run-heavy: done rc=0 16s | peak-RSS 0.87GiB | min-avail 15759MiB | peak-load 0.92
+This process-tree peak includes compilation, tests, FFmpeg and Clippy. It is
+not a codec-workspace measurement or a guaranteed operation memory bound.
+
+Native cases: 8/10/12 bit x mono/YUV420/YUV422/YUV444/identity GBR444,
+17x13, three presentations per case, padded source strides.
+All 15 policy-approved native re-encodes matched independent FFmpeg decoding
+sample-for-sample. The exact native picture Arc survives the guard unchanged.
+Queued epoch tests: seven 10-bit presentations, native threads 1 and 4,
+alternating 1/1000 and 1/90000 clocks and container colors; ordinal 7 repeated,
+distinct input offsets, later unused configuration cannot relabel older output.
+One packet with three temporal units produced three independent policy calls.
+Five native failure controls: refusal, stale choice, traced callback error,
+cancellation during callback and caught unwind. No second frame was published;
+its native owner and decoder dropped; the previously returned frame stayed valid.
+Native invalid-data error retained At<rav1d_safe::Error> and locations through
+both the policy wrapper and erased video session.
+All standalone tests and strict all-target Clippy passed.
+
+Artifacts on r7900x: /mnt/v/output/zencodec/av1-policy-2026-10-25/run1
+Each case retains approved.ivf, expected.raw, dav1d.raw and ffmpeg.stderr.
+SHA256SUMS in that directory identifies the retained files.
+Not covered: native resource admission, pre-reconstruction metadata pause,
+planar conversion, whole-container disclosure, other codec profiles, performance.

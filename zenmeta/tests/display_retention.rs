@@ -1,5 +1,5 @@
 use zencodec::{GainMapParams, Metadata, MetadataFields, MetadataPolicy, Retention};
-use zenpixels::DiffuseWhite;
+use zenpixels::hdr::DiffuseWhite;
 #[test]
 fn source_xmp_is_dropped_but_render_fields_survive() {
     let meta = Metadata::none()

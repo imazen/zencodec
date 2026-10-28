@@ -20,7 +20,9 @@ let dec = CoroutineDecoder::boxed(|mut ctx| async move {
 });
 ```
 
-Each suspending `.await` is one `step` round trip through the driver. The
+Each suspending `.await` returns control to the driver. Row delivery can take
+multiple steps: each step fills at most one buffer allowed by the sink's
+`max_buffer_rows`, letting a pull consumer drain it before continuing. The
 coroutine copies the offered bytes its reads need into a store (under a byte
 cap, released once read; gap bytes are never stored) and each strip once more
 into the sink. That suits container walks and headers; bulk pixel paths are

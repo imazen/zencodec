@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "80edccb7d993c67b485f823ad976e39f8e64a500",
+  "source_sha256": {
+    "src/operation/collection.rs": "7b499ce00336d08d321d29209ec09eb74f34714e1b52e152b2615898467df696",
+    "src/operation/collection_view_tests.rs": "42152b5b977823b5a53ece24df20e7094a480b9ca5efb4a9df58bb722d3d336c",
+    "perf/spatial-validation/src/canvas_render.rs": "b8eafdf9832f425bf508d62a1a270f818f93613866c1e0787b8498b558367901",
+    "perf/spatial-validation/src/canvas_render_tests.rs": "3e86672e04d81a97a81fed39079f73285579fc8ea1b4f6b6d089283770d167b5"
+  },
+  "scope": "Selected rendering through one CheckedCollection publication policy boundary; correctness qualification, not a throughput or product-memory measurement",
+  "native_cases": [
+    "classic TIFF and BigTIFF selected owner",
+    "classic TIFF and BigTIFF SubIFD child identity/pixels/orientation",
+    "JXL orientation and animation presentation"
+  ],
+  "control_contracts": [
+    "no policy after processing failure; corrected request reusable",
+    "one policy decision on completed output",
+    "cancellation and unwind terminal; original traced failure retained"
+  ],
+  "validation": [
+    {
+      "command": "just collection-api-check spatial-render-check",
+      "log": "zencodec-render-selected-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "21s | peak-RSS 0.56GiB | min-avail 11116MiB | peak-load 0.61"
+    },
+    {
+      "command": "just spatial-render-check test doc-default api-doc",
+      "log": "zencodec-render-selected-workspace-20261027-2.log",
+      "exit_code": 0,
+      "run_heavy": "28s | peak-RSS 0.52GiB | min-avail 10946MiB | peak-load 1.93"
+    },
+    {
+      "command": "just spatial-ci-check <fresh-artifacts> cms_oracle,old_jpeg",
+      "log": "zencodec-render-selected-full-20261027.log",
+      "exit_code": 0,
+      "native_test_result": "145 passed; 0 failed; 0 ignored",
+      "run_heavy": "53s | peak-RSS 0.57GiB | min-avail 11075MiB | peak-load 1.04"
+    },
+    {
+      "command": "just docs-site-browser-check 3547",
+      "log": "zencodec-render-selected-site-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "11s | peak-RSS 0.17GiB | min-avail 11036MiB | peak-load 0.85"
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/selected-render-full-1",
+  "log_directory": "/home/lilith/tmp",
+  "shared_api_delta": [
+    "CheckedCollection::decode_with",
+    "CollectionStage::Transform"
+  ],
+  "zenpixels_delta_this_step": {
+    "public_items": 0,
+    "signature_changes": 0,
+    "new_dependencies": 0,
+    "pinned_revision": "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8"
+  },
+  "remaining": [
+    "concrete Renderer is private qualification code",
+    "full native reconstruction precedes display crop",
+    "native and CMS workspace admission",
+    "planar video conversion and HDR presentation",
+    "coupled output preparation and opaque metadata/privacy handling",
+    "geometry copies payload; descriptor normalization can copy color"
+  ]
+}

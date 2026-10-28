@@ -6,8 +6,8 @@
 #![allow(dead_code)]
 
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, StepError,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, Progress, StepError,
 };
 use zencodec::source::AccessPattern;
 use zencodec::{ImageFormat, ImageInfo};
@@ -82,7 +82,7 @@ pub struct HandWritten {
     next_row: u32,
     done: Option<OutputInfo>,
     failed: bool,
-    need: [Request; 1],
+    need: [InputRequest; 1],
 }
 
 impl HandWritten {
@@ -94,7 +94,7 @@ impl HandWritten {
             next_row: 0,
             done: None,
             failed: false,
-            need: [Request::at_least(0, HEADER)],
+            need: [InputRequest::at_least(0, HEADER)],
         }
     }
 
@@ -102,7 +102,7 @@ impl HandWritten {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn enough::Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<SynError>> {
         stop.check().map_err(StepError::Cancelled)?;
         let Some(info) = &self.info else {
@@ -117,7 +117,7 @@ impl HandWritten {
             if input.total_len.is_some_and(|t| t < HEADER as u64) {
                 return Err(StepError::Codec(SynError("short header".into())));
             }
-            self.need = [Request::at_least(0, HEADER)];
+            self.need = [InputRequest::at_least(0, HEADER)];
             return Ok(Progress::need(0));
         };
         let (w, h) = (info.width, info.height);
@@ -150,7 +150,7 @@ impl HandWritten {
         if input.total_len.is_some_and(|t| t < at + len as u64) {
             return Err(StepError::Codec(SynError("truncated".into())));
         }
-        self.need = [Request::at_least(at, len)];
+        self.need = [InputRequest::at_least(at, len)];
         Ok(Progress::need(0))
     }
 }
@@ -161,7 +161,7 @@ impl IncrementalDecode for HandWritten {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn enough::Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<SynError>> {
         if let Some(d) = &self.done {
             return Ok(Progress::new(0, Event::Done(d.clone())));
@@ -173,7 +173,7 @@ impl IncrementalDecode for HandWritten {
         self.failed = r.is_err();
         r
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.need
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -244,4 +244,41 @@ pub fn coroutine_ranges(strip_rows: u32) -> Coro {
             Ok(OutputInfo::full_decode(w, h, DESC))
         },
     )
+}
+
+/// Same controlled operation with legacy or admitted input/row storage.
+/// The synthetic codec's own strip and the output sink are outside admission.
+pub fn coroutine_controlled(strip_rows: u32, input_cap: usize, admitted: bool) -> Coro {
+    let init = move |mut ctx: zencodec_coroutine::CoroutineContext| -> zencodec_coroutine::BoxFuture<SynError> {
+        Box::pin(async move {
+            let mut header = [0u8; HEADER];
+            ctx.read_exact(&mut header).await?;
+            let (w, h) = dims(&header);
+            ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
+            ctx.set_output_descriptor(DESC);
+            ctx.interpretation(zencodec::decode::InterpretationFacts::new(w, h, Some(DESC), zencodec::decode::InterpretationState::Final)).await?;
+            let row = w as usize * 4;
+            let mut strip = vec![0u8; row * strip_rows as usize];
+            let mut y = 0;
+            while y < h {
+                let rows = (h - y).min(strip_rows);
+                let n = rows as usize * row;
+                ctx.read_exact(&mut strip[..n]).await?;
+                ctx.write_rows(BatchMeta::final_rows(y), &PixelSlice::new(&strip[..n], w, rows, row, DESC).unwrap()).await?;
+                y += rows;
+            }
+            Ok(OutputInfo::full_decode(w, h, DESC))
+        })
+    };
+    if admitted {
+        CoroutineDecoder::controlled_with_storage(
+            input_cap,
+            AccessPattern::Sequential,
+            zencodec::storage::StorageBudget::new(64 << 20, 3),
+            init,
+        )
+        .unwrap()
+    } else {
+        CoroutineDecoder::controlled(input_cap, AccessPattern::Sequential, init)
+    }
 }

@@ -1,0 +1,64 @@
+{
+  "base": "c798de0a526cd4e80a90c95c82e8b1116e6de88f",
+  "native_decoder": "189f8585b1a28ac9fa7413c24a2ed3914126e77a",
+  "rustix": "1.1.5",
+  "commands": [
+    "just spatial-file-snapshot-resolve",
+    "just spatial-file-snapshot-check <fresh-artifacts>",
+    "just spatial-validation-check <fresh-artifacts> <oracle-python> file_snapshot",
+    "just docs-site-browser-check 3547"
+  ],
+  "filesystem": {
+    "observed": "xfs",
+    "date": "2026-10-26",
+    "resolve": "findmnt -T /mnt/v -no FSTYPE"
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/file-snapshot-integrated",
+  "receipts": [
+    {
+      "log": "zencodec-file-snapshot-resolve-2026-10-26.log",
+      "sha256": "c491792471aecca97ff84f9950edbfd218950cf02fbec324c3fb302fc3e7eb0d",
+      "results": [
+        "run-heavy: done rc=0 1s | peak-RSS 0.05GiB | min-avail 13667MiB | peak-load 0.21"
+      ]
+    },
+    {
+      "log": "zencodec-file-snapshot-2026-10-26.log",
+      "sha256": "402b2579ad911be7715bf1d14e62fa884a442722ef56b61bb00b5e94091ae5bd",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 0.05s",
+        "run-heavy: done rc=0 5s | peak-RSS 0.56GiB | min-avail 13412MiB | peak-load 0.21"
+      ]
+    },
+    {
+      "log": "zencodec-file-snapshot-integrated-2026-10-26.log",
+      "sha256": "8aa37a5f8653a00c8f6c9659122488f49cc34b70a82b1f0b16794a0c7432d05f",
+      "results": [
+        "test result: ok. 84 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 194.87s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 197s | peak-RSS 0.56GiB | min-avail 13341MiB | peak-load 1.36"
+      ]
+    },
+    {
+      "log": "zencodec-disk-source-guide-2026-10-26.log",
+      "sha256": "845596d1cb1fa345b4b92fc0d6ae8f93dba240df430aa71c8c8effcf3d52bdaf",
+      "results": [
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13023MiB | peak-load 0.29"
+      ]
+    }
+  ],
+  "scope": "Private required-atomic-clone source over existing FileReadAt, native TIFF classic/BigTIFF chunky/planar SubIFDs with direct/buffered reads, path replacement/in-place mutation controls, original overwrite/truncate isolation, 32 concurrent-write snapshot observations, typed refusal and complete native spatial matrix.",
+  "limits": [
+    "No other-filesystem, Windows or macOS qualification.",
+    "No speed, physical-disk-allocation, kernel-memory or syscall-latency claim.",
+    "The published byte limit covers logical extent, not peak clone metadata or physical storage.",
+    "A filesystem instant is not an application-level multi-write transaction."
+  ],
+  "sources": [
+    "https://man7.org/linux/man-pages/man2/FICLONE.2const.html",
+    "https://docs.rs/rustix/1.1.5/rustix/fs/fn.ioctl_ficlone.html"
+  ]
+}

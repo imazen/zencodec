@@ -1,0 +1,37 @@
+{
+  "kind": "correctness validation, not a performance benchmark",
+  "base_commit": "d126276f944b008d048f989bcec504b379367806",
+  "zenjxl_commit": "d5fe3e2b51259c4f644fd9071a4f3d8a56f80223",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "884217a7874ac08cf02103effca7af48e8016ec09c479f2dea3c9e9e390a9261",
+    "perf/spatial-validation/dependencies.lock": "b4256263b3ac52dce7f47c2e798ae30cb61f6b502faa3fd77984d84716e0ac34",
+    "perf/spatial-validation/src/factory_tests.rs": "b2c133e0f21c015ba14286f25f92a7d3efe957542164189e76786fc676acc447"
+  },
+  "host": "r7900x",
+  "command": "just spatial-factories-check <fresh-artifact-directory>",
+  "checks": {
+    "factory_controls": {
+      "passed": 16,
+      "failed": 0
+    },
+    "strict_all_target_clippy": "passed",
+    "actual_input_size": "one byte below the resident size refuses with typed InputSize at Open; exact cap retains native descriptions, samples and placement in both views",
+    "mixed_requirements": "TIFF handles width; JXL handles input size; unsupported fields remain in typed refusal",
+    "qualified_optional_decode_caps": {
+      "TIFF": {
+        "qualified": 3,
+        "total": 8
+      },
+      "JXL": {
+        "qualified": 1,
+        "total": 8
+      }
+    }
+  },
+  "codec_consumer_receipt": "https://github.com/imazen/zenjxl/blob/d5fe3e2b51259c4f644fd9071a4f3d8a56f80223/benchmarks/collection_input_limit_2026-10-26.json",
+  "exit_code": 0,
+  "run_heavy": "done rc=0 7s | peak-RSS 0.64GiB | min-avail 13037MiB | peak-load 0.23",
+  "measurement_limit": "Whole build/test process-tree observation, not decoder RAM or timing. Full earlier 147-presentation/9-layer qualification is recorded separately; this changed input admission, not reconstruction.",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/jxl-input-cap-factories",
+  "log": "~/tmp/zencodec-input-cap-factories-20261026.log"
+}

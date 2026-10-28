@@ -1,0 +1,18 @@
+Native picture storage through policy — 2026-10-25
+Base zencodec: f34acb80eb5609f8a878b6e8224d4834a9bb5b0d
+Changes under test: this commit's native pins, guide and two-mode oracle matrix
+zenavif: feadc4c94b19acdcd82ee545a02263bc67c45d7d
+rav1d-safe: b19aec6561204ff310250bf2bc1b2c6faa42c3b5
+
+Command, outside workspace overrides:
+run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 6m just av1-policy-resolve av1-policy-check /mnt/v/output/zencodec/native-picture-budget-2026-10-25/av1-frames
+
+Result: native AV1 policy tests and strict Clippy pass. All 15 depth/layout
+configurations pass in both native allocation modes against FFmpeg/libdav1d.
+The guide's zero allowance refuses before publication policy; the native traced
+error survives through the shared adapter. Allowed frames remain sample-exact
+after decoder destruction. One/four-worker refusals release unpublished owners.
+The locked graph contains one copy of each shared core/media/pixel/native type.
+
+run-heavy: done rc=0 29s | peak-RSS 1.13GiB | min-avail 15274MiB | peak-load 1.68
+This measures the build/test process, not native decoder memory or throughput.

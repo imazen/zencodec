@@ -4,6 +4,159 @@ use zenjpeg::JpegDecoderConfig;
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, TransferFunction};
 
 #[test]
+fn stored_requests_execute_native_jpeg_templates_without_changing_bytes_or_pixels() {
+    use zencodec::encode::EncoderConfig;
+    use zencodec::operation::{DecodeRequest, EncodeRequest};
+    for progressive in [false, true] {
+        let config = fixtures::config(progressive, true);
+        let raw = fixtures::raw();
+        let direct = config.clone().encode(fixtures::pixels(&raw)).unwrap();
+        let codecs = CodecSet::new()
+            .with_encoder(config)
+            .with_decoder(JpegDecoderConfig::new());
+        let encoded = EncodeRequest::new(zencodec::ImageFormat::Jpeg)
+            .encode(&codecs, fixtures::pixels(&raw))
+            .unwrap();
+        assert_eq!(encoded.data(), direct.data());
+        let direct_pixels = codecs.decode(encoded.data()).unwrap();
+        let decoded = DecodeRequest::new()
+            .with_output(PixelDescriptor::RGB8_SRGB)
+            .decode(&codecs, encoded.data())
+            .unwrap();
+        for y in 0..fixtures::HEIGHT {
+            assert_eq!(decoded.pixels().row(y), direct_pixels.pixels().row(y));
+        }
+        assert_eq!(
+            fixtures::oracle(encoded.data()),
+            fixtures::oracle(direct.data())
+        );
+    }
+}
+
+#[test]
+fn production_resolver_selects_native_jpeg_jobs_and_preserves_direct_output() {
+    use std::convert::Infallible;
+    use zencodec::{
+        At, ImageFormat,
+        encode::{EncoderConfig, Fidelity, FidelityTargetError},
+        operation::{Decision, EncodeRequest, Question, Selection},
+    };
+    for progressive in [false, true] {
+        let config = fixtures::config(progressive, true);
+        let raw = fixtures::raw();
+        let set = CodecSet::new().with_encoder(config.clone());
+        let targets = [
+            Fidelity::Lossless,
+            Fidelity::codec_quality(35.0),
+            Fidelity::codec_quality(80.0),
+        ];
+        let request = EncodeRequest::new(ImageFormat::Jpeg).preferring_fidelity(targets.to_vec());
+        for index in [1, 2] {
+            let mut calls = 0;
+            let actual = request
+                .encode_with(&set, fixtures::pixels(&raw), &mut |question: Question<
+                    '_,
+                >|
+                 -> Result<
+                    _,
+                    At<Infallible>,
+                > {
+                    calls += 1;
+                    let Question::Encode { facts, choices } = question else {
+                        panic!()
+                    };
+                    assert_eq!(
+                        (facts.width, facts.height),
+                        (fixtures::WIDTH, fixtures::HEIGHT)
+                    );
+                    assert_eq!(
+                        choices.len(),
+                        2,
+                        "JPEG cannot qualify mathematical losslessness"
+                    );
+                    assert!(
+                        choices
+                            .iter()
+                            .all(|c| c.value().fidelity != Some(Fidelity::Lossless))
+                    );
+                    Ok(Decision::choose(
+                        choices
+                            .iter()
+                            .find(|c| c.value().preference_index == index)
+                            .unwrap(),
+                    ))
+                })
+                .unwrap();
+            let direct = config
+                .clone()
+                .try_with_fidelity(targets[index])
+                .unwrap()
+                .encode(fixtures::pixels(&raw))
+                .unwrap();
+            assert_eq!(actual.data(), direct.data());
+            assert_eq!(
+                fixtures::oracle(actual.data()),
+                fixtures::oracle(direct.data())
+            );
+            let Selection::Encode(selected) = actual
+                .report()
+                .decisions()
+                .next()
+                .unwrap()
+                .selected
+                .unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(selected.fidelity, Some(targets[index]));
+            assert_eq!(selected.preference_index, index);
+            assert_eq!(calls, 1);
+        }
+        let error = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_fidelity(Fidelity::Lossless)
+            .encode(&set, fixtures::pixels(&raw))
+            .unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<FidelityTargetError>(&error),
+            Some(FidelityTargetError::Substituted { .. })
+        ));
+    }
+}
+
+#[test]
+fn finishing_native_jpeg_does_not_release_the_callers_admitted_raster() {
+    use zencodec::{ImageFormat, encode::EncoderConfig, operation::EncodeRequest};
+    use zencodec_io::storage::{StorageBudget, StorageError};
+    let original = fixtures::raw();
+    let budget = StorageBudget::new(original.len(), 1);
+    let mut owned = budget.bytes(original.len()).unwrap();
+    owned.as_mut_slice().copy_from_slice(&original);
+    let shared = owned.freeze();
+    let caller_copy = shared.clone();
+    let expected = fixtures::config(true, true)
+        .encode(fixtures::pixels(&original))
+        .unwrap();
+    let codecs = CodecSet::new().with_encoder(fixtures::config(true, true));
+    let encoded = EncodeRequest::new(ImageFormat::Jpeg)
+        .encode(&codecs, fixtures::pixels(shared.as_slice()))
+        .unwrap();
+    assert_eq!(encoded.data(), expected.data());
+    assert_eq!(
+        fixtures::oracle(encoded.data()),
+        fixtures::oracle(expected.data())
+    );
+    assert_eq!(budget.reserved_bytes(), original.len());
+    assert!(matches!(
+        budget.bytes(1),
+        Err(StorageError::Objects { limit: 1 })
+    ));
+    drop(shared);
+    assert_eq!(budget.reserved_bytes(), original.len());
+    drop(caller_copy);
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}
+
+#[test]
 fn migration_display_conversion_keeps_pixels_and_residual_orientation() {
     for progressive in [false, true] {
         let mut source = fixtures::base(progressive);

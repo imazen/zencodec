@@ -1,0 +1,81 @@
+{
+  "kind": "native allocation ownership and API validation; no performance claim",
+  "base_commit": "846a4264c8b3e3079630a8fc2c12317656db1347",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "zenpixels_commit_prefix": "284a059",
+  "host": "r7900x",
+  "source_sha256": {
+    "src/image.rs": "311b00cab908af425c2680d446ff35e86910323935d10942c6f8688e7feb4e70",
+    "src/image/owner.rs": "92f192d98a9a3e29713490a1e4a2ef803506721a1be3d47cc955fae2e1e3392f",
+    "perf/spatial-validation/src/jxl_owned_tests.rs": "f707de73338cf29ff967a42f54d96acb8adb002530215f0e3cd95f81758b12d5"
+  },
+  "commands": [
+    "just image-owner-integration",
+    "just spatial-ci-check <fresh-artifact-directory>",
+    "just docs-site-browser-check 3547"
+  ],
+  "coverage": {
+    "native_owner_fixtures": [
+      "conformance_test_images/cmyk_layers.jxl",
+      "named_frame_test.jxl"
+    ],
+    "scope": "first raw image of each fixture; template interpretation comes from already-qualified native adapter",
+    "gates": [
+      "native reconstruction writes directly into admitted strided planes",
+      "exact mapped sample bytes and unchanged allocation addresses",
+      "last ImageOutput clone retains byte/object charges",
+      "held output refuses a second allocation; release permits retry",
+      "partial byte/object admission and cancellation release unpublished allocations",
+      "publication refusal retains original Decline and releases output",
+      "RGB row converter copy preserves exact samples and padding",
+      "identical inverted-CMYK descriptors refuse with typed NeedsCms",
+      "layout/descriptor/color-context drift and missing auxiliaries refuse",
+      "bounded mapping Display and Debug retain original traced backend cause"
+    ],
+    "complete_native_suite": {
+      "passed": 114,
+      "failed": 0,
+      "ignored": 0
+    },
+    "workspace": "all-features tests and doctests passed with pre-existing ignores unchanged; strict lint, WASM, Rustdoc and snapshots passed",
+    "browser": "390/768/1440 px, exact source signatures, independent context expansion, full-example copying and keyboard checks passed"
+  },
+  "initial_attempts": [
+    "unit fixture used a nonexistent descriptor/orientation constant, corrected before execution",
+    "unit fixture used a non-pixel-aligned RGB stride, corrected to 9/12 bytes",
+    "bounded-error control exposed arbitrary backend Display; fixed without removing cause",
+    "initial CMYK identity-copy assumption failed with NeedsCms; retained as typed refusal and added RGB exact-copy control"
+  ],
+  "attempts": [
+    {
+      "log": "zencodec-packed-owner-integration-20261026.log",
+      "sha256": "b95b06bdbeec7e59a9e96a3eb60d9d86e5ea835943ff8f4f21e3f0ecb7ee3d1a",
+      "result": "workspace tests passed; strict all-target lint found an implementation after its test module",
+      "run_heavy": "run-heavy: done rc=101 13s | peak-RSS 0.50GiB | min-avail 12755MiB | peak-load 1.18"
+    },
+    {
+      "log": "zencodec-packed-owner-integration-2-20261026.log",
+      "sha256": "a09bb856deb3fd5ac5680ef7aecb904e2a305bfcdef55031b202204a889562a7",
+      "result": "workspace tests, strict all-target lint, WASM check, strict Rustdoc and API snapshots passed",
+      "run_heavy": "run-heavy: done rc=0 20s | peak-RSS 0.39GiB | min-avail 13011MiB | peak-load 1.38"
+    },
+    {
+      "log": "zencodec-packed-owner-native-20261026.log",
+      "sha256": "4a74a306487cdcb05f9c54e54a7ede0e6eb746fcb4feba4c60001da96460ecb3",
+      "result": "complete 114-test native suite and strict lint passed",
+      "run_heavy": "run-heavy: done rc=0 40s | peak-RSS 0.55GiB | min-avail 12978MiB | peak-load 1.27"
+    },
+    {
+      "log": "zencodec-packed-owner-browser-20261026.log",
+      "sha256": "cb65f37e54a89b4dc70112db8b3711ec5b339adc199d619409b35971424decb4",
+      "result": "source/site and responsive browser gates passed",
+      "run_heavy": "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13078MiB | peak-load 0.74"
+    }
+  ],
+  "limits": [
+    "native packed ownership tested here; concrete JXL package not yet wired to StorageBudget",
+    "native workspace, input, owner/metadata allocations, encoded staging and caller copies excluded",
+    "no total memory bound and no speed claim; run-heavy measures whole validation process trees"
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/packed-owner-native-1"
+}

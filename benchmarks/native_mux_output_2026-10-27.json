@@ -1,0 +1,93 @@
+{
+  "date_utc": "2026-10-27",
+  "kind": "native container destination/semantic qualification; not a benchmark",
+  "base_commit": "6a67643d34da6344e582e22acd6426abc4a21597",
+  "native": {
+    "zenmp4_and_zenavif": "feadc4c94b19acdcd82ee545a02263bc67c45d7d",
+    "zenivf_and_zenwebm": "ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c"
+  },
+  "source_sha256": {
+    "zencodec-media/src/container.rs": "df8b02f44d1ca05aad8bb21d4df12c394cada481201e0c3421611ffc1e24b618",
+    "perf/av1-policy-validation/Cargo.toml": "6dc233496f0ee69395966c5f371341ccd435b3a958778045e664dc3c04bdc926",
+    "perf/av1-policy-validation/dependencies.lock": "19fa227a1533274624c0540db2a76ab1ff2d69771e15924808761aece50d414d",
+    "perf/av1-policy-validation/src/mux_output.rs": "8dd509d53e5f232324d8dd674854d1c946908172d868fccd7990c0ec387bccc4",
+    "perf/av1-policy-validation/src/mux_output_tests.rs": "2e0715be831b222c5c53d7d16d13af619ca5eaaf0d8e36631a88c87123ef1fce",
+    "perf/av1-policy-validation/src/fixtures.rs": "b6598aacd12cfe5bfcc9f12425c01aef22d91f0ad820c7f75c806f3548a6683e"
+  },
+  "checks": [
+    {
+      "command": "cargo test -p zencodec-media-testkit --test contracts malformed_finish_does_not_partially_modify_the_output --locked",
+      "log": "/home/lilith/tmp/zencodec-mux-preflight-before-20261027.log",
+      "sha256": "6d57b3b04df884f4f1843d67619e6f1bed2e0f801c9a60fe5bfdac5fff5528c2",
+      "result": "regression fails before fix: tail and earlier patch changed output before later refusal",
+      "resource_line": "run-heavy: done rc=101 1s | peak-RSS 0.16GiB | min-avail 11634MiB | peak-load 0.10"
+    },
+    {
+      "command": "just mux-finish-check",
+      "log": "/home/lilith/tmp/zencodec-mux-finish-after-20261027.log",
+      "sha256": "9f1fff316497e9f8ab6c215f3aa3860ebb028df5efc5aa2d4d4eb78859c2b2c0",
+      "result": "media testkit, strict lint and WASM pass after replacement/deprecation",
+      "resource_line": "run-heavy: done rc=0 3s | peak-RSS 0.30GiB | min-avail 11336MiB | peak-load 0.19"
+    },
+    {
+      "command": "just av1-mux-check <mux-output-1>",
+      "log": "/home/lilith/tmp/zencodec-native-mux-1-20261027.log",
+      "sha256": "be9cb647627d05fd09e75c1c5b383e03eb9ccae74e21e9ccc6c0d1f31569cd3f",
+      "result": "4 native tests pass; strict lint flags redundant conversion; corrected",
+      "resource_line": "run-heavy: done rc=101 11s | peak-RSS 0.54GiB | min-avail 11328MiB | peak-load 0.36"
+    },
+    {
+      "command": "just av1-mux-check <mux-output-2>",
+      "log": "/home/lilith/tmp/zencodec-native-mux-2-20261027.log",
+      "sha256": "59eb0c6202b36e172c804b58a6fb961418add82f0ddf7f3d7c20521885a6c3e4",
+      "result": "4 tests pass; new shifted-origin fixture assumes DTS exists; corrected to author explicit DTS from PTS when absent",
+      "resource_line": "run-heavy: done rc=101 10s | peak-RSS 0.54GiB | min-avail 11372MiB | peak-load 0.37"
+    },
+    {
+      "command": "just av1-mux-check <mux-output-3>",
+      "log": "/home/lilith/tmp/zencodec-native-mux-3-20261027.log",
+      "sha256": "a69922647edb61caa54d3c555c52d1cbd0caa7043177712fb85dc6f28ced4b35",
+      "result": "5 native tests and strict lint pass, before additional cancellation/timeout case",
+      "resource_line": "run-heavy: done rc=0 12s | peak-RSS 0.54GiB | min-avail 11207MiB | peak-load 0.51"
+    },
+    {
+      "command": "just av1-policy-check <mux-output-full-1>",
+      "log": "/home/lilith/tmp/zencodec-native-mux-full-20261027.log",
+      "sha256": "06f2e182990dea9f75a0137d200e0c210db65814653be98941b9057224a05300",
+      "result": "final 23 native tests and strict lint pass, including all previous policy/plane/ownership gates",
+      "resource_line": "run-heavy: done rc=0 36s | peak-RSS 0.54GiB | min-avail 11418MiB | peak-load 0.65"
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/mux-output-full-1",
+  "matrix": "native_mux_output_2026-10-27.csv",
+  "matrix_sha256": "9ec39b56aa031b0e17402c7acd6845ffe19f1d589a374fa03ebebeaa5119b566",
+  "findings": [
+    "12 cases: 3 containers x 2 destinations x 8/10-bit AV1. Six native frames per case pass independent component and rational PTS readback.",
+    "Disk writes preserve an existing prefix and restore stream end; three-byte writes and initial Interrupted are qualified. IVF uses one four-byte patch, progressive MP4 one eight-byte patch, WebM none. Forward-only routes have no patches.",
+    "IVF has zero of six explicit packet durations in independent inspection; WebM and MP4 preserve six of six. This is not permission to silently discard a required duration.",
+    "With an authored 40 ms decode/presentation origin, IVF/WebM/fragmented MP4 preserve PTS. Progressive MP4 refuses at finish after 1748 appended bytes in the fixture.",
+    "Shared driver validates track epochs/clocks before native effects; partial header errors preserve I/O causes and confirmed append counts; cancellation/timeout between writes is terminal.",
+    "Invalid final patch preflight changes neither tail nor previous bytes. In-memory apply_finish is deprecated in favor of MuxFinish::apply_to; external writers use validate."
+  ],
+  "impedance": {
+    "native_muxer_trait_changes_required_by_this_trial": 0,
+    "required_zenpixels_api_changes_for_encoded_packet_output": 0,
+    "required_zenpixels_convert_kernels_for_encoded_packet_output": 0,
+    "measured_native_containers": 3,
+    "private_driver_container_specific_branches": 0,
+    "unresolved_semantic_distinctions": [
+      "timestamp vs explicit duration preservation",
+      "nonzero decode origin vs layout",
+      "successful prepare vs later packet-dependent refusal",
+      "native pending storage vs whole-operation allocation"
+    ]
+  },
+  "limits": [
+    "The driver is private; no public checked timing/layout admission is implemented by this trial.",
+    "Synchronous short-write sink and real disk files; no HTTP or async backpressure throughput claim.",
+    "Pending byte lengths are observed buffers, not allocations or whole-operation bounds.",
+    "Encoded output is staged after native encoder completion; input owners and native/mux workspaces remain outside admission.",
+    "The zero pixel-change count excludes unresolved planar conversion and rendering contracts.",
+    "Resource lines describe validation processes, not native codec/mux memory or comparative performance."
+  ]
+}

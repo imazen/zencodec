@@ -21,13 +21,12 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 
-use enough::Stop;
 use zencodec::encode::OutputBuffer;
 
 use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::container::{
-    AccessPattern, DemuxEvent, DemuxProgress, Demuxer, Input, MuxFinish, MuxHint, MuxTiming, Muxer,
-    Patch, Request, SeekMode, SeekResult, SeekScope, SeekStatus, SeekTarget,
+    AccessPattern, DemuxEvent, DemuxProgress, Demuxer, Input, InputRequest, MuxFinish, MuxHint,
+    MuxTiming, Muxer, Patch, SeekMode, SeekResult, SeekScope, SeekStatus, SeekTarget,
 };
 use zencodec_media::frame::{
     ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes,
@@ -124,7 +123,7 @@ pub struct ToyDemuxer {
     limits: MediaLimits,
     state: State,
     tracks: Vec<TrackInfo>,
-    requests: Vec<Request>,
+    requests: Vec<InputRequest>,
     time_base: Option<TimeBase>,
     pos: u64,
     ordinal: u64,
@@ -158,7 +157,7 @@ impl ToyDemuxer {
         }
     }
 
-    fn need(&mut self, r: Request) -> Result<DemuxProgress, SessionError<ToyError>> {
+    fn need(&mut self, r: InputRequest) -> Result<DemuxProgress, SessionError<ToyError>> {
         self.requests.push(r);
         Ok(DemuxProgress::need(0))
     }
@@ -228,21 +227,21 @@ impl Demuxer for ToyDemuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<DemuxProgress, SessionError<ToyError>> {
         stop.check()?;
         self.requests.clear();
         match self.state {
             State::Header => {
                 if input.offset != 0 {
-                    return self.need(Request::at_least(0, HEADER_LEN));
+                    return self.need(InputRequest::at_least(0, HEADER_LEN));
                 }
                 let b = input.bytes;
                 if b.len() < HEADER_LEN {
                     if input.reaches_end() {
                         return Err(SessionError::Codec(ToyError::Truncated));
                     }
-                    return self.need(Request::at_least(0, HEADER_LEN));
+                    return self.need(InputRequest::at_least(0, HEADER_LEN));
                 }
                 if &b[0..4] != MAGIC {
                     return Err(SessionError::Codec(ToyError::BadMagic));
@@ -271,7 +270,7 @@ impl Demuxer for ToyDemuxer {
             }
             State::Packets => {
                 if input.offset != self.pos {
-                    return self.need(Request::at_least(self.pos, PACKET_HEADER_LEN));
+                    return self.need(InputRequest::at_least(self.pos, PACKET_HEADER_LEN));
                 }
                 let b = input.bytes;
                 if b.is_empty() && input.reaches_end() {
@@ -286,7 +285,7 @@ impl Demuxer for ToyDemuxer {
                     if input.reaches_end() {
                         return Err(SessionError::Codec(ToyError::Truncated));
                     }
-                    return self.need(Request::at_least(self.pos, PACKET_HEADER_LEN));
+                    return self.need(InputRequest::at_least(self.pos, PACKET_HEADER_LEN));
                 }
                 let len = u32_at(b, 0) as usize;
                 self.limits
@@ -297,7 +296,7 @@ impl Demuxer for ToyDemuxer {
                     if input.reaches_end() {
                         return Err(SessionError::Codec(ToyError::Truncated));
                     }
-                    return self.need(Request::at_least(self.pos, total));
+                    return self.need(InputRequest::at_least(self.pos, total));
                 }
                 let pts = i64_at(b, 4);
                 let flags = b[12];
@@ -328,7 +327,7 @@ impl Demuxer for ToyDemuxer {
             }
             State::Scanning => {
                 let Some(total) = input.total_len else {
-                    return self.need(Request::Len);
+                    return self.need(InputRequest::Len);
                 };
                 if self.scan_pos >= total {
                     self.index_complete = true;
@@ -341,7 +340,7 @@ impl Demuxer for ToyDemuxer {
                     if input.offset == self.scan_pos && input.reaches_end() {
                         return Err(SessionError::Codec(ToyError::Truncated));
                     }
-                    return self.need(Request::range(self.scan_pos, PACKET_HEADER_LEN as u64));
+                    return self.need(InputRequest::range(self.scan_pos, PACKET_HEADER_LEN as u64));
                 }
                 let b = input.bytes;
                 let len = u32_at(b, 0) as u64;
@@ -368,14 +367,14 @@ impl Demuxer for ToyDemuxer {
                     ));
                 }
                 self.requests
-                    .push(Request::range(self.scan_pos, PACKET_HEADER_LEN as u64));
+                    .push(InputRequest::range(self.scan_pos, PACKET_HEADER_LEN as u64));
                 Ok(DemuxProgress::need(PACKET_HEADER_LEN))
             }
             State::Done => Ok(DemuxProgress::new(0, DemuxEvent::Done)),
         }
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.requests
     }
 
@@ -479,7 +478,7 @@ impl Muxer for ToyMuxer {
     fn write_packet(
         &mut self,
         mut packet: Packet,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ToyError>> {
         stop.check()?;
         if !self.begun {
@@ -514,7 +513,7 @@ impl Muxer for ToyMuxer {
         self.out.take_into(into)
     }
 
-    fn finish(self, stop: &dyn Stop) -> Result<MuxFinish, SessionError<ToyError>> {
+    fn finish(self, stop: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<ToyError>> {
         stop.check()?;
         if !self.begun {
             return Err(SessionError::Protocol(ProtocolViolation::NoBegin));
@@ -567,7 +566,7 @@ impl VideoDecoder for ToyDecoder {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ToyError>> {
         stop.check()?;
         let video = config
@@ -594,7 +593,7 @@ impl VideoDecoder for ToyDecoder {
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<ToyError>> {
         stop.check()?;
         if self.ended {
@@ -661,7 +660,10 @@ impl VideoDecoder for ToyDecoder {
         Ok(SendStatus::Accepted)
     }
 
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<ToyError>> {
+    fn receive(
+        &mut self,
+        stop: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<ToyError>> {
         stop.check()?;
         if let Some(f) = self.ready.pop_front() {
             return Ok(Receive::Ready(f));
@@ -784,7 +786,7 @@ impl VideoEncoder for ToyEncoder {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<ToyError>> {
         stop.check()?;
         if self.ended {
@@ -817,7 +819,10 @@ impl VideoEncoder for ToyEncoder {
         Ok(SendStatus::Accepted)
     }
 
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<ToyError>> {
+    fn receive(
+        &mut self,
+        stop: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<ToyError>> {
         stop.check()?;
         if let Some(p) = self.out.pop_front() {
             return Ok(Receive::Ready(p));

@@ -9,7 +9,7 @@ use admission::{Limits, Storage};
 use execution::*;
 use policy::plan::*;
 use policy::*;
-use zencodec::{Unstoppable, decode::ByteRange, encode::Fidelity};
+use zencodec::{NoPulse, decode::ByteRange, encode::Fidelity};
 
 fn storage(bytes: usize) -> Storage {
     Storage::new(Limits {
@@ -85,7 +85,7 @@ fn choices(engine: &mut Engine, req: Requirements, context: Context) -> Vec<Sele
                 req,
                 context,
                 &mut PolicySet::default(),
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap()
     })
@@ -207,7 +207,7 @@ fn a_joint_refusal_is_not_proof_that_no_other_combination_fits() {
             req,
             context(),
             &mut PolicySet::default(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
     let plan = Plan::combine(&selected, context()).unwrap();
@@ -222,7 +222,7 @@ fn partial_admission_rolls_back_and_competing_reservations_refuse() {
     let disk = storage(8);
     let competing = disk.reserve(1).unwrap();
     assert!(matches!(
-        Admitted::start(plan(), context(), &memory, &disk, &Unstoppable)
+        Admitted::start(plan(), context(), &memory, &disk, &NoPulse)
             .err()
             .unwrap()
             .error(),
@@ -230,8 +230,8 @@ fn partial_admission_rolls_back_and_competing_reservations_refuse() {
     ));
     assert_eq!(memory.occupancy().bytes, 0);
     drop(competing);
-    let admitted = Admitted::start(plan(), context(), &memory, &disk, &Unstoppable).unwrap();
-    assert!(Admitted::start(plan(), context(), &memory, &disk, &Unstoppable).is_err());
+    let admitted = Admitted::start(plan(), context(), &memory, &disk, &NoPulse).unwrap();
+    assert!(Admitted::start(plan(), context(), &memory, &disk, &NoPulse).is_err());
     drop(admitted);
     assert_eq!((memory.occupancy().bytes, disk.occupancy().bytes), (0, 0));
 }
@@ -240,14 +240,14 @@ fn partial_admission_rolls_back_and_competing_reservations_refuse() {
 fn actual_growth_checks_caps_and_keeps_charges_until_last_owner() {
     let memory = storage(48);
     let disk = storage(8);
-    let admitted = Admitted::start(plan(), context(), &memory, &disk, &Unstoppable).unwrap();
+    let admitted = Admitted::start(plan(), context(), &memory, &disk, &NoPulse).unwrap();
     let mut pending = admitted
-        .allocate(ByteRange::new(0, 48), context(), &Unstoppable)
+        .allocate(ByteRange::new(0, 48), context(), &NoPulse)
         .unwrap();
     assert_eq!(admitted.bytes(), 48);
     assert!(
         admitted
-            .allocate(ByteRange::new(48, 1), context(), &Unstoppable)
+            .allocate(ByteRange::new(48, 1), context(), &NoPulse)
             .is_err()
     );
     pending.append(&[7; 48]).unwrap();
@@ -265,14 +265,14 @@ fn actual_growth_checks_caps_and_keeps_charges_until_last_owner() {
 fn incomplete_and_stale_transfers_release_their_storage() {
     let memory = storage(48);
     let disk = storage(8);
-    let admitted = Admitted::start(plan(), context(), &memory, &disk, &Unstoppable).unwrap();
+    let admitted = Admitted::start(plan(), context(), &memory, &disk, &NoPulse).unwrap();
     let pending = admitted
-        .allocate(ByteRange::new(0, 48), context(), &Unstoppable)
+        .allocate(ByteRange::new(0, 48), context(), &NoPulse)
         .unwrap();
     assert!(pending.publish(context()).is_err());
     assert_eq!(admitted.bytes(), 0);
     let pending = admitted
-        .allocate(ByteRange::new(0, 48), context(), &Unstoppable)
+        .allocate(ByteRange::new(0, 48), context(), &NoPulse)
         .unwrap();
     assert!(
         pending
@@ -284,7 +284,7 @@ fn incomplete_and_stale_transfers_release_their_storage() {
     );
     assert_eq!(admitted.bytes(), 0);
     let pending = admitted
-        .allocate(ByteRange::new(0, 48), context(), &Unstoppable)
+        .allocate(ByteRange::new(0, 48), context(), &NoPulse)
         .unwrap();
     drop(pending); // Cancellation by dropping the in-flight transfer.
     assert_eq!(admitted.bytes(), 0);
@@ -320,7 +320,7 @@ fn failure_evidence_has_exact_bounds_and_no_payloads() {
             req,
             context(),
             &mut PolicySet::default(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
     let details = error.error().details().unwrap();
@@ -361,7 +361,7 @@ fn simultaneous_plans_cannot_both_spend_the_same_capacity() {
                 scope.spawn(|| {
                     let plan = plan();
                     barrier.wait();
-                    let result = Admitted::start(plan, context(), &memory, &disk, &Unstoppable);
+                    let result = Admitted::start(plan, context(), &memory, &disk, &NoPulse);
                     barrier.wait(); // Keep the winning reservation alive until both tried.
                     result.is_ok()
                 })
@@ -387,21 +387,113 @@ fn cancellation_prevents_admission_and_each_later_growth() {
     let memory = storage(48);
     let disk = storage(8);
     assert!(matches!(
-        Admitted::start(plan(), context(), &memory, &disk, &Cancel)
+        Admitted::start(
+            plan(),
+            context(),
+            &memory,
+            &disk,
+            &zencodec::how_far::StopOnly::new(Cancel),
+        )
             .err()
             .unwrap()
             .error(),
         AdmissionError::Stopped(_)
     ));
     assert_eq!(memory.occupancy().bytes, 0);
-    let admitted = Admitted::start(plan(), context(), &memory, &disk, &Unstoppable).unwrap();
+    let admitted = Admitted::start(plan(), context(), &memory, &disk, &NoPulse).unwrap();
     assert!(matches!(
         admitted
-            .allocate(ByteRange::new(0, 1), context(), &Cancel)
+            .allocate(
+                ByteRange::new(0, 1),
+                context(),
+                &zencodec::how_far::StopOnly::new(Cancel),
+            )
             .err()
             .unwrap()
             .error(),
         AdmissionError::Stopped(_)
     ));
     assert_eq!(admitted.bytes(), 0);
+}
+
+#[test]
+fn pending_requirements_survive_report_wrap_and_cannot_be_discharged_by_a_child() {
+    let mut engine = Engine::new(PolicySet::default(), 128);
+    let selected = choices(&mut engine, req(), context());
+    let mut pending = PendingPlan::new(selected[0], context()).unwrap();
+    pending.accept(selected[2], context()).unwrap();
+    assert_eq!(pending.remaining().collect::<Vec<_>>(), [Kind::Metadata]);
+    // Produce real decisions until the original evidence has left the report.
+    for _ in 0..8 {
+        choices(&mut engine, req(), context());
+    }
+    assert!(engine.dropped_records() > 0);
+    assert!(engine.records().all(|r| r.question != selected[0].question));
+    let child = choices(&mut Engine::new(PolicySet::default(), 8), req(), context());
+    assert_eq!(
+        *pending.accept(child[1], context()).unwrap_err().error(),
+        PlanError::ForeignOperation
+    );
+    assert_eq!(pending.remaining().collect::<Vec<_>>(), [Kind::Metadata]);
+    pending.accept(selected[1], context()).unwrap();
+    let admitted = Admitted::start(
+        pending.finish(context()).unwrap(),
+        context(),
+        &storage(48),
+        &storage(8),
+        &NoPulse,
+    )
+    .unwrap();
+    let mut output = admitted
+        .allocate(ByteRange::new(0, 1), context(), &NoPulse)
+        .unwrap();
+    output.append(&[7]).unwrap();
+    assert_eq!(output.publish(context()).unwrap().bytes(), &[7]);
+}
+
+#[test]
+fn refused_pending_updates_are_atomic_and_incomplete_plans_cannot_start() {
+    let mut engine = Engine::new(PolicySet::default(), 32);
+    let selected = choices(&mut engine, req(), context());
+    let mut pending = PendingPlan::new(selected[0], context()).unwrap();
+    let changed = choices(
+        &mut engine,
+        Requirements {
+            ram: Some(128),
+            ..req()
+        },
+        context(),
+    );
+    assert_eq!(
+        *pending.accept(changed[1], context()).unwrap_err().error(),
+        PlanError::ChangedRequest
+    );
+    let newer = Context {
+        epoch: 3,
+        ..context()
+    };
+    let changed = choices(&mut engine, req(), newer);
+    assert_eq!(
+        *pending.accept(changed[1], newer).unwrap_err().error(),
+        PlanError::Stale
+    );
+    assert_eq!(
+        pending.remaining().collect::<Vec<_>>(),
+        [Kind::Metadata, Kind::Fidelity]
+    );
+    pending.accept(selected[1], context()).unwrap();
+    assert_eq!(
+        *pending.accept(selected[1], context()).unwrap_err().error(),
+        PlanError::Duplicate
+    );
+    pending.accept(selected[2], context()).unwrap();
+    assert_eq!(pending.finish(context()).unwrap().ram, 48);
+    assert_eq!(
+        *PendingPlan::new(selected[0], context())
+            .unwrap()
+            .finish(context())
+            .unwrap_err()
+            .error(),
+        PlanError::Missing
+    );
 }

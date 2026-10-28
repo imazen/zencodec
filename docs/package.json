@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build-site.mjs",
-    "test": "node --test site/site.test.mjs site/source.test.mjs",
+    "test": "node --test site/site.test.mjs site/source.test.mjs site/code-first.test.mjs site/source-catalog.test.mjs",
     "test:browser": "node site/browser.test.mjs"
   },
   "devDependencies": {

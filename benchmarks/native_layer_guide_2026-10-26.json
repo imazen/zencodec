@@ -1,0 +1,16 @@
+{
+  "base": "ea6544561097d65d3d6c1585391c797d3569ee31",
+  "native_probe": "94aacc75876dfc6caab0a74845e434d48995eb8c",
+  "native_oracle": "9a4442e9bf1554bdd1b191e546547ec04a83bea4",
+  "all_feature_evidence": "10d084f9b939",
+  "command": "just docs-site-browser-check 3547",
+  "log": "zencodec-native-layer-guide-2026-10-26.log",
+  "sha256": "b7b9ec7649e88045d07ff7678c1d4e4923354654baf78de860691336069872e4",
+  "results": [
+    "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+    "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+    "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+    "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13163MiB | peak-load 0.47"
+  ],
+  "scope": "Guide records native raw-plane implementation probe separately from unsupported public raw-layer output; source-extracted signatures, inline contexts, browser navigation and responsive layouts still pass."
+}

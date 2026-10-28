@@ -1,0 +1,91 @@
+{
+  "kind": "native color-stage direct admitted output; no timing claim",
+  "base_commit": "358d4055922673df1014cfcb3d54ae7629a9c511",
+  "pixels_commit": "67bc6da7055d23582a7fb94052544b30de070f80",
+  "package_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "host": "r7900x",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "81dfddc7b0f933d2afe30a721cbe42026a62c266c796823af11751a95a64ed4a",
+    "perf/spatial-validation/dependencies.lock": "7a64e2ece2d3f17840dcbb3aecbbacb21aa4020b0e02a1453aa987acd08a71e5",
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "f1348bb9a93e6c14632a3fa2a5c925d62493c244ae20da1a83e01456c34551fe"
+  },
+  "commands": [
+    "just spatial-packaged-resolve",
+    "just spatial-output-plan-check",
+    "just spatial-ci-check <fresh-artifact-directory>"
+  ],
+  "checks": {
+    "native_suite": {
+      "passed": 122,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_lint": "passed",
+    "layers": {
+      "cmyk": 4,
+      "rgb": 5
+    },
+    "identity": "exact native active color bits, current ICC and destination padding; borrowed source directly into aligned admitted destination",
+    "ownership": "one destination allocation retains its charge after source drop and through shared destination owners",
+    "refusal": "byte/object refusal and changed source interpretation release unpublished destination charges",
+    "fault_injection": "mutable CMS writes through row two, then returns original typed error or unwinds; no successful color stage, original input unchanged, all destination charges released",
+    "existing": "147-presentation/nine-raw-layer native matrices and independent-reader gates unchanged",
+    "targeted_final": {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "scope": "three full-suite cases plus the newly added single-pool source/destination case; conversion implementation unchanged"
+    },
+    "shared_pool": "source-only allowance refuses conversion; combined allowance charges both live owners and releases each independently",
+    "guide": "source-derived signatures, examples, role flows and responsive browser checks passed; existing NeedsCms expectation unchanged"
+  },
+  "runs": [
+    {
+      "log": "zencodec-output-plan-resolve-20261026.log",
+      "sha256": "625e8930d1f0b7b7deba1ac616d67efaa2e780e5b3faa05c1ac685e1902e3ad1",
+      "result": "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 11734MiB | peak-load 0.26"
+    },
+    {
+      "log": "zencodec-admitted-color-1-20261026.log",
+      "sha256": "2b2a471ee3d8dc29659f654a41b798b9bacf30a5c82520731e2ec75ef2fc4158",
+      "result": "run-heavy: done rc=0 42s | peak-RSS 0.86GiB | min-avail 10918MiB | peak-load 1.19"
+    },
+    {
+      "log": "zencodec-admitted-color-suite-20261026.log",
+      "sha256": "3aa04c4b1bfb216dbf00ffd1d9c33b5e085432084657f064bb71196ba59d5c01",
+      "result": "run-heavy: done rc=0 41s | peak-RSS 0.48GiB | min-avail 11211MiB | peak-load 0.72"
+    },
+    {
+      "log": "zencodec-admitted-color-browser-20261026.log",
+      "result": "run-heavy: done rc=1 5s | peak-RSS 0.17GiB | min-avail 11424MiB | peak-load 0.40",
+      "sha256": "04e8266cc6d0135cb1cc8514f86f171cc96ec626140af79f08f35f6d586f428c"
+    },
+    {
+      "log": "zencodec-admitted-color-shared-20261026.log",
+      "result": "run-heavy: done rc=0 3s | peak-RSS 0.40GiB | min-avail 11468MiB | peak-load 0.27",
+      "sha256": "c3561a95758f30c8636708aa2b0b399cd06bd58f44ba89c18670c255734c346c"
+    },
+    {
+      "log": "zencodec-admitted-color-browser-2-20261026.log",
+      "result": "run-heavy: done rc=0 10s | peak-RSS 0.17GiB | min-avail 11279MiB | peak-load 0.40",
+      "sha256": "8f363e0da3efdaf36bccc4610294c87f33c28f87143c79ba438aefd813a8acb4"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/admitted-color-plan-1",
+  "remaining": [
+    "Color-stage prototype; complete auxiliary-plane mapping and publication not implemented by this helper.",
+    "No new CMYK arithmetic or polarity conversion.",
+    "Identity still copies into a destination; original-owner borrow path not added.",
+    "CMS scratch, metadata/profile allocation, native codec workspace and conversion cancellation latency not bounded.",
+    "Wrapper RSS covers complete test/build tree, not codec or CMS memory."
+  ],
+  "full_suite_source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "81dfddc7b0f933d2afe30a721cbe42026a62c266c796823af11751a95a64ed4a",
+    "perf/spatial-validation/dependencies.lock": "7a64e2ece2d3f17840dcbb3aecbbacb21aa4020b0e02a1453aa987acd08a71e5",
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "a6e84a2211ca602cf63a4e9e4553ce43b6cde21f10f9b0364fad4769ecacb4a7"
+  },
+  "initial_failures": [
+    "The shortened guide paragraph omitted the required typed refusal name NeedsCms. Restored that name; the browser expectation is unchanged."
+  ]
+}

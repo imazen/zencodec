@@ -3,12 +3,12 @@
 
 mod ordinary {
     // EXAMPLE: jpeg_rewrite
-    use zencodec::{MetadataPolicy, decode::BoxedError, metadata_rewrite::Request};
+    use zencodec::{MetadataPolicy, decode::BoxedError, metadata_rewrite::RewriteRequest};
 
     pub(crate) fn derivative(source: &[u8]) -> Result<Vec<u8>, BoxedError> {
         // Actual JPEG rewrite; scan data is borrowed without pixel decoding.
         // ANCHOR: jpeg_rewrite
-        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
+        let request = RewriteRequest::new(source).with_policy(MetadataPolicy::ColorAndRotation);
         let plan = zenjpeg::metadata::rewrite(&request)?;
         // END: jpeg_rewrite
         // This preserves opaque ICC. Success does not certify its privacy.
@@ -24,7 +24,7 @@ mod checked {
     use zencodec::{
         MetadataPolicy,
         decode::BoxedError,
-        metadata_rewrite::{Action, Request},
+        metadata_rewrite::{Action, RewriteRequest},
     };
 
     #[derive(Debug)]
@@ -40,7 +40,7 @@ mod checked {
         source: &[u8],
         writer: &mut dyn Write,
     ) -> Result<(), BoxedError> {
-        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
+        let request = RewriteRequest::new(source).with_policy(MetadataPolicy::ColorAndRotation);
         let plan = zenjpeg::metadata::rewrite(&request)?;
         // ANCHOR: jpeg_icc_refusal
         if plan
@@ -69,9 +69,9 @@ mod inspected {
     };
     use std::io::Write;
     use zencodec::{
-        MetadataPolicy, Unstoppable,
+        MetadataPolicy, NoPulse,
         decode::BoxedError,
-        metadata_rewrite::{Action, Request},
+        metadata_rewrite::{Action, RewriteRequest},
     };
 
     pub(crate) fn require_inspected_icc<R: PolicyResolver>(
@@ -81,7 +81,7 @@ mod inspected {
     ) -> Result<(), BoxedError> {
         // An additional, deliberately narrow requirement: retained ICC must be
         // inspected. Other carrier obligations need their own qualification.
-        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
+        let request = RewriteRequest::new(source).with_policy(MetadataPolicy::ColorAndRotation);
         let plan = zenjpeg::metadata::rewrite(&request)?;
         let mut engine = Engine::new(PolicySet::default(), 8);
         // ANCHOR: jpeg_icc_admission
@@ -98,7 +98,7 @@ mod inspected {
                     &mut engine,
                     Context::default(),
                     resolver,
-                    &Unstoppable,
+                    &NoPulse,
                 )?;
             }
         }

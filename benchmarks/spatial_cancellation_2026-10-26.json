@@ -1,0 +1,69 @@
+{
+  "implementation": "fd5f053079153731b016bda0a6aaea22bab3b007",
+  "scope": "Existing StopToken configured once per private TIFF/JXL operation. Cancellation before/after parser I/O, graph traversal, native JXL work, cached/exhausted discovery and final output; no new public library API.",
+  "coverage": [
+    "Every stop poll observed in one successful classic-TIFF planar SubIFD selection/decode operation",
+    "Every stop poll observed in the corresponding BigTIFF operation",
+    "Every stop poll observed in one native JXL blendmodes presentation operation",
+    "Pre-open TIFF cancellation with zero source reads",
+    "Known/shared TIFF graph traversal without source I/O",
+    "Cached and exhausted JXL cursors",
+    "Failed native JXL scan remains an error"
+  ],
+  "commands": [
+    "just spatial-cancellation-check",
+    "just spatial-validation-check <fresh-artifacts> <oracle-python>"
+  ],
+  "receipts": [
+    {
+      "log": "zencodec-spatial-cancellation-2026-10-26.log",
+      "sha256": "d9a3fcc5fa31c97af69ebfa542bae51712e6899e5dc1a409e242384b67e72304",
+      "results": [
+        "run-heavy: done rc=101 1s | peak-RSS 0.29GiB | min-avail 13752MiB | peak-load 0.17"
+      ]
+    },
+    {
+      "log": "zencodec-spatial-cancellation2-2026-10-26.log",
+      "sha256": "9ab7e1988dbf2eabb5bd4a0e7a3262933f87f6511c8bb1c0a9cb33142f5a48b7",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 31.02s",
+        "run-heavy: done rc=0 35s | peak-RSS 0.54GiB | min-avail 13563MiB | peak-load 0.45"
+      ]
+    },
+    {
+      "log": "zencodec-spatial-cancellation-full-2026-10-26.log",
+      "sha256": "4b4d2a4f084946034d4ff970dff68780237c4da3ca2cacb3a96e7f260cd1b4f4",
+      "results": [
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 153.74s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 154s | peak-RSS 0.23GiB | min-avail 13419MiB | peak-load 1.10"
+      ]
+    },
+    {
+      "log": "zencodec-spatial-cancellation3-2026-10-26.log",
+      "sha256": "f870444f51f7948e48ad0c1febab717f45727532ee5359a85ca466be7c44c57f",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 31.31s",
+        "run-heavy: done rc=0 33s | peak-RSS 0.54GiB | min-avail 13551MiB | peak-load 0.76"
+      ]
+    },
+    {
+      "log": "zencodec-spatial-cancellation-guide-2026-10-26.log",
+      "sha256": "ae1d3bd182c318dd91d7c9067cd5491897dbd45b6329c7f7108117f6378ce84c",
+      "results": [
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13226MiB | peak-load 0.34"
+      ]
+    }
+  ],
+  "initial_failure": "Compiler caught incorrect native error import and StopReason lacking std::error::Error. Use the existing CodecError stopped category and zenjxl_decoder::api::Error; no test expectation relaxed.",
+  "native_full_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/discovery-cancellation",
+  "limits": [
+    "No cancellation latency measurement or guarantee inside a blocking source call",
+    "TIFF compute checks at coding-unit seams; JXL relies on native polling",
+    "Source revision binding, explicit shared discovery accounting and complete native memory bounds remain open",
+    "Pinned native JXL maps TimedOut to Cancelled; reason-fidelity follow-up required"
+  ],
+  "native_decoder": "4365fe97a955bcd0b9c3f30ca33678e8b1e85478",
+  "lock_sha256": "f8597b99c12f7f1d8f4c5d6fac6a4f0d25d2b0205705645f77517ebcdcd05afc",
+  "native_reason_issue": "https://github.com/imazen/zenjxl-decoder/issues/70"
+}

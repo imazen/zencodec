@@ -51,11 +51,11 @@ pub trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Take bytes from the front of `input` and advance by one event.
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
         -> Result<Progress, StepError<Self::Error>>;
 
     /// What the decoder needs, valid after a step returned `Event::Need`.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 
     fn info(&self) -> Option<&ImageInfo>;
     fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
@@ -69,7 +69,7 @@ pub struct Progress { pub consumed: usize, pub event: Event }
 pub enum Event { Need, Rows { meta: BatchMeta, rows: u32 }, Metadata(MetadataUpdate), Done(OutputInfo) }
 
 #[non_exhaustive]
-pub enum Request {
+pub enum InputRequest {
     AtLeast { offset: u64, min_len: usize },   // bytes from `offset`, at least `min_len`
     Range(ByteRange),                          // exactly this span
     Len,                                       // the total length, as Input::total_len
@@ -133,6 +133,36 @@ write provisional rows (a pass a later one refines) through
 `true` at `begin`. A decoder with no provisional output ignores both, and a
 final-only sink never sees a provisional row.
 
+Sink capacity is independent of a native decoder's batch size. After `begin`,
+`DecodeRowSink::max_buffer_rows` reports the admitted height per borrowed buffer.
+`helpers::copy_rows_to_sink`, whole-image/frame copy helpers and coroutine
+delivery split larger native batches into consecutive buffer requests. They
+preserve source/destination stride and provisional pass coordinates. The copy
+helpers deliver their whole batch before returning. Coroutine delivery instead
+returns one `Event::Rows` per admitted buffer, retaining the rest of the batch
+without polling the producer or consuming more input. A pull consumer can drain
+that buffer before the next step. The held native batch and reconstruction
+workspace remain outside this sink-capacity guarantee.
+Legacy direct sinks must refuse oversized requests rather than grow silently.
+
+Qualification (2026-10-28): a single native PNG batch exhausted a bounded pull
+adapter's object allowance because the coroutine filled every sub-strip before
+returning. `just coroutine-row-delivery-check` reproduces the same failure with
+a one-slot sink, then verifies 129-row batches, different source/destination
+strides, final/provisional coordinates, completion in the producer's final poll,
+and cancellation between deliveries. All prior coroutine tests remain unchanged.
+The native PNG consumer rerun is a separate qualification gate.
+
+Qualification (2026-10-25): the 97x65 PNG guide input exposed a 65-row native
+batch against an admitted 64-row transcode buffer. Shared helper controls use
+capacities 1/2/3/7/9/unbounded with trimmed strided input, nonzero origins,
+provisional passes and failure partway through copying. Controlled erasure
+preserves a one-row limit across both policy suspensions. `just
+sink-capacity-check` passes conformance, coroutine, strict Clippy, no-default
+compilation and public API checks. Resource receipt: rc=0, 8 s; run-heavy peak
+RSS 0.33 GiB, minimum available 17014 MiB, peak load 0.73. This measures the
+validation process, not native workspace or throughput.
+
 **Termination.** After `Done`, every step returns `Done` again with
 nothing consumed. After any error, every step returns `Finished`. `stop` is
 checked at least once per step; a tripped stop is `Cancelled`, and
@@ -142,7 +172,7 @@ returns, applies it.
 
 **Events.** `Event` is non-exhaustive. Variants added later are
 informational: a driver that does not recognise one steps again. Anything
-that needs the driver to act is a `Need` plus a `Request`.
+that needs the driver to act is a `Need` plus a `InputRequest`.
 
 **Crop and region intent** stay on the job; the sink's coordinate space is
 the output image.
@@ -564,3 +594,14 @@ Rules learned on the way, each recorded where it was measured:
 
 `check_all` runs every codec check above against an encoder and decoder
 pair; `check_read_at_contract` takes a source and runs on its own.
+
+### Coherent input across selected reads
+
+The source/driver must preserve one coherent representation for an opened
+operation. Conditional HTTP reads can fail when the object is replaced; an
+existing image identity cannot authorize mixing old directory bytes with a new
+payload. The [native HTTP qualification](../perf/spatial-validation/README.md#source-identity-is-established-by-the-transport)
+executes this through TIFF/SubIFDs, including faults at the last required range.
+A positional file handle does not supply a disk snapshot by itself. These
+obligations stay in the existing `ReadAt` source contract and its adapters;
+codec trait signatures do not gain transport-specific validators.

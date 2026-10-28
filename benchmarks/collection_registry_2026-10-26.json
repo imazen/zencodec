@@ -1,0 +1,91 @@
+{
+  "base_revision": "ce78ab77a01a9a174abb3ea4f48c0594864ee933",
+  "scope": "Promote the native-qualified collection factory and erasure contracts into CodecSet, while keeping concrete TIFF/JXL dependencies in the validation harness. This is correctness qualification, not a timing or codec workspace measurement.",
+  "sources": {
+    "src/collection.rs": "b2bfa99343934604045af9c6407499556944b7732ed495d7101c2c8c43ea4a5c",
+    "src/collection/erased.rs": "97b6f6885608f0f513ceeef344f37c3d8328c6058f5dbf05adece91d1372bf72",
+    "src/collection/factory.rs": "f1c6924d0f11b4e1b80e91a7f60717832ad0e7e12a5a4878adf8a62d93270148",
+    "src/set.rs": "5f5363859a711443b63c309988cf2cdf7e760e7bdb939c3534a92619e2a51a14",
+    "src/set/collection.rs": "633bc14de4cecaf59e18c26412227b0f7c214cfbf4835a9fb2fcd22423983e35",
+    "perf/spatial-validation/src/collection.rs": "67b6d7c5b37e17b19e6b200aa8555fa8174e50c11da45789b7dcd4900c14566d",
+    "perf/spatial-validation/src/collection_factories.rs": "2174d6a42eef0c7e67a74b945df66dba31fc6a038697340a08d06f2ab1f817f5",
+    "perf/spatial-validation/src/factory_tests.rs": "54efd89b961ee15f1d719c0fc3f082a093115c45039a8c7f20f9d1dee25be0db",
+    "perf/spatial-validation/src/http_tests.rs": "88efaa28404b20284aec286d65060d4aabd772d5661fca300e99b747392bfb40",
+    "justfile": "006a1407bc878c0222a58c9de875e73cd7ad75e1ebec289f430a4a5b6390e9cb"
+  },
+  "runs": [
+    {
+      "log": "zencodec-registry-core-1-2026-10-26.log",
+      "sha256": "6cf7704538e910d7eb8f9414e331915fca8241bfe31ef1c7d5a91a955b161e1a",
+      "scope": "Initial native compile refused an incorrect DecodePolicy root import. Fixed the new imports to the existing public decode::DecodePolicy path.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13414MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-core-1; cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "run-heavy: done rc=101 2s | peak-RSS 0.35GiB | min-avail 13078MiB | peak-load 0.27"
+      ]
+    },
+    {
+      "log": "zencodec-registry-core-2-2026-10-26.log",
+      "sha256": "4ac51e925976d74de647994fd5ad7740a0552fb34a12ee83067d0b8d9dae0fb4",
+      "scope": "Thirteen native controls passed; one new control expected Open rather than the established Stopped stage for cancellation before opening. Corrected that new expectation without changing existing contracts.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13374MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-core-2; cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "run-heavy: done rc=101 5s | peak-RSS 0.58GiB | min-avail 13168MiB | peak-load 0.23"
+      ]
+    },
+    {
+      "log": "zencodec-registry-core-3-2026-10-26.log",
+      "sha256": "156100acd4b577f38f5490967358a0382f2ed98def889e7011a09437a39f7b7b",
+      "scope": "Fourteen native factory controls, full workspace all-feature tests/lint, WASM and seven conditional HTTP controls passed.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13404MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-core-3; cargo clippy --workspace --all-targets --all-features --locked -- -D warnings; cargo test --workspace --all-features --locked; cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-http-1 3568",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 10934, \"cases\": 62, \"statuses\": {\"200\": 1, \"206\": 10920, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 37s | peak-RSS 0.63GiB | min-avail 12798MiB | peak-load 0.88"
+      ]
+    },
+    {
+      "log": "zencodec-registry-api-2026-10-26.log",
+      "sha256": "dc407d1bfa15b6d3517c344705b9ba78b4bde0e84bdc78ecd5c85cbbd30a3246",
+      "scope": "Strict Rustdoc and generated API snapshots passed.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13479MiB :: timeout --kill-after=10s 180s bash -eu -c just doc-default; just api-doc",
+        "run-heavy: done rc=0 6s | peak-RSS 0.28GiB | min-avail 13107MiB | peak-load 0.65"
+      ]
+    },
+    {
+      "log": "zencodec-registry-site-2026-10-26.log",
+      "sha256": "a018ca40567d1595ae15ebe15638350ea37fe165a6999510093a7f2a210f441f",
+      "scope": "Source-derived signatures, exact executable examples and all browser interaction/responsive gates passed.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13466MiB :: timeout --kill-after=10s 120s just docs-site-browser-check 3547",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12992MiB | peak-load 0.53"
+      ]
+    }
+  ],
+  "qualified": [
+    "Borrowed local positional TIFF, classic/BigTIFF, planar/chunky, selected children/regions and exact samples, stable owned-file cursor isolation.",
+    "Resident JXL presentations and raw layers preserve native samples and ownership; nonresident source refuses before reads.",
+    "Wrong composition and foreign cursor refusals; discovery allowance; first matching factory failure never falls back.",
+    "Inherited limits or decode policy are passed to native factories, which explicitly refuse their unqualified mapping before I/O.",
+    "Inherited pulse cancellation, inherited stop and per-call stop remain effective before opening, after registry drop and in publication callbacks, for Cancelled and TimedOut.",
+    "Original source/application/native causes and traces survive; publication is refused after conditional HTTP source replacement or truncation.",
+    "The guide uses the real CodecSet and shared CollectionFactory; duplicate private registry and erasure implementations are removed."
+  ],
+  "remaining": [
+    "Native adapter packaging in codec crates.",
+    "Qualified enforcement mappings for all supplied legacy limits and decode policies; current native factories refuse them.",
+    "Progress reporting, automatic format detection and transferable opened jobs.",
+    "Fallible small factory/cursor boxes, native workspace admission and whole-container privacy scope.",
+    "No accepted speed or erasure-cost comparison."
+  ],
+  "http_summary": {
+    "cases": 62,
+    "requests": 10934,
+    "statuses": {
+      "200": 1,
+      "206": 10920,
+      "302": 1,
+      "412": 12
+    }
+  },
+  "environment_note": "run-heavy receipts are whole-command process peak RSS; they do not establish native reconstruction workspace bounds."
+}

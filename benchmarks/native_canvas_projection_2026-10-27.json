@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-27",
+  "zencodec_base": "c8ce95bd0b99cfbdc266d517ceb606699e4730d1",
+  "scope": "Private canvas geometry stage, not complete display rendering",
+  "command": "just spatial-ci-check ARTIFACTS cms_oracle",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-canvas-projection-full-2",
+  "case_receipts": {
+    "boundaries": {
+      "interpretation_or_geometry_refusals": 7,
+      "padded_rows_unchanged": true,
+      "projections": 32,
+      "roles": [
+        "premultiplied color",
+        "selection mask",
+        "applied spot",
+        "depth"
+      ],
+      "stop_refusals": 160,
+      "storage_channels": [
+        "U8",
+        "F32",
+        "F64"
+      ],
+      "storage_refusals": 40,
+      "unpublished_charges_released": true,
+      "unwinds": 16
+    },
+    "jxl-layers": {
+      "native_presentations": 2,
+      "oversized_layer": [
+        1024,
+        576
+      ],
+      "projections": 6,
+      "raw_layer_refusals": 9,
+      "visible_intersection": [
+        188,
+        202
+      ]
+    },
+    "jxl-orientation": {
+      "exact_source_projection": true,
+      "independent_libjxl_presentations": 8,
+      "independent_max_allowed_absolute_error": 0.00390625,
+      "libjxl_version": 11001,
+      "projections": 32
+    },
+    "tiff": {
+      "containers": [
+        "TIFF",
+        "BigTIFF"
+      ],
+      "exact_samples": true,
+      "files": 32,
+      "missing_full_canvas_refusals": 32,
+      "orientations": 8,
+      "projections": 128,
+      "representations": [
+        "RGBA8",
+        "RGBA32Float"
+      ]
+    }
+  },
+  "source_sha256": {
+    "perf/spatial-validation/src/canvas_projection.rs": "dec681fdaa1e56cb06130f1f6f206c62eca70a6b256ca6b0ee549259c11e04bd",
+    "perf/spatial-validation/src/canvas_projection_tests.rs": "15bc348e54d7554d932310e99206d2afb0240f31471f84af7550998209371a32",
+    "perf/spatial-validation/jxl_oracle.c": "273e6154d736d06104cd4ddd17a00143d0b87dfce7d8c2297c182c2610c11f86"
+  },
+  "native_tests": {
+    "passed": 133,
+    "failed": 0,
+    "ignored": 0,
+    "strict_clippy": "passed"
+  },
+  "resource_wrapper": "run-heavy: done rc=0 46s | peak-RSS 0.48GiB | min-avail 11024MiB | peak-load 0.59",
+  "failed_attempts_retained": [
+    "native-canvas-projection-1: destination stride not whole-pixel aligned",
+    "native-canvas-projection-2: numerical checks passed; lint found constant chunks_exact",
+    "native-canvas-projection-full-1: new artifact directory creation collided with existing TIFF freshness assertion; separate explicit projection directory fixed it"
+  ],
+  "limits": [
+    "no target color conversion or display resize",
+    "no native component conversion",
+    "arbitrary auxiliary grid registration is not established by equal dimensions",
+    "native/CMS workspace is not admitted",
+    "source is retained during work; identity still allocates",
+    "cooperative cancellation at plane seams only"
+  ]
+}

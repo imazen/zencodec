@@ -1,7 +1,9 @@
 //! Bounded store of fed bytes, keyed by absolute offset.
 
+use crate::{CoroutineError, admitted_input::AdmittedInput};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use zencodec::storage::StorageBudget;
 
 /// One run of held bytes. `data[head..]` is live and starts at absolute
 /// offset `start`; releasing from the front moves `head` instead of
@@ -27,6 +29,7 @@ impl Segment {
 /// Fed-but-unread bytes. Segments are keyed by their start offset and
 /// never overlap; adjacent feeds merge; reads release what they consume.
 pub(crate) struct InputStore {
+    admitted: Option<AdmittedInput>,
     segments: BTreeMap<u64, Segment>,
     retained: usize,
     cap: usize,
@@ -39,12 +42,27 @@ pub(crate) struct InputStore {
 impl InputStore {
     pub(crate) fn new(cap: usize) -> Self {
         Self {
+            admitted: None,
             segments: BTreeMap::new(),
             retained: 0,
             cap: cap.max(1),
             total: None,
             spare: None,
         }
+    }
+
+    pub(crate) fn with_storage(cap: usize, budget: &StorageBudget) -> Result<Self, CoroutineError> {
+        Ok(Self {
+            admitted: Some(AdmittedInput::new(cap.max(1), budget)?),
+            ..Self::new(cap)
+        })
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.admitted = None;
+        self.segments.clear();
+        self.spare = None;
+        self.retained = 0;
     }
 
     pub(crate) fn total(&self) -> Option<u64> {
@@ -56,7 +74,9 @@ impl InputStore {
     }
 
     pub(crate) fn retained(&self) -> usize {
-        self.retained
+        self.admitted
+            .as_ref()
+            .map_or(self.retained, AdmittedInput::retained)
     }
 
     pub(crate) fn cap(&self) -> usize {
@@ -73,12 +93,23 @@ impl InputStore {
 
     /// Store as much of `bytes` as fits. Returns bytes accepted (bytes
     /// already held are accepted without being stored twice).
-    pub(crate) fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> usize {
+    pub(crate) fn feed(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+    ) -> Result<usize, CoroutineError> {
+        let end = offset
+            .checked_add(bytes.len() as u64)
+            .ok_or(CoroutineError::InputRangeOverflow)?;
         if eof {
-            self.total = Some(offset.saturating_add(bytes.len() as u64));
+            self.total = Some(end);
+        }
+        if let Some(admitted) = &mut self.admitted {
+            return admitted.feed(offset, bytes);
         }
         if bytes.is_empty() {
-            return 0;
+            return Ok(0);
         }
         // Skip any prefix we already hold.
         let mut skip = 0usize;
@@ -89,7 +120,7 @@ impl InputStore {
             }
         }
         if skip >= bytes.len() {
-            return bytes.len();
+            return Ok(bytes.len());
         }
         let offset = offset + skip as u64;
         let bytes = &bytes[skip..];
@@ -104,7 +135,7 @@ impl InputStore {
         let room = self.cap.saturating_sub(self.retained);
         let take = limit.min(room);
         if take == 0 {
-            return skip;
+            return Ok(skip);
         }
         let bytes = &bytes[..take];
         // Merge onto a segment that ends exactly here.
@@ -129,11 +160,14 @@ impl InputStore {
             );
         }
         self.retained += take;
-        skip + take
+        Ok(skip + take)
     }
 
     /// Copy `out.len()` bytes from `offset` if every byte is held.
     pub(crate) fn try_read(&self, offset: u64, out: &mut [u8]) -> bool {
+        if let Some(admitted) = &self.admitted {
+            return admitted.try_read(offset, out);
+        }
         let mut filled = 0usize;
         while filled < out.len() {
             let pos = offset + filled as u64;
@@ -151,6 +185,9 @@ impl InputStore {
 
     /// Append the spans of `offset .. offset + len` that are not held.
     pub(crate) fn missing_into(&self, offset: u64, len: usize, gaps: &mut Vec<(u64, u64)>) {
+        if let Some(admitted) = &self.admitted {
+            return admitted.missing_into(offset, len, gaps);
+        }
         let end = offset + len as u64;
         let mut pos = offset;
         while pos < end {
@@ -182,11 +219,16 @@ impl InputStore {
     /// Releasing a segment's front moves its head (no copy, amortised
     /// compaction); releasing its back truncates; a hole in the middle
     /// splits it, which is the only case that copies.
-    pub(crate) fn release(&mut self, offset: u64, len: usize) {
-        if len == 0 {
-            return;
+    pub(crate) fn release(&mut self, offset: u64, len: usize) -> Result<(), CoroutineError> {
+        let end = offset
+            .checked_add(len as u64)
+            .ok_or(CoroutineError::InputRangeOverflow)?;
+        if let Some(admitted) = &mut self.admitted {
+            return admitted.release(offset, end);
         }
-        let end = offset + len as u64;
+        if len == 0 {
+            return Ok(());
+        }
         // One overlapping segment at a time, so a release allocates
         // nothing: find the last segment that starts before `end` and
         // overlaps, handle it, repeat.
@@ -242,15 +284,24 @@ impl InputStore {
                 self.segments.insert(tail.start, tail);
             }
         }
+        Ok(())
     }
 
     /// Drop every held byte before `offset`.
     pub(crate) fn release_before(&mut self, offset: u64) {
+        if let Some(admitted) = &mut self.admitted {
+            // A prefix cannot split a span or grow the index.
+            admitted
+                .release(0, offset)
+                .expect("prefix release cannot grow the range index");
+            return;
+        }
         let first = self.segments.keys().next().copied();
         if let Some(first) = first
             && first < offset
         {
-            self.release(first, (offset - first) as usize);
+            self.release(first, (offset - first) as usize)
+                .expect("prefix range is representable");
         }
     }
 }
@@ -268,10 +319,10 @@ mod tests {
     #[test]
     fn feed_merge_read_release() {
         let mut s = InputStore::new(1024);
-        assert_eq!(s.feed(0, &[1, 2, 3], false), 3);
-        assert_eq!(s.feed(3, &[4, 5], false), 2);
+        assert_eq!(s.feed(0, &[1, 2, 3], false).unwrap(), 3);
+        assert_eq!(s.feed(3, &[4, 5], false).unwrap(), 2);
         assert_eq!(s.segments.len(), 1, "adjacent feeds merge");
-        assert_eq!(s.feed(10, &[9, 9], true), 2);
+        assert_eq!(s.feed(10, &[9, 9], true).unwrap(), 2);
         assert_eq!(s.total(), Some(12));
         let mut out = [0u8; 5];
         assert!(s.try_read(0, &mut out));
@@ -282,7 +333,7 @@ mod tests {
         assert_eq!(missing(&s, 5, 2), [(5, 2)]);
         assert_eq!(missing(&s, 9, 5), [(9, 1), (12, 2)]);
         assert!(s.beyond_end(11, 2));
-        s.release(1, 2);
+        s.release(1, 2).unwrap();
         assert_eq!(s.retained(), 5);
         assert!(s.try_read(0, &mut [0u8; 1]));
         assert!(!s.try_read(1, &mut [0u8; 1]));
@@ -299,11 +350,11 @@ mod tests {
     #[test]
     fn cap_limits_and_duplicates_are_free() {
         let mut s = InputStore::new(4);
-        assert_eq!(s.feed(0, &[1, 2, 3, 4, 5, 6], false), 4);
-        assert_eq!(s.feed(0, &[1, 2, 3, 4], false), 4, "already held");
-        assert_eq!(s.feed(4, &[5, 6], false), 0, "full");
-        s.release(0, 2);
-        assert_eq!(s.feed(4, &[5, 6], false), 2);
+        assert_eq!(s.feed(0, &[1, 2, 3, 4, 5, 6], false).unwrap(), 4);
+        assert_eq!(s.feed(0, &[1, 2, 3, 4], false).unwrap(), 4, "already held");
+        assert_eq!(s.feed(4, &[5, 6], false).unwrap(), 0, "full");
+        s.release(0, 2).unwrap();
+        assert_eq!(s.feed(4, &[5, 6], false).unwrap(), 2);
         let mut out = [0u8; 4];
         assert!(s.try_read(2, &mut out));
         assert_eq!(out, [3, 4, 5, 6]);
@@ -313,13 +364,13 @@ mod tests {
     fn front_release_is_a_head_move_and_compacts() {
         let mut s = InputStore::new(1 << 20);
         let data: Vec<u8> = (0..20_000u32).map(|i| i as u8).collect();
-        assert_eq!(s.feed(0, &data, true), 20_000);
+        assert_eq!(s.feed(0, &data, true).unwrap(), 20_000);
         let cap_before = s.segments[&0].data.capacity();
         let mut buf = [0u8; 100];
         for i in 0..100u64 {
             assert!(s.try_read(i * 100, &mut buf));
             assert_eq!(buf[0], (i * 100) as u8);
-            s.release(i * 100, 100);
+            s.release(i * 100, 100).unwrap();
         }
         assert_eq!(s.retained(), 10_000);
         let seg = s.segments.values().next().unwrap();

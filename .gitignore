@@ -67,3 +67,4 @@ apidoc/target/
 
 # Built documentation artifact
 docs/_site/
+__pycache__/

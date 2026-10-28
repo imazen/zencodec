@@ -1,0 +1,46 @@
+{
+  "base": "a4d14d6d046978feb6738a445cbb83bd0aade5a4",
+  "native_decoder": "189f8585b1a28ac9fa7413c24a2ed3914126e77a",
+  "commands": [
+    "just spatial-discovery-check",
+    "just spatial-validation-check <fresh-artifacts> <oracle-python>",
+    "just docs-site-browser-check 3547"
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/header-budget-integrated",
+  "receipts": [
+    {
+      "log": "zencodec-native-discovery-2026-10-26.log",
+      "sha256": "6b82811a0c3d4df63698d46309292f44ddbb296b3a64fe4ae0f219c20c6438c9",
+      "results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 23.59s",
+        "run-heavy: done rc=0 33s | peak-RSS 0.58GiB | min-avail 13337MiB | peak-load 0.56"
+      ]
+    },
+    {
+      "log": "zencodec-header-budget-integrated-2026-10-26.log",
+      "sha256": "2c3b6b1e2154965f2a9b809bdc4455f28f78f0b938491d7c4e0bf24ff96efd58",
+      "results": [
+        "test result: ok. 70 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 194.48s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 196s | peak-RSS 0.54GiB | min-avail 13434MiB | peak-load 1.22"
+      ]
+    },
+    {
+      "log": "zencodec-native-header-guide-2026-10-26.log",
+      "sha256": "c19667140db43e8eac2f9487a6823a4487c27c86888810e3c3c27f388bf4bf21",
+      "results": [
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13266MiB | peak-load 0.61"
+      ]
+    }
+  ],
+  "scope": "Per-native-decoder frame-header admission, retained terminal discovery causes and full existing default-feature native spatial matrix with independent libjxl/TIFF inspection.",
+  "limits": [
+    "Header counts do not bound work inside one header or metadata boxes outside the frame stream.",
+    "Separate selected decoder instances do not share the native header charge.",
+    "No speed, hard cancellation-latency or whole-native-memory claim.",
+    "Raw layers remain unsupported."
+  ]
+}

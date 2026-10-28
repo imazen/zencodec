@@ -1,9 +1,55 @@
+> The current review uses `Pulse` / `SharedPulse` for operation control.
+> See [the control migration](pulse-migration.md) for caller and codec changes.
+> Bare byte requests are `InputRequest`; metadata rewriting uses `RewriteRequest`.
+
 # zencodec API Specification
 
 Shared traits and types for zen* image codecs. This is the canonical reference
 for the public API surface.
 
 `#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`.
+
+The [early decode-output commitment](decode-output-commitment.md) is a separate
+proposal with native qualification gates; it is not part of the implemented
+surface below.
+
+### Operation policy binding (review API)
+
+Pass `PolicySet` directly for built-in selection. Add a callback with
+`BoundPolicy::new(requirements, callback)` when a decision depends on the
+current offers. Custom callback structs implement `PolicyResolver` and go
+inside the binding; closures with no mandatory requirements may be passed
+alone. All operation entry points accept the sealed `OperationPolicy` trait.
+
+```rust
+let mut policy = BoundPolicy::new(
+    PolicySet::new().with_output_wait_limit(8 * 1024 * 1024),
+    |question: Question<'_>| -> Result<Decision, At<MyError>> {
+        record_question(&question);
+        Ok(Decision::UsePreset)
+    },
+);
+```
+
+Admission reads the binding before invoking the callback. Unknown or
+contradictory required evidence excludes a route and contributes to the bounded
+`DecisionRecord::unmet_requirements`. A callback cannot select an excluded
+route. `UsePreset` applies the binding's preferences to the remaining choices.
+A direct `PolicySet` selects without callback delegation, so `used_preset`
+remains false; this field records delegation, not the origin of every choice.
+
+`with_policy_set` is deprecated. During migration its requirements and the
+policy argument's requirements both apply; a bound policy supplies preferences
+in place of the legacy setter's preferences. Low-level `resolve_*` adapters
+retain their explicit preset parameter for compatibility; new callers use
+`PolicySet::new()` there and carry requirements in the policy argument.
+`Renderer::render` now takes one policy argument; `render_with_preset` is the
+deprecated compatibility form.
+
+Bindings contain configuration and callback state, not pending obligations.
+Reusing one across decode and encode does not discharge output requirements at
+a decode boundary. Unproven final-effect obligations still refuse. Native
+adapter evidence remains the adapter's responsibility.
 
 ### zenpixels: use but never re-export
 
@@ -48,6 +94,900 @@ metadata. The caller handles CMS transforms.
 
 ---
 
+## Shared native mapping and ownership
+
+`zencodec::frame` owns the existing `Frame`, `Picture`, `MappedPlanes`,
+`PlaneView`, `PlaneSamples`, `MapError`, `PlaneError` and `Presentation`
+contracts. `zencodec_media::frame` re-exports those exact types. Frames retain
+immutable interpretation and an owned picture after decoder reset/drop; another
+presentation can share that picture with different timing. Mapped rows borrow
+the native guard and preserve word stride, significant code bits and bit shift.
+A native ten-bit word remains a component code, not a normalized RGB U16 sample.
+`PlaneView::as_strided_samples` borrows the complete declared span for existing
+plane kernels: it includes inter-row padding and ends after the last active
+sample. Empty geometry exposes no storage. The accessor neither copies nor
+applies the sample encoding; consumers must still honor code bits and shift.
+
+```rust
+trait Picture: Send + Sync {
+    fn map(&self) -> Result<Box<dyn MappedPlanes + '_>, MapError>;
+}
+trait MappedPlanes {
+    fn plane_count(&self) -> usize;
+    fn plane(&self, index: usize) -> Option<PlaneView<'_>>;
+}
+```
+
+The core has no media or I/O-driver dependency. Accounted software `OwnedPlanes`
+remain in media, while packed image interchange remains `zenpixels::PixelSlice`.
+The shared collection and checked consumer are implemented on the API review
+PR; concrete native factories remain in the validation harness. Mapping does not certify
+display conversion, whole-container metadata treatment or a native workspace
+bound. See [the media contract](media-contract.md#frames).
+
+### Mapped image output (`zencodec::image`)
+
+`ImageOutput` owns packed pixels plus auxiliary values, or an existing native
+component `Frame`. `map` borrows planes through a guard. `with_pixels` is the
+packed-color convenience and refuses component codes. Each plane distinguishes
+`Samples::{Pixels, Values, Codes}` and `Meaning::{Color, Auxiliary, Component}`;
+auxiliary scalar values are not relabeled grayscale color.
+
+`ImageInterpretation` is frozen with the owner. It retains stored canvas/region,
+residual orientation, optional native signal/timing and opaque typed source
+details. Its optional `composition` distinguishes a qualified composited view
+from a raw layer; packed storage or equal dimensions do not establish that fact.
+The checked collection binds its view before publication, preserving existing
+clones and sample storage. A contradictory native claim, or a view that changes
+during decoding, returns `OutputError::Composition { expected, actual }` before
+the policy callback. Standalone constructors leave the view unknown unless the
+adapter supplies it. This does not certify blending arithmetic, orientation,
+color conversion or display readiness. `ImageFacts::composition` exposes the
+same bounded fact to the existing resolver. `Auxiliary` separately retains source precision and source dimensional
+shift. Spot color records whether its contribution is already `Applied` or
+still `Separate`; retaining its samples does not authorize applying it again.
+`AuxiliaryKind::Black { inverted }` declares ink polarity rather than assuming
+an attached ICC profile establishes it. Native JXL uses inverted black and the
+`zenpixels::PixelFormat::CmykF32Inverted` packed format; conventional device values
+use `CmykF32`. These are different interpretations of the same physical layout,
+and an unqualified conversion must refuse.
+
+`ImageInterpretation::placement: Option<Placement>` describes the selected
+image's signed origin on a separate presentation canvas, before orientation.
+`Placement::visible(geometry)` returns matching sample-buffer and canvas
+rectangles, or `None` for valid fully off-canvas samples. It never clips the
+owner. `ImageOutput::packed` rejects an empty presentation canvas or signed
+overflow as `OutputError::Placement`, retaining `PlacementError` as its cause.
+Placement does not establish blend instructions or authorize discarding samples.
+`ImageFacts` retains it for bounded diagnostics; `Question::Image` borrows those
+facts for the callback instead of embedding another full copy in the question.
+
+```rust
+impl ImageOutput {
+    fn packed(pixels: zenpixels::PixelBuffer, extras: Vec<(Auxiliary, Values)>,
+        interpretation: ImageInterpretation) -> Result<Self, At<OutputError>>;
+    fn from_packed_owner<P: PackedImageOwner + 'static>(owner: P,
+        auxiliaries: Vec<Auxiliary>, interpretation: ImageInterpretation)
+        -> Result<Self, At<OutputError>>;
+    fn replace_packed_color<P: PackedImageOwner + 'static>(self, owner: P)
+        -> Result<Self, At<OutputError>>;
+    fn from_frame(frame: frame::Frame) -> Self;
+    fn from_frame_pixels<P: PackedImageOwner + 'static>(frame: frame::Frame,
+        owner: P, orientation: zenpixels::Orientation) -> Result<Self, At<OutputError>>;
+    fn source_frame(&self) -> Option<&Arc<frame::FrameInterpretation>>;
+    fn interpretation(&self) -> &ImageInterpretation;
+    fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>>;
+    fn with_pixels<T>(&self, consume: impl FnOnce(zenpixels::PixelSlice<'_>) -> T)
+        -> Result<T, At<OutputError>>;
+}
+trait MappedImage {
+    fn plane_count(&self) -> usize;
+    fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
+}
+trait PackedImageOwner: Send + Sync {
+    fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>>;
+    fn auxiliary(&self, index: usize)
+        -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
+    fn retain_auxiliaries(&self)
+        -> Result<Option<Arc<dyn AuxiliaryImageOwner>>, At<OutputError>>;
+}
+trait AuxiliaryImageOwner: Send + Sync {
+    fn auxiliary(&self, index: usize)
+        -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
+}
+```
+
+`ImageOutput::from_frame_pixels` adopts an explicitly converted packed owner for
+the native frame's exact visible crop. It retains timing and presentation while
+moving the original component interpretation to `source_frame()`. Current
+`interpretation().signal` is absent: the packed descriptor/context describe
+current samples. `ImageFacts::source_frame` exposes bounded source facts to the
+existing publication resolver, distinct from native-current `ImageFacts::frame`.
+The consumed native picture is released; retained clones remain independent.
+Color replacement preserves that provenance and temporal identity. This adapter
+entry point does not execute or certify conversion, infer orientation, rescale
+to a signaled render size, or authorize metadata transfer. The caller supplies
+residual orientation explicitly. Packed constructors still reject current component claims and presentation
+facts without explicit source-frame provenance. That provenance is part of
+`ImageInterpretation`, so a subsequent transform can clone it without losing
+timing or source evidence.
+
+`PackedImageOwner` retains an immutable native or admitted allocation through the
+last `ImageOutput` clone. `ValueSlice` borrows strided auxiliary storage, so an
+adapter can publish already-admitted buffers without converting them to `Vec`.
+`Samples::Values` holds that view by value. Construction checks every declared
+plane; mapping refuses changes to dimensions, stride, descriptor or color context.
+The implementor must also preserve sample contents. This is an ownership
+mechanism; it adds no policy callback and does not admit existing allocations
+retroactively. Native workspace and small owner/metadata allocations are outside
+a managed payload allowance. [Native qualification](../perf/spatial-validation/README.md#packed-output-admission)
+exercises release on refusal/cancellation and retention through clones.
+
+`Values` and `ValueSlice` carry `AuxiliaryGrid`, defaulting to `Unknown`.
+An adapter can declare `ColorSamples` only when each emitted auxiliary sample
+has the same center as the color sample at the corresponding row and column
+throughout the selected stored region. Adoption checks matching dimensions;
+mapping freezes the claim, including through independent auxiliary ownership
+and color replacement. Equal sizes, source precision and `source_dim_shift`
+never establish registration. `with_grid` changes no samples and performs no
+resampling. This initial positive case qualifies same-grid geometry operations;
+arbitrary offsets, sampling steps and phases still need a separate representation
+before general auxiliary resampling can be offered.
+
+`replace_packed_color` composes converted color with the original auxiliary
+mapping guards. The replacement must cover the same stored coordinates. It
+retains geometry, placement, orientation, timing, auxiliary roles and original
+source facts; its descriptor/context describe the new color. It neither
+transforms nor renders auxiliaries, and it refuses component-code output.
+`PackedImageOwner::retain_auxiliaries` optionally supplies an independent owner
+of the same scalar planes. Replacement calls it automatically, verifies the
+frozen layouts and retains its traced failures. The source color can then
+release when no original image clone retains it. `None` keeps the complete
+source owner, including its original color charge; it never triggers a copy.
+Repeated replacement releases intermediate color owners and keeps the already
+retained auxiliary owner without invoking the hook again. With no
+auxiliaries, the consumed source storage releases unless another clone holds it.
+Publication still uses the existing resolver. The optional owner mechanism does
+not require caller capability coordination or a second policy callback.
+
+Packed construction checks region bounds, pixel dimensions and compatible
+interpretation. Frame mapping checks the stored/crop extent, role count and
+mapped per-plane dimensions/encoding. It retains native mapping errors in the
+source chain. It does not scan sample codes, validate ICC profiles or establish
+metadata privacy. Names, opaque profiles and typed source details remain
+unfiltered data; policy admission is a separate boundary.
+Mapping-error `Display` and `Debug` stay bounded; explicit cause inspection
+retains the original backend error and trace, which may contain private data.
+
+## Image collections (`zencodec::collection`)
+
+An opened collection fixes its source operation and composited/uncomposited view.
+`ImageId` is opaque, clonable, comparable and hashable within that operation;
+it is not a portable index or proof of source consistency. `Origin` lets an
+adapter issue IDs and reject foreign ones. Cursor ownership is also checked by
+the adapter. Containment is separate from reduced levels and video timing.
+
+```rust
+trait Collection {
+    type Cursor;
+    fn view(&self) -> Composition;
+    fn images(&mut self) -> Result<Self::Cursor, At<CollectionError>>;
+    fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
+    fn next(&mut self, cursor: &mut Self::Cursor) -> Result<Option<ImageId>, At<CollectionError>>;
+    fn describe(&mut self, image: &ImageId) -> Result<ImageDescription, At<CollectionError>>;
+    fn decode(&mut self, image: &ImageId, request: &ImageRequest)
+        -> Result<ImageOutput, At<CollectionError>>;
+}
+```
+
+`ImageRequest::new()` requests the full selected image. `with_region(Rect)`
+requires that exact nonempty stored region. Unsupported views, containment and
+regions return typed errors; they cannot silently become flattened pixels,
+empty discovery or a clipped region. Backend failures retain their original
+concrete error and location trace; default formatting omits backend payloads.
+
+`Discovery<C>::new(collection, attempts)` applies one immutable call allowance
+across all cursors. It charges before delegating `images`, `children`, `next` and `describe`,
+including cached results, exhaustion and errors. It does not count native parser
+work, source bytes, allocation or CPU time. Issued IDs remain decodable after
+discovery exhaustion.
+
+`ImageDescription` contains local stored dimensions, optional established
+orientation and separate placement. Description does not reconstruct pixels or
+advance a cursor. `CheckedCollection::describe` validates these facts and checks
+the operation's Pulse before returning them; errors identify the `Describe`
+stage. This query establishes no rendered format, supported compression,
+complete metadata or resource admission. A later decode can still fail.
+
+`operation::CheckedCollection<C, R>::open(pulse, resolver, factory)` passes one
+`SharedPulse` with latched cancellation to the factory and checks cancellation
+before and after requests. Its
+`first_image` and `decode` return `Outcome<ImageOutput>` only after the existing
+policy accepts that exact held owner. Pass `PolicySet` or `BoundPolicy` as the
+operation policy. Deprecated `with_policy_set` requirements still apply;
+`report` retains bounded diagnostics. Region/policy refusals are
+request-local; cancellation or unwind drops the native collection permanently.
+Native terminal errors remain the adapter's duty. `CollectionOperationError`
+identifies the failure stage and retains the original cause through `Error::source`.
+Its `stop_reason()` accessor reports the first stop observed by the operation's
+shared token across opening, native and policy failures, and subsequent finished
+calls. Coincident cancellation does not replace the original failure. `None`
+means no stop was observed through that token, rather than classifying all native
+or application errors as non-cancellation.
+
+`CheckedCollection::decode_with(image, native_request, transform)` adds an
+adapter processing boundary before that single publication decision. It passes
+the bound owned image and the same `&dyn Pulse` to a fallible `FnOnce`.
+The completed `ImageOutput` reaches the resolver; a failed transform does not.
+`CollectionStage::Transform` preserves the original traced processing cause.
+The transform must honor its configured requirements and update interpretation
+with its samples; the hook does not independently prove its math or workspace.
+Native `decode` delegates through the same path with an identity transform.
+
+`CodecSet::with_collection(factory)` registers immutable `CollectionFactory`
+configurations. `open_collection(format, source, request, resolver, pulse)` returns
+`CheckedCollection<Discovery<ErasedCollection<'a>>, R>`, borrowing the positional
+source without borrowing the registry. The first matching registration wins,
+including failures; no implicit format detection, source staging or fallback.
+The factory receives the matched format, required view, inherited resource limits
+and decode policy, and the retained `SharedPulse` with latched cancellation. The explicitly encode-only
+output-byte limit does not constrain collection decoding. It must honor configured
+requirements or refuse before affected work. This is stronger than the legacy
+best-effort policy setter on still-image jobs. The inherited cancellation
+condition and per-call `SharedPulse` remain active after the registry drops.
+Opening preserves the supplied Pulse; it does not itself add native progress
+reporting.
+
+```rust
+trait CollectionFactory: Send + Sync {
+    fn formats(&self) -> &[ImageFormat];
+    fn open_with<'a>(&self, source: &'a mut dyn DynReadAt,
+        context: CollectionOpenContext) -> Result<ErasedCollection<'a>, Cause>;
+}
+impl OpenRequest {
+    fn new(view: Composition, discovery_attempts: u64) -> Self;
+    fn with_output_storage(self, storage: storage::StorageBudget) -> Self;
+}
+```
+
+`CollectionOpenContext` groups matched format, view, inherited limits/decode
+policy, the retained `SharedPulse` with latched cancellation and optional required output storage. The
+operation pool is shared by request clones; admission must precede native output
+allocation, and charges remain with the last retained image owner. This does not
+cover native workspace or metadata. Adapters that cannot enforce the pool return
+`CollectionOpenError::UnsupportedOutputStorage` before affected work. There is
+one required native opening method; no alternate compatibility entry remains.
+The packaged JXL factory consumes the request pool without a codec-specific
+storage setter. The private TIFF factory refuses this requirement before source
+queries. A pool never satisfies an unqualified native workspace limit.
+
+`ErasedCollection::new` erases the native collection once and its owned cursor
+state once per cursor. Foreign cursors fail before native work. The small box
+allocations are infallible; the erased job is not promised `Send`. Native image
+IDs and output ownership remain unchanged. Typed collections remain available.
+`CollectionOpenError` distinguishes absent registration, resident-input needs,
+unimplemented limit enforcement and unimplemented decode-policy enforcement.
+Its `UnsupportedLimits { unsupported: ResourceLimits }` and
+`UnsupportedDecodePolicy { unsupported: DecodePolicy }` variants retain the
+unhandled requirements. Qualified or irrelevant fields have no-op/default
+values. This bounded data is diagnostic; it never authorizes a weaker retry.
+
+This is publication after reconstruction, not native allocation admission or a
+whole-container privacy guarantee. Concrete adapter packaging, qualified native
+configuration mappings and broader source/workspace bounds remain open. See
+[the collection contract](collection-contract.md) for executing native coverage,
+caller examples and the full failure boundaries.
+
+## Stored operation requests
+
+`DecodeRowSink::max_buffer_rows() -> core::num::NonZeroU32` reports the sink's
+admitted strip capacity after `begin`. Its default is unconstrained. Shared
+`helpers::copy_rows_to_sink` and coroutine delivery divide larger native batches,
+preserving absolute row coordinates and provisional-pass metadata. This bounds
+sink buffers only: native reconstruction and a coroutine's held batch may be
+larger. Existing codecs that request larger buffers can still receive a typed
+sink failure; bounded sinks must not grow silently. One native progress event
+can represent several consecutive sink buffer requests.
+
+`zencodec::operation` records intent and checks it during execution. These
+additive entry points use the same registered templates and native jobs as
+`CodecSet`. Builders do not query capabilities. A required policy uses the
+checked setter, including an inherited set policy; explicit request policies
+replace that default. Required output rejects a native fallback while an
+explicit preference permits it. Fidelity confirms configuration selection,
+with the existing content-dependent codec restrictions still enforced at encode.
+
+```rust
+struct DecodeRequest { /* private */ }
+impl DecodeRequest {
+    const fn new() -> Self;
+    const fn with_format(self, format: ImageFormat) -> Self;
+    const fn with_policy(self, policy: DecodePolicy) -> Self;
+    fn with_output(self, descriptor: PixelDescriptor) -> Self;
+    fn preferring_output(self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self;
+    fn start_controlled(
+        &self, codecs: &CodecSet, storage: storage::StorageBudget,
+    ) -> Result<Box<decode::DynControlledDecoder>, At<operation::OperationError>>;
+    fn decode(&self, codecs: &CodecSet, input: &[u8]) -> Result<Outcome<DecodeOutput>, At<OperationError>>;
+}
+struct EncodeRequest { /* private */ }
+impl EncodeRequest {
+    const fn new(format: ImageFormat) -> Self;
+    fn with_fidelity(self, fidelity: Fidelity) -> Self;
+    fn preferring_fidelity(self, targets: impl Into<Vec<Fidelity>>) -> Self;
+    const fn with_policy(self, policy: EncodePolicy) -> Self;
+    const fn with_policy_defaults(self, defaults: EncodePolicy) -> Self;
+    const fn with_policy_set(self, preset: PolicySet) -> Self;
+    const fn with_resolution(self, resolution: Resolution) -> Self;
+    fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
+    fn prepare_send(&self, codecs: &CodecSet) -> Result<Vec<PreparedSendEncode>, At<OperationError>>;
+    fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
+    fn encode_with<R: OperationPolicy + ?Sized>(&self, codecs: &CodecSet,
+        pixels: PixelSlice<'_>, resolver: &mut R) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
+}
+struct PreparedEncode { /* private; Debug */ }
+impl PreparedEncode {
+    const fn offer(&self) -> EncodeOffer;
+    fn into_job(self) -> Box<dyn encode::DynEncodeJob>;
+}
+struct PreparedSendEncode { /* private; Debug + Send */ }
+impl PreparedSendEncode {
+    const fn offer(&self) -> EncodeOffer;
+    fn into_job(self) -> Box<dyn encode::DynEncodeJob + Send>;
+}
+struct Outcome<T> { /* private */ }
+impl<T> Outcome<T> { // Also Deref<Target = T>.
+    const fn from_parts(output: T, report: OperationReport) -> Self;
+    const fn output(&self) -> &T;
+    fn into_output(self) -> T;
+    fn into_parts(self) -> (T, OperationReport);
+    const fn report(&self) -> &OperationReport;
+}
+enum OperationError {
+    Codec(CodecSetError),
+    AlternativeCount { count: usize, limit: usize },
+    InvalidFidelity { preference_index: usize, cause: FidelityTargetError },
+    NoEncodeRoute(Vec<RouteRejection>),
+    Allocation,
+    Stopped(enough::StopReason),
+    Policy(PolicyFailure),
+    Execution { cause: Box<CodecSetError>, report: Box<OperationReport> },
+    OutputDescriptor { requested: PixelDescriptor, actual: PixelDescriptor },
+}
+```
+
+Transferable preparation requires registration with
+`CodecSet::with_send_encoder(config)`, where `Config::Job: Send`. Ordinary
+`with_encoder` remains available for thread-affine jobs. Both registrations use
+the same first-registration-wins lookup and retain their behavior on set clones.
+The send path stamps the same required policy, limits and cancellation controls
+before exposing an offer; it does not rebuild the chosen job on another thread.
+
+### One application resolver
+
+The ordinary `encode` call uses its configured `PolicySet`. `encode_with` accepts
+`PolicySet`, `BoundPolicy`, a compatible operation-policy trait object, or a closure.
+Custom callback objects implement `PolicyResolver` and are passed inside
+`BoundPolicy::new(requirements, callback)`; a callback object alone is not an
+`OperationPolicy`.
+The callback returns `Result<Decision, At<E>>`; the native `At<E>` survives in
+the error chain, including its trace. Annotate a closure argument as
+`question: Question<'_>` so Rust infers its borrowed-question lifetime correctly.
+
+```rust
+trait PolicyResolver {
+    type Error: core::error::Error + Send + Sync + 'static;
+    fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
+}
+enum Question<'a> { // non_exhaustive
+    OutputSchedule { facts: OutputScheduleFacts,
+        choices: Choices<'a, OutputScheduleOffer> },
+    ImageConversion { image: &'a image::ImageOutput, facts: &'a ImageFacts,
+        choices: Choices<'a, ImageConversionOffer> },
+    FrameRoute { interpretation: &'a frame::FrameInterpretation,
+        facts: &'a FrameRouteFacts, choices: Choices<'a, FrameRouteOffer> },
+    Image { image: &'a image::ImageOutput, facts: ImageFacts,
+        choices: Choices<'a, PublicationOffer> },
+    Transcode { facts: InterpretationFacts, choices: Choices<'a, TranscodeOffer> },
+    Boundary { facts: InterpretationFacts, choices: Choices<'a, BoundaryOffer> },
+    Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
+    Frame { interpretation: &'a frame::FrameInterpretation,
+        timing: frame::FrameTiming, choices: Choices<'a, PublicationOffer> },
+}
+struct BoundaryOffer { action: BoundaryAction }
+struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
+struct EncodeOffer {
+    format: ImageFormat, fidelity: Option<Fidelity>, preference_index: usize,
+    resolution: Option<Resolution>,
+}
+struct ChoiceId { /* opaque, scoped to one question */ }
+struct Choice<'a, T> { /* private */ }
+impl<'a, T> Choice<'a, T> {
+    const fn value(self) -> &'a T;
+    const fn id(self) -> ChoiceId;
+}
+struct Choices<'a, T> { /* private */ }
+impl<'a, T> Choices<'a, T> {
+    const fn len(self) -> usize;
+    const fn is_empty(self) -> bool;
+    fn first(self) -> Option<Choice<'a, T>>;
+    fn iter(self) -> impl ExactSizeIterator<Item = Choice<'a, T>>;
+}
+enum Decision { Choose(ChoiceId), UsePreset, Decline(At<Decline>) }
+impl Decision {
+    fn choose<T>(choice: Choice<'_, T>) -> Self;
+    fn decline(reason: Decline) -> Self;
+}
+enum Decline { ApplicationRule, NoPreferredChoice, UnsupportedQuestion }
+struct PolicySet { /* private */ }
+impl PolicySet {
+    const fn new() -> Self;
+    const fn prefer_lossless(self, enabled: bool) -> Self;
+    const fn require_metadata(self, treatment: MetadataTransfer) -> Self;
+    const fn allow_opaque_profiles(self, allowed: bool) -> Self;
+    const fn with_workspace_limit(self, bytes: u64) -> Self;
+    const fn allow_assumed_chroma_siting(self, allowed: bool) -> Self;
+    const fn require_extended_range(self, required: bool) -> Self;
+    const fn require_output_schedule(self, schedule: OutputSchedule) -> Self;
+    const fn with_output_wait_limit(self, bytes: u64) -> Self;
+}
+```
+
+Offers are prepared encoder jobs whose fidelity configuration and required
+policy were checked. The selected job survives the callback unchanged; the
+other jobs are dropped before encoding. Malformed targets reject the entire
+request; unsupported targets may be omitted from a preference list. The planner
+accepts 1–64 targets, reserves its list storage fallibly, and never retries an
+execution failure with another target. Preparation can allocate inside codecs;
+the offer limit is not a total-memory guarantee.
+
+### Mandatory admission before callback selection
+
+`PolicySet` requirements now constrain every callback, including direct
+`Decision::Choose`. Metadata treatment, opaque-profile exclusion, workspace,
+extended range, output schedule and output-wait limits are checked before choices
+reach application code. `UsePreset` selects among the admitted choices; lossless
+preference and the decision to accept a disclosed chroma-siting assumption remain
+situational. Required request configuration still applies independently.
+
+Admission retains the original offer indices and prepared jobs. It uses a bounded
+bit mask, without copying offers or allocating a filtered list. When requirements
+exclude every executable alternative, the operation refuses before invoking the
+callback. An originally empty executable set retains its existing callback
+behavior. Stale tokens still cannot select a route from another question.
+
+`DecisionRecord::offered` remains the number of executable alternatives before
+admission; `admitted` counts the alternatives the callback can select.
+`unmet_requirements: UnmetRequirements` contains the union of failures across
+excluded alternatives. Its iterator yields `(PolicyRequirement,
+RequirementEvidence)` pairs: `Unknown` or `Contradicted`. Different alternatives
+can fail different requirements. A successful selection can retain failures from
+other, excluded alternatives. Default failure text names these requirement codes
+when admission leaves no route; no metadata payload is included.
+
+Scope is deliberately conservative: a domain lacking evidence cannot silently
+mark a requirement not applicable. Only interpretation discovery defers checking
+until final adoption, before affected output. This does not bound discovery
+allocations. Reusable tenant policy across coupled operation stages still needs
+explicit requirement scope and discharge; admission alone does not implement it.
+Do not remove `TranscodeRequest::with_metadata` in favor of preset requirements
+until that single-source contract is implemented and qualified.
+
+Tokens from another question, including a nested operation, are refused.
+`UsePreset` delegates once. A callback panic unwinds this one-shot operation and
+drops prepared jobs; a caught panic does not leave an operation to resume.
+Cancellation is checked before preparation and on both sides of the callback.
+This does not make uncooperative native encoding preemptible.
+
+`DecisionRecord::context` retains typed `DecisionContext` facts even on refusal;
+`InterpretationFacts::unavailable` carries an optional `InterpretationUnavailable`
+code without metadata payloads. `with_unavailable(reason)` marks the facts unavailable.
+
+`OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
+records. A record carries question identity, offer count, selected typed contract
+(`Selection::OutputSchedule`, `Selection::ImageConversion`, `Selection::FrameRoute`,
+`Selection::Image`, `Selection::Frame`, `Selection::Transcode`, `Selection::Encode`
+or `Selection::Boundary`),
+preset delegation and `DecisionCode`. Adapters append records with
+`OperationReport::record(record)`.
+The fixed history overwrites its oldest slot without moving retained records;
+iteration and debug formatting remain chronological. The omitted count saturates
+at `u64::MAX`. [Frame-policy measurements](../benchmarks/frame_policy_2026-10-25.md)
+cover the actual resolver and report separately.
+Success returns this report with the output; native execution failure retains it
+in `OperationError::Execution`. `PolicyFailure::record()` identifies refusal,
+stale choice, callback failure or cancellation. Default policy-failure formatting
+excludes application error payloads; explicit source/trace inspection can reveal
+them. Native codec errors keep their codec's own formatting.
+
+The full implementation target and current gaps are recorded in
+[ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
+boundaries, native frame publication and complete pixel-transcode routes. The executing transcode adapter
+is in zencodecs. The pinned JPEG/PNG guide routes are qualified; other native
+routes and configurations need separate qualification.
+
+### Prepared image conversion
+
+```rust
+struct ImageConversionOffer { // non_exhaustive
+    output: PixelDescriptor, geometry: image::ImageGeometry,
+    orientation: Orientation, assumed_chroma_siting: Option<frame::ChromaSiting>,
+    preserves_extended_range: bool, admitted_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+}
+fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
+    image: &image::ImageOutput, offers: &[ImageConversionOffer], resolver: &mut R,
+    preset: PolicySet, pulse: &dyn Pulse,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+Adapters hold the exact source mapping, conversion mechanism and resource
+reservations while the existing callback selects a route. Selection precedes
+pixel writes and destination initialization. The selected route executes once;
+there is no hidden fallback or plan reconstruction. Execution errors retain the
+selected `Selection::ImageConversion` record and the original cause.
+`DecisionContext::ImageConversion` preserves bounded source facts on refusal.
+The shared resolver validates decision tokens and cancellation, not conversion
+math, native mapping or adapter claims.
+
+The default preset refuses an assumed chroma location. Explicit permission only
+allows a disclosed concrete location when source siting is undeclared; it never
+permits replacing a signaled location. `require_extended_range(true)` accepts
+only a route qualifying that guarantee. Other output questions lack this
+proof and refuse; discovery boundaries may continue. This is neither a lossless
+precision guarantee nor an HDR rendering rule. Required metadata/opaque-profile
+policies refuse conversion-only offers, which cannot prove those obligations.
+
+`admitted_bytes` includes retained destination/scratch reservations, not just
+already allocated pixels. `StorageBudget::prepare_filled(len, value)` returns
+`PreparedStorage<T>` without creating the array. Its consuming `allocate()`
+transfers the same charge into `OwnedStorage<T>`; dropping it releases the charge.
+Allocation may still fail. `filled`, `bytes`, `words` and `floats` retain their
+immediate-allocation convenience. Neither admission nor a qualified additional
+workspace bound establishes total operation memory.
+
+The private native AV1 witness executes this boundary for strided RGB16 output,
+with one coded RGB row of admitted scratch. A second explicit target executes
+unclipped RGB F32 with no managed row scratch and unchanged sRGB transfer.
+The same offer and callback suffice. Native crops are bit-identical to full-frame
+rows; independent zimg agreement has a fixed 1e-6 absolute gate for the tested
+BT.709/sRGB cases. The same native frames/crops now execute existing OutputPlan
+linear-light processing and packed-owner replacement with exact row-batch agreement.
+Its continuous sRGB definition differs measurably from IEC constants; explicit
+unclipped options are required. The float mechanism now uses the public
+`zenpixels_convert::ycbcr::YcbcrToRgbF32` and borrowed `sample::CodePlane` on
+the pinned pixel review. Its errors retain actual refusal facts. Other
+matrices/transfers, non-centered siting, integer output and HDR rendering remain
+unqualified. See the
+[native qualification](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
+
+### Prepared frame encoding transitions
+
+`Question::FrameRoute` asks the same fallible resolver before accepting a held
+frame into a prepared encoder. The adapter retains the actual candidate encoder,
+held input and old encoder during the decision. It drains old output before
+installing a replacement. Input epochs remain provenance; output segments have
+independent configuration epochs. Changing only the input epoch does not imply
+an output transition.
+
+```rust
+enum FrameRoute { Continue, BeginSegment } // non_exhaustive
+struct FrameRouteState {
+    previous: Option<FrameFacts>,
+    completed_segments: u64,
+    output_committed: bool,
+}
+struct FrameRouteFacts { input: FrameFacts, output: FrameRouteState }
+struct FrameRouteOffer {
+    route: FrameRoute,
+    fidelity: Option<Fidelity>,
+    conversion: Option<FrameConversionOffer>,
+    admitted_encoded_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+}
+struct FrameConversionOffer {
+    encoder_input: FrameFacts,
+    preserves_samples: bool,
+    preserves_extended_range: bool,
+    assumed_chroma_siting: Option<frame::ChromaSiting>,
+    admitted_bytes: usize,
+}
+fn resolve_frame_route<R: OperationPolicy + ?Sized>(
+    interpretation: &frame::FrameInterpretation,
+    timing: frame::FrameTiming,
+    output: FrameRouteState,
+    offers: &[FrameRouteOffer],
+    resolver: &mut R,
+    preset: PolicySet,
+    pulse: &dyn Pulse,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+The destination registration is already fixed by the request. `Continue` keeps
+its current interpretation; `BeginSegment` starts an independently configured
+segment only when the request and destination permit it. Neither authorizes
+in-band container reconfiguration. The callback cannot manufacture an unsupported
+route. `Selection::FrameRoute` and `DecisionContext::FrameRoute` retain the selected
+contract and before-decision facts in the bounded report.
+
+`output_committed` includes externally visible headers or representation choices,
+not just encoded body bytes. It is adapter evidence, not a reservation or proof
+of destination support. A publication attempt that fails after partial effects
+must terminate the operation; private storage cleanup cannot undo those effects.
+Unknown workspace refuses a required workspace limit, and lossless preference
+never overrides that limit. This offer has no privacy evidence: presets requiring
+metadata treatment or excluding opaque profiles refuse it.
+
+The [native AV1 witness](../perf/av1-policy-validation/README.md#prepared-output-transitions)
+qualifies fixed output refusal and finite segmented encoding. It releases native
+encoders before returning staged compressed packets to a possibly slow writer.
+The admitted bytes cover compressed payloads, not codec workspace, metadata,
+packet bookkeeping or transient native output. This is not a general bounded
+spool or a live sequential-output qualification. Prepared planar conversion and
+continuous-container configuration changes remain separate contracts.
+
+`FrameRouteOffer::conversion` couples a retained converter to that encoder.
+`None` means unqualified, not identity. Original input facts stay in the
+question; `encoder_input` names the actual post-conversion interpretation and
+timing. The adapter retains the mapping, plan, reservations and encoder through
+one callback, executes only the selected plan, and checks its output before
+encoder acceptance. Conversion failure is terminal and retains the selected
+record. `fidelity` still describes the encoder alone: a sample-preserving
+transcode requires both a preserving conversion and lossless encoding.
+`prefer_lossless(true)` ranks that complete evidence first, then lossless encoder
+mode alone, then request order. It remains a preference and never bypasses a
+required workspace or range constraint.
+
+The range preset accepts a frame route only with both qualified range-preserving
+conversion and confirmed lossless encoding. Siting assumptions also require
+permission. Unknown workspace and metadata/privacy obligations remain separate
+refusals. These fields are adapter evidence, not runtime verification of math.
+The native coupled witness normalizes changing BT.709/sRGB YCbCr input to fixed
+RGB8 identity-matrix AV1, with explicit saturation/quantization disclosed as
+non-preserving. This does not qualify HDR, resizing, retiming or muxer changes.
+
+### Coupled transcode offers
+
+```rust
+enum MetadataTransfer { PreserveReported, DiscardDescriptive } // non_exhaustive
+struct TranscodeOffer { // non_exhaustive; fields public
+    encoder: EncodeOffer,
+    output: PixelDescriptor,
+    metadata: MetadataTransfer,
+    retains_opaque_profile: Option<bool>,
+    admitted_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+    output_schedule: Option<OutputScheduleOffer>,
+}
+fn resolve_transcode<R: OperationPolicy + ?Sized>(
+    boundary: DecodeBoundary, offers: &[TranscodeOffer], resolver: &mut R,
+    preset: PolicySet, pulse: &dyn Pulse,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+The adapter retains actual conversion/encoder objects across the callback and
+executes the selected index. The source must be suspended with final usable
+interpretation; provisional or unavailable facts offer no route. This function
+checks choice authority, not the truth of an adapter's resource claims.
+`retains_opaque_profile` defaults to `None` (unknown). A preset forbidding opaque
+profiles accepts only `Some(false)` supplied by the executing adapter; absence
+of inspection is not evidence of absence. This does not certify unknown packets,
+nested images, XML, or personal information visible in the pixels.
+`admitted_bytes` is the route's managed row/conversion storage; alternatives may
+share it. `workspace_upper_bound: None` means unknown. The built-in workspace
+limit rejects unknown bounds and excludes source, managed and encoded storage.
+It is not a total RAM cap.
+
+`PolicySet` can require descriptive metadata removal and forbid retaining opaque
+source profiles. Encode-only questions lack that evidence and refuse these
+requirements. Neither setting certifies pixels or unknown/nested carriers as
+PII-free. `Outcome::from_parts` assembles an adapter's result and report; the
+adapter remains responsible for validating postconditions.
+
+## Controlled decode adapters
+
+The [controlled protocol](controlled-decoding.md) adds
+`ControlledIncrementalDecode::step_controlled` and `resume` alongside the
+legacy incremental methods. `ControlledProgress::Suspended` holds an opaque
+`BoundaryId` and `InterpretationFacts`; it is separate from `Event::Metadata`
+and from byte `InputRequest`s. `erase_controlled` preserves native errors and enforces
+suspension, cancellation and terminal failures through `Fused`.
+
+```rust
+// zencodec::operation: adapter entry point, not a caller coordination step
+fn resolve_boundary<R: OperationPolicy + ?Sized>(
+    boundary: DecodeBoundary,
+    resolver: &mut R,
+    preset: PolicySet,
+    pulse: &dyn Pulse,
+) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>>;
+
+// zencodec_io: runs with the existing slice/read-at/stream/async drivers
+struct PolicyDecoder<D, R> { /* private */ }
+impl<D, R> PolicyDecoder<D, R> {
+    fn new(decoder: D, resolver: R) -> Self;
+    fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn report(&self) -> &OperationReport;
+}
+
+// zencodec_io: adapters that must prepare other stages while suspended
+enum ControlledEvent {
+    Decode(decode::Event),
+    Suspended(decode::DecodeBoundary),
+}
+struct ControlledStepper<'a, D, S> { /* private */ }
+impl<'a, D: decode::ControlledIncrementalDecode, S: decode::DecodeRowSink>
+    ControlledStepper<'a, D, S>
+{
+    fn new(decoder: D, sink: &'a mut S) -> Self;
+    fn info(&self) -> Option<&ImageInfo>;
+    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor>;
+    fn sink(&self) -> &S;
+    fn sink_mut(&mut self) -> &mut S;
+    fn resume(&mut self, boundary: decode::BoundaryId,
+        action: decode::BoundaryAction, pulse: &dyn Pulse)
+        -> Result<(), decode::StepError<D::Error>>;
+}
+// ByteStepper<Output = ControlledEvent, Error = decode::StepError<D::Error>>
+```
+
+`ControlledStepper` runs through `SliceCursor`, `ReadAtCursor`, `ReadCursor`
+and feature `tokio`'s `AsyncCursor`. It exposes mandatory boundaries to an
+adapter that needs to prepare a destination before approving pixel work.
+`sink_mut` permits installing that destination while keeping the native
+session held. Repeated cursor calls return the same boundary without reads
+or native progress. `resume` performs the protocol transition; the following
+cursor call performs native work. Native/sink error, cancellation or unwind
+drops the native session even if the caller retains the stepper. Source
+errors belong to the cursor; the adapter must drop the stepper when abandoning
+an operation. This primitive does not itself prepare a transcode route.
+
+Codec authors can implement the protocol directly or use
+`zencodec_coroutine::CoroutineDecoder::controlled(input_cap, access, init)`.
+`controlled_with_storage(input_cap, access, StorageBudget, init)` additionally
+admits input payload, its bounded range index and row staging. It returns
+`Result<Self, CoroutineError>` and admits initial storage before calling `init`.
+The coroutine awaits `ctx.interpretation(facts)` before affected work. It
+refuses output before final adoption and refuses changed final interpretation.
+See [the authoring contract](controlled-decoding.md#coroutine-authoring-and-transport-execution)
+for enforcement and current storage scope.
+
+`PolicyDecoder` owns the controlled decoder and callback. Failure or unwind drops
+the native session while retaining its decision report; native metadata accessors
+then return `None`. It answers a real
+suspension, resumes that same decoder with the selected action, then returns to
+the driver before more native work. It keeps its report after a driver error
+and is terminal after callback failure or caught unwind. `ContinueReading`
+keeps affected output blocked; unavailable facts offer no valid action and
+normally produce a traced refusal. Neither action certifies native workspace
+or metadata disclosure safety.
+
+### Native frame publication
+
+`zencodec::frame` holds immutable interpretation and presentation facts shared
+by policy and media sessions. `zencodec_media::frame` keeps compatible imports
+of these same types. Native picture storage, mapping and sessions stay in
+`zencodec-media`. These facts do not flatten planar samples into a packed
+`zenpixels::PixelDescriptor`.
+
+Media pump failures expose their upstream or downstream cause through
+`Error::source()`. `MapError::Backend(Box<dyn Error + Send + Sync>)` keeps a
+native mapping failure and its location trace inspectable through adapters and
+type erasure. `Unavailable` has no backend cause. These debugging contracts are
+part of the unpublished media surface; see [the media contract](media-contract.md#error-inspection-across-pumps-and-mappings).
+
+```rust
+// zencodec::frame (public fields; non_exhaustive except Crop and SampleEncoding)
+enum Subsampling { Mono, Yuv420, Yuv422, Yuv444 }
+enum ChromaSiting { Unknown, Left, TopLeft, Center }
+enum PlaneRole { Luma, Cb, Cr, Green, Blue, Red, Alpha }
+struct Crop { x: u32, y: u32, width: u32, height: u32 }
+struct FrameGeometry {
+    coded_width: u32, coded_height: u32, crop: Crop,
+    render: Option<(u32, u32)>,
+}
+struct ColorClaim {
+    bitstream: Option<Cicp>, container: Option<Cicp>, resolved: Option<Cicp>,
+}
+struct FrameInterpretation {
+    geometry: FrameGeometry, subsampling: Subsampling, siting: ChromaSiting,
+    encoding: SampleEncoding, roles: Vec<PlaneRole>, color: ColorClaim,
+    config_epoch: u32,
+}
+struct FrameTiming {
+    pts: Option<Timestamp>, duration_ticks: Option<u64>,
+    packet_ordinal: Option<u64>, input_offset: Option<u64>,
+}
+struct SampleEncoding { /* private */ }
+impl SampleEncoding {
+    const U8: Self;
+    const fn new(storage: zenpixels::ChannelType, code_bits: u8, bit_shift: u8)
+        -> Result<Self, SampleEncodingError>;
+    const fn storage(self) -> zenpixels::ChannelType;
+    const fn code_bits(self) -> u8;
+    const fn bit_shift(self) -> u8;
+    const fn bytes_per_sample(self) -> usize;
+}
+
+// zencodec::operation
+enum PublicationOffer { ReturnHeld } // non_exhaustive
+fn resolve_image<R: OperationPolicy + ?Sized>(
+    image: image::ImageOutput, resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
+) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
+fn resolve_frame<R: OperationPolicy + ?Sized>(
+    interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
+    resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
+) -> Result<DecisionRecord, At<PolicyFailure>>;
+
+// zencodec_media::policy, implements VideoDecoder
+struct PolicyDecoder<D, R> { /* private */ }
+impl<D, R> PolicyDecoder<D, R> {
+    fn new(decoder: D, resolver: R) -> Self;
+    fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn report(&self) -> &OperationReport;
+    const fn is_failed(&self) -> bool;
+}
+enum Stage { Decode, Policy } // non_exhaustive
+struct Error { /* private: stage, report, native/traced cause */ }
+impl Error {
+    const fn stage(&self) -> Stage;
+    fn report(&self) -> &OperationReport;
+}
+```
+
+`resolve_image` consumes the held output and invokes the same resolver with
+`Question::Image`. The callback can inspect immutable facts and map samples;
+source names, profiles and typed extensions remain unfiltered data. Success
+returns the same owner with its decision report. Refusal, cancellation, callback
+failure, stale choice or unwind drops the unpublished owner. Caller-retained
+clones remain independent.
+
+`ImageFacts` records geometry, descriptor, declared plane/auxiliary counts,
+applied retained spot contributions, source-extension count and optional native
+frame/timing facts. These diagnostics contain no source payloads. Image selection
+records retain these facts once in `DecisionContext::Image`; the selected offer
+names only its effect. `PublicationOffer` is shared by image and frame questions,
+replacing the unpublished frame-only option type. No additional resolver trait
+or duplicate native-publication option enum is introduced.
+`ReturnHeld` promises these held samples unchanged; it does not claim they are
+the original samples before an explicit conversion.
+
+Both publication routes follow native reconstruction. Presets requiring metadata
+treatment, disallowing opaque profiles or requiring a workspace bound refuse
+because native publication alone supplies no such proof. Spot counts describe
+retained auxiliary channels; absence does not certify complete source discovery.
+This boundary does not apply a spot plane again or transform pixels.
+
+`FrameFacts` is the bounded report snapshot of geometry, subsampling, siting,
+encoding, plane count, color, epoch and timing; the question borrows the full
+component roles. `DecisionContext::Frame(FrameFacts)` remains available on
+success and failure; `Selection::Frame(PublicationOffer)` identifies a successful
+choice without duplicating the facts. Similarly,
+`Selection::Boundary(BoundaryAction)` records only the mechanism, with the
+interpretation in `DecisionContext::Boundary`. Consumers inspect one source of
+facts for successful and refused operations.
+
+Every native presentation passes policy before publication. The held frame and
+its picture owner survive unchanged on success. Failure or unwind drops the
+decoder and unpublished owners; later work returns `SessionError::Finished`.
+Previously returned frames remain valid. `Error::source` preserves native
+causes or `At<PolicyFailure>` and the original callback's `At<E>` chain.
+
+The native decoder has already reconstructed the frame at this boundary. The
+offer proves neither native allocation bounds nor container privacy. Presets
+requiring workspace or disclosure evidence therefore refuse. A conversion or
+encoder downstream must still check its own input contract. The compatibility
+`SampleEncoding` mirrors an unpublished zenpixels type; coordinated migration
+to that canonical pixel type remains a 0.3 task.
+
+[Native AV1 qualification](../perf/av1-policy-validation/README.md) exercises
+the publication guard, native ownership and independent re-encode readback.
+The guide separately sets the native `rav1d_safe::Settings::max_picture_bytes`
+before constructing the decoder. That optional allowance admits requested
+picture-plane bytes before allocation and follows retained native ownership.
+It does not supply whole-decoder workspace evidence to a `PublicationOffer`; native
+refusal remains a decode-stage error with its original trace.
+
 ## Encode traits
 
 ### `EncoderConfig` (codec config, `Clone + Send + Sync`)
@@ -81,7 +1021,7 @@ trait EncoderConfig: Clone + Send + Sync {
 }
 ```
 
-### `EncodeJob` (per-operation, owns stop token and metadata)
+### `EncodeJob` (per-operation, owns SharedPulse and metadata)
 
 ```rust
 trait EncodeJob: Sized {
@@ -89,7 +1029,7 @@ trait EncodeJob: Sized {
     type Enc: Sized + 'static;                    // single-image encoder
     type AnimationFrameEnc: Sized + Send + 'static; // animation encoder
 
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: EncodePolicy) -> Self;         // default: self
     // Blessed metadata path: filters via Metadata::filtered(&policy) before the
@@ -221,13 +1161,13 @@ trait AnimationFrameEncoder: Sized {
     fn consume_output(&mut self, n: usize);                // default: no-op
     fn take_output(&mut self, into: &mut Vec<u8>);         // default: copy + consume
     fn push_frame(
-        &mut self, pixels: PixelSlice<'_>, duration_ms: u32, stop: Option<&dyn Stop>,
+        &mut self, pixels: PixelSlice<'_>, duration_ms: u32, pulse: Option<&dyn Pulse>,
     ) -> Result<(), Self::Error>;
     fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<FrameDuration, Self::Error>;   // default: exact
+        pulse: Option<&dyn Pulse>) -> Result<FrameDuration, Self::Error>;   // default: exact
     fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<(), Self::Error>;              // default: Err
-    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
+        pulse: Option<&dyn Pulse>) -> Result<(), Self::Error>;              // default: Err
+    fn finish(self, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, Self::Error>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -277,7 +1217,7 @@ trait DecoderConfig: Clone + Send + Sync {
 }
 ```
 
-### `DecodeJob<'a>` (per-operation, holds limits/stop/hints)
+### `DecodeJob<'a>` (per-operation, holds limits/SharedPulse/hints)
 
 ```rust
 trait DecodeJob<'a>: Sized {
@@ -286,11 +1226,11 @@ trait DecodeJob<'a>: Sized {
     type StreamDec: StreamingDecode<Error = Self::Error>;
     type AnimationFrameDec: AnimationFrameDecoder<Error = Self::Error> + 'static;
 
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: DecodePolicy) -> Self;  // default: self
 
-    // Probing (needs limits + stop context)
+    // Probing (needs limits + Pulse context)
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;      // header only
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>; // default: probe()
 
@@ -360,11 +1300,11 @@ trait AnimationFrameDecoder: Sized {
     fn frame_count(&self) -> Option<u32>;       // default: None
     fn loop_count(&self) -> Option<u32>;        // default: None
 
-    fn render_next_frame(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<AnimationFrame<'_>>, Self::Error>;
-    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame_owned(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<OwnedAnimationFrame>, Self::Error>;   // default: copies from render_next_frame
-    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+    fn render_next_frame_to_sink(&mut self, pulse: Option<&dyn Pulse>,
         sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, Self::Error>;
 }
 ```
@@ -376,9 +1316,9 @@ Use `Unsupported<E>` as the associated type for codecs without animation support
 ```rust
 trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
         -> Result<Progress, StepError<Self::Error>>;
-    fn requested(&self) -> &[Request];                         // after Event::Need, never empty
+    fn requested(&self) -> &[InputRequest];                         // after Event::Need, never empty
     fn info(&self) -> Option<&ImageInfo>;
     fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
     fn access_pattern(&self) -> source::AccessPattern;         // default Sequential
@@ -387,7 +1327,7 @@ trait IncrementalDecode {
 struct Input<'a> { offset: u64, bytes: &'a [u8], total_len: Option<u64> }
 struct Progress { consumed: usize, event: Event }
 #[non_exhaustive] enum Event { Need, Rows { meta: BatchMeta, rows: u32 }, Metadata(MetadataUpdate), Done(OutputInfo) }
-#[non_exhaustive] enum Request { AtLeast { offset: u64, min_len: usize }, Range(ByteRange), Len }
+#[non_exhaustive] enum InputRequest { AtLeast { offset: u64, min_len: usize }, Range(ByteRange), Len }
 #[non_exhaustive] enum StepError<E> { Codec(E), Sink(SinkError), Cancelled(StopReason), Finished }
 
 struct Fused<D>;                                   // enforces Done/error/stop termination
@@ -420,10 +1360,45 @@ trait ReadAt {
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>; // default: sequential
     fn as_slice(&self) -> Option<&[u8]>;                      // default None; in-memory sources
 }
-trait DynReadAt: Send { /* same, over BoxedError */ }
+trait DynReadAt { /* same, over BoxedError */ }
 struct SliceReadAt<'a>;  struct ReadAtShim<S>(pub S);
+// Box<dyn DynReadAt + 'a>: local or borrowed source.
+// Box<dyn DynReadAt + Send + 'a>: explicitly transferable source.
 enum AccessPattern { Sequential, BoundedBacktrack { window_bytes: u64 }, RandomAccess }
 enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {..} }
+
+// zencodec-io, feature std: filesystem/reader errors retain their native cause.
+enum StdSourceError { Source(SourceError), Io(std::io::Error), Allocation { requested: usize, source: TryReserveError } }
+// FileReadAt and BufferedReadAt implement ReadAt<Error = StdSourceError>.
+struct ReadAtReader<S> { /* independent logical cursor; no internal buffer */ }
+impl<S> ReadAtReader<S> {
+    const fn new(source: S) -> Self;
+    fn into_inner(self) -> S;
+}
+// impl<S: ReadAt> std::io::{Read, Seek} for ReadAtReader<S>.
+// End-relative seeks call len(); other seeks do no I/O. Failed operations do
+// not advance the logical cursor, but the source/buffer may have changed.
+// Native io::Error and StdSourceError::Io values survive unchanged. Other
+// source errors remain typed payloads with an underlying I/O kind, when present.
+// BufferPolicy::try_for_pattern(pattern, max_bytes) -> Result<BufferPolicy, SourceError>
+// rejects an undersized required backtrack window before constructing a source.
+
+// zencodec-io: retained driver input admission, shared by sync/async drivers.
+struct IoLimits { /* private; new(input_bytes, ranges, in_flight), unlimited() */ }
+impl DriveOptions {
+    fn with_limits(self, limits: IoLimits) -> Self;
+    fn with_work_quota(self, quota: WorkQuota) -> Self;
+}
+struct WorkQuota { /* private; new(nonzero_steps) -> Option<Self>, unlimited() */ }
+// Async compute/packet scheduling only: yielding does not drain output.
+enum InputError {
+    Limit { needed: u64, limit: usize }, RangesDisabled, ReadsDisabled,
+    Allocation { bytes: usize, source: TryReserveError },
+}
+// DriveFailure::Input / AsyncDriveError::Input retain these errors separately
+// from source and codec failures. Zero allowances still permit borrowed slices.
+// Ranges are alternatives; optional prefetch stays within the allowance.
+// Capacity excludes sources, codecs, output and allocator transients.
 
 // DecodeJob<'a> — default Err(UnsupportedOperation::SeekableDecode)
 fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
@@ -479,7 +1454,7 @@ trait DynEncoderConfig: Send + Sync {
 }
 
 trait DynEncodeJob {
-    fn set_stop(&mut self, stop: StopToken);
+    fn set_pulse(&mut self, pulse: SharedPulse);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: EncodePolicy);
     fn set_metadata_policy(&mut self, meta: Metadata, policy: MetadataPolicy); // blessed
@@ -520,12 +1495,12 @@ trait DynAnimationFrameEncoder {
     fn consume_output(&mut self, n: usize);
     fn take_output(&mut self, into: &mut Vec<u8>);
     fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32,
-        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<(), BoxedError>;
     fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<FrameDuration, BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<FrameDuration, BoxedError>;
     fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<(), BoxedError>;
+    fn finish(self: Box<Self>, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, BoxedError>;
 }
 ```
 
@@ -541,7 +1516,7 @@ trait DynDecoderConfig: Send + Sync {
 }
 
 trait DynDecodeJob<'a> {
-    fn set_stop(&mut self, stop: StopToken);
+    fn set_pulse(&mut self, pulse: SharedPulse);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: DecodePolicy);
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
@@ -576,9 +1551,9 @@ trait DynAnimationFrameDecoder {
     fn info(&self) -> &ImageInfo;
     fn frame_count(&self) -> Option<u32>;
     fn loop_count(&self) -> Option<u32>;
-    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame_owned(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<OwnedAnimationFrame>, BoxedError>;
-    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+    fn render_next_frame_to_sink(&mut self, pulse: Option<&dyn Pulse>,
         sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, BoxedError>;
 }
 
@@ -1049,6 +2024,12 @@ Runtime set of registered codec configs with one entry point per operation.
 struct CodecSet { /* private */ }
 
 impl CodecSet {
+    fn with_collection(self, factory: impl collection::CollectionFactory + 'static) -> Self;
+    fn open_collection<'a, R: operation::OperationPolicy>(&self, format: ImageFormat,
+        source: &'a mut dyn source::DynReadAt, request: collection::OpenRequest,
+        resolver: R, pulse: SharedPulse)
+        -> Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>,
+            At<operation::CollectionOperationError>>;
     fn new() -> Self;
 
     // Registration — self-describing via DecoderConfig::formats() /
@@ -1061,7 +2042,7 @@ impl CodecSet {
 
     // Defaults stamped onto every job the set creates.
     fn with_limits(self, limits: ResourceLimits) -> Self;
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_decode_policy(self, policy: DecodePolicy) -> Self;
     fn with_encode_policy(self, policy: EncodePolicy) -> Self;
 
@@ -1560,7 +2541,9 @@ from headers.
 ```rust
 pub use enough;             // cooperative cancellation (Stop trait)
 pub use enough::Unstoppable;
-pub use almost_enough::StopToken;  // owned, cloneable, type-erased stop token
+pub use almost_enough::StopToken;  // cancellation-only compatibility
+pub use how_far;
+pub use how_far::{NoPulse, Pulse, SharedPulse};  // operation control
 ```
 
 ---
@@ -1579,3 +2562,422 @@ Fallback `render_next_frame_to_sink` implementation via `render_next_frame` + co
 ### `negotiate_pixel_format()` / `best_encode_format()` / `is_format_available()`
 
 Format negotiation helpers for matching preferred descriptors to codec capabilities.
+
+### Sample-exact output planning
+
+The conversion dependency exposes `OutputPlan::new_preserving_samples(source,
+current, origin, target_profile, required_descriptor)`. Matching current/target
+profiles and a reversible representation proof are required. Identity, supported
+channel reorder/expansion and U8-to-U16 widening preserve represented samples;
+color arithmetic, reassociation, depth reduction and channel removal refuse
+before execution. No CMS is consulted. This is distinct from unclipped color
+conversion, whose arithmetic is not bit-exact. The native JXL example in
+`perf/spatial-validation/src/jxl_planned_color_tests.rs` exercises borrowing and
+opaque-alpha addition against actual decoded samples.
+
+The native conversion qualification also covers required unclipped Gamma22
+execution. The previous route accepted the option but clipped actual negative
+AV1-derived samples. Internal extended steps now preserve that range while
+retaining positive in-range and default-clipped results. Raw native traces and
+an independent reader qualify the existing Adobe-exponent model. This does not
+establish universal numerical, HDR or CMS guarantees; see the native AV1 README.
+
+## Synchronous container output (`zencodec-media/std`)
+
+The sans-I/O `Muxer` remains unchanged. `zencodec_media::output` adds checked
+synchronous writer ownership as an opt-in adapter:
+
+```rust
+impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+        -> Result<Self, Failure>;
+    pub const fn timing(&self) -> MuxTiming;
+    pub fn publish(self, pulse: &dyn Pulse) -> Result<Output<M, D>, Failure>;
+}
+impl<M: Muxer, D: Destination> Output<M, D> {
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+        -> Result<Self, Failure>;
+    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+        -> Result<Self, Failure>;
+    pub const fn stats(&self) -> &Stats;
+    pub fn is_failed(&self) -> bool;
+    pub fn send(&mut self, packet: Packet, pulse: &dyn Pulse) -> Result<(), Failure>;
+    pub fn finish(self, pulse: &dyn Pulse) -> Result<Stats, Failure>;
+}
+```
+
+Both `new` constructors require `begin_exact_timing`; only
+`with_container_timing` opts into ordinary native timing. Prepared output owns
+its muxer and destination but writes nothing until consumed by `publish`.
+`Forward<W: Write>` and `SeekBack<W: Write + Seek>` implement the sealed
+`Destination` interface. Seek-back offsets are relative to the initial position;
+finish restores the final position after applying validated patches.
+
+`Failure` exposes its `Stage`, confirmed appended `emitted` bytes and owned
+original `cause`. Stages are `Prepare`, `Packet`, `Drain`, `Finish` and `Patch`.
+`Stats` reports emitted bytes, completed patches, patch bytes and maximum pending
+slice length. These are progress observations, not memory bounds. A failed
+patch may leave partial overwrite effects. Send errors and unwind make the
+operation terminal; dropping never publishes or finishes implicitly.
+
+Native validation uses this public driver directly. The complete frame-route
+facade and destination evidence in the shared policy record remain open. These
+blocking writers do not establish safe backpressure against a live encoder.
+
+## Rendering companion
+
+`zencodec_render::Renderer::new(storage)` configures full oriented sRGB RGBA8
+rendering. `with_request(RenderRequest)` and `with_cms(&dyn PluggableCms)`
+configure explicit output and color processing. `RenderRequest::new(descriptor)`
+requires current-space output with channel/depth restrictions; `with_target`,
+`with_region` and `with_conversion` change those requirements explicitly.
+
+`render_first(&mut CheckedCollection<C, R>)` returns
+`Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>>`: the first
+top-level image, or `None` only on successful empty discovery. It propagates
+errors without skipping selections and restarts discovery on each call.
+
+`render_selected(&mut CheckedCollection<C, R>, &ImageId)` returns
+`Result<Outcome<ImageOutput>, At<CollectionOperationError>>` and uses the stored
+operation policy once, after rendering. `render(ImageOutput, &mut policy,
+pulse)` returns `Result<Outcome<ImageOutput>, At<RenderFailure>>` for an
+already-held image. The policy implements `OperationPolicy`; the control is
+`&dyn Pulse`. The deprecated compatibility call is
+`render_with_preset(ImageOutput, &mut resolver, preset, pulse)`. `RenderFailure` exposes `RenderStage` (ColorPlan, Geometry,
+Color, Publication) and retains the original error as its source.
+
+The companion and `geometry::project` perform no source I/O. See the
+[rendering contract](render-contract.md) for defaults, refusals, ownership and
+remaining limits. This review crate is separate from the root workspace until
+its required converter revision is published.
+
+### Destination evidence at frame-route policy
+
+`FrameRouteOffer::destination: Option<DestinationFacts>` describes the actual
+retained writer/container: `seek_back`, `streams`, `patches_at_finish`, and
+`exact_timing`. `None` means unqualified. `PreparedOutput::facts()` and
+`Output::facts()` derive these values from their actual retained objects and
+successful preparation. Ordinary `with_container_timing` does not claim exact
+timing, even when a particular file happens to preserve it.
+
+The selected offer is retained in the bounded decision report. These are facts,
+not capability coordination required of callers: unsupported layouts still fail
+at preparation. Adapters must retain the objects described by their offer. Byte
+streaming says nothing about encoder raw-buffer ownership and never establishes
+safe backpressure or a whole-operation memory bound.
+
+## Owned finite video encoding
+
+`zencodec_media::staged::StagedEncode::new(encoder, muxer, destination, resolver,
+storage, pulse)` prepares exact-timing single-track output from the retained
+encoder configuration. `push(Frame, pulse)` retains the exact picture through
+policy. `push_converted(Frame, &FrameInterpretation, FrameConversionOffer,
+FnOnce(Frame) -> Result<Frame, Cause>, pulse)` retains a prepared conversion,
+executes it once after selection and checks full output interpretation/timing.
+
+`finish(pulse)` consumes the operation, drains and drops its encoder, then writes
+the retained destination. It returns `Completed { stats, report }`. Failure or
+unwind is terminal; `report()` remains readable after a failed push. Located
+`Failure` retains its `Stage`, decision report and concrete cause. `Refusal`
+provides typed staging/protocol failures. Underlying output failures retain
+confirmed partial effects. Dropping performs no implicit finish or publication.
+
+By default this std convenience stages the full compressed sequence in managed
+payload memory, including packet additions. It preserves packet timing and side data.
+Bookkeeping, native workspace and caller-owned pictures are outside that budget.
+It requires output configuration before input and a fixed configuration; it does
+not segment, infer fidelity or provide live encoder backpressure.
+The underlying encoder and muxer mechanisms remain sans-I/O.
+
+`VideoEncoder::output_fidelity() -> Option<zencodec::encode::Fidelity>` describes
+the guarantee of the retained configured encoder for all accepted inputs.
+Unknown is the default. All shared encoder wrappers forward the method.
+`StagedEncode` binds it at preparation, supplies it to frame-route policy, and
+rejects drift during push/drain before publication. This is automatic adapter
+coordination, not a query callers must perform. Preceding conversion fidelity
+remains a separate offer field.
+
+Explicit disk staging uses `StagedEncode::with_staging(..., Staging::disk(file,
+DiskLimits::new(bytes, packets, additions_per_packet), replay_budget)?, pulse)`.
+The caller supplies an exclusively controlled scratch file positioned at its end;
+existing prefixes are preserved. File privacy, retention and deletion belong to
+the caller. No automatic disk fallback occurs. Policy sees `StagingFacts`
+(kind, accumulated payload bytes, payload limit) before accepting each frame.
+Disk writes can block while the encoder retains raw state; only the final
+destination waits until the encoder drops.
+
+Disk payload, packet count and per-packet addition count have separate caps.
+Replay admits owned payloads after encoder release; muxer retention keeps those
+charges, so later admission can fail. The first packet is read before publishing
+the header. Later read/admission failures may follow destination effects:
+`staged::Failure::emitted` retains confirmed appends and the original cause.
+Patch failures may also leave partial overwrites. These are not transactions
+or whole-operation memory guarantees.
+
+### Prepared output scheduling
+
+`Question::OutputSchedule` carries `OutputScheduleFacts { timing, source }`
+and retained `OutputScheduleOffer` alternatives. `OutputSchedule::FinishFirst`
+releases the encoder before final-destination I/O; `Live` permits waits while
+the encoder is alive. `OutputSource::{BorrowedRaster, PullRows, Unknown}`
+describes acquisition, not a memory guarantee. A pull source can itself own a
+full raster. Neither schedule implies release of caller-owned inputs.
+
+`resolve_output_schedule` uses the existing fallible resolver, scoped tokens
+and bounded records. A live offer contradicting `AT_FINISH` refuses before
+selection. Adapters keep prepared objects across selection, perform no automatic
+fallback, and retain the decision record on subsequent execution errors.
+
+`PolicySet::require_output_schedule` selects only the requested mechanism.
+`with_output_wait_limit` requires a qualified bound on all route-retained
+memory during destination waits, including source, codec, conversion, metadata,
+scratch and compressed data. Unknown refuses even for finish-first. It excludes
+unrelated application state and destination-owned allocations and is not a peak
+operation bound. Pass the requirements through `PolicySet` or `BoundPolicy`.
+Mandatory admission filters offers before the callback; the callback chooses
+among admitted routes and cannot weaken those requirements.
+
+`FrameRouteOffer::output_schedule` carries the same guarantee for retained
+video routes. `StagedEncode` supplies finish-first automatically, with unknown
+wait retention, and uses the same policy before frame acceptance. Spool writes
+are separate from final-destination waits.
+
+The native JPEG adapter witness executes both schedules from generated strided
+rows with real short writes. The owned row-source driver below executes this resolver; native total-retention
+qualification remains separate.
+
+### Owned row-source encoding
+
+`zencodec_io::row_encode::encode(encoder, source, writer, policy, options,
+pulse)` is the shared synchronous driver. `Source::description` fixes width,
+height, descriptor and optional color context; `read_rows(first, PixelSliceMut,
+pulse)` fills requested active samples with native stride support.
+`Raster::new(PixelSlice)` preserves a complete raster's stride and color
+context. The driver preserves context on each native row push and rejects
+changed declarations before accepting those samples.
+It snapshots acquisition facts before policy and revalidates declaration and
+mechanism after policy, before each output drain, and before/after row reads.
+A callback-induced change fails with `Refusal::SourceChanged`; already confirmed
+appends remain in the failure report. This is boundary validation, not a lock
+against concurrent mutation of externally shared source state.
+
+`Options::new(storage, max_output_bytes)` admits row and staged payload
+storage from a shared pool. `with_batch_rows` sets a nonzero request size;
+pass `PolicySet` or `BoundPolicy` as the operation policy. Deprecated
+`with_policy_set` requirements remain mandatory. Finish-first is the first
+offer. It stages pending compressed chunks, completes/releases the encoder
+and source, then writes. Live output requires actual streaming timing.
+The final pending bytes go through finish before the last destination wait.
+No row-level refusal silently falls back to allocating a whole raster.
+
+`Completed` carries appended bytes, executed schedule and decision report.
+Located `Failure` carries stage, confirmed appends, bounded decisions and the
+original cause; formatting omits arbitrary backend payloads. Source, policy,
+native, admission, cancellation and writer failures consume the operation.
+Partial writes are never retried.
+
+This replaces the private JPEG scheduling loop. `encode_to_writer` is now
+deprecated; one-shot-only encoding remains `Encoder::encode` followed by writing
+its output. Native workspace, source allocations and queue bookkeeping are
+outside payload admission. A blocking OS operation cannot be interrupted by a
+cooperative stop. Qualified native total-retention bounds remain separate work. This fixed-interpretation driver preserves supplied
+context; it does not perform color conversion or metadata/privacy resolution.
+
+
+`Options::with_disk_staging(file, replay_bytes)` explicitly replaces in-memory
+compressed staging for finish-first execution. It takes ownership of a private
+scratch file positioned at EOF, preserves its prefix, and uses the output-byte
+limit as the spool payload cap. Replay admits a bounded chunk from the same
+storage pool after the encoder and source are released. Construction seeks but
+does not write. The caller owns permissions, path retention and deletion; file
+aliases and concurrent modification are unsupported. Live selection leaves the
+scratch unused. Spool I/O can block while native encoder state remains alive.
+
+`OutputScheduleOffer::staging` exposes the actual `StagingFacts` through the
+existing callback and selected report: memory/disk, current payload and limit.
+A live offer has no staging. No new policy callback or automatic fallback is
+introduced. `Stage::Replay` distinguishes spool reads/admission from destination
+writes; late failures retain confirmed destination appends and concrete causes.
+
+
+### Shared output completion and destinations
+
+`zencodec::output_patch::{OutputFinish, Patch, PatchError}` owns the common
+sans-I/O completion contract. `OutputFinish::validate(emitted_bytes)` checks the
+entire ordered patch set against the final stream extent, including the tail,
+before any final effect. `apply_to(&mut Vec<u8>)` preserves contents and length
+on validation or reservation failure. Overlaps apply in list order. A zero-byte
+patch is legal at the end; out-of-extent offsets and arithmetic overflow refuse.
+External I/O remains non-transactional after successful preflight.
+
+`zencodec_io::destination::{Destination, Forward, SeekBack}` binds writer access
+and output origin. The trait is sealed; seek support cannot be claimed separately
+from a `Write + Seek` writer. SeekBack offsets are relative to its captured
+initial position, with checked addition and verification of the returned seek
+position. Neither wrapper admits memory or authorizes encoder backpressure.
+
+Media retains `container::{MuxFinish, Patch, PatchError}` and
+`output::{Destination, Forward, SeekBack}` as aliases to these exact types.
+Existing native muxers and consumers therefore use the shared implementation
+without a migration. Raster negotiation and execution now use these shared types, as described below.
+Bounded multi-pass source requests remain unimplemented.
+
+
+### Negotiated raster seek-back
+
+`Encoder::begin_output(width, height, descriptor, OutputAccess)` binds a framing
+choice to actual destination access. Its default calls the existing forward
+`begin`; it does not change quality or metadata settings. Patching implementations
+must accept SeekBack, return `OutputTiming::with_patches()`, and complete through
+`finish_output`. Legacy begin/finish paths must never silently lose required
+patches. DynEncoder exposes both methods and the shared shim forwards overrides.
+
+`finish_output` returns `OutputFinish<EncodeOutput>`: the tail retains format,
+MIME, extensions and codec statistics. Container `OutputFinish` defaults to a
+byte vector. Both validate with the same range checks. Existing encoders use a
+provided finish adapter that transfers the original EncodeOutput without copying.
+
+For callers, `row_encode::encode` remains the forward-writer convenience;
+`encode_to_destination(..., SeekBack::new(writer)?, ...)` enables real seek-back.
+An incompatible declared layout refuses before policy, row reads or output.
+The driver preflights every final patch before tail/staged publication, rejects
+unannounced patches, then writes the tail and applies patches in order. Successful
+completion restores the final end position. `patched_bytes` reports confirmed
+overwrites separately from `emitted` appends, including partial patch failure;
+`Stage::Patch` covers seeks and overwrites. External writes are not transactional.
+
+Qualification uses a private one-frame adapter over native AV1 and IVF. It
+buffers the input raster explicitly, negotiates forward versus count-patched
+IVF, preserves a destination prefix, and independently verifies decoded samples.
+This is transport qualification, not a bounded/native streaming raster encoder.
+Production raster codec adoption and repeated-input execution remain open.
+
+### Legacy policy setter migration
+
+`EncodeJob::with_policy`, `DecodeJob::with_policy`, `DynEncodeJob::set_policy`
+and `DynDecodeJob::set_policy` are deprecated: they can silently ignore required
+fields. Use `try_with_policy` (typed), `try_set_policy` (typed or erased), or
+`EncodeRequest::with_policy` / `DecodeRequest::with_policy` with checked execution.
+The operation request builders store requirements; execution reports rejection.
+Deprecation does not change existing codec behavior, and legacy `CodecSet`
+conveniences retain their previous best-effort semantics. Their presence is not
+a guarantee that a requested policy was honored.
+
+### Preset obligations at interpretation adoption
+
+A provisional boundary may select `ContinueReading` while requirements remain
+unresolved. `AdoptInterpretation` can immediately permit native sink output;
+there is no guaranteed later conversion or publication question. The built-in
+preset therefore refuses adoption if metadata retention, opaque-profile
+exclusion, workspace bounds, extended-range preservation, output scheduling or
+output-wait bounds remain unproven. A final descriptor is not evidence for those
+separate obligations. A coupled adapter can prepare the relevant routes and
+resolve their question before explicitly adopting the same held interpretation.
+This refuses unsupported requirements; it does not turn discovery into a
+whole-operation allocation cap. Mandatory requirements filter the offered routes
+before custom callbacks run. Direct selection cannot bypass that filter.
+
+### Workspace deadlines before native preparation
+
+```rust,ignore
+// Adapter entry: snapshot once, before creating native jobs or decoders.
+let bound = policy.requirements();
+legacy.check_workspace(None)?;
+if let Some(bound) = bound {
+    bound.check_workspace(None)?;
+}
+// Retain both snapshots for the later joint route decision.
+// Only now may an unqualified native route begin preparation.
+```
+
+`PolicySet::check_workspace(Option<u64>) -> Result<(), UnmetRequirements>`
+uses the same predicate and typed diagnostics as joint route admission. An
+unknown bound refuses every configured workspace cap, including `u64::MAX`.
+An adapter must check before preparation uses covered workspace: rejection at
+the later policy callback cannot undo earlier native allocation. Managed row
+storage is not a bound on codec/conversion workspace. A supplied qualified bound
+must cover preparation and verification too, within the documented workspace
+scope; it is not a whole-operation memory limit.
+
+This check neither invokes the callback nor clears any requirement. Both legacy
+and bound requirements remain mandatory. `UnmetRequirements` implements
+`core::error::Error` so adapters can retain its named enum evidence through a
+typed cause chain without inventing a question, ticket or selected offer.
+
+The shared helper does not itself enforce an adapter's call order. Native
+integration must prove refusal before job/decoder/conversion preparation and
+preserve the existing final-boundary refusal. Likewise final pixel facts do
+not prove a complete source metadata inventory: a publication owner must qualify
+the metadata required by its treatment and reject relevant late changes before
+releasing its output. See [controlled decoding](controlled-decoding.md).
+
+## Encode declaration and preflight (review API)
+
+```rust
+EncodeDeclaration::new(width, height, descriptor)
+    .with_color(current_color_context)
+    .with_access(destination_access);
+
+// Typed and erased jobs preserve native errors in the existing boxed envelope.
+fn plan_encode(&self, declaration: &EncodeDeclaration<'_>)
+    -> Result<EncodePlan, BoxedError>;
+
+// Typed Encoder returns its own error; DynEncoder boxes it without stringifying.
+fn begin_declared(&mut self, declaration: &EncodeDeclaration<'_>)
+    -> Result<EncodePlan, Self::Error>;
+```
+
+Both hooks default to explicit `UnsupportedOperation::EncodePlanning`, without
+constructing or invoking a legacy encoder. Planning cannot start native image
+state or workers. A driver retains the exact job and declaration, admits the
+route, starts only that job, and validates startup against the admitted plan
+before reads or publication. The hooks themselves do not execute that driver.
+
+`EncodePlan` separates `InputRequirement::{Rows, WholeRaster, Replay}` from
+`OutputTiming` and `OutputPhase::{AnyPass, FinalPass}`. Rows can still buffer the
+whole image internally. `SourcePasses` requires a positive range; finite budgets
+compare its maximum, never just its minimum. Replay execution remains in the
+qualified experiment until shared-driver integration.
+
+`ColorCarriers` holds exact materialized ICC bytes and native CICP. `None` in the
+plan means unreported evidence; `Some(ColorCarriers::default())` means confirmed
+absence. Neither certifies PII removal. Startup comparison covers the complete
+plan, including actual carrier bytes. No native memory bound is inferred.
+
+The core preflight tests cover unsupported defaults, animation-only jobs, typed
+and erased forwarding, no construction during planning, original error recovery,
+current color/access binding, invalid lag/access and startup fact drift. Native
+JPEG/PNG implementations and checked destination integration are separate gates.
+
+### Execute a planned row job
+
+```rust
+zencodec_io::row_encode::encode_job(
+    job, source, writer, resolver, options, &pulse,
+)?;
+// For a Destination that can overwrite earlier output:
+zencodec_io::row_encode::encode_job_to_destination(
+    job, source, destination, resolver, options, &pulse,
+)?;
+```
+
+These adapter functions consume an already configured `EncodeJob`. They retain
+it through planning and policy, recheck source interpretation and destination
+access, reserve driver rows, then construct and start the encoder exactly once.
+The current source color context reaches `begin_declared` before any header can
+be generated. Startup-plan drift fails before source reads or output writes.
+Whole-raster and replay input protocols refuse before construction; this driver
+currently executes only the row protocol.
+
+Policy refusal precedes driver row reservation and encoder construction. The
+existing schedule policy still refuses unknown required workspace/wait bounds.
+The default finish-first route stages compressed output and releases the encoder
+before destination waits. Planning itself remains a codec contract, not an
+enforced sandbox or a native allocation bound.
+
+`Stage::Start` identifies construction, declared startup and startup-plan drift.
+Original native errors, the selected policy record and confirmed output counts
+remain available on failure. This is not yet the checked registry
+`EncodeRequest`-to-destination convenience: it does not infer metadata or fidelity
+requirements on the configured job. Existing raw-encoder entry points retain
+their startup behavior.

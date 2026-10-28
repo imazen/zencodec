@@ -1,0 +1,35 @@
+# Probe output replayed at zencodec e8f16683f90f2b2e6f4e7e1f1a474e61a3a301c4 (ideal-api; ideal-api@origin
+# d420712a has no core src/, zencodec-io or testkit changes since). Probe crate e6760e42, feature `head`.
+# Host r7900x, 2026-10-28, head-replay.sh under run-heavy --mem 3G --jobs 2: rc=0, 12 s,
+# peak RSS 0.45 GiB. Counts from dhat heap counters; not timings or RSS.
+# Baseline 6b0caf34 output stays in results_2026-10-27.tsv.
+registry_clone	pairs=0	clone_allocs=0	clone_bytes=0
+start_controlled	pairs=0	ok=true	allocs=2	bytes=448
+registry_clone	pairs=1	clone_allocs=2	clone_bytes=32
+start_controlled	pairs=1	ok=true	allocs=4	bytes=480
+registry_clone	pairs=4	clone_allocs=2	clone_bytes=128
+start_controlled	pairs=4	ok=true	allocs=4	bytes=576
+registry_clone	pairs=16	clone_allocs=2	clone_bytes=512
+start_controlled	pairs=16	ok=true	allocs=4	bytes=960
+required_descriptor	required_match	raster_bytes=786432	allocs=3	bytes=786616	ok
+required_descriptor	required_mismatch	raster_bytes=786432	allocs=6	bytes=786880	err=OutputDescriptor { requested: PixelDescriptor { format: Bgra8, transfer: Srgb, alpha: Some(Straight), primaries: Bt709, signal_range: Full }, actual: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }
+row_encode	objects_4096	pushes=64	pushes_borrowing_caller_raster=0	raster_bytes=49152	allocs=80	bytes=7904	ok emitted=64 schedule=FinishFirst
+row_encode	objects_8	pushes=8	pushes_borrowing_caller_raster=0	raster_bytes=49152	allocs=15	bytes=13151	err stage=Encode cause=Some(Objects { limit: 8 })
+tenant_preset_encode	default	ok
+tenant_preset_encode	require_metadata_discard	display="policy Declined at question 4: unmet requirements Metadata(Unknown)" debug=Policy(PolicyFailure { record: DecisionRecord { question: 4, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, admitted: 0, unmet_requirements: UnmetRequirements { unknown: 1, contradicted: 0 }, selected: None, used_preset: false, code: Declined }, .. })
+tenant_preset_encode	forbid_opaque_profiles	display="policy Declined at question 5: unmet requirements OpaqueProfiles(Unknown)" debug=Policy(PolicyFailure { record: DecisionRecord { question: 5, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, admitted: 0, unmet_requirements: UnmetRequirements { unknown: 2, contradicted: 0 }, selected: None, used_preset: false, code: Declined }, .. })
+tenant_preset_encode	workspace_limit	display="policy Declined at question 6: unmet requirements Workspace(Unknown)" debug=Policy(PolicyFailure { record: DecisionRecord { question: 6, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, admitted: 0, unmet_requirements: UnmetRequirements { unknown: 4, contradicted: 0 }, selected: None, used_preset: false, code: Declined }, .. })
+tenant_preset_encode	callback_chooses_with_unproven_requirements	display="policy Declined at question 7: unmet requirements Metadata(Unknown) OpaqueProfiles(Unknown) Workspace(Unknown)"
+policy_matrix	transcode/compliant	use_preset: selected index=0 used_preset=true
+policy_matrix	transcode/compliant	direct_choose_first: selected index=0 used_preset=false
+policy_matrix	transcode/conflicting_metadata	use_preset: refused code=Declined display="policy Declined at question 10: unmet requirements Metadata(Contradicted)"
+policy_matrix	transcode/conflicting_metadata	direct_choose_first: refused code=Declined display="policy Declined at question 11: unmet requirements Metadata(Contradicted)"
+policy_matrix	transcode/unknown_evidence	use_preset: refused code=Declined display="policy Declined at question 12: unmet requirements OpaqueProfiles(Unknown) Workspace(Unknown)"
+policy_matrix	transcode/unknown_evidence	direct_choose_first: refused code=Declined display="policy Declined at question 13: unmet requirements OpaqueProfiles(Unknown) Workspace(Unknown)"
+policy_matrix	transcode/noncompliant_then_compliant	use_preset: selected index=1 used_preset=true
+policy_matrix	transcode/noncompliant_then_compliant	direct_choose_first: selected index=1 used_preset=false
+policy_matrix	boundary/Pending	use_preset: selected index=0 used_preset=true action=Some(ContinueReading)
+policy_matrix	boundary/Provisional	use_preset: selected index=0 used_preset=true action=Some(ContinueReading)
+policy_matrix	output_schedule/metadata_requirement	use_preset: refused code=Declined display="policy Declined at question 18: unmet requirements Metadata(Unknown)"
+policy_matrix	output_schedule/wait_limit_proven	use_preset: selected index=0 used_preset=true
+policy_matrix	output_schedule/wait_limit_unknown	use_preset: refused code=Declined display="policy Declined at question 20: unmet requirements OutputWait(Unknown)"

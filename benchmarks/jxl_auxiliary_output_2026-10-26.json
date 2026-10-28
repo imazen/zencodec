@@ -1,0 +1,72 @@
+{
+  "implementation": "055c0c48644eea9d5332c347651dece983987cc8",
+  "scope": "Private common output qualification; independent metadata and native selected-vs-sequential samples, plus exact source values for two float fixtures. No general independent JXL pixel, render, privacy, or native memory guarantee.",
+  "commands": {
+    "spatial_output": "run-heavy --mem 12G --jobs 4 -- just spatial-output-check <fresh-artifacts>",
+    "spatial_full": "run-heavy --mem 12G --jobs 4 -- just spatial-validation-check <fresh-artifacts> <oracle-python>",
+    "video": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just av1-output-check <fresh-artifacts>",
+    "guide": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 3m just docs-site-browser-check 3567"
+  },
+  "receipts": [
+    {
+      "log": "zencodec-auxiliary3-2026-10-26.log",
+      "sha256": "639d11bb7a11228700534bbc92360470144f9da37e88cbfa4100fa2ed55a245c",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 9.44s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.32s",
+        "run-heavy: done rc=0 11s | peak-RSS 0.52GiB | min-avail 13672MiB | peak-load 0.79"
+      ]
+    },
+    {
+      "log": "zencodec-auxiliary-full-2026-10-26.log",
+      "sha256": "43e3ceff3e0e04d31f3801364f86825dae62a0025b9e416b3f6a9be93c66eb92",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 114.92s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 115s | peak-RSS 0.22GiB | min-avail 13601MiB | peak-load 1.12"
+      ]
+    },
+    {
+      "log": "zencodec-auxiliary-av1-2026-10-26.log",
+      "sha256": "b65ce1af1ae024670109973c70b23fd442db53afdb1646cd35d18f06cb1927b3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.57s",
+        "run-heavy: done rc=0 9s | peak-RSS 0.54GiB | min-avail 13378MiB | peak-load 1.01"
+      ]
+    },
+    {
+      "log": "zencodec-auxiliary-guide-2026-10-26.log",
+      "sha256": "36d287a4487b9b590f86a0a1aa9b7f6d3cde87c7eefd34a92eaa2f6ccc271e9b",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13314MiB | peak-load 0.81"
+      ]
+    }
+  ],
+  "native_decoder": "064d08964de1df8181eb3d24ee52e18f70146313",
+  "native_encoder": "0255e5a9f61b7270cb3ed3f7b85fec2283deec55",
+  "named_role_coverage": [
+    "alpha",
+    "depth",
+    "spot color",
+    "selection mask",
+    "black",
+    "CFA",
+    "thermal"
+  ],
+  "qualified": [
+    "16/5 and 32/8 float alpha source precision, with F32 output",
+    "spot linear RGBA and CFA channel index",
+    "non-default intrinsic size and source tone fields",
+    "absent and present-zero frame timecodes, reverse selection, exact rational PTS",
+    "output retention after source/decoder drop"
+  ],
+  "unqualified": [
+    "unknown/reserved roles",
+    "nonzero source dim_shift",
+    "raw JXL layers",
+    "rendering policy and whole-container privacy",
+    "native workspace bounds"
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/",
+  "native_pr": "https://github.com/imazen/zenjxl-decoder/pull/68"
+}

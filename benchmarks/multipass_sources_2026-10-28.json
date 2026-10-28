@@ -1,0 +1,38 @@
+{
+  "tested_source": "b9f3f333e32dc91060124299764c5c94550601ae",
+  "before_source": "bf61b6d514e737e7bb84aab45cebdb4680417d3f",
+  "scope": "Concrete file/reader sources in excluded multipass experiment; no production API promotion",
+  "before": {
+    "command": "cargo test --manifest-path perf/multipass-validation/Cargo.toml --locked --test sources",
+    "result": "4 controls failed behaviorally; 1 strided parity control passed; no compilation failure"
+  },
+  "fixed": {
+    "commands": [
+      "just multipass-check",
+      "just multipass-native-check <artifacts>"
+    ],
+    "public_tests": 31,
+    "native_tests": 19,
+    "failures": 0,
+    "ignored": 0,
+    "clippy": "both strict all-targets passed"
+  },
+  "locks": {
+    "perf/multipass-validation": {
+      "zencodec": 1,
+      "zenpixels": 1,
+      "how-far": 1
+    },
+    "perf/multipass-validation/native": {
+      "zencodec": 1,
+      "zenpixels": 1,
+      "how-far": 1
+    }
+  },
+  "resources": "run-heavy: done rc=0 63s | peak-RSS 1.27GiB | min-avail 3926MiB | peak-load 1.26",
+  "limitations": [
+    "No throughput or compile-time comparison measured.",
+    "Bounded reader padding does not bound backend allocations or make a blocking read cancellable.",
+    "Production multipass integration, pre-flush cancellation, bounded diagnostic retention, native planning/Send and async ownership remain open."
+  ]
+}

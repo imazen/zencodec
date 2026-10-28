@@ -53,8 +53,24 @@ mod encode_write;
 mod file;
 #[cfg(feature = "std")]
 mod pump;
+#[cfg(feature = "std")]
+mod read_at_reader;
+#[cfg(feature = "std")]
+pub mod row_encode;
+#[cfg(feature = "std")]
+mod std_source_error;
 #[cfg(feature = "tokio")]
 pub mod tokio_io;
+
+mod admission;
+pub use admission::{InputError, IoLimits};
+mod work_quota;
+pub use work_quota::WorkQuota;
+mod policy_decoder;
+pub use policy_decoder::{PolicyDecodeError, PolicyDecoder};
+mod controlled_stepper;
+pub use controlled_stepper::{ControlledEvent, ControlledStepper};
+pub mod storage;
 
 pub use drive::{
     DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,
@@ -70,6 +86,8 @@ pub use window::ProtocolViolation;
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};
 #[cfg(feature = "std")]
+// Retain the deprecated convenience for existing callers.
+#[allow(deprecated)]
 pub use encode_write::{
     EncodeWriteError, EncodeWriteReport, encode_to_writer, write_pending, write_pending_animation,
 };
@@ -77,3 +95,11 @@ pub use encode_write::{
 pub use file::FileReadAt;
 #[cfg(feature = "std")]
 pub use pump::{PumpError, pump_read_to_sink};
+#[cfg(feature = "std")]
+pub use read_at_reader::ReadAtReader;
+#[cfg(feature = "std")]
+pub use std_source_error::StdSourceError;
+
+/// Actual writer access for synchronous image and container output.
+#[cfg(feature = "std")]
+pub mod destination;

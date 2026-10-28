@@ -1,0 +1,53 @@
+{
+  "implementation": "c058be552c6f5e87e9d9bc5a9581d14ac15946b4",
+  "native_decoder": "4365fe97a955bcd0b9c3f30ca33678e8b1e85478",
+  "scope": "Spot contribution Applied versus Separate stays with the actual selected output. A 9x7 black RGB fixture with exactly representable spot RGBA and binary coverage matches independent libjxl F32 samples for both routes, retains the same auxiliary bytes and permits repeated selection after changing the native route.",
+  "commands": [
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just spatial-output-check <fresh-artifacts>",
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 6m just spatial-validation-check <fresh-artifacts> <pillow-python>",
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just av1-output-check <fresh-artifacts>",
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 3m just docs-site-browser-check 3567"
+  ],
+  "receipts": [
+    {
+      "log": "zencodec-spot-contribution1-2026-10-26.log",
+      "sha256": "cf5a01df6bd0d464f9647a87b2f56725b627502d9931999ac53dcf504e1e154c",
+      "results": [
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 9.58s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.33s",
+        "run-heavy: done rc=0 13s | peak-RSS 0.52GiB | min-avail 13368MiB | peak-load 0.44"
+      ]
+    },
+    {
+      "log": "zencodec-spot-contribution-full-2026-10-26.log",
+      "sha256": "b9853f1c9ee66793864c840459c3f46414a09a16eb9b152119f4661cde2770f4",
+      "results": [
+        "test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 117.73s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 119s | peak-RSS 0.22GiB | min-avail 13298MiB | peak-load 1.13"
+      ]
+    },
+    {
+      "log": "zencodec-spot-contribution-av1-2026-10-26.log",
+      "sha256": "7a3f943ec86f2412c7cb3ccc3f0a0d65464772c8ee318c7737ba35d679172043",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.46s",
+        "run-heavy: done rc=0 8s | peak-RSS 0.55GiB | min-avail 13197MiB | peak-load 1.25"
+      ]
+    },
+    {
+      "log": "zencodec-spot-contribution-guide-2026-10-26.log",
+      "sha256": "d1e77ca79915dbcd499d8a6dbb71565813e31b3f8f58ba68889ea2fdd2de0824",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13237MiB | peak-load 1.14"
+      ]
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/",
+  "limits": [
+    "Test-process resource measurements, not native workspace bounds",
+    "Independent F32 parity is qualified for this exactly representable spot fixture; general cross-decoder F32 equivalence remains unclaimed",
+    "The private native rendering switch is a mechanism test, not a proposed shared boolean API",
+    "Other auxiliary rendering operations and whole-container privacy remain unqualified"
+  ]
+}

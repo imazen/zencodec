@@ -9,7 +9,7 @@ use std::{
 };
 use zenbitmaps::{BmpEncoderConfig, QoiEncoderConfig};
 use zencodec::{
-    At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, Unstoppable,
+    At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, NoPulse,
     encode::{EncodeJob, EncoderConfig, Fidelity},
 };
 use zenpixels::PixelSlice;
@@ -190,7 +190,7 @@ fn select_exif<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &Unstoppable,
+                &NoPulse,
             )
             .map(|selection| ResolvedExif {
                 packet: None,
@@ -198,7 +198,7 @@ fn select_exif<R: PolicyResolver + ?Sized>(
             })
             .map_err(policy_error);
     }
-    let request = zencodec::metadata_rewrite::Request::new(b"")
+    let request = zencodec::metadata_rewrite::RewriteRequest::new(b"")
         .with_policy(MetadataPolicy::Web)
         .with_metadata_limit(1024 * 1024);
     let processor = zenmeta::rewrite::Context::new(&request).unwrap();
@@ -262,7 +262,7 @@ fn select_exif<R: PolicyResolver + ?Sized>(
             requirements,
             Context::default(),
             resolver,
-            &Unstoppable,
+            &NoPulse,
         )
         .map_err(policy_error)?;
     Ok(ResolvedExif {
@@ -369,7 +369,7 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &Unstoppable,
+                &NoPulse,
             )
             .map_err(policy_error)?;
         let Action::Fidelity(action) = selected.alternative.action else {
@@ -391,7 +391,7 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &Unstoppable,
+                &NoPulse,
             )
             .map_err(policy_error)?;
         let Action::Execution(action) = selected.alternative.action else {

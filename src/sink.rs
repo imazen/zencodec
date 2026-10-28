@@ -97,11 +97,27 @@ pub trait DecodeRowSink {
         Ok(())
     }
 
+    /// Largest strip the sink can lend without growing its admitted storage.
+    ///
+    /// Read after `begin`, before requesting a buffer. A decoder or copying
+    /// adapter divides larger native batches into strips at most this tall.
+    /// This constrains sink storage, not the decoder's native workspace or
+    /// the number of rows represented by one incremental progress event.
+    /// The default places no additional restriction on existing sinks.
+    ///
+    /// Legacy decoders may still request a larger strip; bounded sinks must
+    /// refuse that request rather than silently grow beyond their allowance.
+    fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
+        core::num::NonZeroU32::MAX
+    }
+
     /// Provide a mutable pixel buffer for decoded rows `y .. y + height`.
     ///
     /// The codec passes the strip `width` (pixels), `height` (rows in this
     /// strip), and `descriptor` (pixel format). The sink returns a
     /// [`PixelSliceMut`] with its chosen stride.
+    /// Its width, row count and descriptor must match the request. Respect
+    /// [`max_buffer_rows`](Self::max_buffer_rows) when dividing native batches.
     ///
     /// The codec writes into the buffer via `row_mut()` for each row.
     ///

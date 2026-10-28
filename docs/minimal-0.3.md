@@ -370,9 +370,12 @@ animation is not proof of byte-incremental input. zenpixels [76](https://github.
 is merged; that alone does not prove that every consumer has migrated or that
 its types are published.
 
-The minimum useful next merge is the small input-admission review, with native
-retention and collection experiments proceeding against private candidates.
-Freeze the broader breaking signatures after those consumer paths exercise them.
+The input-admission review remains independently mergeable. Native retention
+and collection experiments now exercise a shared collection and checked
+consumer on PR 168, including selected source geometry before reconstruction;
+concrete adapter factories and registry integration remain
+open. [The collection contract](collection-contract.md) records that boundary.
+Freeze the broader breaking signatures after their consumer paths exercise them.
 A smaller driver repair release can ship independently; do not present it as
 complete modern image/media coverage.
 

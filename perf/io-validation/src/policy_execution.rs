@@ -10,7 +10,7 @@ use std::{error::Error, fmt, sync::Arc};
 use zencodec::{
     At,
     decode::ByteRange,
-    enough::{Stop, StopReason},
+    enough::StopReason,
 };
 
 #[derive(Debug)]
@@ -52,7 +52,7 @@ impl Admitted {
         current: Context,
         memory: &Storage,
         disk: &Storage,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Self, At<AdmissionError>> {
         plan.validate_start(current)
             .map_err(|e| e.map_error(AdmissionError::Plan))?;
@@ -92,7 +92,7 @@ impl Admitted {
         &self,
         range: ByteRange,
         current: Context,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Pending, At<AdmissionError>> {
         self.0
             .plan

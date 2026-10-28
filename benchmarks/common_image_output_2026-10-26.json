@@ -1,0 +1,77 @@
+{
+  "implementation": "4f25da6f2d42e2a7df19bd759872fecba4eb3942",
+  "scope": "Private mapped image output over native TIFF/JXL and AV1; not public API promotion or a native memory bound. The timing test was added after the full 43-test run and passed the targeted gate.",
+  "commands": {
+    "spatial_full": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 6m just spatial-validation-check <fresh-artifacts> <oracle-python>",
+    "spatial_output": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 3m just spatial-output-check <fresh-artifacts>",
+    "video": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 8m just av1-output-check <fresh-artifacts>",
+    "guide": "run-heavy --mem 4G --jobs 2 -- timeout --kill-after=10s 2m just docs-site-browser-check 3567"
+  },
+  "receipts": [
+    {
+      "log": "zencodec-common-output-full-2026-10-26.log",
+      "sha256": "da8950be0f8bd1e3e68b93db0aa56a16b04e6834ecc2267dce60bcd072206f7e",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 110.07s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 112s | peak-RSS 0.37GiB | min-avail 13386MiB | peak-load 0.91"
+      ]
+    },
+    {
+      "log": "zencodec-common-output-timing-2026-10-26.log",
+      "sha256": "990b5b1b8ce4d83e94be3f6a95be02c5260d35347202fd6981e61479e9368795",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 9.51s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.32s",
+        "run-heavy: done rc=0 12s | peak-RSS 0.45GiB | min-avail 13431MiB | peak-load 0.61"
+      ]
+    },
+    {
+      "log": "zencodec-common-output-video1-2026-10-26.log",
+      "sha256": "1f3f5e299b93c786787c5c31d601fab850a9443bda9a7e09a4865f2178b14df9",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.66s",
+        "run-heavy: done rc=0 9s | peak-RSS 0.54GiB | min-avail 13206MiB | peak-load 0.36"
+      ]
+    },
+    {
+      "log": "zencodec-common-output-guide-2026-10-26.log",
+      "sha256": "38d90561cabfcad00f3f7b3615352e4002b6106d9cb12fc18eb1bff1bdf43ab9",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13079MiB | peak-load 0.76"
+      ]
+    }
+  ],
+  "native_auxiliary_role_coverage": {
+    "validated": [
+      "alpha",
+      "spot color"
+    ],
+    "unvalidated": [
+      "depth",
+      "selection mask",
+      "black",
+      "CFA",
+      "thermal",
+      "unknown/reserved"
+    ],
+    "source_dim_shift_nonzero": "not qualified; the upsampled_alpha fixture declares zero"
+  },
+  "video_matrix": {
+    "depths": [
+      8,
+      10,
+      12
+    ],
+    "layouts": [
+      "mono",
+      "4:2:0",
+      "4:2:2",
+      "4:4:4",
+      "GBR"
+    ],
+    "frames_per_configuration": 3,
+    "independent_oracle": "FFmpeg/libdav1d reads native emitted IVF packets"
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/"
+}

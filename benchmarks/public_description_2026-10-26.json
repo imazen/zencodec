@@ -1,0 +1,103 @@
+{
+  "base_revision": "14029a5cc8b1a8457296709c797b1d202bb726fc",
+  "native_qualification_revision": "76edcca8c8b9e31dbb0a397f5b275febcac4f5bd",
+  "scope": "Promote selected source description into Collection and CheckedCollection. Nonempty stored dimensions, optional established orientation and placement; no pixel reconstruction or new policy callback protocol.",
+  "sources": {
+    "src/collection.rs": "7943c7f5c877fcd7f3d1f0e323a3ceec043c2a74a1671c1d7c11d78b3d17168f",
+    "src/collection/description.rs": "6f95c3696e5890d76b46d78651dcba29a5c2da45c657348895bfdbaf656545ef",
+    "src/collection/discovery.rs": "b3020e094857a27bac07031c28e96e4d3d3e6676b910852f40720f047d0526db",
+    "src/operation/collection.rs": "ad20ca404b35fc8893ad2452868ceec6604e569dabffe2903166326a55df3759",
+    "perf/spatial-validation/src/collection.rs": "4a093da98d8923e9eedf2187176492a8a33627113e23f9dc7bd37045c643182a",
+    "perf/spatial-validation/src/description_checked_tests.rs": "0c4ab6eda9103bd6c8737ce8572ccda1d5b0043784b0d4c17cc8ab4c183d17c0",
+    "perf/spatial-validation/src/tiff_items.rs": "bfded1ffaa066b1beb541177636ee68cd94f8ce704691b2502a42d78caa91201",
+    "perf/spatial-validation/src/jxl_items.rs": "a023ffe009f6b0de7e50eb36c34d3c6a62f977257bcbb583aa6587ef1a4fc1f5",
+    "perf/spatial-validation/src/jxl_layers.rs": "c80c24c302f0d7575ba589fe4e0d829d78542ab155992fd089f17c5340197a9c"
+  },
+  "runs": [
+    {
+      "log": "zencodec-description-core-1-2026-10-26.log",
+      "sha256": "eb2039a1b52c2a23621633f5bbc36cd2275ad2dc5da425dbbcba5c74ffdbc714",
+      "scope": "Core identity/cause checks, strict lint and wasm32-unknown-unknown compilation pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13258MiB :: timeout --kill-after=10s 180s just collection-api-check",
+        "run-heavy: done rc=0 4s | peak-RSS 0.49GiB | min-avail 13026MiB | peak-load 0.23"
+      ]
+    },
+    {
+      "log": "zencodec-description-promotion-1-2026-10-26.log",
+      "sha256": "e90d39dd748d65b2669c032e0cae2c9475a3103a674317bc022cb3c670664c5d",
+      "scope": "A new test incorrectly treated StopReason as Error; corrected the test to inspect the retained CodecError category without weakening cancellation expectations.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13143MiB :: timeout --kill-after=10s 180s just spatial-description-check",
+        "run-heavy: done rc=101 2s | peak-RSS 0.35GiB | min-avail 13136MiB | peak-load 0.30"
+      ]
+    },
+    {
+      "log": "zencodec-description-promotion-2-2026-10-26.log",
+      "sha256": "7050cfc6e96346383a4fa71b0d747440cea9404e8753cc1d6a0f776b21d771c7",
+      "scope": "All eleven native, checked-wrapper and discovery description tests plus strict lint pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13166MiB :: timeout --kill-after=10s 180s just spatial-description-check",
+        "run-heavy: done rc=0 38s | peak-RSS 0.57GiB | min-avail 12859MiB | peak-load 0.75"
+      ]
+    },
+    {
+      "log": "zencodec-description-integration-2026-10-26.log",
+      "sha256": "7ddbdfc76c4a0d7988355aea1b090855bcb7d114d6f029fc22a96dd2b9cc87e2",
+      "scope": "Executing consumer example, full workspace all-feature tests/lint, warning-free Rustdoc and API snapshots pass. Pre-existing ignored documentation examples remain ignored.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13295MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-cancellation-check description_checked_; just io-contract-check; just doc-default; just api-doc",
+        "run-heavy: done rc=0 26s | peak-RSS 0.57GiB | min-avail 12628MiB | peak-load 1.08"
+      ]
+    },
+    {
+      "log": "zencodec-description-site-2026-10-26.log",
+      "sha256": "aeace1769fef045a1426dee1b2bbe4d9445ec05f42c0d7c5986a8d8f9ddf0fe3",
+      "scope": "Source checks pass; browser check detects the old count of nine sections after inspection added a tenth.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13336MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "run-heavy: done rc=1 5s | peak-RSS 0.17GiB | min-avail 12992MiB | peak-load 0.13"
+      ]
+    },
+    {
+      "log": "zencodec-description-site-2-2026-10-26.log",
+      "sha256": "a7ca01df8979d83195e049da77c9adbb6360803b255bd4cf9ff621f17596419b",
+      "scope": "The tenth section and its inspection example/signatures are checked; source and full browser gates pass.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13322MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12833MiB | peak-load 0.39"
+      ]
+    },
+    {
+      "log": "zencodec-description-site-3-2026-10-26.log",
+      "sha256": "62a38e1bd79f1857be56404f747a604617b5bf387fb9ad0c18bc6eb38b420d37",
+      "scope": "Final migration status labels, shared-description evidence links and full browser/source checks pass.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13310MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 12841MiB | peak-load 0.33"
+      ]
+    }
+  ],
+  "qualification": [
+    "TIFF directory inspection with payload reads forbidden, then exact raster reconstruction after enabling payload reads; classic/BigTIFF, chunky/planar, nested/shared and differently sized directories.",
+    "Native JXL presentation and full-local-layer descriptions agree with qualified outputs, including all eight orientations, out-of-order inspection and exhaustion.",
+    "Foreign identities, every observed native/check-wrapper stop seam for cancellation and timeout, latched native failures and malformed returned geometry refuse.",
+    "Discovery charges successful, cached and failed inspection; budget refusal does not enter the adapter; existing-ID decode remains available.",
+    "Six conditional HTTP tests passed in the initial native qualification (58 URL cases, 9442 actual requests). Source replacement and short final bodies cannot publish descriptions or later pixels."
+  ],
+  "native_receipt": "benchmarks/selected_description_2026-10-26.json",
+  "remaining": [
+    "Concrete collection adapter packaging and CodecSet registration.",
+    "Complete metadata and carrier privacy, rendered format support, conversion and native workspace admission.",
+    "JXL discovery can still traverse compressed payloads; transport read-ahead can read raster bytes. Description only excludes pixel reconstruction.",
+    "Issue #165 still prevents claiming the full dependency graph is freestanding; the WebAssembly check is narrower."
+  ],
+  "interpretation": "Correctness evidence only; run-heavy receipts measure test/build process resource use, not codec workspace bounds. No valid wall-clock performance conclusion."
+}

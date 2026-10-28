@@ -1,0 +1,137 @@
+{
+  "kind": "packaged API correctness qualification; not a performance benchmark",
+  "date": "2026-10-26",
+  "host": "r7900x",
+  "core_base": "ffedb4f0d4e2bc89fa450e947251945a15d61c18",
+  "zenjxl": "e85000f44160f625c0c19091e62376657e67f52a",
+  "native_decoder": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "zenpixels": "284a0598abf441dc886755b1e65c34dbdf6ce94d",
+  "fixture_revision": "8399f17c54c8138f65304bbc46efc80c269c7402",
+  "independent_readers": {
+    "source": "https://codeload.github.com/libjxl/libjxl/tar.gz/refs/tags/v0.11.1",
+    "source_sha256": "1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9",
+    "runtime_version": 11001,
+    "scope": "Independent test-only decoders; not a product dependency",
+    "helpers": {
+      "jxl-oracle": "d186feec7893b34f47073575f6cf1fb371636c8bf90719d6635a2b773c540904",
+      "layer-oracle": "01a63ac150363fc43926d2d19cc43bcbf3baf445d2f2011c0fdb949d329d740b"
+    }
+  },
+  "command": "just spatial-packaged-check <fresh-directory>; cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-features --all-targets --locked -- -D warnings",
+  "factory_controls": 16,
+  "presentations": 147,
+  "presentations_requiring_visible_dependency_replay": 35,
+  "presentation_comparison": "native samples bit-exact; independent libjxl counts, dimensions and duration ticks",
+  "raw_layers": 9,
+  "raw_selected_decodes_including_repeated_first": 11,
+  "raw_comparison": "packaged/private samples bit-exact; packaged output checked against pinned libjxl, exact CMYK and alpha; pre-existing RGB float absolute-error bound 1/256 unchanged",
+  "raw_results": {
+    "layers-multiple_layers_noise_spline.jxl": [
+      {
+        "different_float_bits": 20325,
+        "layer": 4,
+        "max_absolute_error": 0.00015395879745483398,
+        "samples": 2949120
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 3,
+        "max_absolute_error": 0.0,
+        "samples": 2949120
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 2,
+        "max_absolute_error": 0.0,
+        "samples": 2949120
+      },
+      {
+        "different_float_bits": 574093,
+        "layer": 1,
+        "max_absolute_error": 0.00036650896072387695,
+        "samples": 2949120
+      },
+      {
+        "different_float_bits": 4631615,
+        "layer": 0,
+        "max_absolute_error": 7.152557373046875e-07,
+        "samples": 11796480
+      },
+      {
+        "different_float_bits": 4631615,
+        "layer": 0,
+        "max_absolute_error": 7.152557373046875e-07,
+        "samples": 11796480
+      }
+    ],
+    "layers-conformance_test_images_cmyk_layers.jxl": [
+      {
+        "different_float_bits": 0,
+        "layer": 3,
+        "max_absolute_error": 0.0,
+        "samples": 44880
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 2,
+        "max_absolute_error": 0.0,
+        "samples": 158400
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 1,
+        "max_absolute_error": 0.0,
+        "samples": 128400
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 0,
+        "max_absolute_error": 0.0,
+        "samples": 1572864
+      },
+      {
+        "different_float_bits": 0,
+        "layer": 0,
+        "max_absolute_error": 0.0,
+        "samples": 1572864
+      }
+    ]
+  },
+  "attempts": [
+    {
+      "log": "~/tmp/zencodec-packaged-jxl-1-20261026.log",
+      "exit_code": 101,
+      "failure": "new recipe did not create the artifact parent; test requires a fresh child directory"
+    },
+    {
+      "log": "~/tmp/zencodec-packaged-jxl-2-20261026.log",
+      "exit_code": 101,
+      "result": "all behavioral controls passed; Clippy rejected explicit drop of a non-Drop source wrapper",
+      "run_heavy": "done rc=101 174s | peak-RSS 0.56GiB | min-avail 12866MiB | peak-load 1.20"
+    },
+    {
+      "log": "~/tmp/zencodec-packaged-jxl-lint-20261026.log",
+      "exit_code": 0,
+      "result": "removed redundant wrapper drop; source bytes still explicitly dropped before retained-image checks; all-feature/all-target strict lint passed",
+      "run_heavy": "done rc=0 1s | peak-RSS 0.28GiB | min-avail 13376MiB | peak-load 0.48"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/packaged-jxl-2",
+  "limits": [
+    "resident input only for JXL",
+    "raw selection replays dependencies",
+    "shared decode resource and policy requirements refuse until qualified",
+    "native workspace, complete PII inspection and broad color-conversion routes unqualified"
+  ],
+  "measurement_limit": "Process receipts are not decoder memory limits or accepted timing comparisons.",
+  "site_verification": {
+    "source_checks": 10,
+    "browser_widths": [
+      390,
+      768,
+      1440
+    ],
+    "checks": "consumer/adapter/implementor signatures, full-example copy, independent above/below expansion, keyboard and deep links",
+    "run_heavy": "done rc=0 10s | peak-RSS 0.17GiB | min-avail 12777MiB | peak-load 0.26"
+  }
+}

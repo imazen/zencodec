@@ -1,0 +1,14 @@
+{
+  "repository": "imazen/zenpixels",
+  "revision": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+  "path": "zenpixels-convert/src/output/plan.rs",
+  "line": 73,
+  "policy": {
+    "path": "zenpixels/src/policy.rs",
+    "line": 160,
+    "source_sha256": "fe793db43cc0c7c2b69017f1b06d384bfc00b7aafd0eb06250cf71f46657551b"
+  },
+  "source_sha256": "1d24a8c8fcad7967e9b0a3d1f8d9bc8fcddd9bd22895739f22217dd49c63d4de",
+  "surface": "use alloc::sync::Arc;\nuse zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut};\nuse zenpixels_convert::{ConvertError, ConvertOptions, OutputPlan, output::{OutputMetadata, OutputProfile}};\nuse whereat::At;\n\nimpl OutputPlan {\n    pub fn new(\n        source_desc: PixelDescriptor,\n        current: Option<Arc<ColorContext>>,\n        origin: &ColorOrigin,\n        target: OutputProfile,\n        pixel_format: PixelFormat,\n        options: &ConvertOptions,\n        cms: Option<&dyn zenpixels_convert::cms::PluggableCms>,\n    ) -> Result<Self, At<ConvertError>>;\n\n    pub fn new_with_descriptor(\n        source_desc: PixelDescriptor,\n        current: Option<Arc<ColorContext>>,\n        origin: &ColorOrigin,\n        target: OutputProfile,\n        output: PixelDescriptor,\n        options: &ConvertOptions,\n        cms: Option<&dyn zenpixels_convert::cms::PluggableCms>,\n    ) -> Result<Self, At<ConvertError>>;\n\n    pub fn new_preserving_samples(\n        source_desc: PixelDescriptor,\n        current: Option<Arc<ColorContext>>,\n        origin: &ColorOrigin,\n        target: OutputProfile,\n        output: PixelDescriptor,\n    ) -> Result<Self, At<ConvertError>>;\n\n    pub fn output_descriptor(&self) -> PixelDescriptor;\n\n    pub fn metadata(&self) -> &OutputMetadata;\n\n    pub fn prepare(&mut self, max_width: u32) -> Result<(), At<ConvertError>>;\n\n    pub fn borrow_rows<'a>(\n        &self,\n        source: PixelSlice<'a>,\n    ) -> Result<Option<PixelSlice<'a>>, At<ConvertError>>;\n\n    pub fn convert_rows<'a>(\n        &mut self,\n        source: PixelSlice<'_>,\n        mut destination: PixelSliceMut<'a>,\n    ) -> Result<PixelSliceMut<'a>, At<ConvertError>>;\n}\n\nimpl ConvertOptions {\n    pub const fn retain_channels() -> Self;\n\n    pub const fn with_clip_out_of_gamut(mut self, clip: bool) -> Self;\n\n    pub const fn forbid_lossy() -> Self;\n}\n",
+  "sha256": "9f6891dca273d6de03a869b57e66a85dbf1c8011540e2a3be64bc9cf685a4f55"
+}

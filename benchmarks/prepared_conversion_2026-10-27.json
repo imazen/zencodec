@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "71f42ada3539f88134421cc28d9c6f8ee9887f75",
+  "source_sha256": {
+    "src/storage.rs": "b738724ea859a0bea3c00fbe781f9b2ebc6ad953256ef932c2a5b3190529f482",
+    "src/operation/conversion.rs": "18dc3395091e6f76fa6dd45cf2b0421f7353d5413f7e244f29aec905fa059889",
+    "src/operation/policy.rs": "3c2f56f7e756fd9a8c49b0f317abf6de8537af257d17ff9045efb3ce0073fbad",
+    "perf/av1-policy-validation/src/prepared_conversion.rs": "b39b6768c1107fc6558ecccf3e1f7fce0c748284e0c3d200def88f1d32c6f54f",
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "fbd92ee1e9556cea24e36e330adaf0bb7a4d81211512d8dbe634a3f51b028b6b",
+    "zencodec-media-testkit/tests/storage_ownership.rs": "6da42ced84e2deea1eb52b9c896f16fda00be2d9c7b9a52c4d4c3d7e216e23f6",
+    "zencodec-media-testkit/tests/image_output.rs": "28ceb7afcb1df7b403d6c37a948806dcc6317fe68dc4ebc251ba2b9af8ee66c2"
+  },
+  "scope": "Policy before destination initialization; retained mapping and exact native strip-kernel parity, not independent RGB accuracy or performance",
+  "native_configurations": 18,
+  "native_presentations": 54,
+  "prepared_crop_cases": 162,
+  "validation": [
+    {
+      "command": "just conversion-check <fresh-artifacts>; just io-contract-check doc-default api-doc",
+      "log": "/home/lilith/tmp/zencodec-prepared-conversion-final-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "41s | peak-RSS 0.55GiB | min-avail 10995MiB | peak-load 1.01"
+    },
+    {
+      "command": "AV1_TIMING_FFPROBE=<pinned-8.0.1> just av1-policy-check <fresh-artifacts>; cargo check -p zencodec -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked; just docs-site-browser-check 3547",
+      "log": "/home/lilith/tmp/zencodec-prepared-conversion-native-site-20261027.log",
+      "exit_code": 0,
+      "native_test_result": "30 passed; 0 failed; 0 ignored",
+      "run_heavy": "48s | peak-RSS 0.27GiB | min-avail 11210MiB | peak-load 0.60"
+    }
+  ],
+  "verified": [
+    "10 GiB deferred reservation declined without materializing pixel array",
+    "exact same native mapping held through callback and execution",
+    "default refuses unknown subsampled siting; explicit center permission never overrides declared Left/TopLeft",
+    "integer clipping disclosed; strict extended-range and unknown-workspace requirements refuse",
+    "one selected decision retained on cancellation during row execution",
+    "callback error trace and backend mapping cause survive with safe default formatting",
+    "stale tokens, callback unwind, partial admission and all native output clones release the correct charges",
+    "existing full/1/2/4-row partition and odd-origin crop expectations unchanged"
+  ],
+  "zenpixels_delta": {
+    "api_items": 0,
+    "signature_changes": 0,
+    "kernels": 0,
+    "new_product_dependencies": 0
+  },
+  "resource_scope": "Wrapper RSS is the complete build/test process, not isolated conversion memory. Byte reservations are a managed-capacity allowance, not RSS.",
+  "remaining": [
+    "public planar conversion plan",
+    "independent RGB accuracy",
+    "float excursions/HDR and other matrices/transfers/mono/GBR",
+    "coupled converter/encoder transitions",
+    "native workspace and whole-operation memory bounds",
+    "proportional ROI work; current preparation scans every active sample",
+    "conversion throughput and comparative compile-time measurements"
+  ],
+  "api_delta": [
+    "ImageConversionOffer and resolve_image_conversion",
+    "Question/Selection/DecisionContext::ImageConversion",
+    "PolicySet::allow_assumed_chroma_siting and require_extended_range",
+    "StorageBudget::prepare_filled; PreparedStorage::reserved_bytes and allocate"
+  ]
+}

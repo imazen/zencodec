@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-28",
+  "scope": "Shared joint metadata/publication admission; native publication owner remains a private unqualified experiment",
+  "base": "55945150981f3c6d74e6a69940be7000dad2d08d",
+  "source_sha256": {
+    "src/operation/transcode.rs": "84eca56ffcc62f62ae0861bbf9f12b7a58654577345487bcd9d43707009ef48c",
+    "src/operation/transcode_composition_tests.rs": "9a110e7ea2aa434545c132ac4903005df48cf5a912d932e63e95f02b6336d7bc",
+    "src/operation/policy.rs": "5a1ea7ba0191deb953960675f6926c7557f76a3703f259a37a97445bcb284ecc",
+    "src/operation/policy/requirements.rs": "32037ede973089aabeb5003a2bcdd0252566338aef2cdd1443385e35837406f0",
+    "examples/frame_policy_probe.rs": "13d136538afc51190a6037aa6b417a93fc7752cc3a90475a66e16619578659ea"
+  },
+  "baseline": "Shape and new tests present, before wiring schedule evidence: 0 passed,4 failed (expected)",
+  "fixed": "4 passed; workspace all-feature tests and strict all-target Clippy pass",
+  "layout_bytes": {
+    "TranscodeOffer": {
+      "before": 88,
+      "after": 136
+    },
+    "OutputScheduleOffer": {
+      "before": 48,
+      "after": 48
+    },
+    "FrameRouteOffer": {
+      "before": 264,
+      "after": 264
+    }
+  },
+  "layout_scope": "Rust size_of on x86_64 validation host; not allocation, stack peak or RSS",
+  "receipt": "run-heavy: done rc=0 29s | peak-RSS 0.42GiB | min-avail 4410MiB | peak-load 1.04",
+  "commands": [
+    "just transcode-composition-check",
+    "cargo test --locked --workspace --all-features",
+    "cargo clippy --locked --workspace --all-features --all-targets -- -D warnings",
+    "just policy-layout-check"
+  ],
+  "throughput": "not measured",
+  "limits": [
+    "Adapter factual evidence remains trusted and must be qualified separately",
+    "Unknown native workspace and wait retention still refuse when required",
+    "A transcode decision does not authorize a separate bare decode boundary",
+    "No deferred obligation ledger or publication convenience added"
+  ]
+}

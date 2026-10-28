@@ -3,7 +3,8 @@
 #[path = "../disk_support.rs"]
 mod disk_support;
 use disk_support::*;
-use zencodec::source::{ReadAt, SourceError};
+use zencodec::source::ReadAt;
+use zencodec_io::StdSourceError;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert_eq!(
@@ -14,10 +15,12 @@ fn main() {
     let repetitions: usize = args[2].parse().unwrap();
     let path = std::path::Path::new(&args[3]);
     fixture(path);
-    let mut source: Box<dyn ReadAt<Error = SourceError>> = match args[1].as_str() {
-        "seek" => Box::new(SeekRead::open(path).unwrap()),
+    let mut source: Box<dyn ReadAt<Error = StdSourceError>> = match args[1].as_str() {
+        "seek" => Box::new(NativeErrors(SeekRead::open(path).unwrap())),
         "file" => Box::new(zencodec_io::FileReadAt::open(path).unwrap()),
-        "positional" => Box::new(Positional::new(std::fs::File::open(path).unwrap()).unwrap()),
+        "positional" => Box::new(NativeErrors(
+            Positional::new(std::fs::File::open(path).unwrap()).unwrap(),
+        )),
         _ => panic!("unknown mode"),
     };
     let offsets = offsets(4096, true);

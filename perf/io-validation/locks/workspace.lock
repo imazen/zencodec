@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.27"
+version = "0.2.0"
 dependencies = [
  "almost-enough",
  "enough",
@@ -1409,6 +1409,7 @@ dependencies = [
  "kamadak-exif",
  "moxcms",
  "rayon",
+ "spin",
  "thiserror 2.0.21",
  "tokio",
  "walkdir",

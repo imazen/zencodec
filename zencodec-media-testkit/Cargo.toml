@@ -12,7 +12,7 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 publish = false
 
 [dependencies]
-zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
+zencodec = { path = "..", version = ">=0.2.0, <0.4.0" }
 zencodec-io = { path = "../zencodec-io", version = "0.1.0", default-features = false }
 zencodec-media = { path = "../zencodec-media", version = "0.1.0" }
 zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false }

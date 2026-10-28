@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-28",
+  "base": "e59b3803fc5b212bf4c92648ead4299c4ff0640a",
+  "finding": "rustdoc JSON and cargo-public-api omit the three inherent dyn SourceEncodingDetails::codec_details methods",
+  "implementation": "Explicit additive source extraction with drift guards; original compiler surface and counts unchanged",
+  "validation": {
+    "consumer_tests": {
+      "passed": 2,
+      "failed": 0,
+      "scope": "Actual calls on dyn, dyn + Send, dyn + Send + Sync; original reference identity and different-type refusal"
+    },
+    "strict_clippy": "passed",
+    "site_source_checks": {
+      "passed": 24,
+      "failed": 0
+    },
+    "browser": "passed at 390, 768 and 1440 px; existing coverage plus supplemental search, source links and signatures",
+    "commands": [
+      "just source-details-check",
+      "just docs-site-check",
+      "just docs-site-browser"
+    ],
+    "resource_receipt": "run-heavy: done rc=0 39s | peak-RSS 0.31GiB | min-avail 3843MiB | peak-load 0.64",
+    "resource_scope": "Build/test process only; no codec throughput or memory-bound claim"
+  },
+  "sha256": {
+    "docs/site/source-catalog.mjs": "fda2c9a6e47bc2bad024039511b34ab8a4d23c3386ea4d79b1f93d2fdfd3547c",
+    "docs/site/source-catalog.test.mjs": "42f4122a299a2a4cdd86e9b7e1d781ea4f533cf0f90698a9670a9735435861fe",
+    "docs/site/catalog-search.mjs": "c2de81bbe6afea5f4ec791566386353a92f868814b7b916dd52a318c3da6ec51",
+    "tests/source_encoding_details.rs": "0f8c15d50ee49db90dc6b74f0906a28110d10d8ffeacc38b45d812ed82c1e9b4"
+  },
+  "documentation_followup": {
+    "scope": [
+      "OperationPolicy signatures and binding",
+      "Pulse parameters and reexports",
+      "renderer arity and compatibility method",
+      "qualified native planning and guide subset",
+      "implemented public renderer versus remaining universal render gaps"
+    ],
+    "checks": "24 source checks and complete browser suite passed; existing migration and viewport assertions unchanged",
+    "resource_receipt": "run-heavy: done rc=0 35s | peak-RSS 0.32GiB | min-avail 3914MiB | peak-load 0.78",
+    "regressions_found_and_fixed": [
+      "Retained historical private policy card alongside current operation contracts",
+      "Kept one migration API section",
+      "Wrapped long inline render signature at 390px"
+    ]
+  }
+}

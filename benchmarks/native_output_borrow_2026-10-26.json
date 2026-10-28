@@ -1,0 +1,75 @@
+{
+  "kind": "native identity owner and signaling qualification; no performance claim",
+  "base_commit": "d6630edfb13c8bcaffd50ef1753a1de66dbc9607",
+  "pixels_commit": "e44cf05490a37da749beb0b78477a45051ba3777",
+  "package_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "host": "r7900x",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "c4a9208f8cd17e83a019d18d6f87beaee21b9fd445e66cc9db79383aad8e58e2",
+    "perf/spatial-validation/dependencies.lock": "9e6ca451733b9a59e28d8e261648570562b3b907c3e88531aabd7c72a833c548",
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "7ebfc332bc07113d4de1d4ffef6d52aff942f4e5b146afc3348b79fec0b96708"
+  },
+  "commands": [
+    "just spatial-packaged-resolve",
+    "just spatial-output-plan-check",
+    "just spatial-ci-check <fresh-artifact-directory>"
+  ],
+  "checks": {
+    "native_suite": {
+      "passed": 125,
+      "failed": 0,
+      "ignored": 0
+    },
+    "targeted": {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_lint": "passed",
+    "identity_layers": {
+      "cmyk": 4,
+      "rgb": 5
+    },
+    "ownership": "original color and auxiliary addresses, exact full strided bytes, roles and interpretation retained through source/collection/registry teardown; last owner releases all payload charges",
+    "shared_pool": "source-only allowance refuses a copied color destination but allows retained identity without another payload allocation",
+    "signaling": "sample identity with newly selected CICP declines whole-image reuse; source stays owned by caller; required RGB-to-RGBA conversion also declines reuse",
+    "existing": "admitted row failure/unwind controls, 147-presentation and nine-raw-layer matrices, independent readers and prior expectations unchanged",
+    "guide": "source declarations, examples, browser expansion, clipboard and responsive layouts pass; all prior expectations unchanged"
+  },
+  "runs": [
+    {
+      "log": "zencodec-output-borrow-resolve-20261026.log",
+      "sha256": "2bc6a2784f84d0d797f6fc1a5bc821ef5ae40afb8ffc6de0ac6e7a1dd56fbb06",
+      "result": "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 11660MiB | peak-load 0.25"
+    },
+    {
+      "log": "zencodec-output-borrow-native-20261026.log",
+      "sha256": "035e6d089f14c4a4d57b0cac2c11340ecea022d31776f4b0653b9d6c46c3d232",
+      "result": "run-heavy: done rc=101 42s | peak-RSS 0.86GiB | min-avail 10873MiB | peak-load 1.15"
+    },
+    {
+      "log": "zencodec-output-borrow-native-2-20261026.log",
+      "sha256": "e57acbccc8ed3b70263cb20ec57ae3d6d18467b0f596eba4d4766f220985072e",
+      "result": "run-heavy: done rc=0 7s | peak-RSS 0.40GiB | min-avail 11279MiB | peak-load 0.66"
+    },
+    {
+      "log": "zencodec-output-borrow-suite-20261026.log",
+      "sha256": "d083f98ec6bbf5d32fd6c18d811d1ff777aee79e7dcf8eaba2c512f8806e1ed5",
+      "result": "run-heavy: done rc=0 32s | peak-RSS 0.49GiB | min-avail 11245MiB | peak-load 0.51"
+    },
+    {
+      "log": "zencodec-output-borrow-browser-20261026.log",
+      "sha256": "d5f2f5310f9d6b55668e8bfaf199e1da6ff9dee53ee3a02b07d9b01d26977ead",
+      "result": "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 11137MiB | peak-load 0.62"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-borrow-1",
+  "initial_failure": "The first targeted tests passed; strict lint rejected dropping a non-Drop borrowed source wrapper. Removed that redundant drop; no expectation relaxed.",
+  "remaining": [
+    "Whole-image retention helper remains a private native experiment, not a new consumer API.",
+    "Complete converted color plus auxiliary publication and interpretation-only replacement remain open.",
+    "No new CMYK arithmetic or polarity conversion; CMS workspace and native codec workspace remain outside payload admission.",
+    "Wrapper peak RSS describes complete build/test process tree, not isolated codec/CMS memory."
+  ]
+}

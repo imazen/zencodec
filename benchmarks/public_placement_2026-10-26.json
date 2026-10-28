@@ -1,0 +1,82 @@
+{
+  "base_revision": "73a845e553357009592a27646a12de24e5053c88",
+  "scope": "Generic signed placement frozen with selected output, validated at packed ownership adoption and retained in policy diagnostics. Callback borrows those diagnostics; native blend/reference facts remain codec-specific.",
+  "sources": {
+    "src/image.rs": "719909584b2a218d53e37e3c3e22eea134284a519a4c77810a12838dcee1dfca",
+    "src/image/placement.rs": "ed692127f0806a0e486da1fcae31ecdf2772c0dddaf963d3656d94076d94bf36",
+    "src/operation/image.rs": "bafdc8ede5fddcc0f7d18eddadd8a4992053183057cce7e6f1b206b19eae5261",
+    "src/operation/policy.rs": "8b96e27607a93eb762399b0bef12ce8678939662eb0723081df9781fdaf4e288",
+    "perf/spatial-validation/src/jxl_output.rs": "af1a36f08d053a910a5fbb3b9712408bd029ab666484797993bc43fb2fd6a6d8",
+    "perf/spatial-validation/src/jxl_layers.rs": "564ecb1dca61387b5322345362b9cc5cbb4ddb81d92ee62796ee5fdc3ff56682"
+  },
+  "native_jxl_pin": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "oracle": "Unmodified libjxl 0.11.1; pinned source builder and provenance retained by benchmarks/layer_oracle_2026-10-26.json.",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/core-placement-1*",
+  "runs": [
+    {
+      "log": "zencodec-shared-placement-native-1-2026-10-26.log",
+      "sha256": "82f894ce2a23e946e31014755db57288c4cb17103a66dc9e56e45338e892eaf6",
+      "scope": "New fixture initially used unpublished zenpixels constructors in the registry-based testkit; corrected to the existing from_vec API. The separate native stride oracle remains unchanged.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13426MiB :: timeout --kill-after=10s 600s bash -eu -c just image-output-check",
+        "run-heavy: done rc=101 2s | peak-RSS 0.28GiB | min-avail 13426MiB | peak-load 0.08"
+      ]
+    },
+    {
+      "log": "zencodec-shared-placement-native-2-2026-10-26.log",
+      "sha256": "96fe485bda8b17566ad5bd3217aef2ec6446f88adf00178ae7a65e1aba4db81f",
+      "scope": "Owner/placement tests pass; strict lint flags the larger copied Question::Image payload. Fixed by borrowing ImageFacts, with no lint allowance.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13458MiB :: timeout --kill-after=10s 600s bash -eu -c just image-output-check",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=101 2s | peak-RSS 0.35GiB | min-avail 13218MiB | peak-load 0.26"
+      ]
+    },
+    {
+      "log": "zencodec-shared-placement-native-3-2026-10-26.log",
+      "sha256": "17093e1e1da7492a4f3005732b7f9a3697004bf9f74c625e7160acd7855e3885",
+      "scope": "Owner tests, core lint/WASM and all 88 native/disk cases pass. Final native lint finds an obsolete GeometryError import, removed before the integration gate.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13452MiB :: timeout --kill-after=10s 600s bash -eu -c just image-output-check",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 245.04s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=101 255s | peak-RSS 0.58GiB | min-avail 12989MiB | peak-load 1.12"
+      ]
+    },
+    {
+      "log": "zencodec-shared-placement-integration-2026-10-26.log",
+      "sha256": "9cbe9ee249fb202e24d76a6d2b5ba34479afd18fc30c2b8b6e98979540df94f6",
+      "scope": "Final native lint, native AV1 mapped output, conditional HTTP cases, core tests, Rustdoc and API snapshot generation pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13472MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-validation-lint file_snapshot",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.43s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 7.44s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 7650, \"cases\": 48, \"statuses\": {\"200\": 1, \"206\": 7641, \"302\": 1, \"412\": 7}, \"conditional_after_open\": true}",
+        "test result: ok. 612 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.06s",
+        "run-heavy: done rc=0 31s | peak-RSS 0.61GiB | min-avail 12899MiB | peak-load 1.08"
+      ]
+    },
+    {
+      "log": "zencodec-shared-placement-site-2026-10-26.log",
+      "sha256": "6e8556e4705b027bb2f2f4331738ea2ed3c86c48832ab36309d330289153d2ab",
+      "scope": "Source checks and complete browser checks pass.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13474MiB :: timeout --kill-after=10s 120s bash -eu -c just docs-site-check",
+        "\u2139 pass 8",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13003MiB | peak-load 0.41"
+      ]
+    }
+  ],
+  "remaining": [
+    "Generic header-only description and collection adapter registration",
+    "Native negative-origin fixture qualification; signed extremes are synthetic",
+    "Rendering, blending, orientation and conversion from placement",
+    "Complete native workspace and privacy guarantees"
+  ],
+  "interpretation": "Correctness evidence only. Resource receipts measure test/build processes, not codec memory bounds; no performance conclusion from rejected Zenbench timings."
+}

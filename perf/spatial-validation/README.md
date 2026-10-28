@@ -1,0 +1,1590 @@
+# Native spatial contract experiments
+
+## Open native collections through registered factories
+
+The shared [`CodecSet`](../../src/set/collection.rs) registers the packaged
+[JXL factory](https://github.com/imazen/zenjxl/pull/31) and the private native
+[TIFF candidate](src/collection_factories.rs) once. Opening chooses an explicit format and composition,
+binds the source and stop token, and returns the existing checked consumer.
+Native limits stay on each registered configuration; the request also sets one
+discovery-call allowance. The first registered implementation wins. An error
+does not try another implementation with potentially different semantics.
+
+The opened collection borrows its source and can outlive the factory registry.
+TIFF accepts local positional sources through `ReadAtReader`; no input copy or
+length scan is introduced. JXL borrows an already-resident slice. When a source
+cannot provide one, it refuses before reading rather than collecting the file.
+The shared [`ErasedCollection`](../../src/collection/erased.rs) erases native state
+once at open and owned cursor state once per cursor. It neither boxes each
+`next` result nor changes the native output owner. Typed collection calls remain
+available without this erasure.
+
+The first factory signature used `DynReadAt` with its former mandatory `Send`
+bound. Compiling the actual HTTP consumer rejected the simulator's local state.
+A private `LocalSource` experiment proved the local path; that duplicate protocol
+has now been removed. The shared `DynReadAt` and `ReadAtShim` accept local sources.
+Use `dyn DynReadAt + Send` when an erased source itself crosses threads. Both boxed
+forms support borrowed input; no new source capability query is required.
+
+The native adapters now use that shared source protocol, including the unchanged
+HTTP simulator. Typed `ReadAt` remains the implementor contract, and a caller can
+bind `ReadAtShim(source)` once before opening. Async drivers still prove their
+worker/future transferability at the boundary where it matters. The opened collection
+is local and synchronous. The source interface was absent from
+the published 0.1.26 tree; existing users of its unreleased implicit `Send` bound
+need an explicit bound when transferring the erased object.
+The [shared-source receipt](../../benchmarks/local_source_2026-10-26.json)
+includes the published-tree check, local and scoped-thread controls, full
+workspace checks and native HTTP qualification.
+
+`just spatial-factories-check <fresh-artifact-directory>` checks native TIFF
+children, regions and disk reads, both JXL views, inspection, foreign cursors,
+source causes, discovery exhaustion and output lifetime. `just spatial-http-check`
+also drives the registry over actual conditional HTTP requests. An opened file
+in the disk control stays unchanged under test ownership; positional reads are
+not a snapshot guarantee.
+
+Registration now uses `CodecSet`; JXL is packaged in its codec crate and TIFF
+remains private to this validation harness. Automatic format detection, transferable
+opened jobs, broader native configuration coverage, fallible cursor-erasure
+allocation and TIFF packaging remain open. It establishes no latency or allocation-cost
+comparison and no whole-workspace/privacy guarantee. Cancellation can surface
+as a native, policy or wrapper error. The shared outer error now also exposes
+`stop_reason()`: callers can inspect the observed operation stop without choosing
+an error family, while coincident source/application causes and traces remain
+intact. Native seam controls and coincident-error controls qualify this accessor.
+
+The factory also receives the matched format, inherited `ResourceLimits` and
+`decode::DecodePolicy`. The TIFF mapping enforces `max_width`, `max_height` and
+`max_pixels` before selected output allocation or compressed-pixel reads. The
+same opened operation can inspect an oversized page and decode a smaller child.
+A tiny ROI cannot bypass its stored-image limit. The native path is sequential;
+`ThreadingPolicy::Sequential` is accepted. Both factories accept no-op defaults;
+the explicitly encode-only output-byte cap does not apply to decoding.
+
+JXL checks `max_input_bytes` against its actual resident span before parsing.
+It accepts the exact size and refuses one byte below it in both views while
+retaining the same native samples. Missing or misleading length hints do not
+change admission. Input storage is already caller-owned; this is not a native
+workspace or storage-allocation guarantee.
+
+Other nontrivial fields refuse before source I/O, including JXL geometry, TIFF
+input size, working memory, timing, cumulative pixels, allocation-mode choices
+and each nontrivial decode-policy flag. Mixing a supported dimension field with
+an unsupported memory cap also refuses before I/O. A limit violation retains
+`LimitExceeded { actual, max }` through the checked error; an unimplemented
+mapping retains `CollectionOpenError` with the unhandled settings as typed data.
+For mixed width/memory/input requirements, TIFF reports memory and input size;
+JXL reports memory and width. Handled fields are excluded. Every explicit policy flag is retained
+when refused. This is diagnostic data, not permission to weaken the request.
+No request preflight or error-text parsing is required.
+
+An independent source guard rejects every compressed-pixel range. Over-limit
+TIFF requests refuse without triggering it; an admitted child triggers the guard,
+and disabling it permits exact sample comparison. The fixture covers classic
+and BigTIFF, planar and chunky storage and all three geometry caps. Conditional
+HTTP also qualifies inspection/refusal followed by a successful child decode.
+Additional native controls check wrong-view refusal, all three cancellation
+sources before opening, after registry drop and in publication callbacks, and
+retained terminal stop reasons. Inherited pulse cancellation is honored; native
+progress reports remain future integration.
+
+The [factory receipt](../../benchmarks/collection_factories_2026-10-26.json) records
+source hashes, commands, initial failures and successful gates.
+
+The [CodecSet integration receipt](../../benchmarks/collection_registry_2026-10-26.json) records the promotion, inherited controls, full workspace and HTTP gates.
+
+The [native dimension receipt](../../benchmarks/collection_dimensions_2026-10-26.json) records source hashes and each gate; three of eight decode-relevant optional caps are qualified for TIFF.
+
+## Native JXL limit scope
+
+`just spatial-admission-check <fresh-artifact-directory>` tests whether native
+options can stand in for selected-output and retained-storage requirements.
+The [receipt](../../benchmarks/jxl_resource_scope_2026-10-26.json) records the
+native revision, executed controls, source hash and initial compile failure.
+
+The CMYK fixture's final local layer is 110×68 (7,480 pixels). It decodes under
+the normal raw-layer path, but a native pixel cap of 7,480 rejects the 512×512
+canvas (262,144 pixels) before selection. The native parser also checks preview
+and internal upsampled frame extents. A selected-image cap and this native work
+cap therefore have different scopes; forwarding one number changes behavior.
+
+The native memory control rejects budgets of 0, 1,048,576 and 4,194,304 bytes,
+then succeeds at 16,777,216. Three independently budgeted decodes retain
+18,948,096 bytes of output vector capacity at once, with identical samples.
+Each decoder has already dropped; the caller still owns those strided planes.
+This measures actual live `Vec::capacity`, not RSS or total native workspace.
+
+Do not map the shared memory requirement to a fresh per-decoder tracker and
+claim a whole-collection bound. Retained outputs need a shared allocation charge
+that follows their last owner. Native workspace, discovery, caller-owned input
+and encoded staging need their own qualified scope. The current packed
+`ImageOutput` constructor adopts `PixelBuffer` and auxiliary `Vec` storage;
+integrating already-admitted packed storage without copying remains an adapter
+boundary to resolve. The packed-owner experiment below now supplies that
+mechanism; packaged integration remains separate. Keep the existing typed
+whole-memory refusal until its complete scope is qualified.
+
+## Packed output admission
+
+[Validation receipt](../../benchmarks/packed_owner_2026-10-26.json) records
+the executed gates, source hashes, failed attempts and resource-wrapper results.
+
+`just spatial-owned-check` reconstructs the first raw image in the CMYK-layer
+and named-frame fixtures directly into `StorageBudget` allocations. The new
+`PackedImageOwner` implementation publishes those buffers through `ImageOutput`
+without copying them. Auxiliary values borrow `ValueSlice` instead of requiring
+an ordinary `Vec`. Interpretation comes from the already-qualified native path;
+this experiment does not invent a separate color or layer interpretation.
+
+Exact strided samples and original allocation addresses survive mapping and
+cloning. A held clone keeps the output charge and blocks another allocation at
+the same allowance. Dropping the last image releases it. Partial byte/object
+admission, cancellation after allocation and publication-policy refusal all
+release unpublished storage while retaining their original typed cause.
+RGB `RowConverter` copying preserves samples and padding. Identical inverted-CMYK
+descriptors currently return `NeedsCms`; this experiment records that refusal,
+without treating it as a qualified conversion route.
+
+The core also refuses changed pixel dimensions, stride, descriptor, color
+context, missing auxiliaries and changed auxiliary layout. Its outer mapping
+diagnostics are bounded; explicit source inspection preserves the backend error
+and `whereat` trace. Sample immutability remains the owner's contract.
+
+This covers two first-frame outputs, not the full presentation/layer matrix
+through admitted storage. Native workspace, input, metadata/owner allocations,
+encoded staging and caller copies are outside this payload allowance. It is not
+a total-memory bound or a performance measurement. The mechanism adds no policy
+callback; policy still decides at the existing admission/publication boundaries.
+
+## CMYK output finalization
+
+`just spatial-conversion-check` runs the real first raw layer of the pinned
+CMYK JXL fixture through `zenpixels-convert::finalize_for_output_with`.
+This exercises the current-profile entry point separately from the
+descriptor-only `RowConverter` control above. Four controls establish:
+
+- `SameAsOrigin` and an explicit identical ICC target preserve every active
+  inverted-CMYK F32 bit and the exact ICC bytes. A padded input stays unchanged.
+- A requested sRGB F32 transform returns `NeedsCms`, both without a backend
+  and with moxcms 0.9.1 attached. This does not qualify CMYK color conversion.
+- Removing the current ICC context still refuses even when `ColorOrigin`
+  contains that ICC. Provenance cannot stand in for current interpretation.
+- The current finalizer requires `&PixelBuffer`, forcing the mapped native
+  output to be copied into an ordinary owned buffer first. Even identity then
+  produces a distinct output allocation. Both copies remain readable after
+  dropping the admitted image releases the pool's final charge.
+
+The composited view of this fixture supplies RGBA, while the raw view supplies
+inverted CMYK. The CMYK controls explicitly request the raw view. They do not
+infer a conversion contract from the filename or from composited output.
+
+These are ownership and exact-sample controls, not an RSS or throughput
+measurement. The existing
+[zenpixels issue 69](https://github.com/imazen/zenpixels/issues/69) already tracks
+the remaining finalization ownership gap. Its descriptor-only conversion and
+in-place paths do not replace this profile-aware pixels-plus-metadata contract.
+The next candidate must accept a borrowed source, preserve the selected color
+authority, and write only into caller-admitted destination storage; an identity
+path should retain the original owner. A result must couple matching metadata
+with successful pixels and must not publish a partially converted destination.
+
+[Execution receipt](../../benchmarks/cmyk_finalization_2026-10-26.json).
+
+### Existing OutputPlan with admitted destination storage
+
+The next integration uses the existing `OutputPlan` from
+[zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92), combined with
+[native sample carriage in PR 93](https://github.com/imazen/zenpixels/pull/93)
+at `d79acec2`, including checked identity borrowing and same-profile opaque
+alpha addition. No second planning
+abstraction is added.
+
+`just spatial-output-plan-check` prepares a plan from the actual mapped
+descriptor and current ICC, then calls `convert_rows` directly into aligned
+`StorageBudget` storage. All four CMYK and five RGB raw layers preserve every
+active color bit, ICC and destination padding. There is no owned input staging
+buffer. The destination stays charged through its last shared owner after the
+original decoded image is dropped.
+
+A separate control uses one pool for the native source and converted destination.
+A pool that fits only the held source refuses conversion. A pool covering both
+keeps both payloads charged; dropping the source releases only its own charge.
+Thus a new conversion stage cannot silently reset the retained-output allowance.
+
+Byte/object refusal and changed interpretation return errors without retaining
+destination charges. An injected CMS fails after writing the second row; its
+concrete error remains inspectable, no `ColorStage` is returned, the native input
+is unchanged, and destination storage is released. Controlled unwinding exercises
+the same ownership cleanup. The injected worker qualifies failure handling,
+not CMYK conversion arithmetic.
+
+`OutputPlan::borrow_rows` now returns the original strided view for identity,
+with matching output color context. For all nine native layers, the prototype
+retains the original `ImageOutput`: exact samples, color and auxiliary addresses,
+roles, placement and interpretation stay together. Its storage charge survives
+source/collection teardown and every clone until the last image drops. This
+route succeeds with a pool that fits the source alone, where copying the color
+plane is correctly refused.
+
+Unchanged samples do not alone justify retaining unchanged signaling. A control
+requests explicit sRGB CICP for an untagged sRGB buffer: borrowing the samples
+works, but returning the old image would omit the selected current context. The
+prototype therefore retains the entire image only when descriptor and context
+also match. Otherwise it leaves the source with its caller for an explicit
+conversion or interpretation adapter. Required RGB-to-RGBA conversion also
+declines reuse without weakening the request.
+
+A native RGB F32 presentation from `animation_spline.jxl` exposed a separate
+failure: adding opaque alpha under its unchanged ICC returned `NeedsCms` without
+a backend at `e44cf054`. The planner now uses the existing format kernel for
+this operation. The unchanged native test passes with and without moxcms:
+every RGB bit stays identical, alpha is exactly one, current ICC is preserved,
+and the destination stays admitted. No profile conversion or CMYK arithmetic is
+implied. The narrower converter tests also cover gray and U8/U16 storage,
+padding, unusual F32 bits and retained changed-profile/depth refusal.
+[Native regression receipt](../../benchmarks/native_alpha_output_2026-10-26.json).
+
+The allocating path remains a color-stage prototype. Complete derivative
+publication must also account for
+auxiliary planes and their meanings; this test does not silently drop them into
+a new `ImageOutput`. Native codec workspace, CMS scratch/profile allocations,
+conversion cancellation latency and true CMYK-to-RGB arithmetic remain separate.
+Planned metadata is available before execution so an encoder can reject its
+carriers; it is not evidence that pixels or encoded output have succeeded.
+
+[Admitted conversion receipt](../../benchmarks/admitted_color_plan_2026-10-26.json)
+and [identity-owner receipt](../../benchmarks/native_output_borrow_2026-10-26.json).
+
+### Independent float ICC conversion
+
+The `cms_oracle` feature adds a separately executed Little CMS reference to the
+native color stage. It converts the first RGB F32 presentation of
+`conformance_test_images/animation_spline.jxl` and all five RGBA F32 raw layers of
+`multiple_layers_noise_spline.jxl` from their actual current ICC to the exact
+`display_p3_icc(false)` target bytes. The adapter uses `OutputPlan`, preserves
+extended range explicitly, and writes into aligned, strided, admitted storage.
+
+The reference uses relative colorimetric intent and `NOOPTIMIZE|COPY_ALPHA`.
+The color tolerance was fixed at `0.0001` before the first run. Every active
+color sample is compared; alpha bits, padding, output context and charge release
+are exact checks. The baseline fails all six cases even with the same explicit
+unclipped request. Merely disabling fixed-point arithmetic also fails. The
+corrected float path passes all six, with maximum absolute errors:
+
+| Native selection | Baseline | Corrected |
+| --- | ---: | ---: |
+| RGB presentation | 0.0004351772367954254 | 0.000008165836334228516 |
+| RGBA layer 0 | 2.7187345027923584 | 0.00007697194814682007 |
+| RGBA layer 1 | 0.06446413323283195 | 0.0000186040997505188 |
+| RGBA layer 2 | 2.1296069622039795 | 0.00006747245788574219 |
+| RGBA layer 3 | 2.7416446208953857 | 0.00007224082946777344 |
+| RGBA layer 4 | 2.1330705285072327 | 0.00006723403930664062 |
+
+The conversion change lives in [zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92).
+It selects float arithmetic and available analytic curves, preserves explicit
+ICC authority over embedded CICP, and applies requested clipping separately
+without touching alpha. An independent closed-form control also exposed an
+unequal-channel-curve case; the backend adapter now refuses it before writes
+and retains its concrete `MoxCmsError` through `whereat`.
+
+Reproduce with `just spatial-color-oracle <fresh-reference-directory>`, set
+`SPATIAL_COLOR_ORACLE` to that executable, then run
+`just spatial-color-check <fresh-artifact-directory>`. The full native CI suite
+enables `cms_oracle`; missing oracle inputs fail rather than skip. Per-selection
+artifacts retain exact profiles, input/output F32 rows, reference output and
+comparison JSON. `just spatial-color-inspect <selection-directory>` evaluates
+the recorded worst sample directly from matrix/type-3 ICC tags; it is a narrow
+diagnostic, not a general profile parser. Its math follows
+[ICC.1:2022 sections 10.18 and F.3](https://archive.color.org/specification/ICC.1-2022-05.pdf).
+
+`forbid_lossy()` is deprecated. The behavior-preserving `retain_channels()`
+replacement still permits clipping, so this color-conversion example explicitly
+uses `with_clip_out_of_gamut(false)`. Exact carriage uses `new_preserving_samples`.
+Required range semantics across all backends still need qualification. No new conversion trait or capability handshake was
+needed for these cases. General ICC/LUT qualification, numerical F32 CMYK,
+conversion cancellation and
+CMS workspace admission remain open. These are correctness measurements, not
+throughput or isolated memory measurements.
+
+[Pinned execution receipt](../../benchmarks/native_float_color_2026-10-26.json).
+
+## Packaged retained output storage
+
+The shared `OpenRequest::with_output_storage` path now runs beside the
+ordinary allocation path through all 147 presentations and nine raw layers.
+Admitted output matches ordinary output bit-for-bit, including stride/padding;
+the existing private-native and pinned independent-reader gates stay in place.
+Raw-layer checks retain an old result during the next reconstruction and verify
+that both payloads remain charged. Dropping the collection and input leaves the
+held image readable and charged; dropping that image releases its allowance.
+
+[The matrix receipt](../../benchmarks/operation_output_storage_2026-10-26.json)
+records the exact source/package pins and full-suite result. The
+[package consumer receipt](https://github.com/imazen/zenjxl/blob/3660d49318e4d234ec2eb8e531a3e3a1d40a2215/benchmarks/collection_operation_storage_2026-10-26.json)
+qualifies exact refusal boundaries, zero/partial byte/object admission,
+cross-operation contention, retry after last-clone release, policy errors,
+unwind and cancellation. Both package allocation modes use aligned words for
+F32 samples; neither converts to a different allocation at publication.
+
+The executable guide supplies the shared output allowance on the opening request.
+`CollectionOpenContext` carries resolved requirements to the native factory.
+JXL has no separate storage setter; the private TIFF factory returns
+`UnsupportedOutputStorage` before source queries. One registry accepts separate
+request pools, and cloned requests share the original allowance. Combining a
+payload pool with an unqualified native-memory cap still refuses. Payload
+admission adds no policy callback and does not close native workspace, metadata,
+input or encoded-staging bounds.
+
+The [earlier codec-configured matrix](../../benchmarks/packaged_output_storage_2026-10-26.json)
+records the intermediate API and its package revision; it is not the current
+caller interface.
+
+## Packaged JXL validation
+
+The harness pins [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31) at
+`3660d49318e4d234ec2eb8e531a3e3a1d40a2215`. Registry controls and the compiled
+consumer example use `JxlCollectionConfig`, rather than duplicating its factory.
+The private native mechanisms remain as reference paths. The presentation loop
+checks both paths in reverse order against native samples and independent libjxl
+counts, dimensions and duration ticks. The raw-layer loop compares both paths
+bit for bit and checks packaged samples against the independent layer reader.
+Existing RGB float, exact CMYK/alpha and padding expectations remain unchanged.
+The [packaged validation receipt](../../benchmarks/packaged_jxl_2026-10-26.json)
+records all 147 presentations, nine raw layers, 16 factory controls, oracle
+identity, per-layer measurements and the initial harness/lint failures at
+`e85000f4`. The later [input-limit receipt](../../benchmarks/collection_input_limit_2026-10-26.json)
+qualifies the current pin through the same registry controls. One of eight
+decode-relevant optional caps is now qualified for JXL; TIFF qualifies three.
+
+`just spatial-packaged-check <fresh-parent-directory>` runs the factory,
+presentation and raw-layer controls plus strict lint. Supply `JXL_SELECTION_ORACLE`
+and `JXL_LAYER_ORACLE` from `build_jxl_oracles.py`; use pinned readers, not whichever
+libjxl happens to be installed. A failed control fails the run. No timing result
+from this test run is a performance benchmark.
+
+The three discovery controls remain distinct: shared method-call allowance,
+retained identity count, and native frame-header work. The first also charges
+cached operations; the last includes hidden frames. Converging these knobs needs
+a test proving that shared admission bounds native retained identity allocation
+before it happens. A callback at pixel publication is too late to prove that.
+This remains API simplification work, not a whole-operation RAM guarantee.
+
+## Inspect a selected image before reconstructing it
+
+The shared [`ImageDescription`](../../src/collection/description.rs) describes only the
+selected image's stored dimensions, stored orientation and separate placement.
+`Collection::describe` is the one adapter method; the candidate inspection trait
+has been removed. `CheckedCollection::describe` validates the returned facts,
+and the shared discovery allowance also charges cached descriptions and errors.
+It does not use `ImageInfo`: this query establishes neither a complete metadata
+inventory nor the rendered output format, supported compression or workspace.
+TIFF reads the selected directory's tags without initializing its raster decoder.
+JXL retains basic-header facts and uses its scanned native layer headers.
+
+`just spatial-description-check` exercises both native implementations. A TIFF
+reader refuses every read intersecting native tile payloads; nested/shared
+SubIFD descriptions still succeed in classic/BigTIFF and chunky/planar storage.
+The positive control actually rejects pixel decoding. All eight JXL orientations,
+presentation versus raw-layer geometry, discovery exhaustion, out-of-order reuse,
+foreign IDs, native terminal errors and every observed inspection cancellation
+seam are checked. One initial fixture wrongly assumed five layers meant multiple
+presentations; the failure test now uses an actual animation, without changing
+the required refusal.
+
+The HTTP gate additionally changes or truncates the final description read and
+replaces a source after a successful description but before decode. Typed source
+causes survive and failed sources remain closed. These are correctness tests,
+not WAN timing or native allocation measurements. Transport buffering may read
+ahead into compressed bytes; the mechanism promises no pixel reconstruction,
+not universally zero payload I/O. The [receipt](../../benchmarks/selected_description_2026-10-26.json)
+records the commands, source hashes, failed attempts and successful gates.
+
+## Image selection and shared contracts
+
+The native TIFF loop now also exercises a separate candidate in
+[`src/image_items.rs`](src/image_items.rs) and
+[`src/tiff_items.rs`](src/tiff_items.rs). It discovers main directories lazily,
+follows arbitrary SubIFDs, and decodes the selected directory through the same
+native region path. The TIFF adapter remains private to this experiment;
+identity, request and collection contracts now come from `zencodec::collection`.
+The [shared contract](../../docs/collection-contract.md) records their scope.
+
+The important contract is an operation-bound image identity, distinct from its
+relationship and requested composition. A SubIFD is not necessarily a reduced
+image. Two parents can point to the same image; the result is a graph, not a
+tree. A page number is not an animation timestamp. Foreign identities/cursors
+and an unsupported uncomposited-layer requirement refuse before source I/O.
+
+The native fixture matrix covers nested non-reduced SubIFDs and shared children
+in classic/BigTIFF and chunky/planar RGB8, with exact selected-region parity
+against the original rasters. Malformed cycles and discovery exhaustion return
+explicit errors. Existing reduced-level selection tests remain unchanged.
+The gate passed on 2026-10-25: run-heavy rc=0, 5 s, peak RSS 0.41 GiB, minimum
+available 15881 MiB, peak load 0.15 (test process, not a decoder memory bound;
+log `~/tmp/zencodec-spatial-items1-2026-10-25.log`).
+
+This does not qualify JXL layers, non-image metadata directories, all auxiliary
+roles, or remote revision binding. Discovery currently materializes one bounded
+SubIFD tag and charges yielded relationships; it does not eagerly load the
+whole graph. The native decoder owns TIFF parsing and compression throughout.
+
+## JXL presentations and layers
+
+### Common consumer loop
+
+The shared [`Collection`](../../src/collection.rs) trait now runs the same
+`first_image` consumer against `TiffCollection` and `JxlItems`: discover lazily,
+retain the returned identity, decode that identity. `first_child` selects a
+native TIFF SubIFD; the JXL adapter returns `UnsupportedChildren` because it
+cannot establish that query. Unsupported discovery is not an empty collection.
+Repeated JXL discovery returns the same IDs even after the native scanner has
+advanced. Cross-operation cursors refuse.
+
+The common boundary returns `whereat::At<CollectionError>` and preserves the
+original native/source cause. A source replacement injected after TIFF open is
+still inspectable as the original `SourceFault::VersionChanged`, and a required
+unsupported view refuses before any source read. The guide displays the exact
+executed `first_image` function with its enclosing imports and return type.
+
+The later loop below replaces the associated native sample type with a shared
+mapped output and moves region requests to each decode. Public promotion still
+requires complete interpretation, immutable admission and discovery allowances
+whose scope is explicit. Network revision binding and pixel/privacy policy remain
+separate gates. The cancellation loop below qualifies mechanical stop checks;
+it does not establish a hard latency bound for native calls.
+
+The full combined gate passed after adding the common path: run-heavy rc=0,
+104 s, peak RSS 0.37 GiB, minimum available 15919 MiB, peak load 0.92; log
+`~/tmp/zencodec-common-selection2-2026-10-25.log`. After extracting the displayed
+function, `just spatial-consumer-check` reruns its native cases and strict
+Clippy without repeating the full matrix. These are process receipts, not
+native resource bounds.
+
+### Selected output executes the configured policy automatically
+
+The shared [`CheckedCollection<C, R>` consumer](../../src/operation/collection.rs) owns the native
+collection, one resolver, its preset and one stop token. Its `decode` and
+`first_image` return `Outcome<ImageOutput>` only after `resolve_image` accepts the
+held owner. The [executable guide function](src/collection.rs) shows native JXL
+setup followed by the one-line first-image call. Native factory closures are
+adapter setup; ordinary selections do not pass callbacks or query capabilities.
+
+The same wrapper selects TIFF pages/SubIFDs and JXL presentations. It rechecks
+repeated selections, preserves the accepted allocation address and returns exact
+samples. Each outcome has its own decision; the operation retains the existing
+bounded history, including refused decisions. Errors identify open/discovery/
+decode/policy/stop stages, preserve concrete causes and location traces, and
+omit application payloads from default formatting.
+
+Failure scope matters for an interactive viewer:
+
+- A bad region or policy refusal fails that request. A corrected request can
+  reuse the selected identity, and policy runs again. There is no automatic
+  retry or fallback. Native errors retain the native adapter's own terminal state.
+- An observed cancellation or timeout finishes the opened operation and drops
+  native state. A private shared latch preserves the original extensible reason,
+  including when an application stop callback subsequently returns success.
+- A caught unwind also finishes the operation. Previously returned image owners
+  remain usable; later calls cannot enter native code again.
+
+This differs from the temporal media driver's terminal-error contract: image
+selection is an explicit independent request, while a video session can already
+hold queued packets, frames and references. Shared output and policy types do not
+imply that every session has the same recovery rules.
+
+`just spatial-checked-collection-check` executes native selection, trace/payload
+checks, stale-choice refusal, corrected requests, bounded history, preset
+workspace/privacy refusal and cancellation injected at every observed checkpoint
+of a small native JXL request. The guide fixture compares active rows and untouched
+padding separately; equal pixels do not require equal strides.
+
+The wrapper now lives in core; the TIFF factory and native reference mechanisms remain private std-based
+adapters. It uses the existing resolver and does not prove preallocation
+admission, whole-container privacy, cheap ROI, native workspace bounds or callback
+overhead. Full-crate freestanding compilation remains blocked by
+[issue 165](https://github.com/imazen/zencodec/issues/165).
+The initial two-code atomic stop encoding was rejected by the compiler because
+`StopReason` is non-exhaustive; the qualified latch stores the original value.
+A large-error lint was fixed by owning the bounded report behind a box, matching
+the existing media error approach. [Receipts](../../benchmarks/checked_collection_2026-10-26.json).
+
+The same checked consumer now runs over the reused IMI HTTP source. In
+classic/BigTIFF SubIFD selection, object replacement, changed validators and a
+short body on the final required range all prevent the policy callback as well
+as publication. Retries retain the original transport cause and send no further
+requests. The combined HTTP gate covers 48 URL cases and 7650 actual requests;
+these are protocol counts, not latency measurements. The full test matrix passed;
+strict lint passed after removing an unnecessary clone in the new test.
+[HTTP and guide receipt](../../benchmarks/checked_collection_http_2026-10-26.json).
+
+### Repeated browsing has one operation allowance
+
+A viewport can revisit an image, create another cursor or ask an unsupported
+child query. Native TIFF currently counts returned relationships while JXL
+limits its cached presentations. Those are different native limits, so neither
+is presented as a universal discovery-work bound.
+
+The shared [`Discovery<C>` wrapper](../../src/collection/discovery.rs) wraps either adapter
+without changing `Collection` or its consumer loop. It charges each `images`,
+`children` and `next` attempt before delegation. Cached results, exhaustion and
+errors consume attempts; opening another cursor and retrying cannot reset or
+refund them. A refusal retains the method, allowance and usage through the
+existing traced error. Already returned identities remain decodable after
+exhausting discovery. `first_image` uses two attempts; `first_child` uses four.
+
+`just spatial-discovery-check` executes the same repeated-cursor/exhaustion
+consumer on real TIFF and JXL. Further cases check exact SubIFD samples in
+classic/BigTIFF, typed unsupported-child and injected source failures, zero
+allowance and refusal before further native polling or source I/O. The gate and
+strict lint pass: `run-heavy: done rc=0 8s | peak-RSS 0.54GiB | min-avail 12793MiB |
+peak-load 0.25` (test process). [Receipt](../../benchmarks/spatial_discovery_2026-10-26.json).
+
+This is a bound on calls, not on parser bytes, retained graph memory or CPU
+inside one call. It excludes opening the native decoder. Native limits and
+source admission remain required. Keep accounting in an operation/driver layer;
+there is no evidence here for another public codec trait, a callback per item,
+or requiring every caller to coordinate capability flags. The promoted wrapper
+keeps its call-only scope explicit; native work accounting is still separate.
+
+JXL now also has a separate native header allowance. The private adapter accepts
+`Limits { images: 1, frame_headers: Some(5) }` at open and applies that
+configuration to discovery and every fresh selected decoder. The real layer
+fixture requires five headers for its one visible presentation: four refuses,
+five returns exact pixels. Failed discovery retains the typed native
+`LimitExceeded { resource: "frame_headers", actual, limit }` through every retry
+without re-entering the parser. Native tests also cover hidden preview,
+reference-only and LF frames, partial input, seek, rewind and reset.
+
+This allowance is per native decoder, not a shared total across independent
+selected decodes. It counts completed header parses; bytes, CPU and allocations
+inside a header remain separate bounds. The common call allowance still covers
+cached browsing and repeated cursors. Neither replaces source admission or
+whole-operation accounting. Native implementation and scope:
+[decoder issue 71](https://github.com/imazen/zenjxl-decoder/issues/71).
+The full default-feature native matrix and strict lint pass after integration;
+[receipt](../../benchmarks/native_discovery_2026-10-26.json):
+`run-heavy: done rc=0 196s | peak-RSS 0.54GiB | min-avail 13434MiB | peak-load 1.22`
+(test process, not a decoder resource guarantee).
+
+### Source identity is established by the transport
+
+The [private HTTP source](src/http_source.rs) and [response harness](http_snapshot.py)
+reuse IMI's HTTP range study at `f7652c97119c936b53d739098e2eab789a42592a`.
+They add typed retained causes and deliberate protocol faults around native TIFF
+selection. No HTTP dependency or validator type enters the public codec traits.
+
+The source pins a strong ETag and representation length on its first successful
+response. Every later request sends that ETag in `If-Match` and asks for identity
+encoding. It requires exact 206 coverage, length and the same validator before
+accepting the body. Ignored ranges, redirects and encoding changes refuse.
+Errors permanently fail that source instance; retries preserve the original
+cause and cannot silently adopt a replacement. This uses
+[RFC 9110 conditional range semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
+`If-Range` permits replacement with a full response, which is inappropriate for
+continuing a decode already tied to the original bytes.
+
+`just spatial-http-check <fresh-artifacts> 3568` explicitly enables the private
+`http` feature and runs real local HTTP/1.1. Classic/BigTIFF and chunky/planar
+SubIFDs match original rasters through direct and 4096-byte buffered reads.
+Replacement immediately after discovery refuses selected decode with a retained
+412 cause; retry performs no more HTTP. Fourteen changed/malformed response
+cases refuse through native open. Initial validator and range-admission cases
+also run. The server independently verifies every request after opening is
+conditional. The [receipt](../../benchmarks/http_snapshot_2026-10-26.json)
+records the initial 32 URL cases / 2186 requests and a subsequent 40-case / 4918-request
+run. The latter also injects replacement, changed validators/total length and
+truncated bodies on the final required range of selected decode, after earlier
+ranges have succeeded. No selected pixels escape and retry preserves the cause
+without another request. That gate and strict lint report `run-heavy: done rc=0
+8s | peak-RSS 0.58GiB | min-avail 13236MiB | peak-load 0.31` (test process).
+
+The same trace makes the buffering tradeoff visible without timing a busy host:
+
+| Selected SubIFD | Direct requests / body bytes | 4096-byte buffer requests / body bytes |
+|---|---:|---:|
+| Classic, chunky | 236 / 2977 | 13 / 47877 |
+| Classic, planar | 340 / 3041 | 21 / 80773 |
+| BigTIFF, chunky | 239 / 3353 | 12 / 44257 |
+| BigTIFF, planar | 343 / 3417 | 20 / 77153 |
+
+These totals include opening and repeated reads. Buffering reduces requests and
+fetches more bytes in these fixtures; this establishes neither a speedup nor an
+optimal window. Native admission and transport request/byte budgets must remain
+separate. The full HTTP gate and strict lint report `run-heavy: done rc=0 9s |
+peak-RSS 0.58GiB | min-avail 12907MiB | peak-load 0.28` (test process).
+
+This qualifies one object's revision on a cooperating HTTP server. It does not
+prove multipart-manifest coherence, CDN/browser/TLS behavior, a disk-file snapshot
+or dishonest unchanged ETags. Existing verified bytes from the pinned revision
+need not become invalid merely because a newer revision exists. File sources
+still require a stable-byte ownership/locking contract. A failed read may have
+written partial bytes into caller scratch; no selected output may publish them.
+
+### Disk snapshots use the existing positional source contract
+
+Holding a file handle pins the opened inode across an atomic path replacement.
+It does not stop a writer changing that inode in place. Native classic/BigTIFF,
+chunky/planar and buffered/direct tests confirm the distinction: path replacement
+keeps the old SubIFD pixels, while an in-place overwrite can return new pixels
+through the same discovered identity. The latter deliberately violates
+`FileReadAt`'s documented caller-stability obligation; it is not a codec guarantee.
+
+The private [`clone_source`](src/file_snapshot.rs) creates an unnamed inode in a
+caller-provided spool directory, requires `FICLONE`, and returns the existing
+`FileReadAt`. It exposes neither a writable handle nor a mutable filename.
+[Linux documents the clone as atomic with respect to concurrent writes](https://man7.org/linux/man-pages/man2/FICLONE.2const.html);
+source and destination must share a supporting filesystem. The safe
+[rustix interface](https://docs.rs/rustix/1.1.5/rustix/fs/fn.ioctl_ficlone.html)
+lives only in this optional experiment. No new core I/O trait is involved.
+
+On the tested XFS filesystem, cloned sources preserve exact native TIFF/SubIFD
+pixels after the original is overwritten and truncated. Thirty-two cloned
+representations remain unchanged through a synchronized concurrent positional
+writer test. Native reads use both zero-capacity and 4096-byte `BufReader`s.
+Bad directory/source descriptors, a non-regular source, a logical-byte limit and
+an unsupported procfs source refuse with retained typed/OS causes. There is no
+copy fallback. An ordinary sequential copy would not provide the required
+atomicity while the source is being changed.
+
+The logical extent is admitted before and after cloning. It is not a bound on
+physical disk blocks, filesystem metadata, kernel memory or syscall duration.
+A coherent filesystem instant also does not prove an application finished a
+multi-write file update. Filesystem attributes are not copied as image metadata.
+Other filesystems, Windows and macOS need separate qualification.
+
+Select this platform experiment explicitly:
+
+```sh
+just spatial-file-snapshot-check /path/on/reflink-filesystem/fresh-artifacts
+just spatial-validation-check /path/on/reflink-filesystem/fresh-integrated /path/to/oracle-python file_snapshot
+```
+
+Missing filesystem support fails the selected gate; tests do not silently skip.
+The [receipt](../../benchmarks/file_snapshot_2026-10-26.json) records the platform,
+commands and logs. The full native matrix and strict lint pass:
+`run-heavy: done rc=0 197s | peak-RSS 0.56GiB | min-avail 13341MiB | peak-load 1.36`.
+These are test-process measurements, not source performance or codec bounds.
+
+### Cancellation belongs to the opened operation
+
+`TiffCollection::open_with_stop` and `JxlItems::open_with_stop` accept the existing
+`zencodec::StopToken` once. The common `Collection` methods and `first_image`
+consumer need no additional cancellation argument or capability coordination.
+Default opening remains available when the caller does not need cancellation.
+
+The TIFF adapter checks before opening, around every source read/seek, during
+known graph traversal, between native coding units and before returning output.
+The JXL adapter passes the same token into native options for discovery and
+selected-frame replay, with checks before publishing IDs or mapped output.
+Cached presentations and exhausted cursors still check cancellation: neither
+an item nor successful exhaustion substitutes for a cancelled request.
+
+`just spatial-cancellation-check` injects both `Cancelled` and `TimedOut` at every stop poll observed
+in the successful classic-TIFF and BigTIFF planar SubIFD operations, and one
+native JXL presentation operation. Each cancelled run must return an error and
+no output. Separate controls cover cancellation before any source I/O, known
+graph traversal without I/O, cached/exhausted JXL cursors and a failed native
+scan that must not appear exhausted. Successful controls compare real samples.
+
+These tests do not measure cancellation latency or promise interruption of a
+blocking source call. TIFF compute checks remain at coding-unit seams; JXL uses
+its native cooperative checks. Source deadlines, native workspace bounds and
+broader codec configurations remain separate obligations. Stop reasons produced
+by the adapter use the existing `CodecError` category; native causes remain
+inspectable through the traced collection error. Native JXL now preserves both reasons through `Error::stop_reason()` while keeping
+its existing coarse `ErrorClass::Cancelled`. The consumer reproduced the deadline
+collapse before pinning the [issue 70 fix](https://github.com/imazen/zenjxl-decoder/issues/70).
+The exact-reason gate passed: `run-heavy: done rc=0 67s | peak-RSS 0.59GiB |
+min-avail 12535MiB | peak-load 0.83`. This is test-process usage, not a native
+workspace or latency bound. The [receipt](../../benchmarks/spatial_stop_reasons_2026-10-26.json)
+records the pinned implementation and before/after logs.
+
+The full native gate passed with these adapter changes: `run-heavy: done rc=0
+154s | peak-RSS 0.23GiB | min-avail 13419MiB | peak-load 1.10`. This is test-process
+usage, not a decoder memory bound. The additional graph/failed-scan controls run
+in the targeted cancellation gate. Evidence is recorded in
+[`spatial_cancellation_2026-10-26.json`](../../benchmarks/spatial_cancellation_2026-10-26.json).
+
+### Region requests belong to the selected image
+
+The [platform review](../../docs/platform-review-2026-10-25.md) exercised WIC-backed
+Windows selection and independent OpenImageIO/TIFF readback. Its immediate API
+consequence is `Collection::decode(image, &ImageRequest)`: each request chooses
+full pixels or a stored region. TIFF opening no longer fixes a shared rectangle.
+Returned `StoredRaster::geometry` preserves the selected canvas dimensions and
+region origin; orientation remains unapplied. A region cannot silently clip to
+fit a smaller page or child. Invalid extents retain request/dimension context.
+
+The common native tests alternate full/interior/edge requests on differently
+sized pages and shared SubIFDs, select out of order, and recover after rejected
+empty/overflowing/out-of-bounds requests. JXL currently refuses required regions
+and still permits a subsequent explicit full-image decode. This does not qualify
+JXL region implementation or efficient partial reconstruction.
+
+The full native matrix and strict Clippy passed after this change: 42/42 tests;
+`run-heavy: done rc=0 101s | peak-RSS 0.22GiB | min-avail 13083MiB |
+peak-load 1.35`. The log is `~/tmp/zencodec-platform-regions-full2-2026-10-26.log`;
+this measures the test process, not a native workspace bound.
+
+### Native TIFF pixels through the shared owner
+
+The TIFF adapter first creates `StoredRaster`: a `zenpixels::PixelBuffer`
+and unapplied orientation, then moves it into the common `ImageOutput`.
+[`tiff_pixels.rs`](src/tiff_pixels.rs) adopts the
+native region allocation with its explicit dimensions and byte stride. It
+does not normalize signed values, narrow wide integers or canonicalize NaNs.
+The integration exposed a missing external constructor for `PixelBufferParts`;
+[zenpixels PR 93](https://github.com/imazen/zenpixels/pull/93) adds it alongside
+the signed/wide storage formats. Both crates are pinned at
+`9dad0cb609bbc07ed329696902ed5a1a3d3951b6` in this standalone harness.
+
+`just spatial-samples-check` runs all 22 native strip sample/layout cases
+through checked adoption and identity row conversion, checking the original
+allocation pointer, all active sample bytes, row padding and unapplied
+orientation. It covers classic/BigTIFF, the existing four compression modes,
+predictors and edge/interior/full-image regions. Signed types are qualified
+in gray; unsigned and floating types also cover RGB/RGBA. This is not a claim
+of GrayAlpha, half-float or arbitrary-band native coverage.
+
+The selected directory supplies its own ICC bytes and alpha declaration.
+Unknown transfer and primaries remain unknown. Missing, unspecified or
+unsupported alpha association refuses with `InterpretationError::Alpha`;
+associated and straight declarations survive unchanged. The per-directory
+test decodes two differently tagged pages out of order and repeats a page,
+checking its profile and orientation every time. Malformed or over-budget
+ICC fields remain native errors rather than becoming absent metadata.
+Opaque ICC carriage does not establish profile validity or a PII policy.
+
+The targeted gate passed with run-heavy rc=0, 5 s, peak RSS 0.45 GiB,
+minimum available 12273 MiB, peak load 0.92; log
+`~/tmp/zencodec-native-samples3-2026-10-25.log`. This is a test-process receipt,
+not a decoder memory bound. The shared collection is now implemented on the review PR. Oriented
+display geometry, unknown-color policy, full auxiliary rendering details and
+the distinction between raw sample carriage and approved display conversion
+remain promotion gates. Media's unsigned component-code encoding remains
+distinct from signed/floating image samples.
+
+### One mapped output for TIFF, JXL and video
+
+[`ImageOutput`](../../src/image.rs) replaces the collection's associated
+native sample type. It owns storage through a reference-counted handle and
+returns borrowed planes through a mapping guard. `with_pixels` is the small
+packed-color convenience; planar component codes require an explicit conversion
+and refuse that convenience. The video bridge retains the native mapping guard,
+sample encoding, roles, geometry/crop, color, epoch, timing and presentation
+facts. It makes no pixel copy. Orientation remains unknown where the video
+interface does not establish one.
+
+TIFF moves its existing allocation into the owner. JXL explicitly requests
+interleaved alpha when present, preserves all requested extra planes separately,
+and attaches the profile of the **actual output** after format selection.
+Opaque ICC and unknown transfer/primaries remain distinguishable. This is not
+a privacy approval or proof of a display conversion. A source alpha plane must
+not silently disappear from the ordinary packed-color view.
+
+Auxiliary samples carry their declared role, name, source precision and source
+dimensional shift without pretending to be grayscale. Emitted plane dimensions
+are recorded independently of source subsampling. The native accessors in
+[zenjxl-decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68) supply
+integer/float precision, exponent bits, spot-color linear RGBA and CFA indices.
+The eight
+native fixtures cover straight/associated alpha, extra channels, spot color,
+gray-alpha, upsampled alpha, rotated geometry and an embedded grayscale ICC.
+The generated native-encoder fixtures extend role coverage to 7/7 named roles:
+alpha, depth, spot color, selection mask, black, CFA and thermal. Unknown/reserved
+roles still need native fixtures. The generated subsampling matrix now checks
+all seven named roles at shifts 1/2/3 on an odd 17x13 canvas, retaining the source
+shift separately from full-size emitted planes. Independent libjxl checks orientation, role
+codes, source bit depth and source
+dimensional shift; pixel checks compare native sequential color/alpha/extra
+samples with the selected path. A separate selected-animation test checks exact
+PTS and duration ticks against libjxl, including variable durations and reverse
+selection. This is not independent JXL pixel parity.
+
+The initial trial exposed the existing whole-pixel stride restriction in
+`PixelSlice`: a sample-aligned padded RGB-f32 row can still be rejected. The
+adapter controls its allocations and now requests a whole pixel of padding.
+The native 13-byte-padding regression remains in place. Arbitrary external byte
+strides remain [zenpixels issue 91](https://github.com/imazen/zenpixels/issues/91);
+the constructor's established rejection tests have not been changed.
+
+[`image_output_tests.rs`](../av1-policy-validation/src/image_output_tests.rs)
+compiles the **same** output implementation against native AV1. It checks 8/10/12
+bits with mono, 4:2:0, 4:2:2, 4:4:4 and planar RGB, three frames each. It verifies
+native plane addresses, exact active samples, interpretation/timing, survival
+after decoder reset/drop and release after the last output owner drops.
+Required FFmpeg readback checks the native encoded packets independently.
+`just av1-output-check <fresh-artifacts>` passed with run-heavy rc=0, 9 s,
+peak RSS 0.54 GiB, minimum available 13206 MiB and peak load 0.36; these are
+test-process measurements.
+
+`ImageOutput::interpretation()` now borrows a frozen snapshot. Its checked packed
+constructor rejects sample/region size disagreement, empty or out-of-canvas
+regions, and incompatible component interpretation. A cloned interpretation is
+an editable detached value; it cannot relabel an existing output. Native TIFF
+adoption, JXL owner-drop tests and the same AV1 matrix exercise this boundary.
+
+JXL stores the native header, embedded source profile, selected frame index/name
+and last-frame marker in `source_details`, using the existing `Extensions` type.
+This retains original integer/float precision, exponent bits, tone-mapping facts,
+intrinsic/preview sizes and animation loop/timecode-presence declarations. The
+actual output profile remains attached to the pixels. These source details are
+neither output color instructions nor permission to copy metadata to a derivative;
+names and opaque profiles still require retention policy.
+
+Independent libjxl metadata checks cover HLG, PQ, a PQ gradient, a 32-bit float
+source with 8 exponent bits, an embedded ICC and a preview. Animation checks
+retain exact tick rates, loop count and timecode-presence declarations. The
+generated fixtures additionally exercise a 13x9 intrinsic size over an 8x6
+canvas, intensity target 1000, minimum luminance 0.125, relative-to-display
+behavior and `linear_below = 0.25`. The mapped consumer retains these values
+after decoder/input drop and output cloning. Half/float alpha retains source
+16/5 or 32/8 precision while the emitted storage is F32; exactly representable
+source values also check these two fixtures independently of native sequential
+decoding. Selected-frame timecodes preserve absent versus present zero, and
+reverse selection keeps timecodes separate from rational PTS and duration.
+libjxl independently verifies the generated source headers and frame timecodes.
+The generator is native `jxl-encoder` at
+`0255e5a9f61b7270cb3ed3f7b85fec2283deec55`; it is a standalone test dependency.
+Generated binaries are retained under the explicit `SPATIAL_GENERATED_ARTIFACTS`
+directory, created without overwriting existing results, and never committed.
+The native surface remains under review in
+[PR 68](https://github.com/imazen/zenjxl-decoder/pull/68), tracked by
+[issue 67](https://github.com/imazen/zenjxl-decoder/issues/67).
+The tone-mapping source fields are kept verbatim; no unqualified conversion to
+`SourceColor::diffuse_white` is made. The
+[libjxl metadata contract](https://libjxl.readthedocs.io/en/latest/api_metadata.html)
+distinguishes source precision, intensity bounds and display-tone-map behavior.
+
+The output now lives in `zencodec::image`, using the core's native frame mapping
+contracts. The standalone harness imports that implementation directly rather
+than keeping a parallel trial. Native frame mappings check region, plane count,
+role-derived dimensions and sample encoding before exposing each plane. Invalid
+regions retain their full extent/canvas; mapping failures retain typed native
+causes through `At<OutputError>`. Packed pixels remain in `zenpixels`.
+
+Collection discovery and render/transform policy admission still need
+qualification. Auxiliary rendering, whole-container
+metadata/privacy, native memory bounds, HTTP revision binding and raw JXL layers
+remain open. The output and collection are implemented on the API review PR; concrete
+JXL factory packaging is in PR31; neither surface has been released.
+
+The immutable-interpretation gate passed the full 46-test native suite and strict
+Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,
+peak load 0.95. Log: `~/tmp/zencodec-interpretation-full-2026-10-26.log`.
+This is test-process usage, not a native decoder resource bound.
+
+The auxiliary-interpretation extension passed the full native matrix and strict
+Clippy, plus the same AV1 ownership/sample matrix and guide browser checks.
+The [receipt](../../benchmarks/jxl_auxiliary_output_2026-10-26.json) records the
+tested commit, commands, dependency revisions and log hashes. Its full native
+run reports `run-heavy: done rc=0 115s | peak-RSS 0.22GiB | min-avail 13601MiB |
+peak-load 1.12`. This remains a test-process measurement.
+
+The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
+run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,
+peak load 1.52; log `~/tmp/zencodec-native-samples-full-2026-10-25.log`.
+
+The source-subsampling extension found a native `SectionTooShort` failure for
+valid reduced auxiliary planes with full-resolution color. The correction in
+[decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68) applies the
+source shift independently of color upsampling and validates the effective 8x
+ceiling. All 21 generated cases now pass common output adoption with exact
+native sequential-versus-selected F32 bytes and distinct source/output geometry.
+The independent oracle fully decodes generated fixtures. Its separate native
+qualification also checks exact no-dither u8 samples against libjxl float output
+under explicit matching quantization. That is not a claim of identical F32
+arithmetic across decoders. See the [receipt](../../benchmarks/jxl_subsampled_output_2026-10-26.json).
+
+### A retained spot plane can already be applied
+
+The selected output now records `ColorContribution::{Separate, Applied}` beside
+a spot channel's source linear RGBA. The native adapter can qualify both routes
+without changing the image identity. This is an output fact, not source metadata
+or permission to render it again. The private native boolean used by this test
+is not a proposed shared configuration API.
+
+A generated 9x7 black image with binary spot coverage is decoded in unrendered,
+rendered and unrendered order. All active F32 bytes match independent libjxl
+under the same setting, including the retained auxiliary plane. The exactly
+representable original values also provide a direct oracle. Rendering changes
+the color pixels while leaving auxiliary bytes unchanged; the contribution fact
+survives decoder/input drop. This narrow fixture qualifies independent F32 parity,
+not general cross-decoder floating-point equivalence.
+
+The [receipt](../../benchmarks/jxl_spot_contribution_2026-10-26.json) records the
+full TIFF/JXL matrix, the shared native AV1 output test and guide checks. Full
+native run: `run-heavy: done rc=0 119s | peak-RSS 0.22GiB | min-avail 13298MiB |
+peak-load 1.13`. This is test-process usage, not a native workspace bound.
+
+### Policy follows the actual held output
+
+`zencodec::operation::resolve_image` consumes an `ImageOutput`, invokes the
+existing fallible resolver with `Question::Image`, and returns the same owner
+with its decision record only on acceptance. Image and video publication share
+`PublicationOffer::ReturnHeld`; there is no extra callback interface. The
+callback sees actual immutable output and bounded facts, including whether
+retained spot planes already contributed to color. Those counts do not certify
+that every source channel was discovered or retained.
+
+The native TIFF case admits a selected SubIFD and retains its exact extent,
+allocation address and samples across classic/BigTIFF and chunky/planar variants.
+The JXL case alternates rendered/unrendered selections under one identity; a rule
+against already-applied retained spots refuses the actual rendered route and
+accepts the separate route, preserving all color/auxiliary bytes. The native AV1
+matrix passes its mapped output through the same resolver while retaining plane
+addresses, code depth, crop, timing and owner lifetime.
+
+Authored ownership controls additionally check stale choices, callback failures
+with retained typed traces, refusal, cancellation before/after callback and
+unwind. Presets requiring metadata treatment, no opaque profiles or a workspace
+bound refuse: this publication offer has no evidence for those obligations.
+This boundary follows native reconstruction and is not allocation admission or
+a whole-container privacy certificate. Caller-retained clones remain independent.
+
+### Native qualification
+
+[`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
+identities against native zenjxl-decoder at
+`4365fe97a955bcd0b9c3f30ca33678e8b1e85478`. The existing test corpus remains pinned
+at `8399f17c54c8138f65304bbc46efc80c269c7402` so changing the decoder does not
+change its regression inputs. `codec-corpus` retrieves the immutable archive; missing
+fixtures fail. The harness retains the compressed input and scans presentation
+headers. It does not claim a streaming-input or native-workspace bound.
+
+The matrix selects every presentation in reverse order and compares every f32
+sample byte and extra channel against native sequential decoding. Output rows
+have 13 padding bytes, whose sentinel must survive. The six fixtures contain
+147 visible presentations; 35 require replaying an earlier visible frame. The
+backend's opaque seek target owns the dependency restart; the adapter does not
+guess a keyframe from the visible index or file offset.
+
+The independent [`jxl_oracle.c`](jxl_oracle.c) uses libjxl only for test-time
+discovery. It confirms presentation count, duration ticks and canvas dimensions.
+It also demonstrates why view selection belongs before discovery:
+
+| Fixture | Composited presentations | Uncomposited regular layers |
+|---|---:|---:|
+| `blendmodes.jxl` | 1 | 5 |
+| `multiple_layers_noise_spline.jxl` | 1 | 5 |
+
+The latter includes 1024×576 layers with nonzero origins on a 2048×1152
+canvas. One starts at (1860,950), extending beyond the canvas: layer placement
+is distinct from a bounded decoded region. The presentation-only `JxlItems`
+adapter still refuses an `Uncomposited` requirement; the separate `JxlLayers`
+factory fixes that view before discovery and uses the qualified native F32 path.
+The [initial refusal receipt](../../benchmarks/spatial_layer_refusal_2026-10-26.json)
+records the earlier native correction that stopped silently substituting a
+composited canvas. The current gate exercises actual raw output with preserved
+source samples, described below. Remaining native configurations stay tracked in
+[zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+The independent library is libjxl 0.11.1 locally; CI records the installed
+library's exact numeric version in the test log. Install its development headers
+and library before running the gate (`libjxl-dev` on Ubuntu). Its executable is
+built outside the fresh TIFF artifact directory, and each invocation has a
+30-second deadline.
+
+The combined native tests, independent TIFF/JXL oracles and strict Clippy passed
+with `jxl-items4` on 2026-10-25: run-heavy rc=0, 104 s, peak RSS 0.42 GiB, minimum
+available 15782 MiB, peak load 1.64. Full log:
+`~/tmp/zencodec-jxl-items4-2026-10-25.log`. This is the test process receipt,
+not a per-codec or whole-operation memory guarantee.
+
+These are native cross-path pixel checks and independent discovery checks, not
+independent JXL pixel readback. Layer decoding, layer blend/extra-channel facts,
+gain maps, out-of-order container chunks, complete metadata interpretation and
+source replacement during network access remain unqualified. libjxl exposes
+regular layers when coalescing is disabled; reference-only and low-frequency
+frames remain internal ([decoder contract](https://libjxl.readthedocs.io/en/latest/api_decoder.html)).
+
+## Layer placement without weakening pixel bounds
+
+A viewer receives a selected image or a local region of it, then places that
+image on a presentation canvas. Those are different coordinate spaces. A raw
+JXL layer can have a negative origin or extend beyond the canvas. Making
+`ImageGeometry::region` accept out-of-bounds coordinates would weaken the
+mapped-buffer contract and still lose the layer's own coordinate system.
+
+The shared [`Placement::visible`](../../src/image/placement.rs) method takes the existing
+local `ImageGeometry` plus a signed origin and separate presentation dimensions.
+It returns matching rectangles in the returned sample buffer and presentation
+canvas. A valid fully off-canvas image returns `None`; its pixels and source
+extent are retained. Invalid local regions, empty canvases and signed coordinate
+overflow return typed errors. Orientation, resampling and blending remain
+separate operations; this helper cannot authorize dropping hidden source data.
+
+An exhaustive small-coordinate point-membership oracle checks intersections,
+including nonzero local-region origins. A strided RGB example copies only the
+intersection, preserves destination padding and retains the original owner.
+Independent libjxl discovery supplies the five actual raw extents of
+`multiple_layers_noise_spline.jxl`; two extend beyond the presentation canvas.
+The native decoder's internal-header regression confirms those same extents in
+two input chunk sizes while still returning one composited presentation.
+Negative-origin coverage here is synthetic, not native raw reconstruction.
+
+Placement is now frozen in `ImageInterpretation` and validated by the shared
+owner. Native raw JXL selection supplies it through the same output used by
+TIFF and AV1; callers no longer need a private JXL downcast to find the canvas
+origin. The bounded policy facts retain placement and the callback borrows
+those facts. Native blend/reference semantics remain separate source details. [Qualification receipt](../../benchmarks/spatial_placement_2026-10-26.json).
+Run `just spatial-placement-check /path/to/artifacts`.
+
+The next native experiment now captures complete F32 local planes before
+composition, while retaining the composed references and display output.
+[Native probe and independent oracle](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
+qualify five RGB/alpha layers and four CMYK/alpha layers, including off-canvas
+samples. Both native renderers and complete/chunked input agree exactly, with
+unchanged composed output. libjxl independently agrees on placement, color and
+extra-channel blend instructions, saved-reference slots and timing. CMYK/alpha
+samples are bit-exact; lossy RGB uses the unchanged native float-conformance
+bound, with every differing float count and maximum error recorded. A single
+changed CMYK mantissa bit fails the independent gate.
+
+### Selected native raw output
+
+The follow-through replaces the test tap with the public native F32 path pinned
+at `65e3c871b7341703664039fd2ee70e0524f45db6`. The private
+[`JxlLayers`](src/jxl_layers.rs) adapter discovers regular raw layers, fixes the
+view before issuing scoped identities, and replays from the start for a selected
+layer. It retains the source bytes; this is not incremental input or efficient
+random raw seeking. LF/reference-only helpers remain native internal state.
+
+The existing `Checked<C, R>` consumer runs the configured resolver on the actual
+held output before returning it. The guide's executed
+`checked_jxl_layer_first` example differs from presentation setup only in the
+native factory. Both finish with `images.first_image(&ImageRequest::default())?`.
+Stored output has one `ImageOutput` owner: local geometry, signed placement,
+source color/extra blend instructions, saved-reference slots, duration and last
+flags stay attached to its allocation. Reference slots belong to that opened
+source context; they are not item IDs or a lossless re-encoding instruction set.
+
+The selected native matrix covers nine layers from the two fixtures above,
+reverse order plus repeated first selection, exact native sequential sample
+bytes, retained padding, unchanged allocation through policy, and ownership
+past source/collection drop. Independent libjxl checks every emitted sample and
+composition fact. CMYK and alpha agree bit-for-bit. Lossy RGB differences remain
+within the existing 1/256 conformance bound; the per-selection receipt records
+the differing-bit count and maximum error, including duplicated packed/auxiliary
+channels. Foreign IDs/cursors, unsupported child/region requirements, exhausted
+image/header allowances, policy rejection, cancellation and timeout are tested.
+A one-bit CMYK negative control must fail comparison.
+
+The first integration failed because `PixelDescriptor::new(F32, Cmyk, ...)`
+had no physical format and panicked. A fallible lookup now returns a runtime
+error for absent formats. The pixel dependency at `284a0598abf441dc886755b1e65c34dbdf6ce94d`
+adds conventional and inverted F32 CMYK. Native JXL uses the inverted variant:
+zero means full ink and one means no ink, including its separate black plane.
+Source ICC bytes describe conventional device values; they cannot silently
+relabel that native domain. Unqualified conversion, including polarity changes,
+refuses. The pixel suite preserves every sample bit and ICC context in both
+formats without copying the owned allocation.
+
+Run `just spatial-layer-check <fresh-artifacts>` for the focused gate; the full
+`spatial-validation-check` also executes these cases. For the combined HTTP and
+Linux snapshot features use `just spatial-validation-all <fresh-artifacts>
+<python> <port>`: it runs the native/disk matrix, then starts the required
+simulator for the HTTP tests. This preserves the simulator's 240-second child
+deadline instead of spending it on unrelated native reconstruction. Layer, TIFF, generated-image
+and HTTP artifacts have separate namespaces so every fixture retains its fresh
+directory check. An initial combined invocation exposed the directory collision
+and missing simulator setup; those failures are preserved in the receipt. The
+[raw collection receipt](../../benchmarks/raw_collection_2026-10-26.json) retains
+the initial failure and verified follow-through. The independent C helper is
+copied from `imazen/zenjxl-decoder` commit `65e3c871`'s
+`perf/raw-layer-validation/oracle.c`; it is test-only and uses libjxl 0.11.1 here.
+No binary captures are copied into this repository.
+
+Remaining qualifications: all blend configurations, native negative-origin
+fixtures, preview/progressive publication, reference-only export, representations
+other than F32, qualified CMYK conversion, raw random seeking and native workspace
+bounds. Publication happens after reconstruction; it does not prove preallocation
+admission or whole-container privacy. The collection contract is now shared;
+the concrete TIFF adapter remains private; JXL has a packaged factory and placement is shared.
+
+### Independent oracle qualification
+
+The first CI pixel comparison used Ubuntu's libjxl 0.7.0 package. It disagreed
+on the first noise/spline layer despite reporting the same source and output
+sRGB profile as 0.11.1. CMYK and alpha still matched exactly. A source build of
+0.7.0 reproduced the same first failures. Holding the native captures and gates
+fixed isolated the disagreement to two existing upstream noise fixes:
+
+| Oracle | RGB samples beyond 1/256 | Maximum absolute RGB error |
+|---|---:|---:|
+| Ubuntu 0.7.0 and unmodified 0.7.0 source | 5,883,321 | 0.2081114798784256 |
+| 0.7.0 with the random-batch fix | 62,021 | 0.02619302272796631 |
+| 0.7.0 with both noise fixes | 0 | 0.00036650896072387695 |
+| Unmodified 0.11.1 | 0 | 0.00036650896072387695 |
+
+The changes are upstream's [random-batch fix](https://github.com/libjxl/libjxl/commit/b6e5dfd5b588e41da14fa29ee42ec5e7ea1bdc7c)
+and [noise-strength interpolation fix](https://github.com/libjxl/libjxl/commit/a3ac910f231915a84bf4b8d387d348e252b51919).
+The latter experiment applies both patches to 0.7.0; it is not an official
+release or the CI oracle. No native samples, tolerances or exactness assertions
+changed. [Receipts](../../benchmarks/layer_oracle_2026-10-26.json) retain the
+failures, fixture/source hashes, output profiles, full artifact paths and
+resource-wrapper results. These are correctness experiments, not benchmarks.
+
+CI now builds unmodified libjxl 0.11.1 from its checksum-pinned source archive.
+The builder checks the linked runtime version and records its commands and
+provenance. The C helper also records source/output color profiles; a Rust
+comparison failure names the fixture, layer, plane, channel, coordinates,
+oracle version and both sample values/bits. CI retains JSON evidence on failure.
+
+```sh
+just spatial-jxl-oracle-build /path/to/fresh-oracles
+just spatial-validation-with-oracles /path/to/fresh-evidence /path/to/oracle-python /path/to/fresh-oracles
+```
+
+The builder requires Linux, Python 3.12+, CMake, Ninja and development packages
+for Highway 1.0.7+, Brotli and lcms2. Local builds run under the resource wrapper.
+For an oracle investigation, `spatial-old-oracle-build` builds a supplied 0.7
+source tree; `spatial-layer-oracle-compare` accepts explicit header/library
+directories and reuses native captures. It does not regenerate native pixels.
+
+## Reduced-level region candidate
+
+This is an executable candidate, not a public spatial API. It selects a main
+TIFF page, follows an explicit path of reduced SubIFDs, and returns a region in
+stored coordinates. Native sample bytes and orientation remain unchanged.
+TIFF parsing and coding-unit decoding come from the pinned native codec.
+
+Missing qualification: full color/ICC interpretation, auxiliary-image dependencies,
+whole-container privacy, live HTTP version binding, total native workspace bounds,
+cross-unit batched scheduling, wide planar samples and independent wide-sample
+readback. The current external
+oracle covers the first classic RGB8 page, with both chunky and planar tiles;
+it does not establish those missing contracts.
+
+## Run
+
+Use an export outside workspace path overrides. Install the oracle in an isolated
+Python environment using `just spatial-oracle-install <python>`, then:
+
+```sh
+just spatial-validation-setup
+run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 5m \
+  just spatial-validation-check <fresh-persistent-artifact-dir> <python>
+```
+
+Both oracle and artifact arguments are required. Missing tools fail the gate.
+Each external oracle process also has a 30-second deadline. The harness uses
+Pillow 13.0.0 with libtiff explicitly selected, checks that selection, and compares
+its full-page bytes against the original fixture samples. The native encoder
+writes the fixture grammar. No TIFF parser or compression implementation is
+duplicated here.
+
+## Measured coverage, 2026-10-25
+
+The initial matrix covers 24 combinations: classic/BigTIFF, chunky/planar,
+direct/4096-byte `BufReader`, and two independent pages plus one reduced SubIFD.
+A 6×5 region at (13,12) crosses four 16×16 tiles, including the reduced image's
+partial right/bottom tiles. Every returned sample matches the original raster.
+The selected SubIFD also agrees with the native full-image route.
+
+Fault cases cover partial writes followed by read errors, source replacement,
+final cancellation, invalid reduced-image roles, discovery/output/unit/tag
+allowances, and cursor/seek overflow. Concrete source errors survive TIFF,
+standard I/O and framework error inspection. Output stays private until success;
+an earlier successful result remains valid after a later failure.
+
+Actual call and byte counts are in
+[`spatial_tiff_reads_2026-10-25.tsv`](../../benchmarks/spatial_tiff_reads_2026-10-25.tsv).
+For classic chunky page 0, buffering changes 68 reads / 3,020 bytes into
+9 reads / 34,390 bytes. For its planar reduced SubIFD, the change is 229 reads /
+2,228 bytes into 21 reads / 84,038 bytes. These are source-call counts and bytes
+copied, including rereads. No disk throughput, network latency or codec CPU
+performance was measured. A fixed `BufReader` alone is not evidence of a good
+network plan; byte admission and round trips must be considered together.
+
+Command on r7900x, Rust 1.99.1, isolated export with committed dependency lock:
+
+```sh
+run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 5m \
+  env TMPDIR=$HOME/tmp \
+  CARGO_TARGET_DIR=$HOME/tmp/zencodec-io-experiments-2026-10-24/target \
+  just spatial-validation-check \
+  /mnt/v/output/zencodec/spatial-2026-10-25/run4 \
+  $HOME/tmp/spatial-oracle-2026-10-25/bin/python
+```
+
+Tests and strict all-target Clippy passed. Full local log:
+`~/tmp/zencodec-spatial-tiff4-2026-10-25.log`.
+
+```text
+run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 16698MiB | peak-load 0.61
+```
+
+That process-tree peak includes compilation, tests, oracle and Clippy. It is not
+a codec workspace measurement. Artifacts remain in the directory above with
+`SHA256SUMS`; independent readback recorded Pillow 13.0.0 / libtiff 4.7.2.
+
+## Strip and sample extension
+
+`strip_tests.rs` adds 22 native layouts: Gray unsigned/signed 8/16/32/64 and
+float 32/64; RGB/RGBA unsigned 8/16/32/64 and float 32/64. All run with classic
+TIFF and BigTIFF, uncompressed/PackBits/LZW/Deflate, and no predictor versus the
+applicable horizontal or floating-point predictor. Each checks a middle region,
+the final partial strip and the complete image against original sample bits.
+All eight orientations are reported without transforming stored coordinates.
+Float fixtures include signed zero, infinities, subnormals and NaN payloads;
+comparison is byte exact, including payloads. This is native fixture parity,
+not an independent wide-sample oracle.
+
+The same full gate passed with artifact argument `run5`. Full local log:
+`~/tmp/zencodec-spatial-wide2-2026-10-25.log`.
+
+```text
+run-heavy: done rc=0 3s | peak-RSS 0.37GiB | min-avail 16559MiB | peak-load 0.45
+```
+
+This includes compilation and the original external RGB8 gate. GrayAlpha,
+half-float TIFF, wide planar tiles and opposite-endian files remain unqualified.
+
+## API implications
+
+`zencodec_io::ReadAtReader` is the shared synchronous `Read + Seek` bridge used
+by the native candidate, with its own cursor.
+It adds no prefetch, retry or async suspension. End-relative seeks call `len`,
+which may consume a sequential source. A file, range cache or HTTP adapter owns
+those policies; adapting a parser does not make the parser resumable.
+
+Pages, reduced levels, stored regions, and coding units have separate identities.
+An arbitrary SubIFD is not automatically a pyramid level. An output-byte bound
+does not bound metadata, native workspace or transport staging. The eventual
+shared request needs executable choices and the existing policy resolver;
+this experiment's mechanical cancellation check is not a second policy system.
+
+The promoted bridge repeats this entire native matrix (`run6`, log
+`~/tmp/zencodec-spatial-shared-bridge1-2026-10-25.log`): rc=0, 3 s, peak RSS
+0.40 GiB, minimum available 16526 MiB, peak load 0.51 under `run-heavy`.
+The I/O crate's full all-feature tests, strict Clippy and no-default-feature
+check also pass through `just io-reader-check`. Direct native I/O values keep
+their kind, OS code and payload; generic errors keep their concrete context.
+Additional controls cover invalid counts, failed end-relative spool discovery,
+EOF, standard buffered reads and no bridge-level retry on `Interrupted`.
+
+## Executable guide and CI
+
+The checked API page displays `docs/examples/checked_source.rs` directly. The
+native disk fixture executes that same file. Documentation CI pins the TIFF
+codec and Python oracle, runs this entire gate with command/job deadlines, and
+requires it before Pages deployment.
+
+The guide/native gate passed with `run7` (log
+`~/tmp/zencodec-spatial-guide1-2026-10-25.log`): run-heavy rc=0, 3 s, peak RSS
+0.39 GiB, minimum available 16483 MiB, peak load 0.51. Browser checks at
+390/768/1440 px pass with signatures expanded and exact full-example copying
+(`just docs-site-browser-check 3567`; rc=0, 8 s, peak RSS 0.17 GiB, minimum
+available 16227 MiB, peak load 0.35). These are test-process receipts.
+
+The common-output full gate passed on 2026-10-26: 43/43 native spatial tests
+and strict Clippy; `run-heavy: done rc=0 112s | peak-RSS 0.37GiB |
+min-avail 13386MiB | peak-load 0.91`. Log:
+`~/tmp/zencodec-common-output-full-2026-10-26.log`. This is a test-process
+receipt, not a decoder workspace bound.
+
+The added exact-timing case and auxiliary-output cases passed with the 22 TIFF
+sample cases and strict Clippy: `run-heavy: done rc=0 12s | peak-RSS 0.45GiB |
+min-avail 13431MiB | peak-load 0.61`; log
+`~/tmp/zencodec-common-output-timing-2026-10-26.log`.
+
+### Integrated source/discovery regression gate
+
+After the native timeout fix, common discovery allowance and coherent-source
+contract, the complete default-feature spatial gate passed. It retains the
+independent TIFF/libjxl checks, selected-sample parity, generated auxiliary
+roles/shifts, publication policy and cancellation controls. Its receipt is
+`run-heavy: done rc=0 186s | peak-RSS 0.54GiB | min-avail 13225MiB | peak-load 1.22`.
+Strict lint, warning-free workspace docs and public API snapshot checks also
+pass. [Integrated evidence](../../benchmarks/source_discovery_integrated_2026-10-26.json).
+HTTP runs separately with the explicit `http` feature and server harness above;
+it is not silently skipped by the default native gate.
+
+## Complete native CI gate
+
+`just spatial-ci-check <fresh-parent-directory>` runs every native test and
+strict lint with the same ten-minute test timeout as the documentation job.
+Supply the pinned Python and two JXL oracle executables used above. The test
+profile uses optimization level 1 while keeping debug assertions and overflow
+checks enabled. [The full-suite receipt](../../benchmarks/native_ci_2026-10-26.json)
+records all 112 passing tests and the earlier unoptimized CI timeout. It is
+correctness evidence, not a codec benchmark.
+
+
+### Converted color with retained auxiliary owners
+
+`ImageOutput::replace_packed_color` consumes the old image and a new immutable
+packed owner. The stored coordinates stay the same. Auxiliary mapping guards,
+source roles, placement, timing and opaque source facts remain attached; color
+uses the replacement's descriptor and current context. This is an ownership
+operation, not a CMS, auxiliary renderer or privacy certification. The existing
+resolver still gates publication. Its review-only offer is now `ReturnHeld`,
+which describes a converted image without claiming it is the original raster.
+
+The independent six-case float comparison now also publishes each converted
+owner. Original auxiliary addresses and bytes remain exact; target ICC and
+admission charges survive publication. The RGB case has no auxiliary and
+releases its source payload. Initially, each raw RGBA layer kept its complete
+original owner: the first layer retained 47,222,784 source bytes alongside
+37,785,600 destination bytes. This exposed avoidable retention of old color.
+
+The optional `PackedImageOwner::retain_auxiliaries` now supplies an independent
+`AuxiliaryImageOwner` automatically. JXL implements it over its separate native
+allocations. The same first layer now retains 9,455,616 source bytes and the
+unchanged 37,785,600 destination bytes. The other four layers each retain
+2,368,512 source bytes instead of 11,814,912. These are observed payload charges,
+not process memory measurements. Original image clones still retain old color;
+an inseparable backend keeps its full owner. Source and destination coexist
+during conversion, so this does not lower the admission required at that point.
+Repeated replacement releases intermediate colors without calling the native
+retention hook again. Errors and unwind discard unpublished owners.
+
+The [separate-owner receipt](../../benchmarks/native_separate_auxiliary_2026-10-26.json)
+records all six measured before/after cases. Source, converted and independent
+oracle samples plus source/target ICC artifacts have identical hashes across
+the ownership change. The full 129-test native suite and strict lint pass:
+`run-heavy: done rc=0 52s | peak-RSS 0.54GiB | min-avail 11046MiB | peak-load 0.92`.
+Reproduce the artifact comparison with `just spatial-retention-receipt
+<baseline-directory> <current-directory> <full-suite-log> <receipt.json>`.
+
+Core controls cover drift in either owner, original traced native failures,
+component-code refusal before mapping, retained clones, publication refusal and
+unwind. Native identity controls cover four CMYK layers, five RGB layers, and
+first presentations with spot color and extra channels. A separate premultiplied
+control now uses the required-descriptor conversion plan and keeps exact samples
+and association through borrowed identity and the owner API.
+
+The format-only `OutputPlan::new` selects straight alpha. `SameAsOrigin` requests
+the origin profile, not the original association. The native unknown-TRC fixture
+still refuses that conversion with `NeedsCms`; the test preserves this existing
+contract. `OutputPlan::new_with_descriptor` now accepts the full required layout.
+The same fixture can retain its complete owner without a pixel allocation or
+write exact samples into admitted strided rows. The plan checks the current
+source interpretation, and descriptor/profile conflicts return
+`OutputInterpretationMismatch` before CMS construction. This is not general
+ICC premultiplication conversion support.
+
+The [descriptor receipt](../../benchmarks/native_output_descriptor_2026-10-26.json)
+pins the new implementation and the full 129-test native suite, including the
+unchanged independent-reader and six-case CMS gates. The site extracts actual
+constructor and execution signatures from that exact dependency revision.
+
+Reproduce the focused ownership controls with `just image-color-replacement-check`
+and `just spatial-color-owner-check`. `just spatial-color-check <fresh-artifacts>`
+also exercises actual profile conversion with the independent reader; each
+selection records `publication.json` beside its numerical comparison.
+
+The [execution receipt](../../benchmarks/native_color_owner_2026-10-26.json)
+records every source/hash and all six publication charges. Full native tests and
+strict lint pass: `run-heavy: done rc=0 37s | peak-RSS 0.48GiB | min-avail
+11072MiB | peak-load 0.78`. Full workspace/API validation passes: `run-heavy:
+done rc=0 12s | peak-RSS 0.32GiB | min-avail 11217MiB | peak-load 0.72`.
+These wrapper observations cover whole test/build commands, not isolated codec
+memory or timing comparisons.
+
+### Combined held-image rendering
+
+The shared [`Renderer::render`](../../zencodec-render/src/render.rs) executes requested
+color, oriented canvas/region projection, auxiliary retention and publication
+policy as one held-output operation. It prepares an actual `OutputPlan` against
+the current descriptor/context before allocating projected samples. The source
+owner drops before color replacement; separate projected auxiliary ownership
+lets the superseded color allocation drop as well. Cancellation is checked
+between conversion rows and at publication seams. Refusal, application errors
+and unwind release unpublished destination charges.
+
+`Request` requires an exact output descriptor and a target: current sample
+color, named CICP or explicit ICC. Current means the held samples, not the
+original file's pre-transform color. `None` for the region requests the full
+oriented canvas. The existing policy callback sees the finished owner with
+its exact color and geometry; failures preserve a stage and traced concrete
+cause without exposing arbitrary payloads in default formatting. Raw layers,
+unknown auxiliary registration and unsupported interpretation still refuse.
+This does not sanitize retained source extensions or establish a PII guarantee.
+
+The native TIFF loop found a one-bit same-profile change: RGBA8
+`[0, 37, 74, 111]` became `[0, 37, 73, 111]`. An authoritative ICC with unknown
+descriptor color fields incorrectly selected a CMS round trip.
+[zenpixels 02ccdfb0](https://github.com/imazen/zenpixels/commit/02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8)
+now resolves only unknown fields from that same ICC for identity planning.
+Borrowed views carry the resolved descriptor; borrowed and copied samples stay
+exact. This integration required zero new zenpixels public items, dependencies
+or signature changes. It does not quantify the remaining planar/HDR work.
+
+The [combined-render receipt](../../benchmarks/native_combined_render_2026-10-27.json)
+records the actual sources, failed reproduction, independent CMS results and
+full native gate. Classic TIFF and BigTIFF cover all eight orientations,
+RGBA U8/U16/F32, full output and odd crops. Same-profile samples require exact
+bits. Seventeen native TIFF/JXL float selections additionally compare against
+Little CMS followed by an independent EXIF coordinate table; the existing
+absolute CMS tolerance is 0.0001 and alpha stays exact. Generated native JXL
+subsampled auxiliaries also go through the combined color/geometry operation.
+Tests inject cancellation/timeout at every observed seam, destination byte and
+object refusal, traced callback failure, policy refusal and unwind.
+
+The renderer is now in `zencodec-render` and exposes `render_selected(&mut images,
+&id)` through the shared `CheckedCollection::decode_with` adapter hook. Native
+reconstruction, transformation and one final publication decision happen inside
+the same checked operation. The already-held `render` entry remains available
+for direct owner processing. Native TIFF, BigTIFF and JXL controls verify one
+policy call per result, no policy call after color-plan refusal and successful
+reuse after a corrected request. Classic/BigTIFF SubIFDs independently verify
+child identity, child orientation, exact color samples and final policy facts.
+The [collection contract](../../docs/collection-contract.md#process-a-selected-owner-before-its-single-publication-decision)
+defines traced transform failure and terminal cancellation/unwind.
+
+Its explicit cost is a projected
+payload, then a replacement color payload when needed; even identity geometry
+copies, and descriptor-only normalization currently also copies. One test
+admits geometry but denies the second object and observes a Color-stage error
+with all charges released. This establishes payload accounting, not peak RSS
+or a whole-operation budget. Prepared native decode/ROI,
+coupled privacy/metadata decisions, resize, HDR display
+mapping and planar video remain required before promoting a complete render
+contract. No conversion kernel or CMS dependency was added to zencodec itself.
+
+Reproduce with `just spatial-render-check`, or set `SPATIAL_COLOR_ORACLE` and
+run `just spatial-render-oracle-check <fresh-artifact-directory>`. The normal
+native documentation CI runs the independent path with `cms_oracle` enabled.
+
+### Canvas projection before a complete render API
+
+The shared [`geometry::project`](../../zencodec-render/src/geometry.rs) executes a
+geometry stage over the shared owned output. `None` selects the complete
+oriented canvas; an explicit `Rect` selects display-space coordinates. The
+source must be qualified `Composited`, have an established orientation and no
+separate placement, and contain every required stored sample. A raw layer cannot
+substitute, even if its local dimensions equal the canvas. Native reconstruction
+and reference composition already happened before this stage.
+
+The stage inverse-maps the requested rectangle, borrows that strided stored
+region, and uses `zenpixels_convert::orient::apply_orientation_into` directly
+into admitted, padded output. It allocates no full oriented intermediate.
+Color descriptor/context, timing and original source details remain intact;
+`ProjectionSource` records the immediate input coordinates and orientation.
+The output declares identity orientation and its actual canvas/region. Scalar
+auxiliaries remain values with their original roles, including already-applied
+spots. Their independent owner lets later color replacement release old color.
+
+The [execution receipt](../../benchmarks/native_canvas_projection_2026-10-27.json)
+records 128 successful TIFF projections from 32 classic/BigTIFF RGBA8/float
+inputs, including all eight orientations and selected stored regions. Native
+float round trips preserve NaN payloads, signed zero and excursions. Eight
+JXL orientation fixtures also agree with independently oriented libjxl output
+under the existing native F32 tolerance; projection itself requires exact bits.
+Two further JXL presentations retain their canvas, while all nine raw layers
+refuse this operation, including the 1024×576 layer with 188×202 visible support.
+
+Additional controls cover strided U8/F32/F64 auxiliaries, premultiplied color,
+160 cancellation/timeout seams, 16 callback unwinds, 40 object/byte admission
+refusals, invalid rectangles and an incompatible auxiliary extent. Every
+unpublished payload charge releases. Padding stays untouched. Whole-pixel row
+stride is required by `PixelSlice`; machine-word alignment alone is insufficient
+for RGB or 16-byte pixels. The prototype pads in whole pixels.
+
+This is **not the full render API**. Current color is preserved, not converted
+to a requested display profile. Display resizing, native component conversion,
+general auxiliary grid origins/phases, grids requiring resampling, native
+workspace admission, and publication of a complete planned render remain open.
+Matching auxiliary dimensions alone do not prove co-registration. The shared
+`AuxiliaryGrid::ColorSamples` declaration now establishes the supported case:
+emitted auxiliary sample centers match color. `Unknown` remains the default and
+refuses projection before output admission, even with matching dimensions.
+Adoption checks the declaration against dimensions; later mappings and color
+replacement preserve it. The packaged JXL adapter supplies this native fact.
+This stage still allocates output for identity, retains the borrowed
+source during work, and checks cancellation at plane boundaries rather than
+inside the orientation kernel. No speed or whole-operation memory claim follows.
+
+The [registration receipt](../../benchmarks/native_auxiliary_registration_2026-10-27.json)
+records the full native gate and an additional odd-origin crop through the
+packaged JXL adapter for all seven named auxiliary roles at source shifts 1/2/3.
+The source declaration remains intact while the emitted grid is `ColorSamples`;
+cropped color and auxiliary values match the native reconstructed samples
+exactly. Independent libjxl inspection still checks the stored declaration.
+General grid origins, phases and resampling remain unrepresented.
+Run `just spatial-auxiliary-grid-check <fresh-artifacts>` with the pinned
+`JXL_SELECTION_ORACLE` to repeat that focused control.
+
+Run `just spatial-projection-check <fresh-artifacts>` with a current pinned
+`JXL_SELECTION_ORACLE`; `SPATIAL_PROJECTION_ARTIFACTS` is set by that recipe.
+`just spatial-ci-check` and the documentation workflow include these checks with
+a separate artifact directory so the native TIFF fresh-directory gate stays
+unchanged. `just spatial-jxl-oracle-relink <pinned-build> <fresh-output>` can
+rebuild the helpers against an existing libjxl 0.11.1 library while retaining the
+old binaries and recording source/binary hashes. The ordinary helper modes are
+unchanged; `samples-oriented` enables libjxl's own orientation for this oracle.
+
+### Current TIFF parity fork
+
+The spatial harness now pins [image-tiff `10a3b6b2`](https://github.com/lilith/image-tiff/tree/10a3b6b2fa88eb5943525066a989ea9e64e644d5),
+the parity work on that fork's main branch. The unchanged 133-case native gate
+and strict lint pass with the harness's `lzw,deflate` configuration; see
+[the qualification receipt](../../benchmarks/native_tiff_parity_pin_2026-10-27.json).
+This does **not** exercise old-style JPEG: that decoder requires the `jpeg`
+feature. The fork's Rust 1.99 requirement and additional LERC/LZMA dependencies
+apply to this private adapter experiment; the shared crates keep their own MSRV.
+
+The parity session exposed a separate inventory requirement:
+[issue 171](https://github.com/imazen/zencodec/issues/171). JPEG table tags
+519–521 reference bytes outside the tag values. JPEGInterchangeFormat may read
+through EOF when its length is zero; multiple chunks can depend on one shared
+stream. A region request must not imply independent chunk decoding or bounded
+region-sized work. Inventory must distinguish reachable data, actual decoder
+consumption, and privacy evidence. Predictor interpretation also depends on the
+compression method. The consumer rollout in zenextras is not established by
+this harness's passing tests.
+
+The opt-in `old_jpeg` qualification now uses two immutable fixtures from that
+fork through `codec-corpus`. `zackthecat.tif` exercises external tables: every
+reported table range is covered by native reads, and zeroing each table family
+changes decoded samples. `smallliz.tif` exercises a whole-JPEG stream: a zero
+JPEGInterchangeFormatLength makes the decoder read an appended opaque tail;
+the decoded pixels remain identical. Keeping the original nonzero length does
+not read that tail. A private `Rules::extents` implementation uses the existing
+`Count::ToEnd` for that exact decoder configuration, retaining `Unknown` fate.
+
+These are consumption and mutation controls, not an independent pixel-accuracy
+claim. Native reads do not prove bytes are necessary for rendering or safe to
+retain under a privacy requirement. A separate generated control establishes
+that Predictor 65535 is ignored for uncompressed samples but causes the typed
+`UnknownPredictor` error for LZW. The final consumer rules still belong in
+zentiff; these private rules do not replace its complete inventory.
+
+Run `just spatial-tiff-inventory-check <fresh-artifact-directory>` for the
+focused controls. The documentation workflow also runs them with the full native
+spatial suite and retains their JSON receipts. See
+[the native inventory receipt](../../benchmarks/native_tiff_inventory_2026-10-27.json).
+
+## Required exact samples
+
+`native_output_plan_exact_samples_never_require_a_cms` decodes a real JXL
+presentation and uses `OutputPlan::new_preserving_samples` for two operations:
+borrow unchanged pixels and add opaque alpha into admitted strided storage.
+Every original color byte must match; added alpha is exactly one and dropping
+the result releases its storage charge. The shared constructor refuses color
+arithmetic and non-reversible representation changes before accepting rows.
+It does not preserve encoded file bytes or perform descriptive-metadata policy.
+
+Run `just spatial-output-plan-check` for this and the existing conversion
+contracts. Full qualification uses `just spatial-ci-check` with the documented
+independent readers. No throughput or compile-time comparison is implied.
+
+
+## Public rendering companion
+
+The geometry and combined-render implementations now live in `zencodec-render`;
+the old harness modules only import them and host the unchanged native tests.
+`Renderer::new(storage)` defaults to full oriented sRGB RGBA8, rounding and
+clipping for display while retaining alpha. Explicit `RenderRequest` options
+support the precision-sensitive paths qualified above. One added native test
+checks all eight orientations, exact alpha preservation and one publication
+record through the default constructor.
+
+The full 147-case spatial suite, independent readers and strict lint passed
+against this shared implementation. The dependency lock changes from 127 to 128
+packages: only `zencodec-render` is added; no package version changes. Core
+zencodec gains no converter dependency. The companion is isolated while it needs
+the pinned converter review revision, and requires Rust 1.89 (verified).
+[Contract, reproduction and limits](../../docs/render-contract.md).

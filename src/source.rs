@@ -124,6 +124,18 @@ impl core::error::Error for SourceError {}
 /// `read_many_at` exists so a source that can serve ranges concurrently
 /// (HTTP Range, object stores, parallel `pread`) overlaps their round
 /// trips. Codecs pass every range they can ask for at once.
+///
+/// One decoder operation must observe one coherent byte representation. Bytes
+/// already supplied and any known final length must remain consistent across
+/// reads. A source over a growing stream may discover more bytes while keeping
+/// the supplied prefix unchanged. Replacing an object requires a new operation;
+/// it cannot silently change the meaning of an existing offset or image ID.
+///
+/// Establish this in the source/driver: immutable owned bytes, an immutable
+/// object version, conditional reads that fail on replacement, or a stable-file
+/// ownership/locking contract. Positional filesystem I/O alone is not snapshot
+/// isolation. Transport validators stay outside this trait; source-specific
+/// errors retain the cause when that contract cannot be maintained.
 pub trait ReadAt {
     /// The source-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
@@ -238,7 +250,12 @@ impl ReadAt for SliceReadAt<'_> {
 
 /// Object-safe [`ReadAt`]. Jobs receive this; codecs wrap its boxed errors
 /// with their own source-error constructor.
-pub trait DynReadAt: Send {
+///
+/// A synchronous operation may borrow a thread-local source. Request
+/// `dyn DynReadAt + Send` when the erased source itself crosses threads;
+/// erasure does not move it. Async drivers can instead construct a local
+/// reader on their compute thread and keep transport ownership on the runtime.
+pub trait DynReadAt {
     /// Total length in bytes (may be expensive; see [`ReadAt::len`]).
     fn len(&mut self) -> Result<u64, BoxedError>;
     /// Total length if known without reading ahead.
@@ -326,7 +343,7 @@ impl<S: DynReadAt + ?Sized> DynReadAt for &mut S {
 /// Shim presenting a concrete [`ReadAt`] as a [`DynReadAt`].
 pub struct ReadAtShim<S>(pub S);
 
-impl<S: ReadAt + Send> DynReadAt for ReadAtShim<S> {
+impl<S: ReadAt> DynReadAt for ReadAtShim<S> {
     fn len(&mut self) -> Result<u64, BoxedError> {
         self.0.len().map_err(|e| Box::new(e) as BoxedError)
     }
@@ -358,7 +375,13 @@ impl<S: ReadAt + Send> DynReadAt for ReadAtShim<S> {
     }
 }
 
-impl<S: ReadAt + Send + 'static> From<S> for Box<dyn DynReadAt> {
+impl<'a, S: ReadAt + 'a> From<S> for Box<dyn DynReadAt + 'a> {
+    fn from(source: S) -> Self {
+        Box::new(ReadAtShim(source))
+    }
+}
+
+impl<'a, S: ReadAt + Send + 'a> From<S> for Box<dyn DynReadAt + Send + 'a> {
     fn from(source: S) -> Self {
         Box::new(ReadAtShim(source))
     }

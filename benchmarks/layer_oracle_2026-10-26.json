@@ -1,0 +1,409 @@
+{
+  "native_revision": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "native_captures": "/mnt/v/output/zencodec/platform-regions-20261026-run/cms-raw-regression",
+  "threshold": 0.00390625,
+  "exact_channels": "All CMYK and alpha samples; unchanged existing gate",
+  "finding": "CI libjxl 0.7 reconstruction disagreement is isolated to two upstream noise fixes. Native captures, thresholds and color interpretation remain unchanged. Baseline source and Ubuntu package reproduce the same first failures; the source with both fixes passes. Unmodified 0.11.1 is the CI oracle.",
+  "fixes": [
+    {
+      "commit": "b6e5dfd5b588e41da14fa29ee42ec5e7ea1bdc7c",
+      "url": "https://github.com/libjxl/libjxl/commit/b6e5dfd5b588e41da14fa29ee42ec5e7ea1bdc7c",
+      "effect": "Consume no unused random batch at the end of a row."
+    },
+    {
+      "commit": "a3ac910f231915a84bf4b8d387d348e252b51919",
+      "url": "https://github.com/libjxl/libjxl/commit/a3ac910f231915a84bf4b8d387d348e252b51919",
+      "effect": "Apply the corrected noise LUT boundary in the render stage."
+    }
+  ],
+  "old_source": {
+    "url": "https://codeload.github.com/libjxl/libjxl/tar.gz/refs/tags/v0.7.0",
+    "sha256": "3114bba1fabb36f6f4adc2632717209aa6f84077bc4e93b420e0d63fa0455c5e"
+  },
+  "common_rgb_color": {
+    "space": 0,
+    "white": 1,
+    "primaries": 1,
+    "transfer": 13,
+    "gamma": 0,
+    "intent": 1,
+    "white_xy": [
+      0.3127,
+      0.329
+    ],
+    "red_xy": [
+      0.639998686,
+      0.330010138
+    ],
+    "green_xy": [
+      0.300003784,
+      0.600003357
+    ],
+    "blue_xy": [
+      0.150002046,
+      0.059997204
+    ]
+  },
+  "stages": [
+    {
+      "stage": "oracle-0.7-reproduction",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.7-reproduction/comparison.json",
+      "sha256": "db1790d8364a6f29234ffc84f4657722b70614895e44cca3424b44048337ca56",
+      "failures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 0,
+          "sample": 200,
+          "native": 0.688460111618042,
+          "oracle": 0.682229220867157
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 1,
+          "sample": 0,
+          "native": -0.5573464632034302,
+          "oracle": -0.4512779116630554
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 2,
+          "sample": 0,
+          "native": -0.07006663084030151,
+          "oracle": 0.03600194305181503
+        }
+      ],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 7000,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 7672272,
+          "over_unchanged_threshold": 5883321,
+          "max_absolute_error": 0.2081114798784256
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 7000,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    },
+    {
+      "stage": "oracle-0.7-profiles",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.7-profiles/comparison.json",
+      "sha256": "db1790d8364a6f29234ffc84f4657722b70614895e44cca3424b44048337ca56",
+      "failures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 0,
+          "sample": 200,
+          "native": 0.688460111618042,
+          "oracle": 0.682229220867157
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 1,
+          "sample": 0,
+          "native": -0.5573464632034302,
+          "oracle": -0.4512779116630554
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 2,
+          "sample": 0,
+          "native": -0.07006663084030151,
+          "oracle": 0.03600194305181503
+        }
+      ],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 7000,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 7672272,
+          "over_unchanged_threshold": 5883321,
+          "max_absolute_error": 0.2081114798784256
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 7000,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    },
+    {
+      "stage": "oracle-0.7-source",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.7-source/comparison.json",
+      "sha256": "cbf26143ea4bedff86a8d7a92bf7e3953c131f0bf4dbb7cbebf6378fff969c1a",
+      "failures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 0,
+          "sample": 200,
+          "native": 0.688460111618042,
+          "oracle": 0.682229220867157
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 1,
+          "sample": 0,
+          "native": -0.5573464632034302,
+          "oracle": -0.4512779116630554
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 2,
+          "sample": 0,
+          "native": -0.07006663084030151,
+          "oracle": 0.03600194305181503
+        }
+      ],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 7000,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 7672279,
+          "over_unchanged_threshold": 5883321,
+          "max_absolute_error": 0.2081114798784256
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 7000,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    },
+    {
+      "stage": "oracle-0.7-noise-fix",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.7-noise-fix/comparison.json",
+      "sha256": "a45d8161c8ae3ccc13b17604b79bd0dccefb48e03af935f37260eb2c052f3d0e",
+      "failures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 0,
+          "sample": 1625,
+          "native": 1.558590292930603,
+          "oracle": 1.565390944480896
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 1,
+          "sample": 1625,
+          "native": 0.6297398805618286,
+          "oracle": 0.6365405321121216
+        },
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "layer": 0,
+          "channel": 2,
+          "sample": 1625,
+          "native": -0.47308504581451416,
+          "oracle": -0.46628451347351074
+        }
+      ],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 7000,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 5288625,
+          "over_unchanged_threshold": 62021,
+          "max_absolute_error": 0.02619302272796631
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 7000,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    },
+    {
+      "stage": "oracle-0.7-both-fixes",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.7-both-fixes/comparison.json",
+      "sha256": "7f52b6547f256134f6de9dc45013cc46be5fd4467eff84ca42daafdf089cd5df",
+      "failures": [],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 7000,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 5226033,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.00036650896072387695
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 7000,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    },
+    {
+      "stage": "oracle-0.11-profiles",
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/oracle-0.11-profiles/comparison.json",
+      "sha256": "772986badc7752f35a9dcd023328acfabd453cace5cd3a44f2bc69340578af46",
+      "failures": [],
+      "fixtures": [
+        {
+          "fixture": "multiple_layers_noise_spline.jxl",
+          "sha256": "1912b0df8917c26f6f9a7a0fc07e5dda8b712b101be0194264e19fabd169ddbf",
+          "libjxl": 11001,
+          "layers": 5,
+          "samples": 18874368,
+          "different_float_bits": 5226033,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.00036650896072387695
+        },
+        {
+          "fixture": "conformance_test_images/cmyk_layers.jxl",
+          "sha256": "d732c8836bf1abeadf310d2e07387a32813ed4690d32650c1c25e541b80eed4a",
+          "libjxl": 11001,
+          "layers": 4,
+          "samples": 1587120,
+          "different_float_bits": 0,
+          "over_unchanged_threshold": 0,
+          "max_absolute_error": 0.0
+        }
+      ]
+    }
+  ],
+  "receipts": [
+    {
+      "log": "zencodec-layer-oracle-0.7-reproduce-2026-10-26.log",
+      "sha256": "c884670aa64406a8836201593c273ff86cd8c793deb88ebb4983c8ec62d350ad",
+      "resource_result": [
+        "run-heavy: done rc=1 4s | peak-RSS 0.14GiB | min-avail 13455MiB | peak-load 0.14"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-profiles-2026-10-26.log",
+      "sha256": "e753487684bef4cef5f4126f79c4f6bc88f545cb74f534c06844eddfc16e0178",
+      "resource_result": [
+        "run-heavy: done rc=1 3s | peak-RSS 0.14GiB | min-avail 13412MiB | peak-load 0.25"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-build-2026-10-26.log",
+      "sha256": "989b06b7c41a39a2cdcddddc1e09b746008dc1ab626b3d8ed1e1567ac001f580",
+      "resource_result": [
+        "run-heavy: done rc=0 67s | peak-RSS 1.11GiB | min-avail 11903MiB | peak-load 1.47"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-source-2026-10-26.log",
+      "sha256": "cf42b1aecf5fa932467936aae5e901e367ab7900d5d6ea7c7bb24089cf4a3c89",
+      "resource_result": [
+        "run-heavy: done rc=1 4s | peak-RSS 0.14GiB | min-avail 13499MiB | peak-load 0.63"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-noise-fix-build-2026-10-26.log",
+      "sha256": "e33f69c7e3ba85f85007173d180d823c9fa2d880695099dd1ac5ce1f969c0c26",
+      "resource_result": [
+        "run-heavy: done rc=0 3s | peak-RSS 0.67GiB | min-avail 12879MiB | peak-load 0.60"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-noise-fix-2026-10-26.log",
+      "sha256": "63bf9d87600314a5c1c4d9d7dd7d132b0f945b2fef9d4b4f0cda66bc9e0234d1",
+      "resource_result": [
+        "run-heavy: done rc=1 3s | peak-RSS 0.14GiB | min-avail 13428MiB | peak-load 0.28"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-both-fixes-build-2026-10-26.log",
+      "sha256": "4fd1d918155a07b725cf7322e33cd51495ff6309c6dd34ea7eb0172a501b66d5",
+      "resource_result": [
+        "run-heavy: done rc=0 4s | peak-RSS 0.72GiB | min-avail 12862MiB | peak-load 0.36"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.7-both-fixes-2026-10-26.log",
+      "sha256": "fe3343e2b5f8b6c8f30f8aa75d2da595bdb808601c5928fd770e3769ee11f84f",
+      "resource_result": [
+        "run-heavy: done rc=0 3s | peak-RSS 0.14GiB | min-avail 13483MiB | peak-load 0.34"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-0.11-profiles-2026-10-26.log",
+      "sha256": "1e856ee90fdf68e1aadee0bddf2f9a2ba547930814aa5990b56b42d3ce880376",
+      "resource_result": [
+        "run-heavy: done rc=0 3s | peak-RSS 0.09GiB | min-avail 13452MiB | peak-load 0.41"
+      ]
+    },
+    {
+      "log": "zencodec-layer-oracle-pinned-build-2026-10-26.log",
+      "sha256": "b71daff8a772c0b6b26a589848b13dabdd81f381d7d7cae2fbcb995b4efa61d9",
+      "resource_result": [
+        "run-heavy: done rc=0 46s | peak-RSS 0.79GiB | min-avail 12220MiB | peak-load 1.31"
+      ]
+    },
+    {
+      "log": "zencodec-pinned-oracle-regression-2026-10-26.log",
+      "sha256": "baaea458e04d84f358da1c1e82752e34a61f98deb11853131a4d55a9ded43254",
+      "results": [
+        "test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 245.21s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 250s | peak-RSS 0.56GiB | min-avail 13092MiB | peak-load 1.34"
+      ]
+    }
+  ],
+  "pinned_build": {
+    "source": "https://codeload.github.com/libjxl/libjxl/tar.gz/refs/tags/v0.11.1",
+    "source_sha256": "1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9",
+    "runtime_version": 11001,
+    "scope": "Independent test-only decoders; not a product dependency",
+    "helpers": {
+      "jxl-oracle": "d186feec7893b34f47073575f6cf1fb371636c8bf90719d6635a2b773c540904",
+      "layer-oracle": "01a63ac150363fc43926d2d19cc43bcbf3baf445d2f2011c0fdb949d329d740b"
+    }
+  },
+  "scope": "Correctness only. No timing comparison or complete memory-bound claim."
+}

@@ -1,0 +1,44 @@
+{
+  "implementation": "dd23dcaa23d20bea8ebc7bf9fa501dab44821db4",
+  "native_decoder": "4365fe97a955bcd0b9c3f30ca33678e8b1e85478",
+  "scope": "All seven named roles at source shifts 1/2/3 on an odd 17x13 canvas. Actual full-size emitted geometry, retained source shift and bit-exact selected-versus-sequential F32 bytes. libjxl fully decodes generated fixtures; independent quantized-pixel parity is separately qualified in the native decoder PR.",
+  "commands": [
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just spatial-subsampling-check <fresh-artifacts>",
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just spatial-output-check <fresh-artifacts>",
+    "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 3m just docs-site-browser-check 3567"
+  ],
+  "receipts": [
+    {
+      "log": "zencodec-auxiliary-shift4-2026-10-26.log",
+      "sha256": "5427d9e442f886ce026bf5df2be468b71534398513c9106fd55e35f976a09b7a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 2.63s",
+        "run-heavy: done rc=0 11s | peak-RSS 0.69GiB | min-avail 13313MiB | peak-load 0.93"
+      ]
+    },
+    {
+      "log": "zencodec-auxiliary-shift-output-2026-10-26.log",
+      "sha256": "946a2c4463022158aaab9fa6b6faf96a6d775293f3ce6469abb1d736736d9249",
+      "results": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 9.72s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.33s",
+        "run-heavy: done rc=0 11s | peak-RSS 0.46GiB | min-avail 13286MiB | peak-load 0.76"
+      ]
+    },
+    {
+      "log": "zencodec-subsampling-guide-2026-10-26.log",
+      "sha256": "8a31293d6b9bb3fbe68b70f9b22c412d9964d964ce17c18c507ed2153bcf6961",
+      "results": [
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13227MiB | peak-load 0.46"
+      ]
+    }
+  ],
+  "native_issue": "https://github.com/imazen/zenjxl-decoder/issues/69",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/",
+  "limits": [
+    "test-process resource measurements, not native workspace bounds",
+    "unknown/reserved roles and arbitrary channel combinations unqualified",
+    "no full cross-decoder F32 bit-parity claim",
+    "source role parameters do not describe all applied rendering effects"
+  ]
+}

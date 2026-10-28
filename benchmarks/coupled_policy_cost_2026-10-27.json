@@ -1,0 +1,371 @@
+{
+  "schema": 1,
+  "scope": "Existing frame publication only: same retained workload, no native codec or conversion kernel; retired counts include setup, wall pair includes Python/process startup, assertions and supervisor polling/cleanup.",
+  "revisions": {
+    "before": "7e4923e28e32a64751664b860b51e6cbee4cfc87",
+    "after": "85c33cc8d338c0f5daef42d81e19b9f184156989"
+  },
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027",
+  "instructions_per_capture": 1000000,
+  "counters": {
+    "before": {
+      "record": {
+        "instructions": 299756342,
+        "cycles": 147006509,
+        "cache-misses": 29834,
+        "context-switches": 0
+      },
+      "resolve": {
+        "instructions": 414214504,
+        "cycles": 225057610,
+        "cache-misses": 32756,
+        "context-switches": 1
+      },
+      "combined": {
+        "instructions": 486255956,
+        "cycles": 265625398,
+        "cache-misses": 34425,
+        "context-switches": 2
+      }
+    },
+    "after": {
+      "record": {
+        "instructions": 351638586,
+        "cycles": 181893017,
+        "cache-misses": 33320,
+        "context-switches": 1
+      },
+      "resolve": {
+        "instructions": 452353520,
+        "cycles": 260210412,
+        "cache-misses": 37090,
+        "context-switches": 1
+      },
+      "combined": {
+        "instructions": 523039480,
+        "cycles": 288415016,
+        "cache-misses": 34339,
+        "context-switches": 1
+      }
+    }
+  },
+  "heap": [
+    {
+      "arm": "before",
+      "count": 1,
+      "allocations": 16,
+      "peak_heap_as_printed": "75.46K",
+      "report": "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-1.heap.report.txt"
+    },
+    {
+      "arm": "before",
+      "count": 1000000,
+      "allocations": 16,
+      "peak_heap_as_printed": "75.46K",
+      "report": "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-1000000.heap.txt"
+    },
+    {
+      "arm": "after",
+      "count": 1,
+      "allocations": 16,
+      "peak_heap_as_printed": "75.46K",
+      "report": "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-1.heap.txt"
+    },
+    {
+      "arm": "after",
+      "count": 1000000,
+      "allocations": 16,
+      "peak_heap_as_printed": "75.46K",
+      "report": "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-1000000.heap.txt"
+    }
+  ],
+  "samples": {
+    "before": {
+      "count": 474,
+      "lost": 0,
+      "memmove_self_percent": 26.7
+    },
+    "after": {
+      "count": 513,
+      "lost": 0,
+      "memmove_self_percent": 34.36
+    }
+  },
+  "wall_pair": {
+    "invocations": 45,
+    "operations_per_invocation": 10000000,
+    "mode": "iterate",
+    "confirmed": false,
+    "cpu_load_flags": 0,
+    "heavy_process_flags": 8,
+    "placement": "uniform_hardware",
+    "summaries": [
+      {
+        "arm": "after",
+        "arm_ns": {
+          "mad": 244314.0,
+          "mean": 371274023.4,
+          "median": 361349343.0,
+          "min": 361105029.0,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 49421997.0,
+          "mean": 350795339.4,
+          "median": 360783988.0,
+          "min": 310365328.0,
+          "n": 5
+        },
+        "case": "record",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": true,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": 6.2855090916680485,
+        "log_ratio_sd": 0.08206604295769813,
+        "mean_log_ratio": 0.0609587691986789,
+        "paired_ratio": {
+          "mad": 0.0009736613704600661,
+          "mean": 1.0657484861616773,
+          "median": 1.0015670179908316,
+          "min": 1.0005933566203715,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      },
+      {
+        "arm": "__aa",
+        "arm_ns": {
+          "mad": 1105249.0,
+          "mean": 330872164.6,
+          "median": 311488811.0,
+          "min": 310383562.0,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 49421997.0,
+          "mean": 350795339.4,
+          "median": 360783988.0,
+          "min": 310365328.0,
+          "n": 5
+        },
+        "case": "record",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": false,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": -5.409031708696161,
+        "log_ratio_sd": 0.16386271663617094,
+        "mean_log_ratio": -0.055608187095840124,
+        "paired_ratio": {
+          "mad": 0.13385140786247318,
+          "mean": 0.9560158851236946,
+          "median": 0.9972179134735814,
+          "min": 0.7559737965020906,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      },
+      {
+        "arm": "after",
+        "arm_ns": {
+          "mad": 644793.9999999404,
+          "mean": 522547859.0,
+          "median": 512640836.0,
+          "min": 511678718.99999994,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 388297.0,
+          "mean": 472001125.2,
+          "median": 462085424.0,
+          "min": 460869264.0,
+          "n": 5
+        },
+        "case": "resolve",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": true,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": 10.726679251742496,
+        "log_ratio_sd": 0.07178391654884886,
+        "mean_log_ratio": 0.10189462967358764,
+        "paired_ratio": {
+          "mad": 0.002325696332446947,
+          "mean": 1.1095452540101551,
+          "median": 1.1094070692868252,
+          "min": 0.9979174350246769,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      },
+      {
+        "arm": "__aa",
+        "arm_ns": {
+          "mad": 396724.0,
+          "mean": 471485173.8,
+          "median": 461528446.0,
+          "min": 460102168.0,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 388297.0,
+          "mean": 472001125.2,
+          "median": 462085424.0,
+          "min": 460869264.0,
+          "n": 5
+        },
+        "case": "resolve",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": false,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": -0.1108112234321146,
+        "log_ratio_sd": 0.07494898068469993,
+        "mean_log_ratio": -0.0011087266446153862,
+        "paired_ratio": {
+          "mad": 0.00392261631533708,
+          "mean": 1.0011415966625976,
+          "median": 0.9987946427844908,
+          "min": 0.8997462093099186,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      },
+      {
+        "arm": "after",
+        "arm_ns": {
+          "mad": 722513.0,
+          "mean": 622600678.4,
+          "median": 612578692.0,
+          "min": 611856179.0,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 631209.0,
+          "mean": 562346067.0,
+          "median": 562388163.0,
+          "min": 560832147.0,
+          "n": 5
+        },
+        "case": "combined",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": true,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": 10.661170982245519,
+        "log_ratio_sd": 0.033914509184082814,
+        "mean_log_ratio": 0.10130283322821257,
+        "paired_ratio": {
+          "mad": 0.0012080957111708646,
+          "mean": 1.1071285746794264,
+          "median": 1.0891687237160672,
+          "min": 1.0879606280048963,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      },
+      {
+        "arm": "__aa",
+        "arm_ns": {
+          "mad": 72248.0,
+          "mean": 562207924.4,
+          "median": 562170590.0,
+          "min": 562005646.0,
+          "n": 5
+        },
+        "baseline_ns": {
+          "mad": 631209.0,
+          "mean": 562346067.0,
+          "median": 562388163.0,
+          "min": 560832147.0,
+          "n": 5
+        },
+        "case": "combined",
+        "complete_blocks": 5,
+        "control_present": true,
+        "correctness_checked": true,
+        "effect_exceeds_control_diagnostic": false,
+        "inference": "exploratory",
+        "interval": null,
+        "latency_change_pct": -0.02446500974593782,
+        "log_ratio_sd": 0.0016075379173411503,
+        "mean_log_ratio": -0.00024468002917643616,
+        "paired_ratio": {
+          "mad": 0.00035373236776437,
+          "mean": 0.9997563839057813,
+          "median": 0.9993198345463754,
+          "min": 0.9983641237836485,
+          "n": 5
+        },
+        "planned_blocks": 5,
+        "validity_issues": [],
+        "verdict": "exploratory"
+      }
+    ]
+  },
+  "resources": [
+    "run-heavy: done rc=0 28s | peak-RSS 0.45GiB | min-avail 11353MiB | peak-load 0.87",
+    "run-heavy: done rc=0 27s | peak-RSS 0.45GiB | min-avail 11215MiB | peak-load 1.04",
+    "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 11832MiB | peak-load 0.87",
+    "run-heavy: done rc=0 4s | peak-RSS 0.09GiB | min-avail 11657MiB | peak-load 0.48",
+    "run-heavy: done rc=0 42s | peak-RSS 0.04GiB | min-avail 11749MiB | peak-load 0.69"
+  ],
+  "excluded": "The initial shared-target candidate build returned the exact baseline executable hash; excluded before profiling. Candidate rebuilt in a fresh target. Its failed build attempt log remains retained. Initial heap capture succeeded but report lookup used .gz instead of actual .zst; original capture retained and parsed without rerunning.",
+  "limits": [
+    "No confirmed elapsed-time regression or speed claim.",
+    "No full application memory bound; heaptrack peak includes runtime setup and excludes stack storage.",
+    "Instruction captures and sampled profiles are single observations per cell.",
+    "The existing workload measures one report with many records, not many concurrent operations or decoder reference retention.",
+    "These measurements do not isolate one source field or justify an API migration by themselves."
+  ],
+  "hashes": {
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before.tar": "696df3f9b1066a4658c87523bccf6d945ff8a694c4a93d9c4c7b1c77d6389756",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after.tar": "eedfd8f5feb4e6741e02e0523158a672f031c506b2796419a0a73f528e8e1482",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-source/Cargo.lock": "e5af7dd5f37a2c205a8c47b7128708523f225b0fb2547aad177d7b01935cc667",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-source/Cargo.lock": "e5af7dd5f37a2c205a8c47b7128708523f225b0fb2547aad177d7b01935cc667",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-probe": "8715dfae440a13ac694468b96d96b94d0b373767bbd6e9a693fde5b21c7464f0",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-probe": "b4d49f92ed0b0cc2c55fad055dc3b9aa1f6d6970d65d2e9609b1457cb9062525",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/pair-plan.json": "4c3b3df3b9cb35732ec957945176e530c0e2e44dc945740c3a075bf42898a369",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/pair-attempt/packet.json.gz": "e62ac685336ac06f495ce49846749c53c7a53d5456113047b0485699d1d2b55a",
+    "perf/frame-policy-pair.py": "6b225e0d8aff8c1ad0d5c35947a60c08dfd549f8ae1556db041d920a40481bb7",
+    "/home/lilith/tmp/zencodec-policy-coupled-before-build-20261027.log": "72be37e04c0f7cf3f354919d8bd9d82d58d65418a7262540c03843d29f324f7a",
+    "/home/lilith/tmp/zencodec-policy-coupled-after-isolated-build-20261027.log": "90ac7a0bf72825b74de927dcc04d0bb146366c0cc0a9e1a9cc3abc94d00484f2",
+    "/home/lilith/tmp/zencodec-policy-coupled-counters-20261027.log": "aba1435abba10a87a8dbbda6fc50dcd5e5a9ff5a8caff8a7a56a6a66441846d7",
+    "/home/lilith/tmp/zencodec-policy-coupled-heap-samples-fixed-20261027.log": "1d8c12d2396aa5d0b009ca3dd035d86e43a10f95b573dadb755e2d7c0f33f2bd",
+    "/home/lilith/tmp/zencodec-policy-coupled-pair-20261027.log": "bbbbf25582b4969f8a4cb8005dcd261030a48a560a66742960e04cbb6cc4b50c",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-record.perf.csv": "1ca7278848ce7e9dbee8a7dd9673c4c1deaf57f4795eeb909d9cb1640b3f6d55",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-resolve.perf.csv": "83efe0cc4e8dff52fa5895d0cbbe4955792b203f8a95cca0a831833de252d491",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-combined.perf.csv": "3d9c568bb78503c713cf0ed74079b944f7e9cf200487b9918761d1caf0226f47",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-record.perf.csv": "bfd9f0a8b0db30ff5b359d6b456ccb232c05753cf05f9f850d3e23dac075d353",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-resolve.perf.csv": "bff2c978608f3940253bff013647b1e5f1972360c8df81d3a5371d7a8605fdca",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-combined.perf.csv": "99e1644abe2cb9086295420e61d18e68fc02ca458ed263162338ac72bce8db06",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-1.heap.zst": "c15a6778d703a036dba3f97422c0f317f20fed2628f6fa7bf033169f6d6e32c9",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before-1000000.heap.zst": "229447db5552b5915daa6fafd5a06e42a1f8a41f476f12dec8c076d63499440d",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-1.heap.zst": "b2d522d1c25f47745ad8f231ed94a6508851f92be72a8b18998c946c895e7a81",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after-1000000.heap.zst": "210bf33ee83df4e99a032d09be572c62000b338c6f15de9a8269f9e95fa33767",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/before.perf.data": "5cb2504c493cf371158e73bd8d057cfe9ac41f27d2143f3286d102acbeabb79e",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/after.perf.data": "ee1cc03370ef761a19f64b7a0ca60014d7132b5fcc211f19632498e36401018f",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/policy-coupled-cost-20261027/negative-control.json": "381f854f4937c4d4c20694f037152445c0fde6725f40dae767d519c240c6cf2d"
+  }
+}

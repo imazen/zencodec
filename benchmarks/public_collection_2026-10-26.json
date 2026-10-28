@@ -1,0 +1,153 @@
+{
+  "base_revision": "41c43ef9358ee271ed83fc6c19ad870d0e904d5e",
+  "scope": "Additive shared collection and checked publication contracts on API review PR 168; concrete native adapter factories remain in the validation harness.",
+  "sources": {
+    "src/collection.rs": "e4cebe4f0689956647c27bc3d1fda2051e634cda33395b4790809b6a04894537",
+    "src/collection/discovery.rs": "0305b90838d973e326055852373745da4cd64c4632c21a1524f2660126f8414e",
+    "src/operation/collection.rs": "96be31f03c40a34540ac4beb0983030e3dfc73aca2712ed040333f36edcbb6aa"
+  },
+  "native_jxl_pin": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "zenpixels_pin": "284a0598abf441dc886755b1e65c34dbdf6ce94d",
+  "oracle": "Unmodified libjxl 0.11.1 built by perf/spatial-validation/build_jxl_oracles.py; immutable source hash in benchmarks/layer_oracle_2026-10-26.json.",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/core-collection-1*",
+  "runs": [
+    {
+      "log": "zencodec-collection-promotion-core-1-2026-10-26.log",
+      "sha256": "ea761d956db93608bd9608423ef4358e07b80f0ef9293c23f8a3c1e1e6bf6b60",
+      "scope": "Focused tests and WASM pass; full freestanding build reproduces existing issue 165.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13541MiB :: timeout --kill-after=10s 600s bash -eu -c just collection-api-resolve",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s",
+        "run-heavy: done rc=101 5s | peak-RSS 0.41GiB | min-avail 13308MiB | peak-load 0.21"
+      ]
+    },
+    {
+      "log": "zencodec-collection-promotion-native-1-2026-10-26.log",
+      "sha256": "cec6ee4915761dad6a741ae29e964374632826a99db6e847dedea0253211be19",
+      "scope": "Exploratory disabling of zenpixels defaults exposes existing gain-map math failures; manifest restored, no numerical contract changed.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13420MiB :: timeout --kill-after=10s 900s bash -eu -c just collection-api-check",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s",
+        "run-heavy: done rc=101 4s | peak-RSS 0.41GiB | min-avail 13131MiB | peak-load 0.08"
+      ]
+    },
+    {
+      "log": "zencodec-collection-promotion-native-2-2026-10-26.log",
+      "sha256": "87cf73cb04bdc27c192d03192e55a95b49fcc0ada00c6d3ac94b4113f4542e73",
+      "scope": "Shared collection: focused tests, WASM, native TIFF/JXL, disk snapshots, HTTP and strict lint pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13426MiB :: timeout --kill-after=10s 900s bash -eu -c just collection-api-check",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s",
+        "test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 245.54s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 7.39s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 7650, \"cases\": 48, \"statuses\": {\"200\": 1, \"206\": 7641, \"302\": 1, \"412\": 7}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 269s | peak-RSS 0.61GiB | min-avail 12950MiB | peak-load 1.37"
+      ]
+    },
+    {
+      "log": "zencodec-collection-promotion-integration-2026-10-26.log",
+      "sha256": "abd861a7a749ae95797a0caf623f98532c64d88db41b683aa7c2c504b2347011",
+      "scope": "Exact updated guide examples pass; lint finds an unused old error alias, subsequently removed.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13407MiB :: timeout --kill-after=10s 900s bash -eu -c just collection-validation-resolve",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 81 filtered out; finished in 0.42s",
+        "run-heavy: done rc=101 10s | peak-RSS 0.56GiB | min-avail 13134MiB | peak-load 0.67"
+      ]
+    },
+    {
+      "log": "zencodec-collection-promotion-integration-2-2026-10-26.log",
+      "sha256": "da17e543929d6a6208202177101909445a9b220a6269365e4ebc8e8382eb7ad3",
+      "scope": "Updated guides, full workspace tests/lint, native AV1, warning-free Rustdoc and API snapshot generation pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13454MiB :: timeout --kill-after=10s 900s bash -eu -c just collection-guide-check",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 81 filtered out; finished in 0.44s",
+        "test result: ok. 614 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 25 passed; 0 failed; 36 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.97s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.45s",
+        "run-heavy: done rc=0 51s | peak-RSS 0.56GiB | min-avail 12864MiB | peak-load 0.93"
+      ]
+    },
+    {
+      "log": "zencodec-collection-promotion-site-2026-10-26.log",
+      "sha256": "b2b12a374e965c5f289c27ea2ff72e30d07ef395c495fb58cac596bf446aa6e9",
+      "scope": "Source checks and full browser suite pass for the updated guide and migration map.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13465MiB :: timeout --kill-after=10s 120s bash -eu -c just docs-site-check",
+        "\u2139 pass 8",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12965MiB | peak-load 0.51"
+      ]
+    }
+  ],
+  "not_qualified": [
+    "Complete public adapter packaging and CodecSet collection registration",
+    "Generic source description and placement interfaces",
+    "All codec/layer/thumbnail/pyramid configurations",
+    "Native workspace admission and whole-container privacy",
+    "Full-crate freestanding support (issue 165)",
+    "Latency, throughput or callback overhead: Zenbench rejected the earlier contended run"
+  ],
+  "interpretation": "run-heavy records whole test/build process-tree usage; it is not a codec memory bound or benchmark."
+}

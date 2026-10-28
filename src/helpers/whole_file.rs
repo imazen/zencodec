@@ -4,11 +4,10 @@
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
-use enough::Stop;
 use zenpixels::PixelDescriptor;
 
 use crate::traits::{
-    BatchMeta, DecodeJob, Event, IncrementalDecode, Input, MetadataUpdate, Progress, Request,
+    BatchMeta, DecodeJob, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress,
     StepError,
 };
 use crate::{DecodeRowSink, ImageInfo, OutputInfo};
@@ -46,7 +45,7 @@ const FIRST_PROBE: usize = 4096;
 /// ```
 ///
 /// [`erase_incremental`](crate::decode::erase_incremental) adds the
-/// termination rules and a stop check before every step. The job's own stop
+/// termination rules and a pulse check before every step. The job's own pulse
 /// token (if any) cancels inside the final decode.
 pub struct WholeFileIncremental<J> {
     job: Option<J>,
@@ -55,7 +54,7 @@ pub struct WholeFileIncremental<J> {
     /// The header probe has succeeded or given up for want of more input.
     probed: bool,
     want: usize,
-    need: [Request; 1],
+    need: [InputRequest; 1],
     /// Set once the decode has run: the next step reports `Done`.
     decoded: Option<OutputInfo>,
 }
@@ -73,7 +72,7 @@ where
             info: None,
             probed: false,
             want: FIRST_PROBE,
-            need: [Request::at_least(0, FIRST_PROBE)],
+            need: [InputRequest::at_least(0, FIRST_PROBE)],
             decoded: None,
         }
     }
@@ -91,7 +90,7 @@ where
             None => self.want.max(held.saturating_mul(2)).max(held + 1),
         };
         self.want = want.saturating_mul(2);
-        self.need = [Request::at_least(0, want)];
+        self.need = [InputRequest::at_least(0, want)];
         Progress::need(0)
     }
 }
@@ -107,9 +106,9 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<Self::Error>> {
-        stop.check()?;
+        pulse.check()?;
         if let Some(out) = &self.decoded {
             return Ok(Progress::new(0, Event::Done(out.clone())));
         }
@@ -151,7 +150,7 @@ where
         ))
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.need
     }
 

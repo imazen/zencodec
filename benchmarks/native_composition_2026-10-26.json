@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "date": "2026-10-26",
+  "zencodec": "e1b15c03b7f830eaf04726791287a5a4f99c5557",
+  "zenjxl": "974aa0410030ca5b541fcf418a63690e51203ff7",
+  "zenpixels": "4e59d3c04dc74b4d78a98f0b5310363644f9ac82",
+  "image_tiff": "0219e7099c658422d47bd986ff279b686202b2e0",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-composition-1",
+  "command": "just spatial-ci-check ARTIFACTS cms_oracle",
+  "result": {
+    "native_tests_passed": 129,
+    "native_tests_failed": 0,
+    "native_tests_ignored": 0,
+    "strict_clippy": "passed",
+    "workspace": "all features tests, all-target strict clippy, WASM, warning-free docs, API snapshot passed"
+  },
+  "controls": [
+    "TIFF selected SubIFD region retains Composited through policy and after source/operation drop, classic/BigTIFF and chunky/planar",
+    "packaged JXL reverse-selected presentations retain Composited",
+    "private, packaged and admitted raw JXL owners retain Uncomposited, including oversized layer",
+    "callback sees exactly the owner composition",
+    "contradictory owner claim and adapter view changes before/during decode refuse before policy",
+    "binding shares sample pointers and preserves pre-existing clone interpretation",
+    "existing native pixel, alpha, placement, retention and independent-reader gates unchanged"
+  ],
+  "resources": {
+    "native": "run-heavy: done rc=0 50s | peak-RSS 0.57GiB | min-avail 10938MiB | peak-load 0.66",
+    "workspace": "run-heavy: done rc=0 20s | peak-RSS 0.42GiB | min-avail 10886MiB | peak-load 1.08"
+  },
+  "limits": [
+    "not a display render: residual orientation and current color remain",
+    "binding relies on adapter semantic correctness; it does not verify blend arithmetic",
+    "standalone packed/component construction does not infer composition",
+    "native workspace and whole-container privacy remain separate"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "base": "d78c53a1ccf7608114189ab504c8407f3ed59b09",
+  "commands": [
+    "just spatial-http-check <fresh-artifacts> 3568",
+    "cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --features http --locked -- -D warnings",
+    "just docs-site-browser-check 3547"
+  ],
+  "receipts": [
+    {
+      "log": "zencodec-checked-http-2026-10-26.log",
+      "sha256": "8dde3aa9fa66e145f24801d65fb0e4c996dc7721c7316fe31ac69415e676d847",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 7.43s",
+        "run-heavy: done rc=101 13s | peak-RSS 0.60GiB | min-avail 13401MiB | peak-load 0.30"
+      ]
+    },
+    {
+      "log": "zencodec-checked-http-lint-2026-10-26.log",
+      "sha256": "f5fdc1a1d2220cbef8d97b875fa1f188f31ef28ab7583c4b36d5cf6b589e1fe1",
+      "results": [
+        "run-heavy: done rc=0 1s | peak-RSS 0.24GiB | min-avail 13714MiB | peak-load 0.26"
+      ]
+    },
+    {
+      "log": "zencodec-checked-selection-guide-2026-10-26.log",
+      "sha256": "0a27dad08f875c93025a9cb134484ba24bed4df52f8542b9bfdf2ee5e0999565",
+      "results": [
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13154MiB | peak-load 0.33"
+      ]
+    }
+  ],
+  "http": {
+    "scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+    "requests": 7650,
+    "cases": 48,
+    "statuses": {
+      "200": 1,
+      "206": 7641,
+      "302": 1,
+      "412": 7
+    },
+    "conditional_after_open": true
+  },
+  "raw_requests": "/mnt/v/output/zencodec/platform-regions-20261026-run/checked-http/requests.json",
+  "raw_sha256": "bec18fce17e7141535733ac4a3951f8a6944aa065d1fe4702e55be48b7477333",
+  "correction": "All HTTP tests passed on the first run; strict lint rejected clone_on_copy in the new test. Removed the clone and reran strict lint successfully. No contract/expectation changed.",
+  "scope": "Private checked publication after real conditional HTTP native TIFF/SubIFD selection, with final-range faults, exact pixels and preserved transport causes. Browser qualifies exact checked native example, source signatures, independent inline expansion, clipboard and responsive layouts.",
+  "limits": [
+    "No WAN/TLS/browser-source or multi-object snapshot qualification.",
+    "No latency or whole-operation memory claim.",
+    "Policy publication still follows native reconstruction."
+  ]
+}

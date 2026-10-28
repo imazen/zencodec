@@ -42,12 +42,12 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use enough::{Stop, StopReason};
+use enough::StopReason;
 use whereat::At;
 use zencodec::decode::{
     AnimationFrameDecoder, BatchMeta, Decode, DecodeCapabilities, DecodeJob, DecodeOutput,
-    DecodeRowSink, DecoderConfig, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, SinkError, SourceColor, StepError, StreamingDecode,
+    DecodeRowSink, DecoderConfig, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, Progress, SinkError, SourceColor, StepError, StreamingDecode,
 };
 use zencodec::encode::{
     AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
@@ -61,7 +61,7 @@ use zencodec::source::{AccessPattern, DynReadAt};
 use zencodec::{
     AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ContentLightLevel,
     ErrorCategory, ImageFormat, ImageFormatDefinition, ImageInfo, ImageSequence, MasteringDisplay,
-    Metadata, Orientation, ResourceLimits, StopToken, UnsupportedOperation,
+    Metadata, Orientation, ResourceLimits, SharedPulse, UnsupportedOperation,
 };
 use zenpixels::{
     ColorContext, ColorModel, PixelBuffer, PixelDescriptor, PixelSlice, TransferFunction,
@@ -927,7 +927,7 @@ impl EncodeJob for RefEncodeJob {
     type Enc = RefEnc;
     type AnimationFrameEnc = RefAnimEnc;
 
-    fn with_stop(self, _stop: StopToken) -> Self {
+    fn with_pulse(self, _stop: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {
@@ -1200,7 +1200,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), RefError> {
         if let Some(s) = stop {
             s.check()?;
@@ -1296,7 +1296,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: zencodec::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), RefError> {
         let ticks = duration
             .ticks_at(1000)
@@ -1310,7 +1310,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: zencodec::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::animation::FrameDuration, RefError> {
         let mut timing = self.timing;
         let encoded = timing
@@ -1321,7 +1321,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         Ok(encoded)
     }
 
-    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, RefError> {
+    fn finish(self, stop: Option<&dyn zencodec::Pulse>) -> Result<EncodeOutput, RefError> {
         if let Some(s) = stop {
             s.check()?;
         }
@@ -1466,7 +1466,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     type StreamDec = RefStreamDec<'a>;
     type AnimationFrameDec = RefAnimDec;
 
-    fn with_stop(self, _stop: StopToken) -> Self {
+    fn with_pulse(self, _stop: SharedPulse) -> Self {
         self
     }
     fn with_limits(mut self, limits: ResourceLimits) -> Self {
@@ -1753,7 +1753,7 @@ pub struct RefIncDec {
     /// Bytes of prefix asked for while the header does not parse yet.
     header_want: usize,
     next_row: u32,
-    request: [Request; 1],
+    request: [InputRequest; 1],
 }
 
 impl RefIncDec {
@@ -1763,12 +1763,12 @@ impl RefIncDec {
             header: None,
             header_want: 64,
             next_row: 0,
-            request: [Request::at_least(0, 64)],
+            request: [InputRequest::at_least(0, 64)],
         }
     }
 
     fn need(&mut self, offset: u64, min_len: usize) -> Progress {
-        self.request = [Request::at_least(offset, min_len)];
+        self.request = [InputRequest::at_least(offset, min_len)];
         Progress::need(0)
     }
 }
@@ -1780,7 +1780,7 @@ impl IncrementalDecode for RefIncDec {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _stop: &dyn Stop,
+        _stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<RefError>> {
         if let Some(total) = input.total_len {
             self.limits
@@ -1854,7 +1854,7 @@ impl IncrementalDecode for RefIncDec {
         Ok(Progress::new(strip_len, Event::Rows { meta, rows }))
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.request
     }
 
@@ -1906,7 +1906,7 @@ impl AnimationFrameDecoder for RefAnimDec {
 
     fn render_next_frame(
         &mut self,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, RefError> {
         if let Some(s) = stop {
             s.check()?;
@@ -1936,7 +1936,7 @@ impl AnimationFrameDecoder for RefAnimDec {
 
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
         sink: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, RefError> {
         zencodec::helpers::copy_frame_to_sink(self, stop, sink)

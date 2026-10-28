@@ -1,0 +1,873 @@
+diff --git a/zencodecs/Cargo.toml b/zencodecs/Cargo.toml
+index 44f0450310..deb68400be 100644
+--- a/zencodecs/Cargo.toml
++++ b/zencodecs/Cargo.toml
+@@ -142,6 +142,10 @@
+ checked-transcode = ["dep:zenmeta", "dep:zencodec-io", "zenjpeg?/controlled-decode", "zenpng?/controlled-decode", "zenpixels-convert/icc-db"]
+ # Encoded metadata inspection/rewrite services. Pixel codecs remain optional.
+ metadata = ["dep:zenmeta", "zenmeta/xmp"]
++# EXPERIMENT, never lands: the verified fixed-capacity publication witness from
++# the issue-173 composition review. A private proof, not API. Needs a core whose
++# TranscodeOffer carries `output_schedule`.
++publication-witness = ["checked-transcode", "std"]
+ default = ["jpeg", "webp", "gif", "gif-zenquant", "png", "png-zenquant", "avif-decode", "avif-encode", "jxl-decode", "bitmaps-bmp"]
+ std = ["zencodec-io?/std", "zenmeta?/std"]
+ 
+diff --git a/zencodecs/src/checked_transcode/execution.rs b/zencodecs/src/checked_transcode/execution.rs
+index 279f30cccd..e399419306 100644
+--- a/zencodecs/src/checked_transcode/execution.rs
++++ b/zencodecs/src/checked_transcode/execution.rs
+@@ -48,6 +48,8 @@
+     prepared_jobs: Option<Vec<J>>,
+     expected: Option<ExpectedOutput>,
+     final_seen: bool,
++    #[cfg(feature = "publication-witness")]
++    publication_schedule: Option<operation::OutputScheduleOffer>,
+ }
+ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
+     pub(super) fn new(
+@@ -62,7 +64,22 @@
+             prepared_jobs: None,
+             expected: None,
+             final_seen: false,
+-        }
++            #[cfg(feature = "publication-witness")]
++            publication_schedule: None,
++        }
++    }
++    /// The schedule this owner executes after selection; the publication
++    /// witness alone supplies one, and only through its own entry point.
++    pub(super) fn set_publication_schedule(
++        &mut self,
++        schedule: Option<operation::OutputScheduleOffer>,
++    ) {
++        #[cfg(feature = "publication-witness")]
++        {
++            self.publication_schedule = schedule;
++        }
++        #[cfg(not(feature = "publication-witness"))]
++        debug_assert!(schedule.is_none());
+     }
+     pub(super) fn prepare(&mut self) -> Result<Box<zencodec::decode::DynControlledDecoder>, Cause> {
+         if self.request.strip_rows == 0 {
+@@ -273,6 +290,10 @@
+                     // These buffers are shared by all fidelity alternatives;
+                     // each route retains this same allocation after selection.
+                     offer.admitted_bytes = rows.admitted_bytes();
++                    #[cfg(feature = "publication-witness")]
++                    {
++                        offer.output_schedule = self.publication_schedule;
++                    }
+                     offers.push(offer);
+                 }
+                 self.stage = Stage::Policy;
+diff --git a/zencodecs/src/checked_transcode/publication.rs b/zencodecs/src/checked_transcode/publication.rs
+new file mode 100644
+index 0000000000..83e825b778
+--- /dev/null
++++ b/zencodecs/src/checked_transcode/publication.rs
+@@ -0,0 +1,494 @@
++//! EXPERIMENT, never lands: publication after the checked transcode, from the
++//! issue-173 composition review (Astra, Pulse revision), adapted to the
++//! published io-drivers graph. A private witness, not API. Do not promote it
++//! without review.
++//!
++//! [`VerifiedOutput`] is the usable composition: metadata requirements and a
++//! finish-first schedule, then publication under the operation's universal
++//! pulse. That pulse is borrowed while the destination waits, and an arbitrary
++//! pulse may retain anything, a whole raster included. So the route offers
++//! unknown wait retention, and any required wait cap refuses. The owner keeps
++//! the encoder's own Vec, moved with `EncodeOutput::into_vec` (extras dropped,
++//! no copy); its spare capacity stays.
++//!
++//! The finite counterpart is a private test-only witness: a fixed owner
++//! published through the concrete `NoPulse`, whose layout size is then all the
++//! route retains at a destination wait.
++use super::*;
++use std::io::{self, Write};
++
++// Cooperation granularity between pulse checks, not a time bound.
++const WRITE_CHUNK: usize = 64 * 1024;
++
++/// Verified bytes for one consuming publication. Owns no source, codec, CMS,
++/// callback or backend extras; it is not `Clone`.
++pub struct VerifiedOutput {
++    bytes: Vec<u8>,
++    report: OperationReport,
++}
++impl fmt::Debug for VerifiedOutput {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.debug_struct("VerifiedOutput")
++            .field("len", &self.bytes.len())
++            .finish_non_exhaustive()
++    }
++}
++
++/// Failure after publication started. The accepted prefix is irrevocable.
++pub struct PublicationError {
++    emitted: usize,
++    report: Box<OperationReport>,
++    cause: Cause,
++}
++impl PublicationError {
++    /// Bytes the destination confirmed before the failure.
++    pub fn emitted(&self) -> usize {
++        self.emitted
++    }
++    /// The operation's bounded policy history.
++    pub fn report(&self) -> &OperationReport {
++        &self.report
++    }
++}
++impl fmt::Debug for PublicationError {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.debug_struct("PublicationError")
++            .field("emitted", &self.emitted)
++            .finish_non_exhaustive()
++    }
++}
++impl fmt::Display for PublicationError {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(
++            f,
++            "publication failed after {} accepted bytes",
++            self.emitted
++        )
++    }
++}
++impl core::error::Error for PublicationError {
++    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
++        Some(self.cause.as_ref())
++    }
++}
++
++fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
++    pulse
++        .check()
++        .map_err(|reason| operation::OperationError::Stopped(reason).into())
++}
++
++// Write `bytes` once. The pulse is checked before every write attempt, an
++// `Interrupted` retry included, before the flush (so also after the last
++// write and for empty output) and after a successful flush. Each accepted
++// count is recorded before the next check. A write or flush error returns
++// directly and wins over a coinciding stop. Nothing else is retried.
++fn publish<W: Write>(
++    bytes: &[u8],
++    emitted: &mut usize,
++    writer: &mut W,
++    pulse: &dyn zencodec::Pulse,
++) -> Result<(), Cause> {
++    while *emitted < bytes.len() {
++        check(pulse)?;
++        let end = bytes.len().min(emitted.saturating_add(WRITE_CHUNK));
++        let pending = &bytes[*emitted..end];
++        match writer.write(pending) {
++            Ok(0) => return Err(io::Error::from(io::ErrorKind::WriteZero).into()),
++            Ok(n) if n <= pending.len() => *emitted += n,
++            Ok(_) => {
++                return Err(io::Error::new(
++                    io::ErrorKind::InvalidData,
++                    "writer returned an invalid count",
++                )
++                .into());
++            }
++            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
++            Err(error) => return Err(error.into()),
++        }
++    }
++    check(pulse)?;
++    writer.flush()?;
++    // A stop seen after a successful flush is still reported, with the full
++    // count: every byte may already be visible.
++    check(pulse)
++}
++
++fn receipt(
++    result: Result<(), Cause>,
++    emitted: usize,
++    report: OperationReport,
++) -> Result<Outcome<usize>, At<PublicationError>> {
++    match result {
++        Ok(()) => Ok(Outcome::from_parts(emitted, report)),
++        Err(cause) => Err(At::wrap(PublicationError {
++            emitted,
++            report: Box::new(report),
++            cause,
++        })),
++    }
++}
++
++impl VerifiedOutput {
++    fn from_verified(outcome: Outcome<EncodeOutput>) -> Self {
++        let (encoded, report) = outcome.into_parts();
++        // Moves the encoder's Vec; its Extensions are dropped here, before any
++        // destination wait. No copy, no shrink.
++        Self {
++            bytes: encoded.into_vec(),
++            report,
++        }
++    }
++    /// Write this verified output once, under `pulse` (see `publish`). The
++    /// pulse is borrowed for this call only; a blocking write or flush cannot
++    /// be preempted. Dropping the owner never writes; an error consumes it.
++    pub fn write_to<W: Write>(
++        self,
++        writer: &mut W,
++        pulse: &dyn zencodec::Pulse,
++    ) -> Result<Outcome<usize>, At<PublicationError>> {
++        let mut emitted = 0;
++        let result = publish(&self.bytes, &mut emitted, writer, pulse);
++        receipt(result, emitted, self.report)
++    }
++}
++
++impl TranscodeRequest<'_> {
++    /// The private checked transcode and its verification, then an owner for
++    /// publication under the universal pulse. The same requirements reach
++    /// discovery and the joint Transcode question; none is cleared or
++    /// discharged separately. Finish-first with unknown wait retention: a
++    /// required wait cap refuses before the joint callback.
++    pub fn transcode_for_publication<R: OperationPolicy + ?Sized>(
++        &self,
++        codecs: &CodecSet,
++        input: &[u8],
++        policy: &mut R,
++    ) -> Result<VerifiedOutput, At<Error>> {
++        let schedule = operation::OutputScheduleOffer::new(operation::OutputSchedule::FinishFirst);
++        let mut cursor = SliceCursor::new(self.io.read_size);
++        let completed = self.execute_scheduled(codecs, policy, Some(schedule), |held, pulse| {
++            Ok(cursor.next(input, held, pulse)?)
++        })?;
++        Ok(VerifiedOutput::from_verified(completed))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use core::mem::size_of;
++    use std::sync::{
++        Arc,
++        atomic::{AtomicBool, Ordering},
++    };
++    use zencodec::NoPulse;
++
++    // PRIVATE proof witness, not a production representation. Only this closed
++    // route fixes publication control to the concrete NoPulse.
++    struct FixedProof<const N: usize> {
++        bytes: [u8; N],
++        len: usize,
++        report: OperationReport,
++    }
++    impl<const N: usize> FixedProof<N> {
++        fn wait_bound() -> u64 {
++            size_of::<Self>() as u64
++        }
++        fn from_verified(outcome: Outcome<EncodeOutput>) -> Result<Self, At<Error>> {
++            let (encoded, report) = outcome.into_parts();
++            if encoded.len() > N {
++                return Err(At::wrap(Error {
++                    stage: Stage::Verify,
++                    report: Box::new(report),
++                    cause: Box::new(Refusal::OutputLimit {
++                        actual: encoded.len(),
++                        limit: N,
++                    }),
++                }));
++            }
++            let mut proof = Self {
++                bytes: [0; N],
++                len: encoded.len(),
++                report,
++            };
++            proof.bytes[..proof.len].copy_from_slice(encoded.data());
++            drop(encoded);
++            Ok(proof)
++        }
++        fn write_to<W: Write>(
++            self,
++            writer: &mut W,
++        ) -> Result<Outcome<usize>, At<PublicationError>> {
++            let mut emitted = 0;
++            let result = publish(&self.bytes[..self.len], &mut emitted, writer, &NoPulse);
++            receipt(result, emitted, self.report)
++        }
++    }
++
++    struct Released(Arc<AtomicBool>);
++    impl Drop for Released {
++        fn drop(&mut self) {
++            self.0.store(true, Ordering::SeqCst);
++        }
++    }
++    fn encoded(released: &Arc<AtomicBool>) -> Outcome<EncodeOutput> {
++        // Deliberately oversized backend capacity.
++        let mut bytes = Vec::with_capacity(4096);
++        bytes.extend_from_slice(&[1, 2, 3]);
++        Outcome::from_parts(
++            EncodeOutput::new(bytes, ImageFormat::Png).with_extras(Released(released.clone())),
++            OperationReport::default(),
++        )
++    }
++    fn verified() -> VerifiedOutput {
++        VerifiedOutput::from_verified(encoded(&Arc::new(AtomicBool::new(false))))
++    }
++    struct Cancel(Arc<AtomicBool>);
++    impl enough::Stop for Cancel {
++        fn check(&self) -> Result<(), enough::StopReason> {
++            if self.0.load(Ordering::SeqCst) {
++                Err(enough::StopReason::Cancelled)
++            } else {
++                Ok(())
++            }
++        }
++    }
++    // Accepts one byte per write and records every effect.
++    struct Writer {
++        bytes: Vec<u8>,
++        writes: usize,
++        flushes: usize,
++        cancelled: Arc<AtomicBool>,
++        cancel_after: Option<usize>,
++        cancel_flush: bool,
++        fail: Option<io::ErrorKind>,
++        fail_after: usize,
++        fail_flush: Option<io::ErrorKind>,
++        cancel_on_fail: bool,
++    }
++    impl Writer {
++        fn new(cancelled: Arc<AtomicBool>) -> Self {
++            Self {
++                bytes: vec![],
++                writes: 0,
++                flushes: 0,
++                cancelled,
++                cancel_after: None,
++                cancel_flush: false,
++                fail: None,
++                fail_after: 0,
++                fail_flush: None,
++                cancel_on_fail: false,
++            }
++        }
++    }
++    impl Write for Writer {
++        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++            self.writes += 1;
++            if self.bytes.len() == self.fail_after
++                && let Some(kind) = self.fail.take()
++            {
++                if self.cancel_on_fail {
++                    self.cancelled.store(true, Ordering::SeqCst);
++                }
++                return Err(kind.into());
++            }
++            self.bytes.push(bytes[0]);
++            if self.cancel_after == Some(self.bytes.len()) {
++                self.cancelled.store(true, Ordering::SeqCst);
++            }
++            Ok(1)
++        }
++        fn flush(&mut self) -> io::Result<()> {
++            self.flushes += 1;
++            if self.cancel_flush {
++                self.cancelled.store(true, Ordering::SeqCst);
++            }
++            if let Some(kind) = self.fail_flush {
++                return Err(kind.into());
++            }
++            Ok(())
++        }
++    }
++    fn stopped(error: &At<PublicationError>) -> bool {
++        matches!(
++            zencodec::find_cause::<operation::OperationError>(error),
++            Some(operation::OperationError::Stopped(
++                enough::StopReason::Cancelled
++            ))
++        )
++    }
++
++    #[test]
++    fn cancellation_before_between_after_the_last_write_and_after_flush_keeps_effects() {
++        // (cancelled at entry, cancel after byte, cancel in flush, bytes, flushes)
++        for (before, after, flush, count, flushes) in [
++            (true, None, false, 0, 0),
++            (false, Some(1), false, 1, 0),
++            (false, Some(3), false, 3, 0),
++            (false, None, true, 3, 1),
++        ] {
++            let cancelled = Arc::new(AtomicBool::new(before));
++            let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
++            let mut writer = Writer::new(cancelled);
++            writer.cancel_after = after;
++            writer.cancel_flush = flush;
++            let error = verified().write_to(&mut writer, &pulse).unwrap_err();
++            assert_eq!(error.error().emitted(), count);
++            assert_eq!(writer.bytes, [1, 2, 3][..count]);
++            assert_eq!((writer.writes, writer.flushes), (count, flushes));
++            assert!(stopped(&error));
++        }
++    }
++    #[test]
++    fn interrupted_is_retried_with_the_pulse_checked_again() {
++        // Our existing I/O convention: Interrupted is retried, never silently.
++        let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
++        writer.fail = Some(io::ErrorKind::Interrupted);
++        writer.fail_after = 1;
++        let done = verified().write_to(&mut writer, &NoPulse).unwrap();
++        assert_eq!(*done.output(), 3);
++        assert_eq!(writer.bytes, [1, 2, 3]);
++        assert_eq!((writer.writes, writer.flushes), (4, 1));
++        // A stop raised during the interrupted attempt is seen before the retry.
++        let cancelled = Arc::new(AtomicBool::new(false));
++        let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
++        let mut writer = Writer::new(cancelled);
++        writer.fail = Some(io::ErrorKind::Interrupted);
++        writer.fail_after = 1;
++        writer.cancel_on_fail = true;
++        let error = verified().write_to(&mut writer, &pulse).unwrap_err();
++        assert_eq!(error.error().emitted(), 1);
++        assert_eq!(writer.bytes, [1]);
++        assert_eq!((writer.writes, writer.flushes), (2, 0));
++        assert!(stopped(&error));
++    }
++    #[test]
++    fn a_destination_failure_keeps_the_prefix_and_its_cause_without_retry() {
++        let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
++        writer.fail = Some(io::ErrorKind::BrokenPipe);
++        writer.fail_after = 1;
++        let error = verified().write_to(&mut writer, &NoPulse).unwrap_err();
++        assert_eq!(error.error().emitted(), 1);
++        assert_eq!(writer.bytes, [1]);
++        assert_eq!((writer.writes, writer.flushes), (2, 0));
++        assert_eq!(
++            zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
++            io::ErrorKind::BrokenPipe
++        );
++    }
++    #[test]
++    fn a_flush_failure_keeps_the_full_count_and_its_error_even_when_cancelled() {
++        for cancel_flush in [false, true] {
++            let cancelled = Arc::new(AtomicBool::new(false));
++            let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
++            let mut writer = Writer::new(cancelled);
++            writer.cancel_flush = cancel_flush;
++            writer.fail_flush = Some(io::ErrorKind::TimedOut);
++            let error = verified().write_to(&mut writer, &pulse).unwrap_err();
++            assert_eq!(error.error().emitted(), 3);
++            assert_eq!(writer.bytes, [1, 2, 3]);
++            assert_eq!((writer.writes, writer.flushes), (3, 1));
++            assert_eq!(
++                zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
++                io::ErrorKind::TimedOut
++            );
++        }
++    }
++    #[test]
++    fn empty_cancelled_output_does_not_flush() {
++        let empty = VerifiedOutput::from_verified(Outcome::from_parts(
++            EncodeOutput::new(vec![], ImageFormat::Png),
++            OperationReport::default(),
++        ));
++        let cancelled = Arc::new(AtomicBool::new(true));
++        let pulse = zencodec::how_far::StopOnly::new(Cancel(cancelled.clone()));
++        let mut writer = Writer::new(cancelled);
++        let error = empty.write_to(&mut writer, &pulse).unwrap_err();
++        assert_eq!(error.error().emitted(), 0);
++        assert_eq!((writer.writes, writer.flushes), (0, 0));
++        assert!(stopped(&error));
++    }
++    #[test]
++    fn the_owner_moves_the_encoder_vec_while_the_private_witness_copies() {
++        let released = Arc::new(AtomicBool::new(false));
++        let output = encoded(&released);
++        let pointer = output.data().as_ptr();
++        let owner = VerifiedOutput::from_verified(output);
++        assert_eq!(owner.bytes.as_ptr(), pointer);
++        assert!(owner.bytes.capacity() >= 4096);
++        assert!(released.load(Ordering::SeqCst));
++        drop(owner);
++        let proof = FixedProof::<4>::from_verified(encoded(&released)).unwrap();
++        let mut writer = Writer::new(Arc::new(AtomicBool::new(false)));
++        proof.write_to(&mut writer).unwrap();
++        assert_eq!(writer.bytes, [1, 2, 3]);
++        assert_eq!(
++            FixedProof::<4>::wait_bound(),
++            size_of::<FixedProof<4>>() as u64
++        );
++        let Err(error) = FixedProof::<2>::from_verified(encoded(&released)) else {
++            panic!("an over-capacity output built a proof");
++        };
++        assert!(matches!(
++            zencodec::find_cause::<Refusal>(&error),
++            Some(Refusal::OutputLimit {
++                actual: 3,
++                limit: 2
++            })
++        ));
++    }
++    #[cfg(all(feature = "jpeg", feature = "png", feature = "cms"))]
++    #[test]
++    fn the_private_fixed_no_pulse_witness_runs_the_actual_prepared_job() {
++        use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
++        use zenpixels::{Cicp, PixelSlice};
++        use zenpixels_convert::cms_moxcms::MoxCms;
++        let input = zenjpeg::JpegEncoderConfig::new()
++            .with_calibrated_quality(87.0)
++            .job()
++            .encoder()
++            .unwrap()
++            .encode(PixelSlice::new(&[23, 42, 61], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap())
++            .unwrap()
++            .into_vec();
++        let codecs = CodecSet::new()
++            .with_decoder(zenjpeg::JpegDecoderConfig::new())
++            .with_decoder(zenpng::PngDecoderConfig::new())
++            .with_encoder(zenpng::PngEncoderConfig::new());
++        const CAP: usize = 65536; // Private fixture capacity, not a measured native bound.
++        let request = TranscodeRequest::new(ImageFormat::Png)
++            .with_cms(&MoxCms)
++            .with_output(
++                OutputProfile::Named(Cicp::SRGB),
++                PixelFormat::Rgb8,
++                ConvertOptions::forbid_lossy(),
++            )
++            .with_metadata(MetadataTransfer::DiscardDescriptive)
++            .with_output_limit(CAP);
++        let mut policy = PolicySet::new()
++            .require_metadata(MetadataTransfer::DiscardDescriptive)
++            .allow_opaque_profiles(false)
++            .require_output_schedule(operation::OutputSchedule::FinishFirst)
++            .with_output_wait_limit(FixedProof::<CAP>::wait_bound());
++        let mut schedule =
++            operation::OutputScheduleOffer::new(operation::OutputSchedule::FinishFirst);
++        schedule.wait_retained_upper_bound = Some(FixedProof::<CAP>::wait_bound());
++        let mut cursor = SliceCursor::new(request.io.read_size);
++        let completed = request
++            .execute_scheduled(&codecs, &mut policy, Some(schedule), |held, pulse| {
++                Ok(cursor.next(&input, held, pulse)?)
++            })
++            .unwrap();
++        let proof = FixedProof::<CAP>::from_verified(completed).unwrap();
++        drop(cursor);
++        drop(input);
++        drop(codecs);
++        drop(request);
++        let mut bytes = Vec::new();
++        let receipt = proof.write_to(&mut bytes).unwrap();
++        assert_eq!(*receipt.output(), bytes.len());
++        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
++    }
++}
+diff --git a/zencodecs/src/checked_transcode.rs b/zencodecs/src/checked_transcode.rs
+index 18a20b8385..63cb9d7d4a 100644
+--- a/zencodecs/src/checked_transcode.rs
++++ b/zencodecs/src/checked_transcode.rs
+@@ -27,6 +27,9 @@
+ #[cfg(feature = "checked-transcode-async")]
+ mod asynchronous;
+ mod execution;
++#[cfg(feature = "publication-witness")]
++#[doc(hidden)]
++pub mod publication;
+ mod sink;
+ use sink::{Destination, PreparedRows};
+ 
+@@ -337,6 +340,23 @@
+         &self,
+         codecs: &CodecSet,
+         resolver: &mut R,
++        next: F,
++    ) -> Result<Outcome<EncodeOutput>, At<Error>>
++    where
++        R: OperationPolicy + ?Sized,
++        F: FnMut(&mut Held<'_>, &dyn zencodec::Pulse) -> Result<Yield<ControlledEvent>, Cause>,
++    {
++        self.execute_scheduled(codecs, resolver, None, next)
++    }
++
++    // The executing owner supplies the output schedule it will run; no
++    // application callback or reusable report can. Only the publication
++    // witness passes one; every other route offers unknown schedule evidence.
++    fn execute_scheduled<R, F>(
++        &self,
++        codecs: &CodecSet,
++        resolver: &mut R,
++        schedule: Option<operation::OutputScheduleOffer>,
+         mut next: F,
+     ) -> Result<Outcome<EncodeOutput>, At<Error>>
+     where
+@@ -344,6 +364,7 @@
+         F: FnMut(&mut Held<'_>, &dyn zencodec::Pulse) -> Result<Yield<ControlledEvent>, Cause>,
+     {
+         let mut execution = execution::Execution::<operation::PreparedEncode>::new(self, codecs);
++        execution.set_publication_schedule(schedule);
+         let result = (|| {
+             let decoder = execution.prepare()?;
+             let mut destination = Destination::default();
+diff --git a/zencodecs/tests/checked_transcode/publication.rs b/zencodecs/tests/checked_transcode/publication.rs
+new file mode 100644
+index 0000000000..8292a524f8
+--- /dev/null
++++ b/zencodecs/tests/checked_transcode/publication.rs
+@@ -0,0 +1,245 @@
++//! EXPERIMENT, never lands: native controls for the publication witness on the
++//! real JPEG/PNG/CMS fixture. The parity comparison with `transcode` is not an
++//! independent oracle; the existing PNG and CMS oracle tests stay unchanged.
++//! The finite NoPulse proof is private to the crate (its unit tests).
++use super::*;
++use std::io::{self, Write};
++use zencodec::NoPulse;
++use zencodec::operation::{BoundPolicy, OutputSchedule, PolicySet};
++
++// The usable composition: metadata treatment plus a finish-first schedule.
++fn requirements() -> PolicySet {
++    PolicySet::new()
++        .require_metadata(MetadataTransfer::DiscardDescriptive)
++        .allow_opaque_profiles(false)
++        .require_output_schedule(OutputSchedule::FinishFirst)
++}
++struct ReleasedWriter {
++    budget: StorageBudget,
++    bytes: Vec<u8>,
++}
++impl Write for ReleasedWriter {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        assert_eq!(
++            (self.budget.reserved_bytes(), self.budget.reserved_objects()),
++            (0, 0)
++        );
++        let n = bytes.len().min(7);
++        self.bytes.extend_from_slice(&bytes[..n]);
++        Ok(n)
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++
++#[test]
++fn metadata_and_finish_first_share_one_retained_route_with_unknown_wait() {
++    for progressive in [false, true] {
++        let budget = StorageBudget::new(512 * 1024, 16);
++        let mut joint = 0;
++        let (ready, expected) = {
++            let input = fixture(progressive);
++            let codecs = codecs();
++            let req = request(budget.clone());
++            let expected = req
++                .transcode(&codecs, &input)
++                .unwrap()
++                .into_output()
++                .into_vec();
++            let mut policy = BoundPolicy::new(
++                requirements(),
++                |question: Question<'_>| -> Result<Decision, At<Infallible>> {
++                    if let Question::Transcode { choices, .. } = question {
++                        joint += 1;
++                        for choice in choices.iter() {
++                            let offer = choice.value();
++                            assert_eq!(offer.metadata, MetadataTransfer::DiscardDescriptive);
++                            assert_eq!(offer.retains_opaque_profile, Some(false));
++                            let schedule = offer.output_schedule.unwrap();
++                            assert_eq!(schedule.schedule, OutputSchedule::FinishFirst);
++                            // A borrowed pulse may retain anything.
++                            assert_eq!(schedule.wait_retained_upper_bound, None);
++                            assert_eq!(offer.workspace_upper_bound, None);
++                        }
++                    }
++                    Ok(Decision::UsePreset)
++                },
++            );
++            let ready = req
++                .transcode_for_publication(&codecs, &input, &mut policy)
++                .unwrap();
++            (ready, expected)
++        }; // Input, codecs, request and callback do not survive into the writer.
++        assert_eq!(joint, 1);
++        let mut writer = ReleasedWriter {
++            budget: budget.clone(),
++            bytes: vec![],
++        };
++        let completed = ready.write_to(&mut writer, &NoPulse).unwrap();
++        assert_eq!(*completed.output(), writer.bytes.len());
++        assert_eq!(writer.bytes, expected);
++        assert!(
++            !writer
++                .bytes
++                .windows(SECRET.len())
++                .any(|b| b == SECRET.as_bytes())
++        );
++    }
++}
++
++#[test]
++fn unsupported_schedule_wait_or_workspace_refuses_before_the_joint_callback() {
++    let input = fixture(false);
++    let codecs = codecs();
++    for required in [
++        requirements().require_output_schedule(OutputSchedule::Live),
++        requirements().with_output_wait_limit(1 << 20),
++        // Even the largest cap cannot turn unknown retention into evidence.
++        requirements().with_output_wait_limit(u64::MAX),
++        requirements().with_workspace_limit(u64::MAX),
++    ] {
++        let budget = StorageBudget::new(512 * 1024, 16);
++        let mut policy = BoundPolicy::new(
++            required,
++            |question: Question<'_>| -> Result<Decision, At<Infallible>> {
++                assert!(!matches!(question, Question::Transcode { .. }));
++                Ok(Decision::UsePreset)
++            },
++        );
++        let error = request(budget.clone())
++            .transcode_for_publication(&codecs, &input, &mut policy)
++            .unwrap_err();
++        assert_eq!(error.error().stage(), Stage::Policy);
++        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++    }
++}
++
++#[test]
++fn routes_without_the_witness_still_offer_unknown_schedule_evidence() {
++    // The ordinary checked route is unchanged: the same finish-first
++    // requirement refuses there, because nothing supplies its evidence.
++    let budget = StorageBudget::new(512 * 1024, 16);
++    let mut policy = requirements();
++    let error = request(budget.clone())
++        .transcode_with(&codecs(), &fixture(false), &mut policy)
++        .unwrap_err();
++    assert_eq!(error.error().stage(), Stage::Policy);
++    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++}
++
++#[test]
++fn selected_route_output_overflow_never_returns_a_publication_owner() {
++    let budget = StorageBudget::new(512 * 1024, 16);
++    let mut policy = requirements();
++    let error = request(budget.clone())
++        .with_output_limit(1)
++        .transcode_for_publication(&codecs(), &fixture(false), &mut policy)
++        .unwrap_err();
++    assert_eq!(error.error().stage(), Stage::Verify);
++    assert!(matches!(
++        zencodec::find_cause::<zencodecs::checked_transcode::Refusal>(&error),
++        Some(zencodecs::checked_transcode::Refusal::OutputLimit { .. })
++    ));
++    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++}
++
++#[test]
++fn prepared_job_metadata_claim_still_needs_successful_postconditions() {
++    let codecs = CodecSet::new()
++        .with_decoder(JpegDecoderConfig::new())
++        .with_encoder(IgnoresMetadata(jpeg_config(false)));
++    let mut policy = PolicySet::new()
++        .require_metadata(MetadataTransfer::PreserveReported)
++        .require_output_schedule(OutputSchedule::FinishFirst);
++    let error = TranscodeRequest::new(ImageFormat::Jpeg)
++        .with_cms(&MoxCms)
++        .transcode_for_publication(&codecs, &fixture(false), &mut policy)
++        .unwrap_err();
++    assert_eq!(error.error().stage(), Stage::Verify);
++}
++
++#[test]
++fn callback_unwind_drops_prepared_route_without_a_publication_owner() {
++    let budget = StorageBudget::new(512 * 1024, 16);
++    let input = fixture(false);
++    let codecs = codecs();
++    let mut policy = BoundPolicy::new(
++        requirements(),
++        |question: Question<'_>| -> Result<Decision, At<Infallible>> {
++            if matches!(question, Question::Transcode { .. }) {
++                panic!("review callback unwind")
++            }
++            Ok(Decision::UsePreset)
++        },
++    );
++    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++        request(budget.clone()).transcode_for_publication(&codecs, &input, &mut policy)
++    }));
++    assert!(result.is_err());
++    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++}
++
++// A caller's control is not necessarily small just because it is borrowed.
++struct RasterControl {
++    raster: Vec<u8>,
++    cancelled: Arc<AtomicBool>,
++    dropped: Arc<AtomicBool>,
++}
++impl enough::Stop for RasterControl {
++    fn check(&self) -> Result<(), enough::StopReason> {
++        assert!(!self.raster.is_empty());
++        if self.cancelled.load(Ordering::SeqCst) {
++            Err(enough::StopReason::Cancelled)
++        } else {
++            Ok(())
++        }
++    }
++}
++impl Drop for RasterControl {
++    fn drop(&mut self) {
++        self.dropped.store(true, Ordering::SeqCst);
++    }
++}
++#[test]
++fn a_raster_retaining_pulse_stays_alive_and_a_wait_cap_refuses_the_route() {
++    let input = fixture(false);
++    let cancelled = Arc::new(AtomicBool::new(false));
++    let dropped = Arc::new(AtomicBool::new(false));
++    let pulse = zencodec::how_far::StopOnly::new(RasterControl {
++        raster: vec![7; 8192],
++        cancelled: cancelled.clone(),
++        dropped: dropped.clone(),
++    });
++    let budget = StorageBudget::new(512 * 1024, 16);
++    let mut capped = requirements().with_output_wait_limit(u64::MAX);
++    let error = request(budget.clone())
++        .transcode_for_publication(&codecs(), &input, &mut capped)
++        .unwrap_err();
++    assert_eq!(error.error().stage(), Stage::Policy);
++    // A separate operation without a cap, not a retry of the refused one.
++    let mut uncapped = requirements();
++    let ready = request(budget.clone())
++        .transcode_for_publication(&codecs(), &input, &mut uncapped)
++        .unwrap();
++    cancelled.store(true, Ordering::SeqCst);
++    let mut writer = ReleasedWriter {
++        budget,
++        bytes: vec![],
++    };
++    let error = ready.write_to(&mut writer, &pulse).unwrap_err();
++    assert_eq!(error.error().emitted(), 0);
++    assert!(writer.bytes.is_empty());
++    assert!(
++        error
++            .error()
++            .report()
++            .decisions()
++            .any(|r| matches!(r.selected, Some(Selection::Transcode(_))))
++    );
++    // The control and its raster lived through publication; the route never
++    // owned it, which is exactly why its retention is unknown.
++    assert!(!dropped.load(Ordering::SeqCst));
++    drop(pulse);
++    assert!(dropped.load(Ordering::SeqCst));
++}
+diff --git a/zencodecs/tests/checked_transcode.rs b/zencodecs/tests/checked_transcode.rs
+index cee6bd8aa6..e537ecd2e8 100644
+--- a/zencodecs/tests/checked_transcode.rs
++++ b/zencodecs/tests/checked_transcode.rs
+@@ -1,4 +1,8 @@
+ //! Real native codecs, with independent PNG parsing and CMS conversion oracles.
++// EXPERIMENT, never lands: the publication witness's native controls.
++#[cfg(feature = "publication-witness")]
++#[path = "checked_transcode/publication.rs"]
++mod publication;
+ use std::{
+     convert::Infallible,
+     io::Cursor,

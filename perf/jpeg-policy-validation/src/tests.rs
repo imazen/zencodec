@@ -1,12 +1,12 @@
 use crate::fixtures::*;
 use std::{borrow::Cow, cell::RefCell, convert::Infallible, rc::Rc};
 use zencodec::decode::{
-    Decode, DecodeJob, DecodeRowSink, DecoderConfig, Event, IncrementalDecode, Input, Progress,
-    Request, StepError, StreamingDecode,
+    Decode, DecodeJob, DecodeRowSink, DecoderConfig, Event, IncrementalDecode, Input,
+    InputRequest, Progress, StepError, StreamingDecode,
 };
 use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-use zencodec::metadata_rewrite::{Action as RewriteAction, Request as RewriteRequest};
-use zencodec::{ImageInfo, MetadataPolicy, OrientationHint, Unstoppable};
+use zencodec::metadata_rewrite::{Action as RewriteAction, RewriteRequest};
+use zencodec::{ImageInfo, MetadataPolicy, OrientationHint, NoPulse};
 use zencodec_io::{CollectSink, DriveOptions, drive_from_read_at, drive_from_slice};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::container::marker;
@@ -44,7 +44,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Observed<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn zencodec::enough::Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Self::Error>> {
         let progress = self.inner.step(input, sink, stop)?;
         if matches!(progress.event, Event::Metadata(_)) {
@@ -63,7 +63,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Observed<D> {
         }
         Ok(progress)
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.inner.requested()
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -319,7 +319,7 @@ fn required_privacy_checks_the_native_plan_report_before_copying_any_bytes() {
         Privacy::OrientationOnlyV1,
         TranscodeRoute::Rewrite,
     )
-    .resolve(&mut engine, Context::default(), &mut callback, &Unstoppable);
+    .resolve(&mut engine, Context::default(), &mut callback, &NoPulse);
     assert!(evidence.is_err());
     let mut writer = Vec::new();
     if evidence.is_ok() {

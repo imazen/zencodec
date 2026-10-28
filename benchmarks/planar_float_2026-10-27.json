@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "41579bd3b1295458c0aa34f52f6a8658487f17c5",
+  "source_sha256": {
+    "perf/av1-policy-validation/src/planar_float.rs": "daff77b7e4ea8275aa1bf278983dbee22acf58f015cbe0782a343d78174108ab",
+    "perf/av1-policy-validation/src/prepared_conversion.rs": "442a3ed6f4415c834dd625f59d30b4a055db856539da5f1ef5c76a7e830db3de",
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "fddfe8227ed8b729f7ff5c65116d97d8445b5bb36262c66f888ae569dda8edf9",
+    "perf/av1-policy-validation/inspect_planar_rgb.py": "3dd0d54ed18db2aeb179b82a54bf911dbdb62046e0735d93f78cdc5b2abba7d3"
+  },
+  "implementation_origin": "BT.709 normalization/matrix recipe from imazen/zenavif feadc4c94b19acdcd82ee545a02263bc67c45d7d src/yuv_convert.rs; omit final integer saturation/quantization and retain exact dyadic centered interpolation.",
+  "scope": "Private executing float route; current sRGB-encoded BT.709 RGB, not linear light, HDR rendering or a published planar plan",
+  "native_presentations": 54,
+  "crop_cases": 162,
+  "absolute_agreement_limit": 1e-06,
+  "max_abs_difference": 1.341104507446289e-07,
+  "by_depth": [
+    {
+      "bits": 8,
+      "presentations": 18,
+      "max_abs_difference": 1.341104507446289e-07
+    },
+    {
+      "bits": 10,
+      "presentations": 18,
+      "max_abs_difference": 1.1920928955078125e-07
+    },
+    {
+      "bits": 12,
+      "presentations": 18,
+      "max_abs_difference": 1.341104507446289e-07
+    }
+  ],
+  "verification": {
+    "absolute_limit": 1e-06,
+    "presentations": 54,
+    "outside_tolerance": 0,
+    "clipping_controls_not_detected": 0
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/planar-float-zimg-verified",
+  "provenance_sha256": "7264ce3aee6ca7a029cc28701d4df286783ed4b4425c26a6da4fa3d0de223c17",
+  "verified": [
+    "same shared policy resolver selects actual unclipped float route before allocation",
+    "strict range-preservation preset accepts this real float route and rejects integer clipping",
+    "all float crop outputs agree bit-for-bit with the corresponding full-frame rows",
+    "native callback/backend failure, stale token, unwind and cancellation controls run for both output targets",
+    "source mapping held once; consumed source picture released; destination charges follow last clone",
+    "independent zimg float agreement with fixed normalized absolute 1e-6 tolerance",
+    "deliberately clamping native float fails the numerical gate for all 54 presentations"
+  ],
+  "validation": [
+    {
+      "command": "just av1-planar-check <fresh-source>; just av1-planar-float-inspect <source> <fresh-output>",
+      "exit_code": 0,
+      "log": "/home/lilith/tmp/zencodec-planar-float-native-oracle-20261027.log",
+      "run_heavy": "11s | peak-RSS 0.55GiB | min-avail 11413MiB | peak-load 0.52"
+    },
+    {
+      "command": "just av1-planar-float-verify <source> <fresh-output>",
+      "exit_code": 0,
+      "log": "/home/lilith/tmp/zencodec-planar-float-zimg-verified-20261027.log",
+      "run_heavy": "0s | peak-RSS 0.05GiB | min-avail 11744MiB | peak-load 0.13"
+    },
+    {
+      "command": "just av1-policy-check <fresh-source>; just av1-planar-float-verify <source> <fresh-output>; just docs-ci-shell-check docs-site-browser-check 3547",
+      "exit_code": 0,
+      "log": "/home/lilith/tmp/zencodec-planar-float-final-20261027.log",
+      "run_heavy": "47s | peak-RSS 0.17GiB | min-avail 11142MiB | peak-load 0.48"
+    }
+  ],
+  "public_api_delta": 0,
+  "zenpixels_changes": 0,
+  "resource_scope": "Wrapper RSS covers complete commands, not isolated conversion. Only source mapping and destination payload are retained by the float route; native decode/metadata and whole-process costs remain outside admission.",
+  "remaining": [
+    "public borrowed plane/conversion plan in zenpixels-convert",
+    "processing through OutputPlan while preserving excursions",
+    "other matrices/transfers and HDR rendering",
+    "non-centered siting support",
+    "source precision/word placement migration",
+    "native workspace bounds and throughput/compile-time comparisons"
+  ]
+}

@@ -10,7 +10,7 @@ use core::{
 };
 use zencodec::{
     At,
-    enough::{Stop, StopReason},
+    enough::StopReason,
 };
 
 static NEXT_QUESTION: AtomicUsize = AtomicUsize::new(1);
@@ -258,7 +258,7 @@ impl Engine {
         requirements: Requirements,
         context: Context,
         resolver: &mut R,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Selected, At<Failure<R::Error>>> {
         self.resolve_inner(facts, entries, requirements, context, resolver, stop)
             .map_err(|e| e.map_error(|e| e.with_details(facts, requirements, entries)))
@@ -272,7 +272,7 @@ impl Engine {
         requirements: Requirements,
         context: Context,
         resolver: &mut R,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Selected, At<Failure<R::Error>>> {
         let mut record = Record {
             operation: self.operation.unwrap_or(0),

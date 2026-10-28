@@ -3,7 +3,7 @@
 //! No claim about image samples, arbitrary ICC, all XMP semantics or whole files.
 #![allow(dead_code)]
 use crate::policy::*;
-use zencodec::{At, enough::Stop};
+use zencodec::At;
 
 const TIFF: &str = "http://ns.adobe.com/tiff/1.0/";
 
@@ -156,7 +156,7 @@ impl<'a> Prepared<'a> {
         engine: &mut Engine,
         context: Context,
         resolver: &mut R,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Approved<'a>, At<Failure<R::Error>>> {
         let strict = self.privacy == Privacy::OrientationOnlyV1;
         // Byte, parser-node and depth limits are not a proven whole-operation

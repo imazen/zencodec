@@ -321,23 +321,15 @@ pub trait EncodeJob: Sized {
     /// thread boundaries (e.g., in pipeline `Sink` implementations).
     type AnimationFrameEnc: Sized + Send + 'static;
 
-    /// Set cooperative cancellation token.
-    ///
-    /// [`StopToken`](almost_enough::StopToken) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased stop. Convert any `Stop + Clone + 'static` with
-    /// `stop.into_token()` or `StopToken::new(stop)`.
-    fn with_stop(self, stop: crate::StopToken) -> Self;
-
-    /// Set progress and cancellation pulse.
-    ///
-    /// [`SharedPulse`](how_far::SharedPulse) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased pulse.
-    ///
-    /// Default implementation delegates to [`with_stop`](EncodeJob::with_stop)
-    /// via `StopToken::new(pulse)`.
-    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self {
-        self.with_stop(crate::StopToken::new(pulse))
+    /// Legacy cancellation-only adapter. Prefer the complete operation pulse.
+    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn with_stop(self, stop: crate::StopToken) -> Self {
+        self.with_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(stop)))
     }
+
+    /// Retain progress, cancellation, phase planning and sharing for this job.
+    /// Codecs must not erase this to a cancellation-only token.
+    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
@@ -350,6 +342,9 @@ pub trait EncodeJob: Sized {
     /// best-effort; static capability flags do not confirm policy enforcement.
     /// Use [`try_set_policy`](Self::try_set_policy) or
     /// [`try_with_policy`](Self::try_with_policy) for a required policy.
+    #[deprecated(
+        note = "may silently ignore policy; use try_with_policy or a checked operation request"
+    )]
     fn with_policy(self, _policy: crate::EncodePolicy) -> Self {
         self
     }
@@ -378,6 +373,27 @@ pub trait EncodeJob: Sized {
         policy: crate::EncodePolicy,
     ) -> Result<Self, crate::UnsupportedOperation> {
         self.try_set_policy(policy)?;
+        Ok(self)
+    }
+
+    /// Require exact physical density, or an equivalent unknown-unit aspect
+    /// ratio. Unsupported/rounded substitutions refuse and leave this job intact.
+    /// A later conflicting configuration must refuse before publishing output.
+    /// This does not resize pixels or change video sample aspect.
+    fn try_set_resolution(
+        &mut self,
+        resolution: crate::Resolution,
+    ) -> Result<(), crate::ResolutionError> {
+        resolution.validate()?;
+        Err(crate::ResolutionError::Unsupported)
+    }
+
+    /// Builder form of [`Self::try_set_resolution`]. A rejection consumes it.
+    fn try_with_resolution(
+        mut self,
+        resolution: crate::Resolution,
+    ) -> Result<Self, crate::ResolutionError> {
+        self.try_set_resolution(resolution)?;
         Ok(self)
     }
 
@@ -555,6 +571,27 @@ pub trait EncodeJob: Sized {
     /// ```
     fn extensions_mut(&mut self) -> Option<&mut dyn core::any::Any> {
         None
+    }
+
+    /// Plan the exact configured job without constructing its native encoder.
+    ///
+    /// Bind the full image interpretation and actual destination access. Do not
+    /// read pixels, publish bytes, allocate native image state or start workers.
+    /// The caller must retain this same job and declaration through admission,
+    /// then compare the result of `Encoder::begin_declared` before any effects.
+    /// Unknown carrier evidence is not proof of absence or privacy compliance.
+    ///
+    /// The default explicitly refuses. Planning uses the existing boxed error
+    /// envelope so even jobs with no single-image encoder need no new associated
+    /// type or error conversion. Preserve native errors and location traces in
+    /// the box; never stringify them. Successful planning allocates no error box.
+    fn plan_encode(
+        &self,
+        _declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, super::BoxedError> {
+        Err(alloc::boxed::Box::new(
+            crate::UnsupportedOperation::EncodePlanning,
+        ))
     }
 
     /// Create a one-shot encoder for a single image.

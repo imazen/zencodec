@@ -25,7 +25,7 @@ use crate::StopToken;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
-use enough::Stop;
+
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use super::BoxedError;
@@ -41,7 +41,7 @@ use super::encoding::{EncodeJob, EncoderConfig};
 /// Wraps [`Encoder`] for dyn dispatch. Produced by
 /// [`DynEncodeJob::into_encoder`].
 ///
-/// Encoders may borrow job-scoped data (stop tokens, metadata) so they
+/// Encoders may borrow job-scoped data (pulse tokens, metadata) so they
 /// are not guaranteed `'static`. Attach codec-specific output data via
 /// [`EncodeOutput::with_extras`](crate::EncodeOutput::with_extras) instead
 /// of downcasting.
@@ -80,6 +80,36 @@ pub trait DynEncoder: Send {
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         let _ = (width, height, descriptor);
         Err(Box::new(crate::UnsupportedOperation::RowLevelEncode))
+    }
+
+    /// Start the complete admitted declaration; see `Encoder::begin_declared`.
+    /// Direct implementations default to explicit refusal, without legacy startup.
+    fn begin_declared(
+        &mut self,
+        _declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::EncodePlanning))
+    }
+
+    /// Prepare actual destination access; see [`Encoder::begin_output`].
+    fn begin_output(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        access: crate::output_patch::OutputAccess,
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
+        let _ = access;
+        self.begin(width, height, descriptor)
+    }
+    /// Complete negotiated bytes and patches; see [`Encoder::finish_output`].
+    fn finish_output(
+        self: Box<Self>,
+    ) -> Result<crate::output_patch::OutputFinish<EncodeOutput>, BoxedError> {
+        Ok(crate::output_patch::OutputFinish::new(
+            self.finish()?,
+            alloc::vec::Vec::new(),
+        ))
     }
 
     /// Encoded bytes ready to send; see
@@ -122,6 +152,34 @@ impl core::fmt::Debug for dyn DynEncoder + '_ {
 pub(super) struct EncoderShim<E>(pub(super) E);
 
 impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
+    fn begin_declared(
+        &mut self,
+        declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        self.0
+            .begin_declared(declaration)
+            .map_err(|error| Box::new(error) as BoxedError)
+    }
+
+    fn begin_output(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        access: crate::output_patch::OutputAccess,
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
+        self.0
+            .begin_output(width, height, descriptor, access)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+    fn finish_output(
+        self: Box<Self>,
+    ) -> Result<crate::output_patch::OutputFinish<EncodeOutput>, BoxedError> {
+        self.0
+            .finish_output()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
     fn preferred_strip_height(&self) -> u32 {
         self.0.preferred_strip_height()
     }
@@ -248,7 +306,7 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError>;
 
     /// Push with destination-aware rounding and return the actual duration.
@@ -257,9 +315,9 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, BoxedError> {
-        self.push_frame_exact(pixels, duration, stop)?;
+        self.push_frame_exact(pixels, duration, pulse)?;
         Ok(duration)
     }
 
@@ -269,13 +327,16 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         _pixels: PixelSlice<'_>,
         _duration: crate::animation::FrameDuration,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         Err(Box::new(crate::UnsupportedOperation::AnimationTiming))
     }
 
     /// Finalize animation. Returns encoded output.
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
+    fn finish(
+        self: Box<Self>,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<EncodeOutput, BoxedError>;
 }
 
 impl core::fmt::Debug for dyn DynAnimationFrameEncoder + '_ {
@@ -330,10 +391,10 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         self.0
-            .push_frame(pixels, duration_ms, stop)
+            .push_frame(pixels, duration_ms, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -341,10 +402,10 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, BoxedError> {
         self.0
-            .push_frame_timed(pixels, duration, stop)
+            .push_frame_timed(pixels, duration, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -352,15 +413,18 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         self.0
-            .push_frame_exact(pixels, duration, stop)
+            .push_frame_exact(pixels, duration, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError> {
-        self.0.finish(stop).map_err(|e| Box::new(e) as BoxedError)
+    fn finish(
+        self: Box<Self>,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<EncodeOutput, BoxedError> {
+        self.0.finish(pulse).map_err(|e| Box::new(e) as BoxedError)
     }
 }
 
@@ -375,18 +439,31 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
 /// then call [`into_encoder`](DynEncodeJob::into_encoder) or
 /// [`into_animation_frame_encoder`](DynEncodeJob::into_animation_frame_encoder).
 pub trait DynEncodeJob {
-    /// Set cooperative cancellation token.
-    fn set_stop(&mut self, stop: StopToken);
-
-    /// Set progress and cancellation pulse.
-    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
-        self.set_stop(crate::StopToken::new(pulse));
+    /// Plan the retained effective job before native startup. Generated shims
+    /// forward the concrete job's implementation, retaining original errors.
+    fn plan_encode(
+        &self,
+        _declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::EncodePlanning))
     }
+
+    /// Set cooperative cancellation token.
+    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn set_stop(&mut self, pulse: StopToken) {
+        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
+    }
+
+    /// Retain all operation control capabilities through type erasure.
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
 
-    /// Set encode security policy.
+    /// Legacy best-effort encode policy; unsupported fields may be ignored.
+    #[deprecated(
+        note = "may silently ignore policy; use try_set_policy or a checked operation request"
+    )]
     fn set_policy(&mut self, policy: crate::EncodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
@@ -399,6 +476,13 @@ pub trait DynEncodeJob {
             return Err(Box::new(crate::UnsupportedOperation::EncodePolicy));
         }
         Ok(())
+    }
+
+    /// Require exact physical density or unknown-unit aspect. Refusal leaves
+    /// the job unchanged. Generated shims call the concrete checked setter.
+    fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
+        resolution.validate()?;
+        Err(Box::new(crate::ResolutionError::Unsupported))
     }
 
     /// Set metadata to embed, filtered by an explicit retention policy (blessed
@@ -458,6 +542,15 @@ pub trait DynEncodeJob {
     ) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
 }
 
+pub(crate) fn erase_send_job<J>(job: J) -> Box<dyn DynEncodeJob + Send>
+where
+    J: EncodeJob + Send + 'static,
+    J::Enc: Encoder + Send,
+    J::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    Box::new(EncodeJobShim(Some(job)))
+}
+
 struct EncodeJobShim<J>(Option<J>);
 
 impl<J> EncodeJobShim<J> {
@@ -495,8 +588,14 @@ where
     J::Enc: Encoder + Send,
     J::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn set_stop(&mut self, stop: StopToken) {
-        self.try_apply(|job| job.with_stop(stop));
+    fn plan_encode(
+        &self,
+        declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        let Some(job) = self.0.as_ref() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        job.plan_encode(declaration)
     }
 
     fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
@@ -508,6 +607,8 @@ where
     }
 
     fn set_policy(&mut self, policy: crate::EncodePolicy) {
+        // Preserve the legacy setter behavior; checked callers use try_set_policy.
+        #[allow(deprecated)]
         self.try_apply(|job| job.with_policy(policy));
     }
 
@@ -521,6 +622,14 @@ where
 
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
         self.try_apply(|job| job.with_metadata_policy(meta, policy));
+    }
+
+    fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_mut() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_resolution(resolution)
+            .map_err(|error| Box::new(error) as BoxedError)
     }
 
     #[allow(deprecated)]
@@ -651,7 +760,7 @@ pub trait DynEncoderConfig: Send + Sync {
     ///
     /// The job owns its config (cloned). The `'static` bound means
     /// the job can outlive the config reference — the only remaining
-    /// lifetime dependency is the stop token (set via `set_stop`).
+    /// lifetime dependency is the pulse control (set via `set_pulse`).
     fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static>;
 }
 
@@ -766,6 +875,20 @@ mod begin_dispatch_tests {
     }
 
     #[test]
+    fn direct_dyn_declared_start_refuses_without_losing_one_shot() {
+        let mut encoder: Box<dyn DynEncoder> = Box::new(OneShot);
+        let declaration = crate::encode::EncodeDeclaration::new(1, 1, PixelDescriptor::RGB8_SRGB);
+        let error = encoder.begin_declared(&declaration).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::EncodePlanning)
+        );
+        assert!(encoder.pending_output().is_empty());
+        let pixels = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::RGB8_SRGB);
+        assert!(encoder.encode(pixels.as_slice()).is_ok());
+    }
+
+    #[test]
     fn default_begin_refuses_rows_for_typed_shim_and_direct_dyn_encoders() {
         let pixels = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::RGB8_SRGB);
         let mut typed = OneShot;
@@ -820,7 +943,7 @@ mod timing_dispatch_tests {
             &mut self,
             _: PixelSlice<'_>,
             _: u32,
-            _: Option<&dyn Stop>,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<(), Self::Error> {
             panic!("rational dispatch must not call the legacy path")
         }
@@ -828,7 +951,7 @@ mod timing_dispatch_tests {
             &mut self,
             _: PixelSlice<'_>,
             duration: FrameDuration,
-            _: Option<&dyn Stop>,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<(), Self::Error> {
             let ticks = duration
                 .ticks_at(100)
@@ -842,17 +965,17 @@ mod timing_dispatch_tests {
             &mut self,
             pixels: PixelSlice<'_>,
             duration: FrameDuration,
-            stop: Option<&dyn Stop>,
+            pulse: Option<&dyn crate::Pulse>,
         ) -> Result<FrameDuration, Self::Error> {
             let mut next = self.quantizer;
             let encoded = next
                 .quantize(duration)
                 .map_err(|_| UnsupportedOperation::AnimationTiming)?;
-            self.push_frame_exact(pixels, encoded, stop)?;
+            self.push_frame_exact(pixels, encoded, pulse)?;
             self.quantizer = next;
             Ok(encoded)
         }
-        fn finish(self, _: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
+        fn finish(self, _: Option<&dyn crate::Pulse>) -> Result<EncodeOutput, Self::Error> {
             Ok(EncodeOutput::new(self.accepted, ImageFormat::Gif))
         }
     }
@@ -898,3 +1021,233 @@ mod timing_dispatch_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod negotiated_output_tests {
+    use super::*;
+    use crate::output_patch::{OutputAccess, OutputFinish, Patch};
+    struct Patching(bool);
+    impl Encoder for Patching {
+        type Error = crate::UnsupportedOperation;
+        fn reject(op: Self::Error) -> Self::Error {
+            op
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(crate::UnsupportedOperation::RowLevelEncode)
+        }
+        fn begin_output(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+            access: OutputAccess,
+        ) -> Result<crate::encode::OutputTiming, Self::Error> {
+            if access != OutputAccess::SeekBack {
+                return Err(crate::UnsupportedOperation::RowLevelEncode);
+            }
+            self.0 = true;
+            Ok(crate::encode::OutputTiming::AT_FINISH.with_patches())
+        }
+        fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error> {
+            assert!(self.0);
+            Ok(OutputFinish::new(
+                EncodeOutput::new(alloc::vec![0], ImageFormat::Jpeg)
+                    .with_extras(7u32)
+                    .with_extension("qualified"),
+                alloc::vec![Patch {
+                    offset: 0,
+                    bytes: alloc::vec![9]
+                }],
+            ))
+        }
+    }
+    #[test]
+    fn erased_encoder_forwards_negotiation_patches_and_output_metadata() {
+        let mut encoder: Box<dyn DynEncoder> = Box::new(EncoderShim(Patching(false)));
+        assert!(
+            encoder
+                .begin_output(1, 1, PixelDescriptor::RGB8_SRGB, OutputAccess::Forward)
+                .is_err()
+        );
+        assert!(
+            encoder
+                .begin_output(1, 1, PixelDescriptor::RGB8_SRGB, OutputAccess::SeekBack)
+                .unwrap()
+                .patches_at_finish()
+        );
+        let finish = encoder.finish_output().unwrap();
+        assert_eq!(finish.validate(0).unwrap(), 1);
+        assert_eq!(finish.tail.extras::<u32>(), Some(&7));
+        assert_eq!(finish.tail.extension(), "qualified");
+        assert_eq!(finish.patches[0].bytes, [9]);
+    }
+}
+
+#[cfg(test)]
+mod declared_encode_tests {
+    use super::*;
+    use crate::encode::{ColorCarriers, EncodeDeclaration, EncodePlan, OutputTiming};
+    use crate::{Cicp, UnsupportedOperation};
+    use alloc::sync::Arc;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    use zenpixels::ColorContext;
+
+    struct Job(Arc<AtomicUsize>);
+    impl EncodeJob for Job {
+        type Error = UnsupportedOperation;
+        type Enc = Declared;
+        type AnimationFrameEnc = ();
+        fn with_pulse(self, _: how_far::SharedPulse) -> Self {
+            self
+        }
+        fn with_limits(self, _: ResourceLimits) -> Self {
+            self
+        }
+        fn with_metadata(self, _: Metadata) -> Self {
+            self
+        }
+        fn plan_encode(
+            &self,
+            declaration: &EncodeDeclaration<'_>,
+        ) -> Result<EncodePlan, BoxedError> {
+            // The effective job is retained; planning never constructs its encoder.
+            assert_eq!(self.0.load(Ordering::Relaxed), 0);
+            native_plan(declaration).map_err(|error| Box::new(error) as BoxedError)
+        }
+        fn encoder(self) -> Result<Declared, Self::Error> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            Ok(Declared)
+        }
+        fn animation_frame_encoder(self) -> Result<Self::AnimationFrameEnc, Self::Error> {
+            Err(UnsupportedOperation::AnimationEncode)
+        }
+    }
+
+    fn native_plan(
+        declaration: &EncodeDeclaration<'_>,
+    ) -> Result<EncodePlan, UnsupportedOperation> {
+        let p3 = ColorContext::from_cicp(Cicp::DISPLAY_P3);
+        if declaration.color != Some(&p3) {
+            return Err(UnsupportedOperation::PixelFormat);
+        }
+        assert_eq!(
+            declaration.access,
+            crate::output_patch::OutputAccess::SeekBack
+        );
+        Ok(EncodePlan::rows(OutputTiming::AT_FINISH.with_patches())
+            .with_carriers(ColorCarriers::new(None, Some(Cicp::DISPLAY_P3))))
+    }
+
+    struct Declared;
+    impl Encoder for Declared {
+        type Error = UnsupportedOperation;
+        fn reject(error: Self::Error) -> Self::Error {
+            error
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(UnsupportedOperation::RowLevelEncode)
+        }
+        fn begin_declared(
+            &mut self,
+            declaration: &EncodeDeclaration<'_>,
+        ) -> Result<EncodePlan, Self::Error> {
+            native_plan(declaration)
+        }
+        fn begin_output(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+            _: crate::output_patch::OutputAccess,
+        ) -> Result<OutputTiming, Self::Error> {
+            panic!("complete declaration must not be lowered to legacy startup")
+        }
+    }
+
+    #[test]
+    fn erased_preflight_retains_job_color_access_and_native_error() {
+        let starts = Arc::new(AtomicUsize::new(0));
+        let job: Box<dyn DynEncodeJob> = Box::new(EncodeJobShim(Some(Job(starts.clone()))));
+        let declaration = EncodeDeclaration::new(16, 32, PixelDescriptor::RGB8_SRGB)
+            .with_access(crate::output_patch::OutputAccess::SeekBack);
+        let error = job.plan_encode(&declaration).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::PixelFormat)
+        );
+        let context = ColorContext::from_cicp(Cicp::DISPLAY_P3);
+        let declaration = declaration.with_color(&context);
+        let planned = job.plan_encode(&declaration).unwrap();
+        assert_eq!(starts.load(Ordering::Relaxed), 0);
+        let mut encoder = job.into_encoder().unwrap();
+        assert_eq!(starts.load(Ordering::Relaxed), 1);
+        let observed = encoder.begin_declared(&declaration).unwrap();
+        planned.validate(&declaration).unwrap();
+        planned.validate_started(&observed).unwrap();
+    }
+
+    struct Legacy;
+    impl Encoder for Legacy {
+        type Error = UnsupportedOperation;
+        fn reject(error: Self::Error) -> Self::Error {
+            error
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(UnsupportedOperation::RowLevelEncode)
+        }
+        fn begin_output(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+            _: crate::output_patch::OutputAccess,
+        ) -> Result<OutputTiming, Self::Error> {
+            panic!("unsupported planning must refuse without startup")
+        }
+    }
+    struct LegacyJob;
+    impl EncodeJob for LegacyJob {
+        type Error = UnsupportedOperation;
+        type Enc = (); // Default planning must also support animation-only jobs.
+        type AnimationFrameEnc = ();
+        fn with_pulse(self, _: how_far::SharedPulse) -> Self {
+            self
+        }
+        fn with_limits(self, _: ResourceLimits) -> Self {
+            self
+        }
+        fn with_metadata(self, _: Metadata) -> Self {
+            self
+        }
+        fn encoder(self) -> Result<(), Self::Error> {
+            panic!("must not construct")
+        }
+        fn animation_frame_encoder(self) -> Result<(), Self::Error> {
+            panic!("must not construct")
+        }
+    }
+
+    #[test]
+    fn defaults_refuse_without_legacy_startup_even_without_color() {
+        let declaration = EncodeDeclaration::new(1, 1, PixelDescriptor::RGB8_SRGB);
+        let error = LegacyJob.plan_encode(&declaration).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::EncodePlanning)
+        );
+        assert_eq!(
+            Legacy.begin_declared(&declaration),
+            Err(UnsupportedOperation::EncodePlanning)
+        );
+        let mut erased: Box<dyn DynEncoder> = Box::new(EncoderShim(Legacy));
+        let error = erased.begin_declared(&declaration).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::EncodePlanning)
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "dyn_encoding/precision_tests.rs"]
+mod precision_tests;

@@ -1,3 +1,5 @@
+// Keep the legacy writer protocol/fallback regression coverage executable.
+#![allow(deprecated)]
 //! Actual QOI codec: strided input, input boundaries, output drains and truncation.
 #![forbid(unsafe_code)]
 use std::io::{self, Read};

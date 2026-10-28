@@ -4,7 +4,8 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use zencodec::decode::{Input, Request};
+use crate::admission::{InputError, reserve};
+use zencodec::decode::{Input, InputRequest};
 
 /// Bytes the driver holds: `buf[head..end]` starts at absolute `base`.
 ///
@@ -40,6 +41,16 @@ impl Window {
 
     pub(crate) fn bytes(&self) -> &[u8] {
         &self.buf[self.head..self.end]
+    }
+
+    pub(crate) fn capacity(&self) -> usize {
+        self.buf.capacity()
+    }
+
+    pub(crate) fn release(&mut self) {
+        self.buf = Vec::new();
+        self.head = 0;
+        self.end = 0;
     }
 
     pub(crate) fn input(&self) -> Input<'_> {
@@ -96,6 +107,21 @@ impl Window {
     /// Room for `n` more bytes after the held bytes, to read into; follow
     /// with [`commit`](Self::commit). The contents are stale, not zeroed.
     pub(crate) fn spare(&mut self, n: usize) -> &mut [u8] {
+        self.try_spare(n, usize::MAX)
+            .expect("input window allocation")
+    }
+
+    pub(crate) fn try_spare(&mut self, n: usize, limit: usize) -> Result<&mut [u8], InputError> {
+        let needed = self.len().checked_add(n).ok_or(InputError::Limit {
+            needed: u64::MAX,
+            limit,
+        })?;
+        if needed > limit {
+            return Err(InputError::Limit {
+                needed: needed as u64,
+                limit,
+            });
+        }
         if self.buf.len() - self.end < n && self.head > 0 {
             self.buf.copy_within(self.head..self.end, 0);
             self.end -= self.head;
@@ -103,10 +129,18 @@ impl Window {
         }
         if self.buf.len() - self.end < n {
             // Grow geometrically so a stream of reads zeroes O(total) bytes.
-            let want = (self.end + n).max(self.buf.len().saturating_mul(2));
+            let want = (self.end + n)
+                .max(self.buf.len().saturating_mul(2))
+                .min(limit);
+            reserve(&mut self.buf, want)?;
+            if self.buf.capacity() > limit {
+                let needed = self.buf.capacity() as u64;
+                self.release();
+                return Err(InputError::Limit { needed, limit });
+            }
             self.buf.resize(want, 0);
         }
-        &mut self.buf[self.end..self.end + n]
+        Ok(&mut self.buf[self.end..self.end + n])
     }
 
     /// Keep `n` of the bytes last handed out by [`spare`](Self::spare).
@@ -154,14 +188,16 @@ pub(crate) fn read_target(min_len: usize, read_size: usize) -> usize {
 pub enum ProtocolViolation {
     /// `Need` with no requests.
     EmptyRequest,
+    /// A request's offset plus length cannot be represented by the protocol.
+    AddressOverflow(InputRequest),
     /// The input satisfied one of the decoder's requests, yet it took
     /// nothing and asked again.
-    NoProgress(Request),
+    NoProgress(InputRequest),
     /// The decoder asked for bytes past the end it was told about, instead
     /// of reporting truncated input.
     NeedPastEnd {
         /// The request.
-        request: Request,
+        request: InputRequest,
         /// The total length the decoder had been given.
         total: u64,
     },
@@ -171,6 +207,7 @@ impl fmt::Display for ProtocolViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyRequest => write!(f, "decoder returned Need with no requests"),
+            Self::AddressOverflow(r) => write!(f, "decoder request address overflows: {r:?}"),
             Self::NoProgress(r) => write!(
                 f,
                 "decoder took nothing from an input that satisfied its request {r:?}"
@@ -189,18 +226,30 @@ impl core::error::Error for ProtocolViolation {}
 /// exist, must not ask past a known end, and an input that satisfied one
 /// must have been consumed from.
 pub(crate) fn check_need(
-    requests: &[Request],
+    requests: &[InputRequest],
     offered: &Input<'_>,
     consumed: usize,
 ) -> Result<(), ProtocolViolation> {
     if requests.is_empty() {
         return Err(ProtocolViolation::EmptyRequest);
     }
+    for &request in requests {
+        let span = match request {
+            InputRequest::AtLeast { offset, min_len } => Some((offset, min_len.max(1) as u64)),
+            InputRequest::Range(r) => Some((r.offset, r.length)),
+            _ => None,
+        };
+        if let Some((offset, length)) = span
+            && offset.checked_add(length).is_none()
+        {
+            return Err(ProtocolViolation::AddressOverflow(request));
+        }
+    }
     if let Some(total) = offered.total_len {
         for r in requests {
             let past = match *r {
-                Request::AtLeast { offset, .. } => offset > total,
-                Request::Range(range) => range.end() > total,
+                InputRequest::AtLeast { offset, .. } => offset > total,
+                InputRequest::Range(range) => range.end() > total,
                 _ => false,
             };
             if past {
@@ -253,13 +302,13 @@ mod tests {
             check_need(&[], &full, 0),
             Err(ProtocolViolation::EmptyRequest)
         );
-        let r = Request::at_least(0, 4);
+        let r = InputRequest::at_least(0, 4);
         assert_eq!(
             check_need(&[r], &full, 0),
             Err(ProtocolViolation::NoProgress(r))
         );
         assert_eq!(check_need(&[r], &full, 1), Ok(()));
-        let past = Request::range(6, 4);
+        let past = InputRequest::range(6, 4);
         assert!(matches!(
             check_need(&[past], &full, 0),
             Err(ProtocolViolation::NeedPastEnd { .. })

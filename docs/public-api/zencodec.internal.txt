@@ -9,23 +9,28 @@
 
 ## summary
 #
-#   inherent methods                           51
-#   trait roster entries (type × trait)        69
+#   inherent methods                           85
+#   trait roster entries (type × trait)       146
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
-#   decode                            9
-#   encode                            4
+#   collection                        5
+#   decode                           12
+#   encode                            9
 #   estimate                          2
 #   exif                              3
+#   frame                             7
 #   gainmap                           2
+#   image                             6
 #   inventory                         6
 #   metadata_rewrite                  2
+#   operation                         7
+#   output_patch                      1
 #   source                            2
 #   time                              2
 
-## items (51 lines)
+## items (85 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -46,26 +51,52 @@ pub fn StreamOffset::assert_fields_are_eq(&self)
 pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn animation::FrameDuration::assert_fields_are_eq(&self)
+pub fn collection::CollectionOpenError::assert_fields_are_eq(&self)
+pub fn collection::DiscoveryUsage::assert_fields_are_eq(&self)
+pub fn collection::ImageDescription::assert_fields_are_eq(&self)
+pub fn collection::RegionRequest::assert_fields_are_eq(&self)
+pub fn collection::SelectionError::assert_fields_are_eq(&self)
 pub fn decode::BatchMeta::assert_fields_are_eq(&self)
+pub fn decode::BoundaryId::assert_fields_are_eq(&self)
 pub fn decode::ByteRange::assert_fields_are_eq(&self)
+pub fn decode::DecodeBoundary::assert_fields_are_eq(&self)
 pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::Event::assert_fields_are_eq(&self)
 pub fn decode::Input<'a>::assert_fields_are_eq(&self)
+pub fn decode::InputRequest::assert_fields_are_eq(&self)
+pub fn decode::InterpretationFacts::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
-pub fn decode::Request::assert_fields_are_eq(&self)
 pub fn encode::AnimationOutputTiming::assert_fields_are_eq(&self)
+pub fn encode::ColorCarriers::assert_fields_are_eq(&self)
+pub fn encode::EncodeDeclaration<'a>::assert_fields_are_eq(&self)
+pub fn encode::EncodePlan::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::InputRequirement::assert_fields_are_eq(&self)
 pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
 pub fn encode::OutputTiming::assert_fields_are_eq(&self)
+pub fn encode::SourcePasses::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn exif::EntryRef<'e>::assert_fields_are_eq(&self)
 pub fn exif::Exif<'a>::assert_fields_are_eq(&self)
 pub fn exif::ExifPolicy::assert_fields_are_eq(&self)
+pub fn frame::ColorClaim::assert_fields_are_eq(&self)
+pub fn frame::Crop::assert_fields_are_eq(&self)
+pub fn frame::FrameGeometry::assert_fields_are_eq(&self)
+pub fn frame::FrameInterpretation::assert_fields_are_eq(&self)
+pub fn frame::FrameTiming::assert_fields_are_eq(&self)
+pub fn frame::Presentation::assert_fields_are_eq(&self)
+pub fn frame::SampleEncoding::assert_fields_are_eq(&self)
 pub fn gainmap::Fraction::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
+pub fn image::GeometryError::assert_fields_are_eq(&self)
+pub fn image::ImageGeometry::assert_fields_are_eq(&self)
+pub fn image::Placement::assert_fields_are_eq(&self)
+pub fn image::PlacementOverlap::assert_fields_are_eq(&self)
+pub fn image::Rect::assert_fields_are_eq(&self)
+pub fn image::SourcePrecision::assert_fields_are_eq(&self)
 pub fn inventory::Disposition::assert_fields_are_eq(&self)
 pub fn inventory::Inventory::assert_fields_are_eq(&self)
 pub fn inventory::InventoryError::assert_fields_are_eq(&self)
@@ -74,12 +105,20 @@ pub fn inventory::PartId::assert_fields_are_eq(&self)
 pub fn inventory::PartTag::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
+pub fn operation::ChoiceId::assert_fields_are_eq(&self)
+pub fn operation::DestinationFacts::assert_fields_are_eq(&self)
+pub fn operation::FrameFacts::assert_fields_are_eq(&self)
+pub fn operation::FrameRouteFacts::assert_fields_are_eq(&self)
+pub fn operation::FrameRouteState::assert_fields_are_eq(&self)
+pub fn operation::StagingFacts::assert_fields_are_eq(&self)
+pub fn operation::UnmetRequirements::assert_fields_are_eq(&self)
+pub fn output_patch::Patch::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (69 types)
+## trait impls (146 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -99,6 +138,7 @@ OrientationHint: TrivialClone
 PolicyKind: TrivialClone
 RequestError: TrivialClone
 Resolution: TrivialClone
+ResolutionError: TrivialClone
 ResolutionUnit: TrivialClone
 ResourceError: TrivialClone
 ResourceLimits: TrivialClone
@@ -110,19 +150,39 @@ UnsupportedOperation: TrivialClone
 animation::FrameDuration: TrivialClone
 animation::TimingError: TrivialClone
 animation::TimingQuantizer: TrivialClone
+collection::CollectionOpenError: TrivialClone
+collection::Composition: TrivialClone
+collection::DiscoveryMethod: TrivialClone
+collection::DiscoveryUsage: TrivialClone
+collection::ImageDescription: TrivialClone
+collection::ImageRequest: TrivialClone
+collection::RegionRequest: TrivialClone
+collection::SelectionError: TrivialClone
 decode::BatchMeta: TrivialClone
+decode::BoundaryAction: TrivialClone
+decode::BoundaryId: TrivialClone
 decode::ByteRange: TrivialClone
+decode::ControlError: TrivialClone
+decode::DecodeBoundary: TrivialClone
 decode::DecodePolicy: TrivialClone
 decode::Input<'a>: TrivialClone
+decode::InputRequest: TrivialClone
+decode::InterpretationFacts: TrivialClone
+decode::InterpretationState: TrivialClone
+decode::InterpretationUnavailable: TrivialClone
 decode::MetadataUpdate: TrivialClone
-decode::Request: TrivialClone
 encode::AnimationOutputTiming: TrivialClone
+encode::EncodeDeclaration<'a>: TrivialClone
+encode::EncodePlanError: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
 encode::FidelityRejection: TrivialClone
 encode::FidelityTargetError: TrivialClone
+encode::InputRequirement: TrivialClone
 encode::LossyTarget: TrivialClone
+encode::OutputPhase: TrivialClone
 encode::OutputTiming: TrivialClone
+encode::SourcePasses: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone
@@ -133,6 +193,19 @@ exif::ExifPolicy: TrivialClone
 exif::Ifd: TrivialClone
 exif::Retention: TrivialClone
 exif::TextEncoding: TrivialClone
+frame::ChromaSiting: TrivialClone
+frame::ColorClaim: TrivialClone
+frame::Crop: TrivialClone
+frame::FrameGeometry: TrivialClone
+frame::FrameTiming: TrivialClone
+frame::PlaneError: TrivialClone
+frame::PlaneRole: TrivialClone
+frame::PlaneSamples<'a>: TrivialClone
+frame::PlaneView<'a>: TrivialClone
+frame::Presentation: TrivialClone
+frame::SampleEncoding: TrivialClone
+frame::SampleEncodingError: TrivialClone
+frame::Subsampling: TrivialClone
 gainmap::Fraction: TrivialClone
 gainmap::GainMapChannel: TrivialClone
 gainmap::GainMapDirection: TrivialClone
@@ -140,12 +213,55 @@ gainmap::GainMapRender: TrivialClone
 gainmap::Iso21496Format: TrivialClone
 gainmap::UFraction: TrivialClone
 helpers::IccMatchTolerance: TrivialClone
+image::AuxiliaryGrid: TrivialClone
+image::ColorContribution: TrivialClone
+image::GeometryError: TrivialClone
+image::ImageGeometry: TrivialClone
+image::Placement: TrivialClone
+image::PlacementOverlap: TrivialClone
+image::Rect: TrivialClone
+image::ValueSlice<'a>: TrivialClone
 inventory::Disposition: TrivialClone
 inventory::MetadataKind: TrivialClone
 inventory::PartId: TrivialClone
 inventory::PartKind: TrivialClone
 metadata_rewrite::Action: TrivialClone
 metadata_rewrite::Compression: TrivialClone
+operation::BoundaryOffer: TrivialClone
+operation::ChoiceId: TrivialClone
+operation::CollectionStage: TrivialClone
+operation::DecisionCode: TrivialClone
+operation::DecisionContext: TrivialClone
+operation::DecisionRecord: TrivialClone
+operation::Decline: TrivialClone
+operation::DestinationFacts: TrivialClone
+operation::EncodeFacts: TrivialClone
+operation::EncodeOffer: TrivialClone
+operation::FrameConversionOffer: TrivialClone
+operation::FrameFacts: TrivialClone
+operation::FrameRoute: TrivialClone
+operation::FrameRouteFacts: TrivialClone
+operation::FrameRouteOffer: TrivialClone
+operation::FrameRouteState: TrivialClone
+operation::ImageConversionOffer: TrivialClone
+operation::ImageFacts: TrivialClone
+operation::MetadataTransfer: TrivialClone
+operation::OutputSchedule: TrivialClone
+operation::OutputScheduleFacts: TrivialClone
+operation::OutputScheduleOffer: TrivialClone
+operation::OutputSource: TrivialClone
+operation::PolicyRequirement: TrivialClone
+operation::PolicySet: TrivialClone
+operation::PublicationOffer: TrivialClone
+operation::Question<'a>: TrivialClone
+operation::RequirementEvidence: TrivialClone
+operation::Selection: TrivialClone
+operation::StagingFacts: TrivialClone
+operation::StagingKind: TrivialClone
+operation::TranscodeOffer: TrivialClone
+operation::UnmetRequirements: TrivialClone
+output_patch::OutputAccess: TrivialClone
+output_patch::PatchError: TrivialClone
 source::AccessPattern: TrivialClone
 time::Rounding: TrivialClone
 time::TimeBase: TrivialClone

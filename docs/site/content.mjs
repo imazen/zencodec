@@ -84,7 +84,7 @@ export const lanes = [
 ];
 export const questions = [
   { n:166, title:'When are facts final enough to commit?', text:'Late color, orientation and opaque carriers need explicit scope and suspension before affected work. Current informational events cannot establish that barrier.' },
-  { n: 27, title: 'Can one request replace capability coordination?', text: 'The private resolver now binds requirements, configured presets and traced application errors through native and registry paths. Public API reduction still needs a reviewed integration.' },
+  { n: 27, title: 'Can one request replace capability coordination?', text: 'The review API binds mandatory requirements and traced application callbacks through OperationPolicy and BoundPolicy. Pinned JPEG/PNG guide routes are qualified; operation-wide obligation discharge and further API reduction remain open.' },
   { n: 160, title: 'Where should an encode wait?', text: 'Separate CPU fairness from output waiting. Qualify raw/intermediate ownership and upstream pause behavior for the exact configuration.' },
   { n: 161, title: 'Who admits the next byte?', text: 'Driver limits must apply before reads and allocation. Keep checked buffering policy, coalescing, shared leases, and retained media ownership explicit.' },
   { n: 154, title: 'Who resolves color before encode?', text: 'Animation and descriptor/configuration color paths must honor the same resolver. Metadata policy alone cannot prove that the target can carry the chosen color description.' },

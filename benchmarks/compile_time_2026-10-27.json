@@ -1,0 +1,269 @@
+{
+  "schema": 1,
+  "source_main": "a20e4dd3318cf2703ed383a7619819a7c32d6b7f",
+  "source_ideal": "85c33cc8d338c0f5daef42d81e19b9f184156989",
+  "baseline": "crates.io 0.1.26",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027",
+  "packet": "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027/attempt/packet.json.gz",
+  "measurements": [
+    {
+      "case": "dev-default",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.97,
+        "min": 1.93,
+        "max": 2.05
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.4,
+        "max": 0.42
+      },
+      "cargo_peak_rss_kib": {
+        "median": 247632,
+        "min": 247172,
+        "max": 248956
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.66,
+        "min": 2.61,
+        "max": 2.77
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.08,
+        "min": 1.06,
+        "max": 1.15
+      },
+      "cargo_peak_rss_kib": {
+        "median": 311872,
+        "min": 311220,
+        "max": 312536
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.29,
+        "min": 2.24,
+        "max": 2.6
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.69,
+        "min": 0.69,
+        "max": 0.77
+      },
+      "cargo_peak_rss_kib": {
+        "median": 250912,
+        "min": 249668,
+        "max": 251096
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.96,
+        "min": 1.94,
+        "max": 2.0
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.4,
+        "max": 0.44
+      },
+      "cargo_peak_rss_kib": {
+        "median": 248088,
+        "min": 247188,
+        "max": 248972
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.96,
+        "min": 1.93,
+        "max": 2.02
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.4,
+        "max": 0.41
+      },
+      "cargo_peak_rss_kib": {
+        "median": 247200,
+        "min": 247068,
+        "max": 248104
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.69,
+        "min": 2.65,
+        "max": 2.77
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.1,
+        "min": 1.09,
+        "max": 1.11
+      },
+      "cargo_peak_rss_kib": {
+        "median": 318256,
+        "min": 316124,
+        "max": 319232
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.28,
+        "min": 2.26,
+        "max": 2.33
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.7,
+        "min": 0.7,
+        "max": 0.71
+      },
+      "cargo_peak_rss_kib": {
+        "median": 253532,
+        "min": 253120,
+        "max": 254308
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.99,
+        "min": 1.95,
+        "max": 1.99
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.39,
+        "max": 0.42
+      },
+      "cargo_peak_rss_kib": {
+        "median": 247540,
+        "min": 246920,
+        "max": 248704
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.37,
+        "min": 2.37,
+        "max": 2.4
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.71,
+        "min": 0.71,
+        "max": 0.73
+      },
+      "cargo_peak_rss_kib": {
+        "median": 246016,
+        "min": 245192,
+        "max": 246244
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 3.64,
+        "min": 3.62,
+        "max": 3.89
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.98,
+        "min": 1.97,
+        "max": 2.18
+      },
+      "cargo_peak_rss_kib": {
+        "median": 312728,
+        "min": 312432,
+        "max": 313524
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.9,
+        "min": 2.88,
+        "max": 2.92
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.25,
+        "min": 1.24,
+        "max": 1.27
+      },
+      "cargo_peak_rss_kib": {
+        "median": 256376,
+        "min": 255368,
+        "max": 256904
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.35,
+        "min": 2.33,
+        "max": 2.36
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.71,
+        "min": 0.71,
+        "max": 0.72
+      },
+      "cargo_peak_rss_kib": {
+        "median": 245196,
+        "min": 245004,
+        "max": 245348
+      }
+    }
+  ],
+  "quality": {
+    "mode": "iterate",
+    "confirmed": false,
+    "invocations": 60,
+    "cpu_load_flags": 60,
+    "heavy_process_flags": 17,
+    "placement": "uniform_hardware",
+    "correctness_checked": true
+  },
+  "scope": "minimal consumer re-export; empty target each invocation; dependencies prefetched; OS file cache warm; two cargo jobs; incremental and compiler wrappers disabled; Rust 1.99.1 on Ryzen 9 7900X; no codec implementations, tests, site generation or CMS",
+  "resource_wrapper": "run-heavy: done rc=0 180s | peak-RSS 0.30GiB | min-avail 11360MiB | peak-load 1.98",
+  "log": "/home/lilith/tmp/zencodec-compile-current-run-20261027.log",
+  "hashes": {
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027/attempt/packet.json.gz": "6da12050b7d18ba6cb5c1b1e6c6c9285f83ab19e56f2ca562e8ff40f21a558e4",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027/plan.json": "7ca68091acaf35948981fcc021b61e58a08aa31843d7ed6724597915f4248d18",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027/runner-measured.py": "6f95d8207e0a36f6c7e33b44f56e309140a226a38a6c138be4d46d93ffc6eb33",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/compile-time-current-20261027/toolchain.txt": "6bb2920e36aff7999433500d6e467333e589a309e221d6a2081533b66fc535c6",
+    "/home/lilith/tmp/zencodec-compile-current-run-20261027.log": "6e5ea49b008facd5680de4057fdf0d8a9456af74ff0dbcbee1dd231545a3e7ee"
+  }
+}

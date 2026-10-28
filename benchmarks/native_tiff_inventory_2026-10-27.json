@@ -1,0 +1,102 @@
+{
+  "date_utc": "2026-10-27",
+  "source_base": "9d2a0fe8128c32af1236bd051a3ea4aee7f0e9e5",
+  "fork": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+  "kind": "native consumption and mutation qualification, not a benchmark",
+  "command": "just spatial-ci-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-tiff-inventory-full-1 cms_oracle,old_jpeg",
+  "artifact_root": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-tiff-inventory-full-1",
+  "log": "/home/lilith/tmp/zencodec-native-tiff-inventory-full-1-20261027.log",
+  "tests": {
+    "passed": 136,
+    "failed": 0,
+    "ignored": 0
+  },
+  "strict_clippy": "passed",
+  "resource_line": "run-heavy: done rc=0 53s | peak-RSS 0.58GiB | min-avail 10847MiB | peak-load 0.98",
+  "native_receipts": {
+    "external-tables.json": {
+      "claim": "native table consumption and mutation sensitivity; not independent pixel accuracy or privacy",
+      "decoded_sample_bytes": 149526,
+      "fixture": "tests/libtiffpic/zackthecat.tif",
+      "fork": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+      "read_calls": 109,
+      "seek_end_calls": 1,
+      "tables": [
+        {
+          "fully_read": true,
+          "mutation_changed_pixels": true,
+          "mutation_rejected": false,
+          "range": [
+            7364,
+            7556
+          ],
+          "tag": 519
+        },
+        {
+          "fully_read": true,
+          "mutation_changed_pixels": true,
+          "mutation_rejected": false,
+          "range": [
+            7568,
+            7652
+          ],
+          "tag": 520
+        },
+        {
+          "fully_read": true,
+          "mutation_changed_pixels": true,
+          "mutation_rejected": false,
+          "range": [
+            7664,
+            8198
+          ],
+          "tag": 521
+        }
+      ]
+    },
+    "shared-stream-tail.json": {
+      "bounded_reads_tail": false,
+      "claim": "bytes read are not necessarily needed for rendering and do not establish privacy",
+      "fixture": "tests/libtiffpic/smallliz.tif",
+      "fork": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+      "original_file_bytes": 5052,
+      "pixels_unchanged": true,
+      "seek_end_calls": 1,
+      "stream_start": 8,
+      "tail_range": [
+        5052,
+        5105
+      ],
+      "zero_length_reads_tail": true
+    },
+    "predictor-context.json": {
+      "cases": [
+        {
+          "compression": 1,
+          "decode_succeeds": true,
+          "predictor": 65535
+        },
+        {
+          "compression": 5,
+          "decode_succeeds": false,
+          "predictor": 65535
+        }
+      ],
+      "claim": "inventory must mirror compression-specific rejection; unsupported tags alone do not determine decode failure",
+      "fork": "10a3b6b2fa88eb5943525066a989ea9e64e644d5"
+    }
+  },
+  "limits": [
+    "Two pinned old-JPEG layouts, plus generated uncompressed/LZW predictor controls; not all TIFF compressions or old-JPEG variants.",
+    "Native read coverage and mutation sensitivity do not establish independent pixel accuracy.",
+    "Reading opaque bytes does not establish rendering necessity or privacy.",
+    "Shared table discovery is implemented; complete zentiff consumer Rules and shared-stream resource offers still require integration."
+  ],
+  "tracking": "https://github.com/imazen/zencodec/issues/171",
+  "typed_cause_recheck": {
+    "command": "just spatial-tiff-inventory-check /mnt/v/output/zencodec/platform-regions-20261026-run/tiff-native-inventory-3",
+    "log": "/home/lilith/tmp/zencodec-tiff-native-inventory-3-20261027.log",
+    "result": "all three controls and strict lint pass, including exact UnknownPredictor(65535) cause",
+    "resource_line": "run-heavy: done rc=0 5s | peak-RSS 0.47GiB | min-avail 11127MiB | peak-load 0.65"
+  }
+}

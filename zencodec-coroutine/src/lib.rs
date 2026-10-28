@@ -47,6 +47,7 @@
 
 extern crate alloc;
 
+mod admitted_input;
 mod context;
 mod decoder;
 mod input;

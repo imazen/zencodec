@@ -16,7 +16,7 @@ use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::output::OwnedAnimationFrame;
 use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
-use enough::Stop;
+
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use super::BoxedError;
@@ -85,13 +85,13 @@ pub trait DynAnimationFrameDecoder: Send {
     /// Render the next frame as an owned copy.
     fn render_next_frame_owned(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, BoxedError>;
 
     /// Render the next frame directly into a caller-owned sink.
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
         sink: &mut dyn crate::DecodeRowSink,
     ) -> Result<Option<OutputInfo>, BoxedError>;
 }
@@ -134,20 +134,20 @@ impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder
 
     fn render_next_frame_owned(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, BoxedError> {
         self.0
-            .render_next_frame_owned(stop)
+            .render_next_frame_owned(pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
         sink: &mut dyn crate::DecodeRowSink,
     ) -> Result<Option<OutputInfo>, BoxedError> {
         self.0
-            .render_next_frame_to_sink(stop, sink)
+            .render_next_frame_to_sink(pulse, sink)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 }
@@ -198,17 +198,21 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 /// then call one of the `into_*` methods to create a decoder.
 pub trait DynDecodeJob<'a> {
     /// Set cooperative cancellation token.
-    fn set_stop(&mut self, stop: StopToken);
-
-    /// Set progress and cancellation pulse.
-    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
-        self.set_stop(StopToken::new(pulse));
+    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn set_stop(&mut self, pulse: StopToken) {
+        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
     }
+
+    /// Retain all operation control capabilities through type erasure.
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
 
-    /// Set decode security policy.
+    /// Legacy best-effort decode policy; unsupported fields may be ignored.
+    #[deprecated(
+        note = "may silently ignore policy; use try_set_policy or a checked operation request"
+    )]
     fn set_policy(&mut self, policy: crate::DecodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
@@ -310,6 +314,18 @@ pub trait DynDecodeJob<'a> {
         ))
     }
 
+    /// Start a controlled session with this job's bound configuration.
+    /// Default refusal prevents an ordinary incremental implementation from
+    /// being used as evidence of mandatory interpretation suspension.
+    fn into_controlled_decoder(
+        self: Box<Self>,
+        preferred: &[PixelDescriptor],
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
+        let _ = (preferred, storage);
+        Err(Box::new(super::control::ControlError::NotControlled))
+    }
+
     /// Decode from a random-access source into `sink` (consumes this job).
     fn push_decoder_from_source(
         self: Box<Self>,
@@ -367,10 +383,6 @@ where
     J::StreamDec: Send,
     J::AnimationFrameDec: Send,
 {
-    fn set_stop(&mut self, stop: StopToken) {
-        self.try_apply(|job| job.with_stop(stop));
-    }
-
     fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
         self.try_apply(|job| job.with_pulse(pulse));
     }
@@ -380,6 +392,8 @@ where
     }
 
     fn set_policy(&mut self, policy: crate::DecodePolicy) {
+        // Preserve the legacy setter behavior; checked callers use try_set_policy.
+        #[allow(deprecated)]
         self.try_apply(|job| job.with_policy(policy));
     }
 
@@ -496,6 +510,14 @@ where
     ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let job = self.take()?;
         job.dyn_incremental_decoder(preferred)
+    }
+
+    fn into_controlled_decoder(
+        mut self: Box<Self>,
+        preferred: &[PixelDescriptor],
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
+        self.take()?.dyn_controlled_decoder(preferred, storage)
     }
 
     fn push_decoder_from_source(

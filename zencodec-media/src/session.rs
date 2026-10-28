@@ -20,14 +20,15 @@
 //!   from the new position.
 //!
 //! Sessions do no I/O, need no async runtime and know nothing about
-//! containers. Every call takes a `&dyn Stop`; [`FusedDecoder`] makes errors
-//! and cancellation terminal until a successful `reset`.
+//! containers. Work calls take a `&dyn zencodec::Pulse`; [`FusedDecoder`] makes errors
+//! and cancellation terminal until a successful `reset`. [`FusedEncoder`]
+//! makes encoder errors terminal; a fresh encoder starts a new operation.
 
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt;
 
-use enough::{Stop, StopReason};
+use enough::StopReason;
 pub use zencodec::decode::ErasedError;
 
 use crate::frame::{Frame, FrameInterpretation};
@@ -108,6 +109,8 @@ pub enum UnsupportedMedia {
     Container,
     /// This sample layout or depth.
     PixelFormat,
+    /// Exact preservation of packet timestamps and explicit durations.
+    ExactTiming,
 }
 
 /// Every session error is terminal for the session except `Codec` errors a
@@ -118,7 +121,7 @@ pub enum SessionError<E> {
     /// The codec or container implementation failed (malformed input,
     /// backend error).
     Codec(E),
-    /// The stop tripped.
+    /// The pulse tripped.
     Cancelled(StopReason),
     /// Called again after a terminal error.
     Finished,
@@ -264,7 +267,7 @@ pub trait VideoDecoder {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<Self::Error>>;
 
     /// Offer one packet. `Accepted` takes its payload; `ReceivePending`
@@ -272,11 +275,14 @@ pub trait VideoDecoder {
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<Self::Error>>;
 
     /// One frame at a time, in presentation order.
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<Self::Error>>;
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<Self::Error>>;
 
     /// Declare end of input; idempotent. Then `receive` until `EndOfStream`.
     fn end_input(&mut self) -> Result<(), SessionError<Self::Error>>;
@@ -300,18 +306,31 @@ pub trait VideoEncoder {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<Self::Error>>;
 
     /// One packet at a time, in decode order, carrying the presentation
     /// timestamp of the frame it shows.
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<Self::Error>>;
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<Self::Error>>;
 
     /// Declare end of input; idempotent. Then `receive` until `EndOfStream`.
     fn end_input(&mut self) -> Result<(), SessionError<Self::Error>>;
 
     /// Codec configuration a muxer needs before the first packet.
     fn output_config(&self) -> Option<&CodecConfig>;
+
+    /// Fidelity guaranteed by this actual prepared encoder for every accepted
+    /// input frame. None means unqualified, not lossy or lossless. A guarantee
+    /// must not be inferred from codec identity or an unvalidated request.
+    /// This describes encoding only; preceding conversion may lose samples.
+    /// Fixed-configuration operations bind this value with output_config and
+    /// reject a later change before publishing staged output.
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        None
+    }
 }
 
 /// A type-erased, sendable decoder session.
@@ -333,19 +352,22 @@ impl<D: VideoDecoder> VideoDecoder for VideoDecoderShim<D> {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ErasedError>> {
-        self.0.configure(config, stop).map_err(erase)
+        self.0.configure(config, pulse).map_err(erase)
     }
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<ErasedError>> {
-        self.0.send(packet, stop).map_err(erase)
+        self.0.send(packet, pulse).map_err(erase)
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<ErasedError>> {
-        self.0.receive(stop).map_err(erase)
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<ErasedError>> {
+        self.0.receive(pulse).map_err(erase)
     }
     fn end_input(&mut self) -> Result<(), SessionError<ErasedError>> {
         self.0.end_input().map_err(erase)
@@ -366,18 +388,24 @@ impl<E: VideoEncoder> VideoEncoder for VideoEncoderShim<E> {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<ErasedError>> {
-        self.0.send(frame, stop).map_err(erase)
+        self.0.send(frame, pulse).map_err(erase)
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<ErasedError>> {
-        self.0.receive(stop).map_err(erase)
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<ErasedError>> {
+        self.0.receive(pulse).map_err(erase)
     }
     fn end_input(&mut self) -> Result<(), SessionError<ErasedError>> {
         self.0.end_input().map_err(erase)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.0.output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        self.0.output_fidelity()
     }
 }
 
@@ -405,20 +433,18 @@ impl<D> FusedDecoder<D> {
 impl<D: VideoDecoder> FusedDecoder<D> {
     fn guard<T>(
         &mut self,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
         f: impl FnOnce(&mut D) -> Result<T, SessionError<D::Error>>,
     ) -> Result<T, SessionError<D::Error>> {
         if self.failed {
             return Err(SessionError::Finished);
         }
-        if let Err(r) = stop.check() {
-            self.failed = true;
+        self.failed = true;
+        if let Err(r) = pulse.check() {
             return Err(SessionError::Cancelled(r));
         }
         let r = f(&mut self.inner);
-        if r.is_err() {
-            self.failed = true;
-        }
+        self.failed = r.is_err();
         r
     }
 }
@@ -428,31 +454,34 @@ impl<D: VideoDecoder> VideoDecoder for FusedDecoder<D> {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<D::Error>> {
-        self.guard(stop, |d| d.configure(config, stop))
+        self.guard(pulse, |d| d.configure(config, pulse))
     }
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<D::Error>> {
-        self.guard(stop, |d| d.send(packet, stop))
+        self.guard(pulse, |d| d.send(packet, pulse))
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<D::Error>> {
-        self.guard(stop, |d| d.receive(stop))
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<D::Error>> {
+        self.guard(pulse, |d| d.receive(pulse))
     }
     fn end_input(&mut self) -> Result<(), SessionError<D::Error>> {
         if self.failed {
             return Err(SessionError::Finished);
         }
+        self.failed = true;
         let r = self.inner.end_input();
-        if r.is_err() {
-            self.failed = true;
-        }
+        self.failed = r.is_err();
         r
     }
     fn reset(&mut self) -> Result<(), SessionError<D::Error>> {
+        self.failed = true;
         let r = self.inner.reset();
         self.failed = r.is_err();
         r
@@ -462,15 +491,88 @@ impl<D: VideoDecoder> VideoDecoder for FusedDecoder<D> {
     }
 }
 
+/// Makes every encoder error and cancellation terminal, including native
+/// validation errors that an unwrapped backend might otherwise permit retrying.
+///
+/// Unlike a decoder, an encoder has no reset operation: create a fresh session
+/// after failure. Informational `output_config` remains available. If a backend
+/// unwinds and the application catches the panic, later work calls still refuse.
+pub struct FusedEncoder<E> {
+    inner: E,
+    failed: bool,
+}
+
+impl<E> FusedEncoder<E> {
+    /// Wrap an encoder with strict terminal-error handling.
+    pub const fn new(inner: E) -> Self {
+        Self {
+            inner,
+            failed: false,
+        }
+    }
+
+    /// Recover the backend, explicitly leaving the fused contract.
+    pub fn into_inner(self) -> E {
+        self.inner
+    }
+}
+
+impl<E: VideoEncoder> FusedEncoder<E> {
+    fn guard<T>(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+        f: impl FnOnce(&mut E) -> Result<T, SessionError<E::Error>>,
+    ) -> Result<T, SessionError<E::Error>> {
+        if self.failed {
+            return Err(SessionError::Finished);
+        }
+        // Set before entering either user-supplied operation so an unwinding
+        // backend/pulse cannot accidentally reopen partially changed state.
+        self.failed = true;
+        pulse.check().map_err(SessionError::Cancelled)?;
+        let result = f(&mut self.inner);
+        self.failed = result.is_err();
+        result
+    }
+}
+
+impl<E: VideoEncoder> VideoEncoder for FusedEncoder<E> {
+    type Error = E::Error;
+    fn send(
+        &mut self,
+        frame: &Frame,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<SendStatus, SessionError<E::Error>> {
+        self.guard(pulse, |encoder| encoder.send(frame, pulse))
+    }
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<E::Error>> {
+        self.guard(pulse, |encoder| encoder.receive(pulse))
+    }
+    fn end_input(&mut self) -> Result<(), SessionError<E::Error>> {
+        self.guard(&zencodec::how_far::NoPulse, VideoEncoder::end_input)
+    }
+    fn output_config(&self) -> Option<&CodecConfig> {
+        self.inner.output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        self.inner.output_fidelity()
+    }
+}
+
 /// Erase a decoder: errors become [`ErasedError`], and errors and
 /// cancellation become terminal until `reset` ([`FusedDecoder`]).
 pub fn erase_video_decoder<D: VideoDecoder + Send + 'static>(d: D) -> Box<DynVideoDecoder> {
     Box::new(VideoDecoderShim(FusedDecoder::new(d)))
 }
 
-/// Erase an encoder's error type.
+/// Erase an encoder's error type and make all errors/cancellation terminal
+/// ([`FusedEncoder`]). Use [`VideoEncoderShim`] directly when preserving a
+/// backend's explicitly documented retryable validation contract is required.
 pub fn erase_video_encoder<E: VideoEncoder + Send + 'static>(e: E) -> Box<DynVideoEncoder> {
-    Box::new(VideoEncoderShim(e))
+    Box::new(VideoEncoderShim(FusedEncoder::new(e)))
 }
 
 impl<D: VideoDecoder + ?Sized> VideoDecoder for Box<D> {
@@ -478,19 +580,22 @@ impl<D: VideoDecoder + ?Sized> VideoDecoder for Box<D> {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<D::Error>> {
-        (**self).configure(config, stop)
+        (**self).configure(config, pulse)
     }
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<D::Error>> {
-        (**self).send(packet, stop)
+        (**self).send(packet, pulse)
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<D::Error>> {
-        (**self).receive(stop)
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<D::Error>> {
+        (**self).receive(pulse)
     }
     fn end_input(&mut self) -> Result<(), SessionError<D::Error>> {
         (**self).end_input()
@@ -508,18 +613,24 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<E::Error>> {
-        (**self).send(frame, stop)
+        (**self).send(frame, pulse)
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<E::Error>> {
-        (**self).receive(stop)
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<E::Error>> {
+        (**self).receive(pulse)
     }
     fn end_input(&mut self) -> Result<(), SessionError<E::Error>> {
         (**self).end_input()
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         (**self).output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        (**self).output_fidelity()
     }
 }
 
@@ -533,7 +644,7 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
 pub fn send_packet_until_accepted<D, F, E2>(
     dec: &mut D,
     packet: &mut Packet,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
     mut on_output: F,
 ) -> Result<(), PumpError<SessionError<D::Error>, E2>>
 where
@@ -541,9 +652,9 @@ where
     F: FnMut(Frame) -> Result<(), E2>,
 {
     loop {
-        match dec.send(packet, stop).map_err(PumpError::Upstream)? {
+        match dec.send(packet, pulse).map_err(PumpError::Upstream)? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match dec.receive(stop).map_err(PumpError::Upstream)? {
+            SendStatus::ReceivePending => match dec.receive(pulse).map_err(PumpError::Upstream)? {
                 Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
                 _ => {
                     return Err(PumpError::Upstream(SessionError::Protocol(
@@ -556,7 +667,7 @@ where
     // Accepted: deliver whatever output is available now, so frames never
     // sit in the codec until the next backpressure event.
     loop {
-        match dec.receive(stop).map_err(PumpError::Upstream)? {
+        match dec.receive(pulse).map_err(PumpError::Upstream)? {
             Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
@@ -576,7 +687,7 @@ where
 pub fn send_frame_until_accepted<E, F, E2>(
     enc: &mut E,
     frame: &Frame,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
     mut on_output: F,
 ) -> Result<(), PumpError<SessionError<E::Error>, E2>>
 where
@@ -584,9 +695,9 @@ where
     F: FnMut(Packet) -> Result<(), E2>,
 {
     loop {
-        match enc.send(frame, stop).map_err(PumpError::Upstream)? {
+        match enc.send(frame, pulse).map_err(PumpError::Upstream)? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match enc.receive(stop).map_err(PumpError::Upstream)? {
+            SendStatus::ReceivePending => match enc.receive(pulse).map_err(PumpError::Upstream)? {
                 Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
                 _ => {
                     return Err(PumpError::Upstream(SessionError::Protocol(
@@ -597,7 +708,7 @@ where
         }
     }
     loop {
-        match enc.receive(stop).map_err(PumpError::Upstream)? {
+        match enc.receive(pulse).map_err(PumpError::Upstream)? {
             Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
@@ -617,7 +728,7 @@ where
 /// The decoder's error as `Upstream`, `on_output`'s as `Downstream`.
 pub fn drain_decoder<D, F, E2>(
     dec: &mut D,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
     mut on_output: F,
 ) -> Result<(), PumpError<SessionError<D::Error>, E2>>
 where
@@ -626,7 +737,7 @@ where
 {
     dec.end_input().map_err(PumpError::Upstream)?;
     loop {
-        match dec.receive(stop).map_err(PumpError::Upstream)? {
+        match dec.receive(pulse).map_err(PumpError::Upstream)? {
             Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
@@ -645,7 +756,7 @@ where
 /// The encoder's error as `Upstream`, `on_output`'s as `Downstream`.
 pub fn drain_encoder<E, F, E2>(
     enc: &mut E,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
     mut on_output: F,
 ) -> Result<(), PumpError<SessionError<E::Error>, E2>>
 where
@@ -654,7 +765,7 @@ where
 {
     enc.end_input().map_err(PumpError::Upstream)?;
     loop {
-        match enc.receive(stop).map_err(PumpError::Upstream)? {
+        match enc.receive(pulse).map_err(PumpError::Upstream)? {
             Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
@@ -686,4 +797,10 @@ impl<U: fmt::Display, D: fmt::Display> fmt::Display for PumpError<U, D> {
 impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error
     for PumpError<U, D>
 {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Upstream(error) => Some(error),
+            Self::Downstream(error) => Some(error),
+        }
+    }
 }

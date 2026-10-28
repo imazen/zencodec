@@ -947,8 +947,9 @@ footer p {
     padding-inline:20px
   }
   .topbar {
-    height:66px;
-    padding-inline:20px;
+    min-height:66px;
+    height:auto;
+    padding:10px 20px;
     justify-content:space-between;
     gap:15px
   }
@@ -963,7 +964,10 @@ footer p {
     margin-right:6px
   }
   .topbar nav {
-    gap:15px
+    min-width:0;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    gap:8px 15px
   }
   .topbar nav a {
     font-size:11px
@@ -1566,3 +1570,4 @@ footer p {
 
 .policy-deep-dive {border-left:2px solid var(--adapter);padding:0 0 0 16px;margin:24px 0}
 .policy-deep-dive>summary {cursor:pointer;min-height:44px;padding:12px 0;font-size:14px;color:var(--adapter)}
+.guide-current{font-size:14px;max-width:80ch;margin:0 0 25px}.guide-current a{font-weight:650}

@@ -1157,7 +1157,9 @@ fn decode_respects_cancellation() {
     let stopper = Stopper::cancelled();
 
     let config = MockDecoderConfig;
-    let job = config.job().with_stop(zencodec::StopToken::new(stopper));
+    let job = config.job().with_pulse(zencodec::SharedPulse::new(
+        zencodec::how_far::StopOnly::new(stopper),
+    ));
     let err = job.decoder(Cow::Borrowed(&data), &[]).unwrap_err();
     assert!(format!("{err}").contains("cancelled"));
 }
@@ -1181,7 +1183,9 @@ fn animation_decode_respects_per_frame_cancellation() {
 
     // Second frame: cancel
     let stopper = Stopper::cancelled();
-    let err = dec.render_next_frame(Some(&stopper)).unwrap_err();
+    let err = dec
+        .render_next_frame(Some(&zencodec::how_far::StopOnly::borrowed(&stopper)))
+        .unwrap_err();
     assert!(format!("{err}").contains("cancelled"));
 }
 
@@ -1197,7 +1201,9 @@ fn animation_encode_respects_cancellation() {
     enc.push_frame(buf.as_slice(), 100, None).unwrap();
 
     let stopper = Stopper::cancelled();
-    let err = enc.finish(Some(&stopper)).unwrap_err();
+    let err = enc
+        .finish(Some(&zencodec::how_far::StopOnly::borrowed(&stopper)))
+        .unwrap_err();
     assert!(format!("{err}").contains("cancelled"));
 }
 

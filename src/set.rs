@@ -58,6 +58,7 @@
 
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -75,6 +76,8 @@ use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
     ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits, StopToken,
 };
+
+mod collection;
 
 // ===========================================================================
 // Internal entries — object-safe configs that can also clone themselves
@@ -103,10 +106,16 @@ where
     }
 }
 
-trait EncoderEntry: DynEncoderConfig {
+trait EncoderEntry: Send + Sync {
     fn clone_entry(&self) -> Box<dyn EncoderEntry>;
     fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry>;
     fn as_dyn(&self) -> &dyn DynEncoderConfig;
+    fn send_job(
+        &self,
+        _fidelity: Option<Fidelity>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        Err(CodecSetError::EncoderJobNotSend(self.as_dyn().format()))
+    }
 }
 
 impl<C> EncoderEntry for C
@@ -123,6 +132,41 @@ where
     }
     fn as_dyn(&self) -> &dyn DynEncoderConfig {
         self
+    }
+}
+
+// Registration captures Send while the concrete job type is still known.
+// Legacy entries remain available for thread-affine jobs.
+struct SendEncoderEntry<C>(C);
+impl<C> EncoderEntry for SendEncoderEntry<C>
+where
+    C: EncoderConfig + 'static,
+    C::Job: Send,
+    <C::Job as EncodeJob>::Enc: Encoder + Send,
+    <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
+        Box::new(Self(self.0.clone()))
+    }
+    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
+        Box::new(Self(self.0.with_fidelity(fidelity)))
+    }
+    fn as_dyn(&self) -> &dyn DynEncoderConfig {
+        &self.0
+    }
+    fn send_job(
+        &self,
+        fidelity: Option<Fidelity>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        let config = match fidelity {
+            Some(target) => self
+                .0
+                .clone()
+                .try_with_fidelity(target)
+                .map_err(|error| CodecSetError::Codec(Box::new(error)))?,
+            None => self.0.clone(),
+        };
+        Ok(crate::traits::erase_send_job(config.job()))
     }
 }
 
@@ -155,6 +199,9 @@ pub enum CodecSetError {
     Cancelled,
     /// The selected codec failed.
     Codec(BoxedError),
+    /// A transferable job was required, but this entry used local registration.
+    /// Register it with `CodecSet::with_send_encoder` when its job is Send.
+    EncoderJobNotSend(ImageFormat),
 }
 
 /// Source property that the still-image transcode convenience cannot preserve.
@@ -182,6 +229,10 @@ impl fmt::Display for CodecSetError {
             }
             Self::Cancelled => f.write_str("operation cancelled"),
             Self::Codec(e) => write!(f, "codec error: {e}"),
+            Self::EncoderJobNotSend(format) => write!(
+                f,
+                "encoder job for {format} was not registered with with_send_encoder"
+            ),
         }
     }
 }
@@ -221,8 +272,8 @@ impl From<BoxedError> for CodecSetError {
 pub struct CodecSet {
     decoders: Vec<Box<dyn DecoderEntry>>,
     encoders: Vec<Box<dyn EncoderEntry>>,
+    collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
     limits: Option<ResourceLimits>,
-    stop: Option<StopToken>,
     pulse: Option<how_far::SharedPulse>,
     decode_policy: Option<DecodePolicy>,
     encode_policy: Option<EncodePolicy>,
@@ -235,8 +286,8 @@ impl CodecSet {
         Self {
             decoders: Vec::new(),
             encoders: Vec::new(),
+            collections: Vec::new(),
             limits: None,
-            stop: None,
             pulse: None,
             decode_policy: None,
             encode_policy: None,
@@ -271,6 +322,22 @@ impl CodecSet {
         self
     }
 
+    /// Register an encoder whose prepared jobs may move between threads.
+    ///
+    /// Use this for async operations that retain a job across an I/O wait.
+    /// Existing `with_encoder` keeps supporting thread-affine jobs. Both have
+    /// the same first-registration-wins rule and work with synchronous calls.
+    pub fn with_send_encoder<C>(mut self, config: C) -> Self
+    where
+        C: EncoderConfig + 'static,
+        C::Job: Send,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        self.encoders.push(Box::new(SendEncoderEntry(config)));
+        self
+    }
+
     // --- Operation defaults -------------------------------------------------
 
     /// Resource limits stamped onto every job this set creates.
@@ -279,17 +346,21 @@ impl CodecSet {
         self
     }
 
-    /// Cooperative-cancellation token stamped onto every job this set creates.
+    /// Add a cancellation-only condition while retaining the operation pulse.
+    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
     pub fn with_stop(mut self, stop: StopToken) -> Self {
-        self.stop = Some(stop);
+        use how_far::Pulse as _;
+        let pulse = self.pulse.take().unwrap_or_default();
+        self.pulse = Some(
+            how_far::WithStop::new(&pulse, stop)
+                .share()
+                .expect("owned SharedPulse and owned cancellation are shareable"),
+        );
         self
     }
 
     /// Progress and cancellation pulse stamped onto every job this set creates.
-    ///
-    /// Automatically populates the cancellation token for codecs that only support `Stop`.
     pub fn with_pulse(mut self, pulse: how_far::SharedPulse) -> Self {
-        self.stop = Some(StopToken::new(pulse.clone()));
         self.pulse = Some(pulse);
         self
     }
@@ -347,7 +418,7 @@ impl CodecSet {
 
     /// Formats with a registered encoder, in registration order.
     pub fn encodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        self.encoders.iter().map(|e| e.format())
+        self.encoders.iter().map(|e| e.as_dyn().format())
     }
 
     /// Detect the input's format from magic bytes, consulting only formats
@@ -524,13 +595,144 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = self.decode_policy {
+            // Legacy convenience preserves best-effort behavior.
+            #[allow(deprecated)]
             job.set_policy(policy);
         }
         Ok(job)
+    }
+
+    pub(crate) fn checked_decode_job<'a>(
+        &'a self,
+        format: ImageFormat,
+        policy: Option<DecodePolicy>,
+    ) -> Result<Box<dyn DynDecodeJob<'a> + 'a>, CodecSetError> {
+        let entry = self
+            .decoder_entry(format)
+            .ok_or(CodecSetError::NoDecoder(format))?;
+        let mut job = entry.dyn_job();
+        if let Some(limits) = self.limits {
+            job.set_limits(limits);
+        }
+        if let Some(pulse) = &self.pulse {
+            job.set_pulse(pulse.clone());
+        }
+        if let Some(policy) = policy.or(self.decode_policy) {
+            job.try_set_policy(policy)?;
+        }
+        Ok(job)
+    }
+
+    /// The inherited operation pulse, or `NoPulse` when none was configured.
+    /// Pass this same control through policy, I/O, and native work.
+    pub fn pulse(&self) -> &dyn crate::Pulse {
+        self.pulse.as_ref().map_or(&crate::NoPulse, |pulse| pulse)
+    }
+
+    /// Legacy name for the operation control.
+    #[deprecated(note = "use pulse; operation control includes progress and cancellation")]
+    pub fn stop(&self) -> &dyn enough::Stop {
+        self.pulse()
+    }
+
+    pub(crate) fn operation_pulse(&self) -> &dyn crate::Pulse {
+        self.pulse()
+    }
+
+    pub(crate) fn check_operation_stop(&self) -> Result<(), enough::StopReason> {
+        self.pulse().check()
+    }
+
+    pub(crate) fn operation_access_pattern(&self) -> crate::source::AccessPattern {
+        self.decoders
+            .iter()
+            .map(|d| d.capabilities().access_pattern())
+            .fold(crate::source::AccessPattern::Sequential, |a, b| {
+                a.most_demanding(b)
+            })
+    }
+
+    pub(crate) fn detect_incremental(
+        &self,
+        input: &crate::decode::Input<'_>,
+    ) -> Result<Option<ImageFormat>, CodecSetError> {
+        if input.offset != 0 {
+            return Ok(None);
+        }
+        let detected = self.detect(input.bytes);
+        let complete =
+            crate::decode::InputRequest::at_least(0, ImageFormat::RECOMMENDED_PROBE_BYTES)
+                .is_satisfied_by(input);
+        // TIFF magic is shared with TIFF-based raws. Wait for the same complete
+        // prefix in both the legacy and controlled request entry points.
+        let conclusive = match detected {
+            Some(ImageFormat::Tiff) => complete,
+            Some(_) => true,
+            None => false,
+        };
+        if conclusive {
+            Ok(detected)
+        } else if complete {
+            Err(CodecSetError::UnrecognizedFormat)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) fn operation_encode_policy(&self) -> Option<EncodePolicy> {
+        self.encode_policy
+    }
+
+    pub(crate) fn checked_encode_job(
+        &self,
+        format: ImageFormat,
+        fidelity: Option<Fidelity>,
+        policy: Option<EncodePolicy>,
+    ) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
+        let config = self
+            .encoder_entry(format)
+            .ok_or(CodecSetError::NoEncoder(format))?
+            .as_dyn();
+        let mut job = match fidelity {
+            Some(target) => config
+                .try_fidelity_job(target)
+                .map_err(|e| CodecSetError::Codec(Box::new(e)))?,
+            None => config.dyn_job(),
+        };
+        self.stamp_checked_encode_job(&mut *job, policy)?;
+        Ok(job)
+    }
+
+    pub(crate) fn checked_send_encode_job(
+        &self,
+        format: ImageFormat,
+        fidelity: Option<Fidelity>,
+        policy: Option<EncodePolicy>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        let entry = self
+            .encoder_entry(format)
+            .ok_or(CodecSetError::NoEncoder(format))?;
+        let mut job = entry.send_job(fidelity)?;
+        self.stamp_checked_encode_job(&mut *job, policy)?;
+        Ok(job)
+    }
+    fn stamp_checked_encode_job(
+        &self,
+        job: &mut dyn DynEncodeJob,
+        policy: Option<EncodePolicy>,
+    ) -> Result<(), CodecSetError> {
+        if let Some(limits) = self.limits {
+            job.set_limits(limits);
+        }
+        if let Some(pulse) = &self.pulse {
+            job.set_pulse(pulse.clone());
+        }
+        if let Some(policy) = policy.or(self.encode_policy) {
+            job.try_set_policy(policy)?;
+        }
+        Ok(())
     }
 
     // --- Encode -------------------------------------------------------------
@@ -664,6 +866,8 @@ impl CodecSet {
         let source_metadata = Metadata::from(decoded.info());
         let mut job = self.encode_job_with(target, fidelity)?;
         job.set_metadata_policy(source_metadata, metadata);
+        // Legacy transcode preserves best-effort behavior.
+        #[allow(deprecated)]
         job.set_policy(
             self.encode_policy
                 .unwrap_or_else(EncodePolicy::none)
@@ -795,7 +999,7 @@ impl CodecSet {
     fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn EncoderEntry> {
         self.encoders
             .iter()
-            .find(|e| e.format() == format)
+            .find(|e| e.as_dyn().format() == format)
             .map(|b| &**b)
     }
 
@@ -806,10 +1010,10 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = self.encode_policy {
+            // Legacy convenience preserves best-effort behavior.
+            #[allow(deprecated)]
             job.set_policy(policy);
         }
         job
@@ -827,8 +1031,8 @@ impl Clone for CodecSet {
         Self {
             decoders: self.decoders.iter().map(|d| d.clone_entry()).collect(),
             encoders: self.encoders.iter().map(|e| e.clone_entry()).collect(),
+            collections: self.collections.clone(),
             limits: self.limits,
-            stop: self.stop.clone(),
             pulse: self.pulse.clone(),
             decode_policy: self.decode_policy,
             encode_policy: self.encode_policy,
@@ -859,7 +1063,7 @@ pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
     preferred: Vec<PixelDescriptor>,
     inner: Option<Box<crate::traits::DynIncrementalDecoder>>,
-    probe: [crate::traits::Request; 1],
+    probe: [crate::traits::InputRequest; 1],
 }
 
 impl CodecSetIncrementalDecoder {
@@ -869,7 +1073,7 @@ impl CodecSetIncrementalDecoder {
             set,
             preferred: preferred.to_vec(),
             inner: None,
-            probe: [crate::traits::Request::at_least(
+            probe: [crate::traits::InputRequest::at_least(
                 0,
                 ImageFormat::RECOMMENDED_PROBE_BYTES,
             )],
@@ -884,38 +1088,18 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         &mut self,
         input: crate::traits::Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn enough::Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<crate::traits::Progress, crate::traits::StepError<CodecSetError>> {
         use crate::traits::{Progress, StepError};
-        for set_stop in [
-            self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop),
-            self.set.stop.as_ref().map(|s| s as &dyn enough::Stop),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            set_stop.check()?;
-        }
+        self.set.check_operation_stop()?;
         if self.inner.is_none() {
-            if input.offset != 0 {
+            let Some(format) = self
+                .set
+                .detect_incremental(&input)
+                .map_err(StepError::Codec)?
+            else {
                 return Ok(Progress::need(0));
-            }
-            let detected = self.set.detect(input.bytes);
-            let complete = self.probe[0].is_satisfied_by(&input);
-            let conclusive = match detected {
-                // TIFF magic is short and shared with TIFF-based raws: look
-                // at more of the file before committing.
-                Some(ImageFormat::Tiff) => complete,
-                Some(_) => true,
-                None => false,
             };
-            if !conclusive {
-                if complete {
-                    return Err(StepError::Codec(CodecSetError::UnrecognizedFormat));
-                }
-                return Ok(Progress::need(0));
-            }
-            let format = detected.expect("conclusive implies detected");
             let job = self.set.decode_job(format).map_err(StepError::Codec)?;
             let inner = job
                 .into_incremental_decoder(&self.preferred)
@@ -924,11 +1108,11 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         }
         let inner = self.inner.as_mut().expect("set above");
         inner
-            .step(input, sink, stop)
+            .step(input, sink, pulse)
             .map_err(|e| e.map_codec(|c| CodecSetError::Codec(c.into_inner())))
     }
 
-    fn requested(&self) -> &[crate::traits::Request] {
+    fn requested(&self) -> &[crate::traits::InputRequest] {
         match &self.inner {
             Some(inner) => inner.requested(),
             None => &self.probe,
@@ -946,14 +1130,7 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
     fn access_pattern(&self) -> crate::source::AccessPattern {
         match &self.inner {
             Some(inner) => inner.access_pattern(),
-            None => self
-                .set
-                .decoders
-                .iter()
-                .map(|d| d.capabilities().access_pattern())
-                .fold(crate::source::AccessPattern::Sequential, |a, b| {
-                    a.most_demanding(b)
-                }),
+            None => self.set.operation_access_pattern(),
         }
     }
 }

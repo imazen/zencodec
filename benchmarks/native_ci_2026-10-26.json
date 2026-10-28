@@ -1,0 +1,34 @@
+{
+  "kind": "complete native correctness suite; no codec performance claim",
+  "base_commit": "e6aacfd155fc699aaa98f77658e88e5719562f7b",
+  "manifest_sha256": "def08ffd256654c19008e40681dcdfda1e4e1d692c135740042b63e58de8e14e",
+  "test_profile": {
+    "opt_level": 1,
+    "debug": 1,
+    "debug_assertions": true,
+    "overflow_checks": true
+  },
+  "command": "just spatial-ci-check <fresh-artifact-directory>",
+  "unchanged_test_timeout": "10 minutes including compilation",
+  "host": "r7900x",
+  "checks": {
+    "native_tests": {
+      "passed": 112,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_clippy": "passed",
+    "coverage": "entire standalone native TIFF/JXL suite including registry, dependencies, raw layers, color/auxiliary interpretation, conversion, selection, resource-scope controls and independent pinned readers"
+  },
+  "exit_code": 0,
+  "run_heavy": "done rc=0 83s | peak-RSS 0.80GiB | min-avail 12271MiB | peak-load 1.35",
+  "previous_ci_failure": {
+    "run": 40380574467,
+    "job": 121775363472,
+    "exit_code": 124,
+    "reason": "unoptimized complete native suite reached existing ten-minute command limit; no reported assertion failure before timeout"
+  },
+  "measurement_limit": "Whole build/test resource observation; not native codec timing, decoder RAM or a speed comparison. Profile optimization leaves all correctness gates enabled.",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-ci-optimized-1",
+  "log_sha256": "72610b214bc097c2bee6e88fbc7188c6b8c91d15d968a77e73d94fd3c2416998"
+}

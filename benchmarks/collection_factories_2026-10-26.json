@@ -1,0 +1,105 @@
+{
+  "base_revision": "ab57e4d616ac22b2037dc1730ba727997ad2529f",
+  "scope": "Private format-erased native collection factories with borrowed local positional sources, resident-only JXL, checked publication and original errors. No production CodecSet registration or new public source trait.",
+  "sources": {
+    "perf/spatial-validation/src/collection_factories.rs": "3c5e7de3b94377d4d6745b0dd08d2d0db6cd4b20fc7f1fd85579c4b05cefe4b8",
+    "perf/spatial-validation/src/erased_collection.rs": "075070c9f4ca1725cbc107aef975f104c2aa695aa84c0a1a64abb90bc9d621c0",
+    "perf/spatial-validation/src/local_source.rs": "fd669eb443e43440c4c76738c90d3770f37f04904965d7a099dcf53b1cbd2f26",
+    "perf/spatial-validation/src/factory_tests.rs": "f3fefbbda5b463a123ed5c046384a05638534dce743e22942334f2886f267f4c",
+    "perf/spatial-validation/src/http_tests.rs": "d96697fad2b2c5ca8cdb457937e0025f1aeafb44a85f41bf50a8b7b4f19cd292",
+    "perf/spatial-validation/src/collection.rs": "82336a34c3ae2dfa3ae3f65d8e7fd0bffdf1d5b01798cf51d1897d55940d4298"
+  },
+  "runs": [
+    {
+      "log": "zencodec-factory-compile-1-2026-10-26.log",
+      "sha256": "d59513c113f299def5fc1aa7d14c2935070d1f857f83b5b37214098305f37cd9",
+      "scope": "Initial DynReadAt factory rejects the actual local HTTP source (Send), and method dispatch on a reference exposes a borrow-lifetime error. The private LocalSource candidate removes the Send requirement and explicitly borrows the underlying source slice.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13297MiB :: timeout --kill-after=10s 180s cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked --features http --no-run",
+        "run-heavy: done rc=101 2s | peak-RSS 0.33GiB | min-avail 13297MiB | peak-load 0.09"
+      ]
+    },
+    {
+      "log": "zencodec-factories-native-1-2026-10-26.log",
+      "sha256": "901f2a90bdc24bcc5de6d20928c1ef86a41c6cd7c4fbf91102c46acdca55646d",
+      "scope": "New tests initially used At fields instead of the error() accessor; test compile error corrected.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13288MiB :: timeout --kill-after=10s 180s just spatial-factories-check",
+        "run-heavy: done rc=101 1s | peak-RSS 0.32GiB | min-avail 13288MiB | peak-load 0.18"
+      ]
+    },
+    {
+      "log": "zencodec-factories-native-2-2026-10-26.log",
+      "sha256": "8abb81fb6029c3b48a857ab6524b2c04038b7efbe3fad4c29e1fea5bf3b8c3ee",
+      "scope": "Seven native factory controls and strict lint pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13317MiB :: timeout --kill-after=10s 180s just spatial-factories-check",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.84s",
+        "run-heavy: done rc=0 5s | peak-RSS 0.58GiB | min-avail 12862MiB | peak-load 0.36"
+      ]
+    },
+    {
+      "log": "zencodec-factories-http-1-2026-10-26.log",
+      "sha256": "1ed4429480e91f9c97e8b0d9a43f2ee1c123ffef7f566b14d08eb148a5837068",
+      "scope": "Initial actual HTTP registry path and six existing transport controls pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13298MiB :: timeout --kill-after=10s 180s just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-http-1 3568",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 101 filtered out; finished in 9.58s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 9815, \"cases\": 59, \"statuses\": {\"200\": 1, \"206\": 9802, \"302\": 1, \"412\": 11}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 15s | peak-RSS 0.62GiB | min-avail 12808MiB | peak-load 0.31"
+      ]
+    },
+    {
+      "log": "zencodec-factories-integration-2026-10-26.log",
+      "sha256": "b245b0981ef73fbec0d33da222ea2fb3f5559f8b2d7152ba64d650b9091772fe",
+      "scope": "Eight controls pass. The new cancellation test initially expected only CodecError, overlooking the existing PolicyFailure stop family. Corrected to require the exact original reason from either family.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13223MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-disk-1; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-http-2 3568",
+        "test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.93s",
+        "run-heavy: done rc=101 2s | peak-RSS 0.58GiB | min-avail 13133MiB | peak-load 0.30"
+      ]
+    },
+    {
+      "log": "zencodec-factories-integration-2-2026-10-26.log",
+      "sha256": "823f7f3a20f41c76b7b0485920881f04e0356b08dd18d998015bfbd1987b49b1",
+      "scope": "Nine native controls including owned stable disk files and every observed cancellation seam pass; seven HTTP tests including final-read source replacement/short bodies and strict lint pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13255MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-disk-2; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-http-2 3568",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.97s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 103 filtered out; finished in 10.60s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 10934, \"cases\": 62, \"statuses\": {\"200\": 1, \"206\": 10920, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 15s | peak-RSS 0.62GiB | min-avail 13094MiB | peak-load 0.44"
+      ]
+    },
+    {
+      "log": "zencodec-factories-guide-2026-10-26.log",
+      "sha256": "e61482fc8fef5d88d9acfa65d6178a2f228e9a45285564e1db0e24facf2b2296",
+      "scope": "Ten native controls including the exact guide example and strict lint pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13251MiB :: timeout --kill-after=10s 180s just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/factories-disk-3",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.96s",
+        "run-heavy: done rc=0 3s | peak-RSS 0.58GiB | min-avail 13099MiB | peak-load 0.34"
+      ]
+    },
+    {
+      "log": "zencodec-factories-site-2026-10-26.log",
+      "sha256": "cdcc9ed2149b7b79490f525c565d944389d9d3c4b10884f6521d56803ba03005",
+      "scope": "All source and browser checks pass, including the factory example, signatures and independent context expansion.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13250MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12748MiB | peak-load 0.32"
+      ]
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/factories-{disk-1,disk-2,disk-3,http-1,http-2}",
+  "remaining": [
+    "Public adapter packaging, automatic format detection and CodecSet registration.",
+    "Public local/transferable source erasure, transferable opened jobs and fallible cursor erasure allocation.",
+    "Complete native workspace and privacy admission; qualified performance comparison.",
+    "A common outer stop-reason accessor to avoid error-family coordination while retaining original causes."
+  ],
+  "interpretation": "Correctness only. Resource receipts measure test/build processes; no native workspace or speed claim."
+}

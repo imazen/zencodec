@@ -14,7 +14,7 @@
 //! - [`session`]: codec sessions with explicit backpressure (`send` /
 //!   `receive`), drain at end of input, and discard-only reset.
 //! - [`container`]: a sans-I/O [`Demuxer`](container::Demuxer) speaking the
-//!   image decoders' `Input`/`Request` dialogue (so every `zencodec-io`
+//!   image decoders' `Input`/`InputRequest` dialogue (so every `zencodec-io`
 //!   driver serves it), and a [`Muxer`](container::Muxer) whose bytes are
 //!   pulled like a streaming image encoder's.
 //! - [`adapt`]: the animation traits as a layer over demuxer + decoder and
@@ -27,11 +27,23 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 pub mod adapt;
 pub mod container;
 pub mod frame;
 pub mod limits;
+/// Checked synchronous output drivers (requires `std`).
+#[cfg(feature = "std")]
+pub mod output;
 pub mod packet;
+pub mod policy;
 pub mod session;
+/// Owned finite video encoding with admitted compressed staging (requires `std`).
+#[cfg(feature = "std")]
+pub mod staged;
+/// Explicit memory/disk compressed packet staging (requires `std`).
+#[cfg(feature = "std")]
+pub mod staging;
 pub mod track;

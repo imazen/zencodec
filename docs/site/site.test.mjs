@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { lanes } from './content.mjs';
 import { migrations } from './migration-data.mjs';
+import { improvements } from './improvements.mjs';
 const root=new URL('../_site/',import.meta.url);
 const html=await readFile(new URL('index.html',root),'utf8');
 test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
@@ -70,4 +71,48 @@ test('unlisted migration map separates release states and deploys with the guide
   assert.ok(page.includes('prototype::PolicyResolver (private)'));
   assert.ok(page.includes('data-example="convert_display"'));
   assert.ok(page.includes('data-example="convert_framebuffer"'));
+});
+
+test('checked API page links executable examples and actual signatures for each role',async()=>{
+  const page=await readFile(new URL('ideal.html',root),'utf8');
+  assert.ok(html.includes('href="ideal.html"'));
+  const ids=[...page.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+  assert.equal(new Set(ids).size,ids.length);
+  for(const role of ['consumer','adapter','implementor','target'])assert.ok(ids.includes(role));
+  for(const [,url] of page.matchAll(/(?:href|src)="([^"]+)"/g)) {
+    if(url.startsWith('#')){assert.ok(ids.includes(url.slice(1)),url);continue;}
+    if(url.startsWith('https://')||url==='data:,')continue;
+    assert.ok(!url.includes('..'),url);
+    assert.ok((await stat(new URL(url,root))).isFile(),url);
+  }
+  assert.ok(page.includes('docs/examples/checked_operations.rs'));
+  assert.ok(page.includes('perf/jpeg-policy-validation/src/checked_examples.rs'));
+  assert.ok(page.includes('data-api="operationResolver"'));
+  assert.ok(page.includes('data-api="operationControl"'));
+  assert.ok(page.includes('qualification gaps'));
+  assert.ok(!page.includes('prototype::PolicyResolver'));
+  assert.ok(page.includes('data-example="checked_resolution"'));
+  assert.ok(page.includes('data-example="checked_video_storage"'));
+  assert.ok(html.includes('ideal.html#changes'));
+  assert.ok(page.includes('data-api="outputPlan"'));
+  assert.ok(page.includes('data-api="ycbcrPlan"'));
+  const ycbcrApi=JSON.parse(await readFile(new URL('../ycbcr-api.json',import.meta.url),'utf8'));
+  assert.match(ycbcrApi.surface,/pub fn convert_rows<'b>/);
+  assert.match(ycbcrApi.surface,/pub fn from_u16/);
+  assert.match(ycbcrApi.surface,/pub enum YcbcrError/);
+  assert.ok(page.includes(`/blob/${ycbcrApi.revision}/zenpixels-convert/src/ycbcr.rs`));
+  assert.ok(page.includes('data-example="native_required_layout"'));
+  const outputApi=JSON.parse(await readFile(new URL('../output-plan-api.json',import.meta.url),'utf8'));
+  assert.ok(page.includes(`/blob/${outputApi.revision}/${outputApi.path}#L${outputApi.line}`));
+  assert.match(outputApi.surface,/pub fn new_with_descriptor\(/);
+  assert.match(outputApi.surface,/pub fn new_preserving_samples\(/);
+  assert.match(outputApi.surface,/pub const fn retain_channels\(/);
+  assert.match(outputApi.surface,/pub fn borrow_rows<'a>/);
+  for(const entry of improvements) {
+    assert.ok(ids.includes(`change-${entry.id}`));
+    for(const field of ['why','consumer','adapter','implementor','open']) assert.ok(entry[field]?.length,`${entry.id}: ${field}`);
+    assert.ok(entry.signatures.length>0);
+    assert.ok(entry.evidence.length>0);
+    for(const [,target] of entry.evidence) if(!target.startsWith('https://')) await stat(new URL(`../../${target}`,import.meta.url));
+  }
 });

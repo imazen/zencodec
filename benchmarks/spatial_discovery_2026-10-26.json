@@ -1,0 +1,44 @@
+{
+  "base": "87e54ded618ead5fbc542e5d53103db9118a9e70",
+  "scope": "Private immutable operation-wide discovery-call allowance, charged before delegation for images, children and next. Native TIFF/JXL consumers and exact selected samples; no new public library API.",
+  "command": "just spatial-discovery-check",
+  "initial_failure": "New fault-injection fixture held a RefCell read borrow while requesting a mutable borrow. Split the setup statements; no established expectation changed.",
+  "receipts": [
+    {
+      "log": "zencodec-discovery-budget-2026-10-26.log",
+      "sha256": "3c9f989516669c2be62f28ba064bfd01106a81375432e3338a3798c0d43e4f7d",
+      "results": [
+        "test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 60 filtered out; finished in 5.64s",
+        "run-heavy: done rc=101 8s | peak-RSS 0.54GiB | min-avail 12705MiB | peak-load 0.31"
+      ]
+    },
+    {
+      "log": "zencodec-discovery-budget2-2026-10-26.log",
+      "sha256": "d6bb25fe8d3d399553874bef1a005ebf61a8a9e8c3637e9ec7bad5863652348e",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 5.66s",
+        "run-heavy: done rc=0 8s | peak-RSS 0.54GiB | min-avail 12793MiB | peak-load 0.25"
+      ]
+    },
+    {
+      "log": "zencodec-stop-reasons-guide-2026-10-26.log",
+      "sha256": "af34b415efe965a948dc38f9874ade944179a4668ce03165906f60b4ab8768f0",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 12558MiB | peak-load 0.58"
+      ]
+    },
+    {
+      "log": "zencodec-discovery-guide-2026-10-26.log",
+      "sha256": "db1dda4c752a97f5a3f624d5cea9999a2032ee74f10f38c37912b569889a9230",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 12599MiB | peak-load 0.40"
+      ]
+    }
+  ],
+  "limits": [
+    "Does not bound parsing/graph work, source bytes or memory inside a call",
+    "Native open precedes this wrapper and requires its own admission",
+    "No performance or cancellation latency claim",
+    "Keep private pending operation-context integration and native-work qualification"
+  ]
+}

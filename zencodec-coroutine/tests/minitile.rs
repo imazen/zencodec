@@ -6,8 +6,8 @@
 
 use enough::StopReason;
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo, Request,
-    SinkError, StepError,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, SinkError, StepError,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -130,8 +130,8 @@ impl ReadAt for CountingSource<'_> {
     }
 }
 
-fn stop() -> &'static dyn enough::Stop {
-    &enough::Unstoppable
+fn stop() -> &'static dyn zencodec::Pulse {
+    &zencodec::how_far::NoPulse
 }
 
 #[test]
@@ -190,12 +190,12 @@ fn sequential_reads_ask_for_the_rest_of_the_read() {
     let mut sink = CollectSink::new();
     let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
     assert_eq!(p.event, Event::Need);
-    assert_eq!(dec.requested(), &[Request::at_least(0, 4)]);
+    assert_eq!(dec.requested(), &[InputRequest::at_least(0, 4)]);
     let p = dec.step(Input::new(0, b"SE"), &mut sink, stop()).unwrap();
     assert_eq!((p.consumed, p.event), (2, Event::Need));
     assert_eq!(
         dec.requested(),
-        &[Request::at_least(2, 2)],
+        &[InputRequest::at_least(2, 2)],
         "still short: one contiguous request for the rest of the read"
     );
     let p = dec.step(Input::new(2, b"Q1"), &mut sink, stop()).unwrap();
@@ -203,7 +203,7 @@ fn sequential_reads_ask_for_the_rest_of_the_read() {
     assert_eq!(p.event, Event::Metadata(MetadataUpdate::HeaderReady));
     let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
     assert_eq!(p.event, Event::Need);
-    assert_eq!(dec.requested(), &[Request::at_least(4, 8)]);
+    assert_eq!(dec.requested(), &[InputRequest::at_least(4, 8)]);
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn one_strip_per_step_and_begin_before_rows() {
         match p.event {
             Event::Need => {
                 let r = match dec.requested()[0] {
-                    Request::Range(r) => r,
+                    InputRequest::Range(r) => r,
                     other => panic!("{other:?}"),
                 };
                 input_at = r.offset as usize;
@@ -464,11 +464,21 @@ fn cancellation_keeps_the_stop_reason_and_is_terminal() {
     let mut sink = CollectSink::new();
     use almost_enough::Cancellable;
     assert_eq!(
-        dec.step(Input::empty(), &mut sink, &stopper).unwrap().event,
+        dec.step(
+            Input::empty(),
+            &mut sink,
+            &zencodec::how_far::StopOnly::borrowed(&stopper)
+        )
+        .unwrap()
+        .event,
         Event::Need
     );
     stopper.stop();
-    match dec.step(Input::empty(), &mut sink, &stopper) {
+    match dec.step(
+        Input::empty(),
+        &mut sink,
+        &zencodec::how_far::StopOnly::borrowed(&stopper),
+    ) {
         Err(StepError::Cancelled(StopReason::Cancelled)) => {}
         other => panic!("expected Cancelled, got {other:?}"),
     }

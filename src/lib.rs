@@ -22,10 +22,10 @@
 //! # Re-exported crates
 //!
 //! The [`enough`] crate is re-exported for cooperative cancellation
-//! (`enough::Stop`).
+//! (`how_far::Pulse`: progress, cancellation, and phase planning).
 //!
 //! ```rust,ignore
-//! use enough::Stop;
+//! use zencodec::{NoPulse, Pulse, SharedPulse};
 //! ```
 //!
 //! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement the
@@ -49,11 +49,13 @@ whereat::define_at_crate_info!();
 
 pub mod animation;
 mod capabilities;
+pub mod collection;
 /// Cross-codec color-signaling emission policy (ICC vs CICP). See
 /// `docs/color-emit-model.md`.
 mod color;
 mod cost;
 mod detect;
+mod encode_plan;
 mod error;
 pub mod estimate;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
@@ -61,6 +63,8 @@ pub mod exif;
 mod extensions;
 mod fidelity;
 mod format;
+pub mod frame;
+mod frame_storage;
 /// Cross-codec gain map types (ISO 21496-1).
 pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
@@ -70,6 +74,7 @@ pub mod helpers;
 // breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
 // a future major; do not ship it in a patch/minor.
 pub mod icc;
+pub mod image;
 mod info;
 pub mod inventory;
 mod limits;
@@ -77,13 +82,17 @@ mod metadata;
 /// Metadata-only rewrite requests, reports and runtime service contracts.
 pub mod metadata_rewrite;
 mod negotiate;
+pub mod operation;
 mod orientation;
 mod output;
 mod output_buffer;
+/// Shared sans-I/O finish patches for image and container output.
+pub mod output_patch;
 mod policy;
 mod set;
 mod sink;
 pub mod source;
+pub mod storage;
 pub mod time;
 mod traits;
 
@@ -111,10 +120,12 @@ pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
 };
+mod resolution;
 pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
+pub use resolution::ResolutionError;
 pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
 pub use zenpixels::ColorAuthority;
 
@@ -140,7 +151,8 @@ pub use almost_enough::StopToken;
 pub use enough;
 pub use enough::Unstoppable;
 pub use how_far;
-pub use how_far::Pulse;
+pub use how_far::NoPulse;
+pub use how_far::{Pulse, SharedPulse};
 
 /// Location-tracing error wrapper, re-exported from [`whereat`].
 ///
@@ -198,6 +210,10 @@ pub mod encode {
 
     // Types
     pub use crate::capabilities::EncodeCapabilities;
+    pub use crate::encode_plan::{
+        ColorCarriers, EncodeDeclaration, EncodePlan, EncodePlanError, InputRequirement,
+        OutputPhase, SourcePasses,
+    };
     pub use crate::fidelity::{
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };
@@ -226,10 +242,18 @@ pub mod encode {
 /// Codec implementors implement the generic traits. Dispatch callers
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
+    #[allow(deprecated)]
+    pub use crate::traits::Request;
+
+    pub use crate::traits::{
+        BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+        DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
+        InterpretationUnavailable, erase_controlled,
+    };
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, ErasedError, Event,
-        Fused, IncrementalDecode, Input, MetadataUpdate, Progress, Request, StepError,
+        Fused, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
         StreamingDecode, erase_incremental,
     };
 
@@ -275,5 +299,5 @@ pub mod prelude {
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
         DynEncoderConfig, EncodeJob, Encoder, EncoderConfig,
     };
-    pub use how_far::Pulse;
+    pub use how_far::{Pulse, SharedPulse};
 }

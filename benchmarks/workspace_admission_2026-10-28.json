@@ -1,0 +1,26 @@
+{
+  "tested_source": "7358912e",
+  "paired_pixels": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+  "api": "PolicySet::check_workspace(Option<u64>) -> Result<(), UnmetRequirements>",
+  "scope": "Adapter early workspace predicate; no native entry-order qualification claimed",
+  "controls": {
+    "shared_policy": "6 tests pass, including early/joint agreement for direct and preset choice, unknown/exceeded named evidence, remaining metadata/final-adoption refusal, typed cause retention",
+    "binding": "8 existing tests pass",
+    "clippy": "strict core all-targets passed",
+    "receipt": "run-heavy: done rc=0 17s | peak-RSS 0.43GiB | min-avail 4120MiB | peak-load 0.76"
+  },
+  "catalog": {
+    "result": "Current public/API catalog signatures regenerated and checked",
+    "receipt": "run-heavy: done rc=0 16s | peak-RSS 0.27GiB | min-avail 4420MiB | peak-load 0.51"
+  },
+  "guide": {
+    "command": "just docs-site-browser-check 3547",
+    "result": "24 source tests and responsive browser suites pass; new adapter example preserves source context and exact copy",
+    "receipt": "run-heavy: done rc=0 40s | peak-RSS 0.32GiB | min-avail 3899MiB | peak-load 0.68"
+  },
+  "limits": [
+    "Call order is the native adapter responsibility: check both legacy and bound snapshots before covered preparation.",
+    "Final pixel interpretation still does not prove metadata completeness.",
+    "No new workspace measurement, release approval, or general deferred-obligation mechanism."
+  ]
+}

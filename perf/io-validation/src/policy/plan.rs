@@ -25,6 +25,84 @@ impl fmt::Display for PlanError {
 }
 impl Error for PlanError {}
 
+/// Authoritative preparation state, independent of the diagnostic ring.
+/// This conservative experiment blocks every execution effect until all three
+/// stages are admitted. It does not model arbitrary effect-specific deadlines.
+#[derive(Debug)]
+pub(crate) struct PendingPlan {
+    execution: Selected,
+    metadata: Option<Selected>,
+    fidelity: Option<Selected>,
+}
+impl PendingPlan {
+    #[track_caller]
+    pub fn new(execution: Selected, current: Context) -> Result<Self, At<PlanError>> {
+        if !matches!(execution.alternative.action, Action::Execution(_)) {
+            return Err(At::wrap(PlanError::UnexpectedQuestion).at());
+        }
+        if execution.context != current {
+            return Err(At::wrap(PlanError::Stale).at());
+        }
+        Ok(Self {
+            execution,
+            metadata: None,
+            fidelity: None,
+        })
+    }
+
+    /// Validate before mutation so a refused child/stale selection cannot
+    /// replace an already admitted stage or discharge another obligation.
+    #[track_caller]
+    pub fn accept(&mut self, selected: Selected, current: Context) -> Result<(), At<PlanError>> {
+        let fail = |e| At::wrap(e).at();
+        if selected.operation != self.execution.operation {
+            return Err(fail(PlanError::ForeignOperation));
+        }
+        if selected.requirements != self.execution.requirements {
+            return Err(fail(PlanError::ChangedRequest));
+        }
+        if selected.context != current || current != self.execution.context {
+            return Err(fail(PlanError::Stale));
+        }
+        let slot = match selected.alternative.action {
+            Action::Metadata(_) => &mut self.metadata,
+            Action::Fidelity(_) => &mut self.fidelity,
+            Action::Execution(_) => return Err(fail(PlanError::Duplicate)),
+            Action::Media(_) | Action::Boundary(_) => {
+                return Err(fail(PlanError::UnexpectedQuestion));
+            }
+        };
+        if slot.is_some() {
+            return Err(fail(PlanError::Duplicate));
+        }
+        *slot = Some(selected);
+        Ok(())
+    }
+
+    pub fn remaining(&self) -> impl Iterator<Item = Kind> + '_ {
+        [
+            self.metadata.is_none().then_some(Kind::Metadata),
+            self.fidelity.is_none().then_some(Kind::Fidelity),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
+    #[track_caller]
+    pub fn finish(self, current: Context) -> Result<Plan, At<PlanError>> {
+        if current != self.execution.context {
+            return Err(At::wrap(PlanError::Stale).at());
+        }
+        let metadata = self
+            .metadata
+            .ok_or_else(|| At::wrap(PlanError::Missing).at())?;
+        let fidelity = self
+            .fidelity
+            .ok_or_else(|| At::wrap(PlanError::Missing).at())?;
+        Plan::combine(&[self.execution, metadata, fidelity], current)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Plan {
     pub operation: u64,

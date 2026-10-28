@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "c7e76b23fec2f11f8631c4c25842727c3dc92a9e",
+  "source_sha256": {
+    "perf/av1-policy-validation/src/float_processing.rs": "a3590eb98c643d9d3995785ce186136f33062f2262a961b0b35618a647f6c539",
+    "perf/av1-policy-validation/src/prepared_conversion.rs": "4c1fdba02dcbc6ba6dfcd6b6c669e16a858f73b2fe736a42e3035bea39800ff9",
+    "perf/av1-policy-validation/dependencies.lock": "c3743488bc4f0d0757075d86145fac56bbf00d9b32ce9712ccf53c9e9fb8d421"
+  },
+  "zenpixels_rev": "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8",
+  "linear_srgb_version": "0.6.12",
+  "presentations": 54,
+  "crops": 162,
+  "metrics": {
+    "max_iec_error": 5.6949194831901195e-05,
+    "max_roundtrip_error": 1.0728836059570312e-06,
+    "max_continuous_error": 1.1395496919419656e-06,
+    "min_linear": -0.98394775,
+    "max_linear": 4.857329,
+    "clipped_samples": 10714
+  },
+  "gate": "Absolute 0.00001 against the selected continuous curve and for roundtrip. IEC/CSS disagreement is measured separately, with no accepted tolerance. Row batches are byte-identical.",
+  "reference": "https://www.w3.org/TR/css-color-4/#color-conversion-code",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/float-processing-full",
+  "validation": {
+    "command": "just av1-policy-check <fresh-artifacts>",
+    "log": "/home/lilith/tmp/zencodec-float-processing-full-20261027.log",
+    "exit_code": 0,
+    "run_heavy": "41s | peak-RSS 0.56GiB | min-avail 11354MiB | peak-load 0.66"
+  },
+  "initial_finding": {
+    "log": "/home/lilith/tmp/zencodec-float-processing-20261027.log",
+    "reason": "The initial 0.00001 IEC agreement probe failed: library constants define a different continuous curve. Retained the disagreement as a measurement; numerical regression checks name the actual curve."
+  },
+  "verified": [
+    "Real native source -> unclipped sRGB F32 -> OutputPlan linear RGB F32 -> sRGB",
+    "whole-image and 1/2/4-row batches are bit-identical for all native frames and crops",
+    "strided destination padding untouched; returned context matches samples",
+    "processed owner adopted without a pixel copy; source facts, geometry, timing and presentation retained",
+    "forbid_lossy default clips extended samples; explicit false preserves excursions"
+  ],
+  "changes": {
+    "public_api": 0,
+    "zenpixels_source": 0,
+    "new_packages": 0,
+    "dependency_note": "Direct no-default-feature convert dependency was already transitively present. Both pixel crates move from 1d3ddd21 to reviewed OutputPlan 02ccdfb0.",
+    "packages_before": 140,
+    "packages_after": 140
+  },
+  "remaining": [
+    "public planar conversion route",
+    "clear strict preset replacement/deprecation",
+    "explicit or documented numerical model/accuracy contract",
+    "HDR and other matrices/transfers",
+    "whole-operation workspace limits",
+    "performance and compile-time comparisons"
+  ],
+  "site_validation": {
+    "log": "/home/lilith/tmp/zencodec-float-processing-site-3-20261027.log",
+    "exit_code": 0,
+    "run_heavy": "10s | peak-RSS 0.17GiB | min-avail 11204MiB | peak-load 0.72"
+  }
+}

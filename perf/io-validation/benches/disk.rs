@@ -18,11 +18,11 @@ fn disk(suite: &mut Suite) {
                     .max_time(std::time::Duration::from_secs(2))
                     .max_rounds(30);
                 for positional in [false, true] {
-                    let mut source: Box<dyn ReadAt<Error = zencodec::source::SourceError> + Send> =
+                    let mut source: Box<dyn ReadAt<Error = zencodec_io::StdSourceError> + Send> =
                         if positional {
                             Box::new(zencodec_io::FileReadAt::open(&path).unwrap())
                         } else {
-                            Box::new(SeekRead::open(&path).unwrap())
+                            Box::new(NativeErrors(SeekRead::open(&path).unwrap()))
                         };
                     let offsets = offsets(size, random);
                     verify(&mut *source, size, &offsets);

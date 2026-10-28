@@ -53,6 +53,7 @@ jobs:
   jpeg:
     name: Qualify native JPEG contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       CARGO_BUILD_JOBS: 4
       CARGO_INCREMENTAL: 0
@@ -72,6 +73,146 @@ jobs:
           cp perf/jpeg-policy-validation/dependencies.lock perf/jpeg-policy-validation/Cargo.lock
           cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Execute effective-job preflight implementation experiment
+        timeout-minutes: 7
+        run: |
+          python3 -m unittest discover -s perf/jpeg-policy-validation -p test_native_graph.py
+          python3 perf/jpeg-policy-validation/check-native-preflight.py \
+            "$HOME/tmp/zencodec-native-preflight-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --target "$GITHUB_WORKSPACE/perf/jpeg-policy-validation/target"
+
+  av1:
+    name: Qualify native AV1 policy and guide
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+      AV1_POLICY_ARTIFACTS: ${{ github.workspace }}/perf/av1-policy-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
+      AV1_TIMING_FFPROBE: ${{ github.workspace }}/perf/av1-policy-validation/target/timing-oracle/ffmpeg-8.0.1/ffprobe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/av1-policy-validation
+      - name: Install independent AV1 oracle
+        timeout-minutes: 6
+        run: |
+          # The Azure package mirror exhausted the entire job deadline while
+          # downloading FFmpeg. Keep Ubuntu's signed packages, using its archive
+          # mirror and explicit command deadlines instead.
+          # Hosted images also resolve URIs through mirror+file, so changing the
+          # sources file alone does not change their selected download host.
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
+          timeout --kill-after=5s 10s ffmpeg -version
+      - name: Build pinned container timing inspector
+        timeout-minutes: 7
+        run: |
+          timeout --kill-after=15s 6m python3 perf/av1-policy-validation/build_timing_oracle.py perf/av1-policy-validation/target/timing-oracle
+          timeout --kill-after=5s 10s "$AV1_TIMING_FFPROBE" -version
+      - name: Test pinned native ownership, policy and independent readback
+        run: |
+          cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Verify unclipped planar float output independently
+        timeout-minutes: 2
+        run: |
+          timeout --kill-after=5s 90s python3 perf/av1-policy-validation/inspect_planar_rgb.py "$AV1_POLICY_ARTIFACTS" "${AV1_POLICY_ARTIFACTS}-rgb" --float-output --verify-float
+      - name: Verify saved unclipped Gamma22 traces
+        timeout-minutes: 2
+        run: |
+          timeout --kill-after=5s 30s python3 -m unittest discover -s perf/av1-policy-validation -p verify_gamma_test.py
+          timeout --kill-after=5s 60s python3 perf/av1-policy-validation/verify_gamma.py "$AV1_POLICY_ARTIFACTS" "$AV1_POLICY_ARTIFACTS/independent-gamma.json"
+      - name: Retain planar conversion evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: av1-planar-rgb-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            perf/av1-policy-validation/target/oracle-*-rgb/**
+            perf/av1-policy-validation/target/oracle-*/planar-*/**
+            perf/av1-policy-validation/target/oracle-*/independent-gamma.json
+          if-no-files-found: error
+
+  spatial:
+    name: Qualify native TIFF and JXL image selection
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+      SPATIAL_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
+      SPATIAL_GENERATED_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-generated
+      SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
+      SPATIAL_PROJECTION_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-projection
+      SPATIAL_INVENTORY_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-inventory
+      SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
+      JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
+      JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
+      SPATIAL_COLOR_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-cms/color-oracle
+      SPATIAL_COLOR_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-color
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/spatial-validation
+      - name: Install pinned independent libtiff oracle
+        timeout-minutes: 3
+        run: |
+          timeout --kill-after=10s 30s python3 -m venv perf/spatial-validation/target/oracle-python
+          timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
+      - name: Build pinned independent libjxl oracles
+        timeout-minutes: 8
+        run: |
+          # Use the same signed-package mirror and bounded downloads as AV1.
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
+          timeout --kill-after=15s 6m python3 perf/spatial-validation/build_jxl_oracles.py "$(dirname "$JXL_SELECTION_ORACLE")"
+          timeout --kill-after=10s 1m python3 perf/spatial-validation/build_color_oracle.py "$(dirname "$SPATIAL_COLOR_ORACLE")"
+      - name: Execute native spatial selection and exact guide example
+        run: |
+          cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
+      - name: Check standalone renderer and its example
+        timeout-minutes: 5
+        run: |
+          cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
+          timeout --kill-after=15s 2m cargo check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
+          timeout --kill-after=15s 2m cargo clippy --manifest-path zencodec-render/Cargo.toml --all-targets --locked -- -D warnings
+          timeout --kill-after=15s 2m cargo test --manifest-path zencodec-render/Cargo.toml --locked
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - name: Check renderer MSRV
+        timeout-minutes: 3
+        run: timeout --kill-after=15s 2m cargo +1.89.0 check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
+      - name: Retain independent layer evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: spatial-oracles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            perf/spatial-validation/target/oracle-*-jxl/provenance.json
+            perf/spatial-validation/target/oracle-*-jxl/commands.json
+            perf/spatial-validation/target/oracle-*-layers/**/*.json
+            perf/spatial-validation/target/oracle-*-layers/**/stderr.txt
+            perf/spatial-validation/target/oracle-*-cms/provenance.json
+            perf/spatial-validation/target/oracle-*-color/**/comparison.json
+            perf/spatial-validation/target/oracle-*-color/**/publication.json
+            perf/spatial-validation/target/oracle-*-projection/**/*.json
+            perf/spatial-validation/target/oracle-*-projection/**/*.txt
+            perf/spatial-validation/target/oracle-*-inventory/**/*.json
+            perf/spatial-validation/target/oracle-*-color/**/stderr.txt
+          if-no-files-found: error
 
   build:
     name: Build and exercise guide
@@ -88,7 +229,11 @@ jobs:
       - run: npm test --prefix docs
       - name: Install browser
         working-directory: docs
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: |
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          timeout --kill-after=15s 3m npx playwright install-deps chromium
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=20000 timeout --kill-after=15s 3m npx playwright install chromium
       - name: Check navigation, diagrams, examples and mobile layout
         run: |
           python3 -m http.server 3537 --bind 127.0.0.1 --directory docs/_site > "$RUNNER_TEMP/docs-server.log" 2>&1 &
@@ -110,7 +255,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [examples, jpeg, build]
+    needs: [examples, jpeg, av1, spatial, build]
     runs-on: ubuntu-latest
     permissions:
       pages: write

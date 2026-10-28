@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-28",
+  "scope": "Controlled completion consistency and staged publication admission; scripted backends, not native-codec performance",
+  "review_base": "019cd47bd4ef64ccf6ed588262a834173cd4b895",
+  "source_sha256": {
+    "src/traits/incremental.rs": "0edfa24af77c66e358604249bd1af68c6977c0cfccf27c4286aa5823aaf069af",
+    "zencodec-media/src/staged.rs": "e35acf8b3d4e6b462f9fac6f19aa4740dc78a363461ec7ae03047c6906dd2554",
+    "zencodec-media-testkit/tests/policy_completion_review.rs": "6536627cdb095423b9e2bb730901ec654ea844b127bb4364f142ecf261de4971",
+    "zencodec-testkit/tests/policy_final_facts_review.rs": "46ac1a898dd2f0a5f72c54e5516d2b6613aa6913576bcff6c1450b16f5ff098c"
+  },
+  "baseline": {
+    "staged_tests": {
+      "passed": 0,
+      "failed": 2,
+      "observation": "Header bytes published without a policy decision"
+    },
+    "completion_tests": {
+      "passed": 0,
+      "failed": 1,
+      "observation": "Done accepted width 2 and RGBA8 after adoption of width 1 and RGB8"
+    },
+    "receipt": "run-heavy: done rc=0 6s | peak-RSS 0.29GiB | min-avail 4758MiB | peak-load 0.92",
+    "wrapper_note": "Wrapper recorded both expected rc101 test processes; rc0 is not a baseline test pass"
+  },
+  "fixed": {
+    "staged_tests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "completion_tests": {
+      "passed": 1,
+      "failed": 0
+    },
+    "workspace": "cargo test --locked --workspace --all-features passed",
+    "clippy": "cargo clippy --locked --workspace --all-features --all-targets -- -D warnings passed",
+    "receipt": "run-heavy: done rc=0 19s | peak-RSS 0.42GiB | min-avail 4617MiB | peak-load 0.85"
+  },
+  "followup": {
+    "scope": "Identical and stricter late presets, named refusal, all three output-fact mismatches and terminal state",
+    "regressions": "4 passed, 0 failed; targeted strict Clippy passed",
+    "receipt": "run-heavy: done rc=0 2s | peak-RSS 0.27GiB | min-avail 4806MiB | peak-load 0.49"
+  },
+  "reproduce": "just policy-completion-check",
+  "limits": [
+    "Empty-container admission is unsupported and refuses",
+    "Done consistency cannot roll back rows or sink.finish already delivered",
+    "No native adapter is alleged to produce contradictory Done facts",
+    "Deferred operation obligations remain open"
+  ]
+}

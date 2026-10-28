@@ -1,0 +1,82 @@
+{
+  "kind": "native CMYK profile finalization and ownership qualification; no performance claim",
+  "base_commit": "c2aa2728c41e37c47ab045bbed36ea0e28d4c3ff",
+  "package_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "pixels_commit": "284a0598abf441dc886755b1e65c34dbdf6ce94d",
+  "moxcms": "0.9.1",
+  "host": "r7900x",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "50d904ab34d2adc3d5221372f815ca728e023b10a5cdf8388a0395710767a782",
+    "perf/spatial-validation/dependencies.lock": "457745606979df56a45bbd0f7785701fd13aa2a7e22875dc460fc2b18ff3d8df",
+    "perf/spatial-validation/src/jxl_conversion_tests.rs": "d318b6c66b9f29e2d79a5e45547b4cc5cc1a9aa8df12a843b47717a88ddec9fc"
+  },
+  "commands": [
+    "just spatial-packaged-resolve",
+    "just spatial-conversion-check",
+    "just spatial-ci-check <fresh-artifact-directory>"
+  ],
+  "checks": {
+    "native_suite": {
+      "passed": 119,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_lint": "passed",
+    "scope": "first uncomposited layer of mandatory codec-corpus CMYK JXL fixture",
+    "identity": "SameAsOrigin and same explicit ICC preserve exact active F32 bits and exact ICC; padded source unchanged",
+    "conversion": "sRGB F32 refuses with NeedsCms both without CMS and with moxcms attached",
+    "provenance": "origin ICC does not replace missing current context",
+    "ownership": "three simultaneously distinct live sample addresses; two finalizer-related ordinary buffers stay readable after last admitted image releases all pool charges",
+    "existing": "147 presentations, nine raw layers and independent-reader gates unchanged",
+    "guide": "source-derived signatures, executable examples, role flows and 390/768/1440px browser controls passed"
+  },
+  "initial_failures": [
+    "The test initially returned Outcome<ImageOutput> where it promised ImageOutput; explicit into_output preserves the checked result boundary.",
+    "The test incorrectly assumed the composited view of the CMYK fixture was CMYK. It returns RGBA; final CMYK controls explicitly select the raw view. No pre-existing expectation changed."
+  ],
+  "runs": [
+    {
+      "name": "resolve",
+      "result": "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 13541MiB | peak-load 0.13",
+      "sha256": "2f69d125954dfa9f22664e4415366e860952ec77ac6dce78d69cc2fe8301f0f1"
+    },
+    {
+      "name": "finalizer-1",
+      "result": "run-heavy: done rc=101 30s | peak-RSS 0.86GiB | min-avail 12742MiB | peak-load 0.80",
+      "sha256": "9356b57589543e5cc17bd074cb0cd305c19270c3406b50b8f93b9be0be2c57b6"
+    },
+    {
+      "name": "finalizer-2",
+      "result": "run-heavy: done rc=101 13s | peak-RSS 0.51GiB | min-avail 13099MiB | peak-load 0.80",
+      "sha256": "63d7c50a4afbb1bfd72e51c0d4b6ba0f33f36d898f531d2b323b92e06b06e982"
+    },
+    {
+      "name": "finalizer-3",
+      "result": "run-heavy: done rc=0 4s | peak-RSS 0.56GiB | min-avail 13286MiB | peak-load 0.68",
+      "sha256": "f5bae2ecff2749daed82eedefce6206e6341d2c82c5003b5a09478c7e6754d4d"
+    },
+    {
+      "name": "finalizer-4",
+      "result": "run-heavy: done rc=0 2s | peak-RSS 0.40GiB | min-avail 13580MiB | peak-load 0.60",
+      "sha256": "a827e199a2c54e10121cfa34c92666212265454d9de7fae481834034cccfa7aa"
+    },
+    {
+      "name": "native",
+      "result": "run-heavy: done rc=0 30s | peak-RSS 0.49GiB | min-avail 13220MiB | peak-load 0.75",
+      "sha256": "c3a25ef553cda8d1ab90deeda5024e639cd09f5e1b4fef12ccb2f5e17bf32a69"
+    },
+    {
+      "name": "guide",
+      "result": "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13087MiB | peak-load 0.43",
+      "sha256": "5faef0e3a12a6a4051f0a5249a7eea693dd4f44413fe38ae938725ad1340ff51"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/cmyk-finalizer-1",
+  "followup": "https://github.com/imazen/zenpixels/issues/69",
+  "limits": [
+    "Not a complete CMYK transform implementation or full CMYK fixture matrix.",
+    "Wrapper RSS covers entire validation/build tree, not codec workspace.",
+    "Auxiliary planes are not converted by this packed-color finalizer.",
+    "Output finalization copies and CMS workspace are outside decode output admission."
+  ]
+}

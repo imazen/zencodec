@@ -9,7 +9,7 @@ use zencodec::encode::{
     AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
     EncodePolicy, Encoder, EncoderConfig, OutputTiming,
 };
-use zencodec::{ImageFormat, Metadata, ResourceLimits, StopToken, UnsupportedOperation};
+use zencodec::{ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation};
 use zencodec_testkit::reference::{
     RefAnimEnc, RefEnc, RefEncodeJob, RefError, ReferenceDecoderConfig, ReferenceEncoderConfig,
 };
@@ -87,8 +87,8 @@ impl<const F: u8> EncodeJob for LiarJob<F> {
     type Error = RefError;
     type Enc = LiarEnc<F>;
     type AnimationFrameEnc = ();
-    fn with_stop(self, stop: StopToken) -> Self {
-        Self(self.0.with_stop(stop))
+    fn with_pulse(self, stop: SharedPulse) -> Self {
+        Self(self.0.with_pulse(stop))
     }
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
@@ -429,8 +429,8 @@ impl<const F: u8> EncodeJob for AnimLiarJob<F> {
     type Error = RefError;
     type Enc = RefEnc;
     type AnimationFrameEnc = AnimLiarEnc<F>;
-    fn with_stop(self, stop: StopToken) -> Self {
-        Self(self.0.with_stop(stop))
+    fn with_pulse(self, stop: SharedPulse) -> Self {
+        Self(self.0.with_pulse(stop))
     }
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
@@ -515,7 +515,7 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn zencodec::enough::Stop>,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), RefError> {
         self.inner.push_frame(pixels, duration_ms, stop)?;
         self.pushed += 1;
@@ -529,7 +529,7 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
         let n = n.min(self.shown.len());
         self.shown.drain(..n);
     }
-    fn finish(self, stop: Option<&dyn zencodec::enough::Stop>) -> Result<EncodeOutput, RefError> {
+    fn finish(self, stop: Option<&dyn zencodec::Pulse>) -> Result<EncodeOutput, RefError> {
         if F == A_LOOSE_COUNT && self.declared.is_some_and(|n| n != self.pushed) {
             // Pretend all is well: hand back what was produced.
             let mut rest = self.shown;

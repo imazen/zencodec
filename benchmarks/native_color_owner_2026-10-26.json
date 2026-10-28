@@ -1,0 +1,339 @@
+{
+  "date": "2026-10-26",
+  "scope": "Owned converted color plus retained native auxiliaries; no performance or whole-process memory claim",
+  "core_commit": "ab25c9d4367872e3367ccabd1012c9b649519aae",
+  "zenpixels_commit": "d79acec203ad6781b0c85373b7202c512fbbf3c8",
+  "zenjxl_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "source_sha256": {
+    "src/image.rs": "5d265ac098b11192b8c262c31b237a83db3f67c8acd48b3247cc03b83e653b1f",
+    "src/image/replace.rs": "369f6ca93f7169a56d5054fd65c5e070d9968e57c8ac4ea3217db016cb1bb082",
+    "src/operation/frame.rs": "ce47807c151155f328211b1df24a1032a44f8e3a55003f21105ab2fd5a0b5b2b",
+    "src/operation/image.rs": "2d11299b62f57f2a6b719778f893114c9304c722db494efd5a7335c293046ced",
+    "tests/packed_color_replacement.rs": "bfd03cd8c57c70d4145ce4864e74abf63e4f274a462df779c55f48e812c9b885",
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "1a4720fbe890dd91c5b8b63ecf4c18ea5f6cd2488a5a0e6c8a74d6a4cc5c778e",
+    "perf/spatial-validation/src/jxl_color_oracle_tests.rs": "f1e8d56e67b1b14fa6bfd80cb64897d8586ced956aa7b8508620a6e10d3f6d16"
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-color-owner-final-1",
+  "commands": [
+    "just image-color-replacement-integration",
+    "just spatial-ci-check <fresh-artifacts> cms_oracle",
+    "just docs-site-browser-check 3547"
+  ],
+  "controls": {
+    "core": {
+      "passed": 5,
+      "failed": 0,
+      "scope": "retention, flattened replacement, no-aux release, geometry/context drift, traced native failures, component-code rejection, publication refusal/unwind"
+    },
+    "native_identity_selections": 11,
+    "native_premultiplied_exact_owner_controls": 1,
+    "independent_cms_publications": 6,
+    "full_native_suite": {
+      "passed": 129,
+      "failed": 0,
+      "ignored": 0,
+      "strict_lint": "passed"
+    },
+    "workspace": "tests, strict all-target lint, WASM, strict docs and API snapshots passed; pre-existing ignored doctests unchanged",
+    "site": "source and browser gates passed"
+  },
+  "native_cases": [
+    {
+      "comparison": {
+        "admitted_destination_bytes": 1236480,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 307200,
+        "channels": 3,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "conformance_test_images/animation_spline.jxl",
+        "height": 320,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 8.165836334228516e-06,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 102400",
+        "selection": 0,
+        "width": 320,
+        "worst": [
+          29,
+          186,
+          0.04027518257498741,
+          0.04028334841132164
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 0,
+        "destination_bytes": 1236480,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 0,
+        "source_bytes_before": 1232640
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "5a553f05fd8ac51d12c6564b1f2b19fd2f9cc6c1e18c64b4c1334bc988281f6d",
+        "converted.f32": "3f1c4f552da66f1d33cad3142972a17517ca99f88a33019f3fb6849426678aac",
+        "oracle.f32": "4a07cb830814da061d526df38d1e0d8f64baddd9683550cce8f40cab4e684439"
+      }
+    },
+    {
+      "comparison": {
+        "admitted_destination_bytes": 37785600,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 7077881,
+        "channels": 4,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "multiple_layers_noise_spline.jxl",
+        "height": 1152,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 7.697194814682007e-05,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 2359296",
+        "selection": 1,
+        "width": 2048,
+        "worst": [
+          2,
+          7682,
+          0.040141936391592026,
+          0.040218908339738846
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 37785600,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 47222784,
+        "source_bytes_before": 47222784
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "b5ab06c2c18f5e9652dab09f16f67cd3057fd60f560784a8a541fb42812aa5b0",
+        "converted.f32": "11664c93e9b8a2f13df8299c0d80bbbfa4e38d4f7d5b07a28256d7ae8a1fc844",
+        "oracle.f32": "5024844801a7b9d89c23f41797cebef2cf4e1f311499aa9b01ffce248b1e419a"
+      }
+    },
+    {
+      "comparison": {
+        "admitted_destination_bytes": 9455616,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 457173,
+        "channels": 4,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "multiple_layers_noise_spline.jxl",
+        "height": 576,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 1.86040997505188e-05,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+        "selection": 2,
+        "width": 1024,
+        "worst": [
+          88,
+          2264,
+          0.04038267955183983,
+          0.04040128365159035
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "c3bbe47ddc393a13860625ff24348c99ceb60b1feb8bbf2e9b9acde8719fbe5c",
+        "converted.f32": "a6a99da9acde8e819df25353e2524995edb7244a1d808bd6f15f945daae9e614",
+        "oracle.f32": "7d888685d7ef6272bb889f88e0268cd3e207832ae029784098d88c76330cd1e8"
+      }
+    },
+    {
+      "comparison": {
+        "admitted_destination_bytes": 9455616,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 1769472,
+        "channels": 4,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "multiple_layers_noise_spline.jxl",
+        "height": 576,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 6.747245788574219e-05,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+        "selection": 3,
+        "width": 1024,
+        "worst": [
+          572,
+          4094,
+          3.123802900314331,
+          3.1237354278564453
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "5beeed40165e0d12ba335c851e8cf0f7b958acae194670ddb0e7e02831172212",
+        "converted.f32": "e96bc4f270c8154f0b5b1a7abe0b202ced9d38d19c910b74efa3870a6f843695",
+        "oracle.f32": "a0442e01a7b5e4a59ad3c86bc3b6a6754c0c69c472b260f797477077990fb9f7"
+      }
+    },
+    {
+      "comparison": {
+        "admitted_destination_bytes": 9455616,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 1769472,
+        "channels": 4,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "multiple_layers_noise_spline.jxl",
+        "height": 576,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 7.224082946777344e-05,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+        "selection": 4,
+        "width": 1024,
+        "worst": [
+          574,
+          12,
+          3.2328057289123535,
+          3.2327334880828857
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "51d306d30cc55a00e8d986f905efa73ce2c2b300141379835de2d94129c31479",
+        "converted.f32": "8dff8cff345ef9f15f2fd1ba2841349958a08adcd13997de17c81e6e9d6a9956",
+        "oracle.f32": "7a3d7c8f759c2cd6f71be0a61873a109931e4d50bda25c7e349f1a981b6e6539"
+      }
+    },
+    {
+      "comparison": {
+        "admitted_destination_bytes": 9455616,
+        "alpha_mismatch": 0,
+        "changed_color_samples": 17325,
+        "channels": 4,
+        "clip_out_of_gamut": false,
+        "color_error_limit": 0.0001,
+        "fixture": "multiple_layers_noise_spline.jxl",
+        "height": 576,
+        "intent": "relative-colorimetric",
+        "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+        "max_absolute_color_error": 6.723403930664062e-05,
+        "nonfinite": 0,
+        "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+        "selection": 5,
+        "width": 1024,
+        "worst": [
+          132,
+          248,
+          3.133030414581299,
+          3.132963180541992
+        ]
+      },
+      "publication": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "f1d4ea7c0d0f3e7491a4b16dd686a47143c7e75a256790bab44886ecd7d3ba0f",
+        "converted.f32": "a72fdf05149e33b068e3d7d671ccf37069ef72b6847f354347e6f263d347c883",
+        "oracle.f32": "1ebc68fe4fa66e34a08d1d52ed99c72be4909ae785dd1896c9cb5caa784d92ff"
+      }
+    }
+  ],
+  "discovered_limitations": [
+    "PixelFormat selects straight alpha, so OutputPlan SameAsOrigin cannot express retained premultiplication for the native unknown-TRC fixture. The explicit NeedsCms probe is retained; an exact-copy owner control is separate from numerical conversion.",
+    "Native auxiliary owners retain old color payloads too. This is charged, not an extra unaccounted allocation; further replacements release intermediate colors.",
+    "The same-coordinate composition preserves unfiltered source facts; it does not authorize auxiliary rendering or whole-container privacy."
+  ],
+  "runs": [
+    {
+      "log": "/home/lilith/tmp/zencodec-color-replace-core-1-20261026.log",
+      "sha256": "ec43fb354b63d11a8fff0c7deb690d0ca0c42cdd12a72d7c1a7c86305a0c1cdd",
+      "resource_line": "run-heavy: done rc=101 2s | peak-RSS 0.29GiB | min-avail 11604MiB | peak-load 0.24"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-color-replace-core-2-20261026.log",
+      "sha256": "9cccf3933f91e9fc4dad9464552146289f41d7148f538eeb511d6f52b9ab9e9a",
+      "resource_line": "run-heavy: done rc=0 2s | peak-RSS 0.26GiB | min-avail 11466MiB | peak-load 0.85"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-native-color-owner-1-20261026.log",
+      "sha256": "56dc7fe1f7d9c0e29a514a1eb2fed2d10df80c92c9ce7d93c17b179cb781533b",
+      "resource_line": "run-heavy: done rc=0 18s | peak-RSS 0.55GiB | min-avail 11056MiB | peak-load 0.75"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-native-color-owner-2-20261026.log",
+      "sha256": "214628823ca39a8099d71211c85bd363b478c9004de4f7d7d3bd9c21e363dcf6",
+      "resource_line": "run-heavy: done rc=101 14s | peak-RSS 0.52GiB | min-avail 11120MiB | peak-load 0.80"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-native-color-owner-diagnose-20261026.log",
+      "sha256": "13bced78ea9ccf9ae5e63c70e89496fad08910fd9d6d54ca1e3ee47435395471",
+      "resource_line": "run-heavy: done rc=101 2s | peak-RSS 0.40GiB | min-avail 11278MiB | peak-load 0.35"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-native-color-owner-3-20261026.log",
+      "sha256": "791945c57d3f49fd3494f12e665f93aede3703d41266dba736d9592f66e63509",
+      "resource_line": "run-heavy: done rc=0 3s | peak-RSS 0.41GiB | min-avail 11247MiB | peak-load 0.19"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-color-replacement-integration-20261026.log",
+      "sha256": "7631f0b71805454db9c0ed51967cb0b8778a005d09672ada8b62c8b423a83f0d",
+      "resource_line": "run-heavy: done rc=101 10s | peak-RSS 0.40GiB | min-avail 11065MiB | peak-load 1.76"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-color-replacement-integration-2-20261026.log",
+      "sha256": "56c36de3f65ebd01bafb1e5ac33f190f11ae9e3c5e34d6c2909a76e538d4acd0",
+      "resource_line": "run-heavy: done rc=0 12s | peak-RSS 0.32GiB | min-avail 11217MiB | peak-load 0.72"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-native-color-owner-suite-20261026.log",
+      "sha256": "513f10bcba55c97a387345c139c65196ddc88e65436e27a8d1af4ae666111e5f",
+      "resource_line": "run-heavy: done rc=0 37s | peak-RSS 0.48GiB | min-avail 11072MiB | peak-load 0.78"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-color-owner-site-20261026.log",
+      "sha256": "241b3b2b591c158a8659906befc4fcb4b60840cb886d7d11ba25b45b68711603",
+      "resource_line": "run-heavy: done rc=0 10s | peak-RSS 0.17GiB | min-avail 11089MiB | peak-load 0.74"
+    }
+  ]
+}

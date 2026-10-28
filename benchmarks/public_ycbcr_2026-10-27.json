@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "1d560b4a29fe9391e3a84bd589993e0e16533e9d",
+  "zenpixels_revision": "6250da2fc073150d69cbc6746ffa6cc6724b743f",
+  "implementation_commit": "4654887671b9eac47e4fa9eb0a4cc75b46f6ee6a",
+  "source_sha256": {
+    "perf/av1-policy-validation/src/prepared_conversion.rs": "c947a36f48ee68c497a70bc6e28864b3f1d16061b919950fb86e8466b87c76d3",
+    "perf/av1-policy-validation/dependencies.lock": "fc9848f314cd87ee2ba8f06f8ec32b4f7092237c733607c129bdfb812efce009"
+  },
+  "presentations": 54,
+  "crops": 162,
+  "byte_identical_float_files": 54,
+  "native_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/public-ycbcr-pinned",
+  "baseline_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/float-processing-full",
+  "independent_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/public-ycbcr-zimg-1",
+  "public_delta": {
+    "zenpixels_types": 4,
+    "zenpixels_convert_types": 2,
+    "inherent_methods": 9,
+    "new_features": 0,
+    "new_packages": 0,
+    "packages_before": 140,
+    "packages_after": 140
+  },
+  "validation": [
+    {
+      "command": "just ycbcr-check; just av1-planar-check <fresh-artifacts> (local source patch)",
+      "log": "/home/lilith/tmp/zencodec-public-ycbcr-local-3-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "16s | peak-RSS 0.56GiB | min-avail 11337MiB | peak-load 0.64"
+    },
+    {
+      "command": "just av1-planar-float-verify <source> <fresh-output>; zenpixels: just test clippy output-borrow-compat",
+      "log": "/home/lilith/tmp/zenpixels-ycbcr-full-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "75s | peak-RSS 2.64GiB | min-avail 8908MiB | peak-load 1.91"
+    },
+    {
+      "command": "just av1-policy-check <fresh-artifacts> (committed git dependency)",
+      "log": "/home/lilith/tmp/zencodec-public-ycbcr-pinned-2-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "47s | peak-RSS 0.56GiB | min-avail 11356MiB | peak-load 0.86"
+    },
+    {
+      "command": "just av1-planar-float-verify <pinned source> <fresh output>; just docs-site-browser-check 3547",
+      "log": "/home/lilith/tmp/zencodec-public-ycbcr-site-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "13s | peak-RSS 0.17GiB | min-avail 11250MiB | peak-load 0.45"
+    }
+  ],
+  "scope": "Borrowed typed code planes and executing unclipped BT.709/sRGB plan. The zencodec adapter retains existing policy/admission/ownership and native error controls. No throughput or isolated-memory claim.",
+  "remaining": [
+    "additional matrices/transfers and siting",
+    "integer/mono/GBR conversion packaging",
+    "source sample type unification across codec interfaces",
+    "strict preset replacement and numerical-model contract",
+    "coupled streaming reconfiguration",
+    "whole-operation workspace and performance comparisons"
+  ],
+  "independent_pinned_artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/public-ycbcr-pinned-zimg"
+}

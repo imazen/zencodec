@@ -1,0 +1,38 @@
+{
+  "date_utc": "2026-10-27",
+  "kind": "correctness qualification, not a performance or compile-time comparison",
+  "source_base": "35bc9497ad169487c06fa19ede571908bb4a0468",
+  "source_changes": [
+    "perf/spatial-validation/Cargo.toml TIFF pin and dependencies.lock",
+    "justfile spatial-tiff-resolve"
+  ],
+  "previous_tiff": "0219e7099c658422d47bd986ff279b686202b2e0",
+  "qualified_tiff": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+  "features": [
+    "lzw",
+    "deflate"
+  ],
+  "command": "just spatial-ci-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-tiff-parity-pin-1 cms_oracle",
+  "environment": {
+    "SPATIAL_ORACLE_PYTHON": "/home/lilith/tmp/spatial-oracle-2026-10-25/bin/python",
+    "JXL_SELECTION_ORACLE": "/mnt/v/output/zencodec/platform-regions-20261026-run/oriented-jxl-oracle-1/jxl-oracle",
+    "JXL_LAYER_ORACLE": "/mnt/v/output/zencodec/platform-regions-20261026-run/oriented-jxl-oracle-1/layer-oracle",
+    "SPATIAL_COLOR_ORACLE": "/mnt/v/output/zencodec/platform-regions-20261026-run/cms-reference-1/color-oracle"
+  },
+  "artifact_root": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-tiff-parity-pin-1",
+  "log": "/home/lilith/tmp/zencodec-tiff-parity-pin-20261027.log",
+  "tests": {
+    "passed": 133,
+    "failed": 0,
+    "ignored": 0
+  },
+  "strict_clippy": "passed",
+  "resource_line": "run-heavy: done rc=0 60s | peak-RSS 0.56GiB | min-avail 10827MiB | peak-load 0.83",
+  "limits": [
+    "JPEG feature disabled: old-style JPEG is not exercised by this gate.",
+    "Existing tests and oracle thresholds unchanged.",
+    "The fork now requires Rust 1.99 and adds unconditional LERC/LZMA dependencies. No core MSRV change.",
+    "Decoder-specific zentiff inventory is outside this private harness; follow issue 171."
+  ],
+  "tracking": "https://github.com/imazen/zencodec/issues/171"
+}

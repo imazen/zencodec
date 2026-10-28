@@ -1,0 +1,58 @@
+{
+  "base": "1072900c7012f3c17120b0526f374761b5a6b4e9",
+  "native_decoder": "189f8585b1a28ac9fa7413c24a2ed3914126e77a",
+  "command": "just spatial-checked-collection-check",
+  "receipts": [
+    {
+      "log": "zencodec-checked-collection-2026-10-26.log",
+      "sha256": "0b974e573db28aff005ae2e4d02a54d1dfe5b8b31304694f4e90e656dd723686",
+      "results": [
+        "run-heavy: done rc=101 1s | peak-RSS 0.29GiB | min-avail 13695MiB | peak-load 0.25"
+      ]
+    },
+    {
+      "log": "zencodec-checked-collection2-2026-10-26.log",
+      "sha256": "41a20add472a213fe06602277b1336434f02271491a766891feabf7770fdd469",
+      "results": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.19s",
+        "run-heavy: done rc=101 4s | peak-RSS 0.55GiB | min-avail 13474MiB | peak-load 0.21"
+      ]
+    },
+    {
+      "log": "zencodec-checked-collection3-2026-10-26.log",
+      "sha256": "46223ae20e5a8c683c56204dc2ae2934c31462af1b4b013cc600d19183e38d67",
+      "results": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.18s",
+        "run-heavy: done rc=0 2s | peak-RSS 0.55GiB | min-avail 13486MiB | peak-load 0.69"
+      ]
+    },
+    {
+      "log": "zencodec-checked-collection-guide-2026-10-26.log",
+      "sha256": "7655df68b3dfaece2621a59790841a93e82ac47abcb2cf70bfed988187f56de4",
+      "results": [
+        "test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.20s",
+        "run-heavy: done rc=101 2s | peak-RSS 0.55GiB | min-avail 13721MiB | peak-load 0.10"
+      ]
+    },
+    {
+      "log": "zencodec-checked-collection-qualified-2026-10-26.log",
+      "sha256": "91744a9dd3e8a4a83de74f1f28de6c935f49068f977ef713cf74b1edb63577d8",
+      "results": [
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.20s",
+        "run-heavy: done rc=0 5s | peak-RSS 0.55GiB | min-avail 13412MiB | peak-load 0.27"
+      ]
+    }
+  ],
+  "scope": "Private consumer policy wrapper: exact native JXL output and TIFF classic/BigTIFF chunky/planar pages/SubIFDs, owner-address equality at publication, request-local refusals, bounded history, preserved traced causes, stale-choice refusal, caught unwind and both stop reasons at every observed checkpoint of a small native request.",
+  "corrections": [
+    "Replaced two-code atomic stop storage after the compiler rejected exhaustive matching of the extensible StopReason enum.",
+    "Boxed the bounded error report after strict lint rejected large error returns.",
+    "Corrected the new guide test to compare exact active rows and intact padding separately; the native and adapter outputs intentionally use different strides. No established test expectation was relaxed."
+  ],
+  "limits": [
+    "Publication follows reconstruction, not allocation admission.",
+    "No callback overhead, throughput or whole-codec memory claim.",
+    "std-only candidate driver; no new public API or no_std portability claim.",
+    "Ordinary native failures preserve the native adapter state; this wrapper does not promise recovery from terminal transport/parser errors."
+  ]
+}

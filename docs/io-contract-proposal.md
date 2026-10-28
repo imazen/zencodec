@@ -174,6 +174,13 @@ early; authoritative color must be known before an irreversible downstream
 encode. [Issue 154](https://github.com/imazen/zencodec/issues/154) tracks the
 shared color handoff.
 
+The [native HTTP selection experiment](../perf/spatial-validation/README.md#source-identity-is-established-by-the-transport)
+now executes these single-object checks through real HTTP/1.1 and native TIFF.
+It reuses IMI's range client/server, retains protocol/source causes and refuses
+replacement after discovery. The measured request/byte trace compares direct
+and buffered input without making timing claims. Browser/CDN, multi-object
+manifest coherence and stable disk snapshots remain distinct qualification gates.
+
 ## 5. Bound compute batches and preserve media order
 
 Separate CPU fairness from transport backpressure. A maximum-steps `WorkQuota`

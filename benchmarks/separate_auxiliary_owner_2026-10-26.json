@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-26",
+  "kind": "ownership correctness qualification; no throughput or isolated-memory claim",
+  "base_zencodec": "efd51ac99803d304211c5b59396de25060d44ab0",
+  "source_sha256": {
+    "src/image.rs": "dc19d4035e9c6794d35f7108f62c37fefcf0f084c958948867c35495d8111b1e",
+    "src/image/owner.rs": "3cb3cc40525b06a5fd33c6291bbe28d1eee52f38dd360f73d369e135bf6c507a",
+    "src/image/replace.rs": "7b644242612220c016d5fddeb32bee532663fae4a9c71d859f14a09a60d454f8",
+    "tests/packed_color_replacement.rs": "2951ebad7dafc8bce5bf75cf1d14da6e6db9f9b89045555d3b4d7e7d394a7944"
+  },
+  "contract": [
+    "Optional immutable AuxiliaryImageOwner automatically retained during packed color replacement",
+    "Fallback retains inseparable complete owner without copying",
+    "Original image clones retain old color; separate auxiliary owner releases it after the last original drops",
+    "Repeated replacement uses the retained auxiliary owner without calling the hook again",
+    "Hook/mapping refusal preserves original whereat cause and named trace; diagnostics do not print backend payloads",
+    "Missing/changed retained layout refuses at creation and later mapping",
+    "Invalid new color or absent declared auxiliary roles do not invoke hook",
+    "Unwind/refusal drops unpublished destination without breaking original clones"
+  ],
+  "checks": {
+    "focused_tests_passed": 8,
+    "workspace_all_features": "passed",
+    "strict_all_target_clippy": "passed",
+    "wasm32_unknown_unknown": "passed",
+    "strict_rustdoc": "passed",
+    "public_api_snapshot": "regenerated",
+    "native_adapter": "pending qualification in following integration"
+  },
+  "commands": [
+    "just image-color-replacement-integration",
+    "just image-color-replacement-check"
+  ],
+  "runs": [
+    {
+      "log": "/home/lilith/tmp/zencodec-separate-auxiliary-integration-20261026.log",
+      "sha256": "fd4a242583afba164ee603f13f6f24bc1dc2bda73d29a6badaeac0db83b2e6d7",
+      "resource_wrapper": "run-heavy: done rc=0 27s | peak-RSS 0.50GiB | min-avail 10890MiB | peak-load 0.76"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-separate-auxiliary-final-check-20261026.log",
+      "sha256": "44fa665f82a9447dbc56a9df08330553eba827eb954cf0e38b51195ddc9d9a1e",
+      "resource_wrapper": "run-heavy: done rc=0 1s | peak-RSS 0.16GiB | min-avail 11519MiB | peak-load 0.42"
+    }
+  ]
+}

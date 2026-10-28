@@ -7,7 +7,7 @@ use zencodec::decode::{
 };
 use zencodec::{
     AnimationFrame, CodecErrorExt, ErrorCategory, ImageFormat, ImageInfo, RequestError,
-    ResourceLimits, StopToken, UnsupportedOperation,
+    ResourceLimits, SharedPulse, UnsupportedOperation,
 };
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -43,7 +43,7 @@ impl AnimationFrameDecoder for LegacyDecoder {
     }
     fn render_next_frame_to_sink(
         &mut self,
-        _: Option<&dyn zencodec::enough::Stop>,
+        _: Option<&dyn zencodec::Pulse>,
         _: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, NativeError> {
         Err(NativeError)
@@ -53,7 +53,7 @@ impl AnimationFrameDecoder for LegacyDecoder {
     }
     fn render_next_frame(
         &mut self,
-        _: Option<&dyn zencodec::enough::Stop>,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, NativeError> {
         Err(NativeError)
     }
@@ -80,7 +80,7 @@ impl<'a> DecodeJob<'a> for LegacyJob {
     type Dec = LegacyDecoder;
     type StreamDec = LegacyDecoder;
     type AnimationFrameDec = LegacyDecoder;
-    fn with_stop(self, _: StopToken) -> Self {
+    fn with_pulse(self, _: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _: ResourceLimits) -> Self {

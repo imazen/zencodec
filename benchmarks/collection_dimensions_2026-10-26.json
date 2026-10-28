@@ -1,0 +1,79 @@
+{
+  "base_revision": "1214c2f071dee7ef0718337fbbffe006ad8e7346",
+  "scope": "Qualify three of eight decode-relevant optional ResourceLimits caps for private native TIFF collections: stored width, height and pixel count. This is not native workspace admission.",
+  "sources": {
+    "src/collection/factory.rs": "1c4570075ac584b2544a8d9954e1d827868d407ab7d325e5545be3f038ac61c1",
+    "perf/spatial-validation/src/collection_factories.rs": "60672ff072630e2cf93ec9344c5bf6daf1f4dadfab76c37bbe51b3d452e208fe",
+    "perf/spatial-validation/src/tiff_items.rs": "c5b253a72cf6228f50b464c9cc749678f1a058a3bf077a8bc3a3ce7f59fd6a1d",
+    "perf/spatial-validation/src/tiff_region.rs": "77212225233914a635a92d112ae40a1e683a93455a7741018d07668ec5c01cc2",
+    "perf/spatial-validation/src/factory_tests.rs": "3f5519300792dd35079910d492d21dd703b15e48fa0474d868b27e45e2403c74",
+    "perf/spatial-validation/src/description_tiff_tests.rs": "c86e637cf2eb128ac2ebca815535b287cbe34ae934c336db141cd3d464e372b3",
+    "perf/spatial-validation/src/http_tests.rs": "1fe6a916b0574c8dc4c2f841a8576332d59250047aea4cf510de64571db7ba5d"
+  },
+  "runs": [
+    {
+      "log": "zencodec-registry-limits-1-2026-10-26.log",
+      "sha256": "c85651865a8b83138ecbb977bd3ddb4fd6d8eb60689e657d1c61e94e17a00e3c",
+      "scope": "Native dimension/refusal controls and unchanged description controls; strict lint.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13437MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-limits-1; just spatial-description-check",
+        "run-heavy: done rc=0 38s | peak-RSS 0.58GiB | min-avail 12994MiB | peak-load 1.47"
+      ]
+    },
+    {
+      "log": "zencodec-registry-limits-http-2026-10-26.log",
+      "sha256": "0d1d4d3dc935c12c14562a8e21987c44b9647a6d2208a913fcc995096d51de5c",
+      "scope": "Conditional HTTP permits oversized inspection, refuses its decode and accepts a smaller child.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13456MiB :: timeout --kill-after=10s 180s just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-limits-http-1 3568",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 11400, \"cases\": 63, \"statuses\": {\"200\": 1, \"206\": 11386, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 16s | peak-RSS 0.63GiB | min-avail 13112MiB | peak-load 0.72"
+      ]
+    },
+    {
+      "log": "zencodec-registry-limits-final-2026-10-26.log",
+      "sha256": "05a80c83f053960c29a94d87915d3649e644e31bbc42de30e7bdcbe417772efa",
+      "scope": "Final native and HTTP gates after explicit encode-only output-byte scoping and mixed-configuration controls.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13457MiB :: timeout --kill-after=10s 180s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-limits-2; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-limits-http-2 3568",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 11400, \"cases\": 63, \"statuses\": {\"200\": 1, \"206\": 11386, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 17s | peak-RSS 0.63GiB | min-avail 13184MiB | peak-load 2.73"
+      ]
+    },
+    {
+      "log": "zencodec-registry-limits-site-2026-10-26.log",
+      "sha256": "4945934557f2b56527bb139c666ddb8c5c93b633ad778bdd7ab715132e350573",
+      "scope": "Source-derived signatures, constructor and inherited-default context, and browser gates.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13490MiB :: timeout --kill-after=10s 120s just docs-site-browser-check 3547",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12884MiB | peak-load 0.53"
+      ]
+    }
+  ],
+  "qualified": [
+    "Actual stored geometry is checked before selected-output allocation and compressed-pixel reads. Tiny regions do not bypass the full stored-image cap.",
+    "Over-limit descriptions remain available; an admitted smaller child decodes in the same operation after an earlier refusal.",
+    "Independent NoPixels source guard is not triggered by limit refusal. An admitted child triggers it; disabling the guard permits exact native sample comparison. Classic/BigTIFF and planar/chunky configurations are exercised.",
+    "Pinned TIFF source has no native threading path; Sequential is accepted. Native no-op defaults are accepted by both TIFF/JXL factories.",
+    "The documented encode-only output-byte field does not constrain a decode. Nontrivial unqualified fields and mixed supported/unsupported configurations refuse before source reads or length queries.",
+    "Each explicit value of each decode-policy flag refuses while no-op defaults succeed. JXL geometry remains explicitly unsupported.",
+    "LimitExceeded retains actual and maximum values through the checked error."
+  ],
+  "not_qualified": [
+    "Native working memory or process RSS bound.",
+    "Input-size, frame-count, animation-duration or total-pixel caps.",
+    "JXL geometry resource mappings across presentation, raw layers, hidden/reference reconstruction and replay.",
+    "Fallible/infallible allocation-mode enforcement or nontrivial decode policy/PII guarantees."
+  ],
+  "http_summary": {
+    "cases": 63,
+    "requests": 11400,
+    "statuses": {
+      "200": 1,
+      "206": 11386,
+      "302": 1,
+      "412": 12
+    }
+  },
+  "process_memory_note": "run-heavy numbers describe whole test commands, not the codec workspace or a timing comparison."
+}

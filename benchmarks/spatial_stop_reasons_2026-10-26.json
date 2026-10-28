@@ -1,0 +1,38 @@
+{
+  "native_fix": "b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a",
+  "native_previous": "4365fe97a955bcd0b9c3f30ca33678e8b1e85478",
+  "issue": "https://github.com/imazen/zenjxl-decoder/issues/70",
+  "command": "just spatial-cancellation-check",
+  "scope": "Both StopReason variants at every observed poll in successful classic-TIFF/BigTIFF planar SubIFD and native JXL blendmodes selection. Direct decode_with reproducer preserves TimedOut after the native fix. Adapter CodecError and native error causes remain inspectable through CollectionError.",
+  "lock_sha256": "ab17a19d71d4195bd9e3f0616aa28cf4c77673ea8effaf285a0b9ccde97b0b33",
+  "receipts": [
+    {
+      "log": "zencodec-native-timeout-before2-2026-10-26.log",
+      "sha256": "f5e4ad185ac9636e15fefa62b88799fed34912b8cfeb0a780cd9b8d6be9b837b",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.05s",
+        "run-heavy: done rc=101 1s | peak-RSS 0.54GiB | min-avail 13732MiB | peak-load 0.40"
+      ]
+    },
+    {
+      "log": "zencodec-stop-reason-resolve-2026-10-26.log",
+      "sha256": "d98ee88c8c37c02c00bb49a1d78777644a49cb4193ad7c27495244b3a0a924cf",
+      "results": [
+        "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 13046MiB | peak-load 0.31"
+      ]
+    },
+    {
+      "log": "zencodec-stop-reason-qualified-2026-10-26.log",
+      "sha256": "4ce1c1ee4e404e74aebf96b2fd698938e46aa77510872d73bb255505509226ba",
+      "results": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 56.74s",
+        "run-heavy: done rc=0 67s | peak-RSS 0.59GiB | min-avail 12535MiB | peak-load 0.83"
+      ]
+    }
+  ],
+  "limits": [
+    "Fixture-specific cooperative polling, not all codec configurations",
+    "No latency guarantee inside blocking source I/O or native compute",
+    "No whole-operation memory bound or performance conclusion"
+  ]
+}

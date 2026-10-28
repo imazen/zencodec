@@ -12,7 +12,7 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 publish = false
 
 [dependencies]
-zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
+zencodec = { path = "..", version = ">=0.2.0, <0.4.0" }
 zenpixels = { version = ">=0.2.14, <0.4.0" }
 enough = "0.4.4"
 # Single-threaded hand-off cell between the decoder and the coroutine it

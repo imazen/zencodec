@@ -196,7 +196,7 @@ pub enum ResolutionUnit {
     Unknown,
 }
 
-pub use zenpixels::{ContentLightLevel, DiffuseWhite, MasteringDisplay};
+pub use zenpixels::hdr::{ContentLightLevel, DiffuseWhite, MasteringDisplay};
 
 /// Source color description from the image file.
 ///

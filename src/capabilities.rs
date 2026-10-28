@@ -60,6 +60,8 @@ pub enum UnsupportedOperation {
     /// Pull-based decoding from a random-access source
     /// ([`DecodeJob::push_decoder_from_source`](crate::decode::DecodeJob::push_decoder_from_source)).
     SeekableDecode,
+    /// Preflight or startup with a complete encode declaration.
+    EncodePlanning,
 }
 
 impl UnsupportedOperation {
@@ -81,6 +83,7 @@ impl UnsupportedOperation {
             Self::Inventory => "inventory",
             Self::IncrementalDecode => "incremental_decode",
             Self::SeekableDecode => "seekable_decode",
+            Self::EncodePlanning => "encode_planning",
         }
     }
 }
@@ -239,7 +242,8 @@ impl EncodeCapabilities {
     pub const fn cicp_safe_sole_carrier(&self) -> bool {
         self.cicp_safe_sole_carrier
     }
-    /// Whether `with_stop` on encode jobs is respected (not a no-op).
+    /// Whether encode jobs honor cancellation from `with_pulse`.
+    /// This flag does not promise progress reports.
     pub const fn stop(&self) -> bool {
         self.stop
     }
@@ -382,7 +386,8 @@ impl EncodeCapabilities {
             | UnsupportedOperation::MultiImageDecode
             | UnsupportedOperation::PixelFormat
             | UnsupportedOperation::IncrementalDecode
-            | UnsupportedOperation::SeekableDecode => false,
+            | UnsupportedOperation::SeekableDecode
+            | UnsupportedOperation::EncodePlanning => false,
         }
     }
 
@@ -685,7 +690,8 @@ impl DecodeCapabilities {
     pub const fn cicp(&self) -> bool {
         self.cicp
     }
-    /// Whether `with_stop` on decode jobs is respected (not a no-op).
+    /// Whether decode jobs honor cancellation from `with_pulse`.
+    /// This flag does not promise progress reports.
     pub const fn stop(&self) -> bool {
         self.stop
     }
@@ -832,6 +838,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::IncrementalDecode => self.incremental,
             UnsupportedOperation::SeekableDecode => self.seekable,
+            UnsupportedOperation::EncodePlanning => false,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
             UnsupportedOperation::Inventory => self.inventory,

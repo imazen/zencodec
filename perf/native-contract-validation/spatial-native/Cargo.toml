@@ -1,0 +1,23 @@
+[package]
+name = "native-contract-spatial"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Region read planning before compressed reads over the native TIFF parser"
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../../..", features = ["std"] }
+# The TIFF parity fork perf/spatial-validation qualifies.
+tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5", default-features = false, features = ["lzw", "deflate"] }
+
+[patch.crates-io]
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zencodec = { path = "../../.." }
+
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true

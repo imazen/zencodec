@@ -1,0 +1,34 @@
+{
+  "implementation": "a9c04e13b1253d64a95d81d3aa71a99388ad1819",
+  "native_decoder": "b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a",
+  "commands": [
+    "just spatial-validation-check <fresh-artifacts> <oracle-python>",
+    "RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --all-features --no-deps --locked",
+    "just api-doc-check"
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/source-discovery-integrated",
+  "receipts": [
+    {
+      "log": "zencodec-source-discovery-integrated-2026-10-26.log",
+      "sha256": "ae6245d30b82ff3ab2244b0701a340f19256276686a8923370016afc1ade1dde",
+      "results": [
+        "test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 184.88s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 186s | peak-RSS 0.54GiB | min-avail 13225MiB | peak-load 1.22"
+      ]
+    },
+    {
+      "log": "zencodec-source-contract-docs-2026-10-26.log",
+      "sha256": "e476e07768a3937892e341310f5d13dae43f29a80489d96365feeb45fcdb59b4",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.18s",
+        "run-heavy: done rc=0 5s | peak-RSS 0.26GiB | min-avail 13285MiB | peak-load 0.27"
+      ]
+    }
+  ],
+  "scope": "Complete existing default-feature native spatial matrix, independent libjxl/TIFF inspection, sample parity, publication policy, both stop reasons, graph/discovery accounting and strict lint after native timeout pin. The real HTTP matrix runs separately with the explicit http feature; see http_snapshot_2026-10-26.json.",
+  "limits": [
+    "No new latency/performance or whole-native-memory claim",
+    "Raw JXL layers, broad source snapshots and preallocation admission remain unqualified"
+  ]
+}

@@ -1,0 +1,32 @@
+# Native TIFF read counts; correctness qualification, not a latency benchmark.
+# Source: core 7d315035 + adjacent perf/spatial-validation harness.
+# TIFF: 0219e7099c658422d47bd986ff279b686202b2e0.
+# Command and limits: perf/spatial-validation/README.md.
+# Selected rectangle: x=13,y=12,width=6,height=5 (crosses four tiles).
+# reference_index: 0=main page 0, 1=its reduced SubIFD, 2=main page 1.
+# bytes is the sum returned by read_at, including rereads, not unique bytes.
+bigtiff	planar	bufreader_4096	page	reference_index	read_calls	bytes
+false	false	false	0	0	68	3020
+false	false	false	0	1	157	2068
+false	false	false	1	2	170	2782
+false	false	true	0	0	9	34390
+false	false	true	0	1	13	50774
+false	false	true	1	2	10	16756
+false	true	false	0	0	76	3116
+false	true	false	0	1	229	2228
+false	true	false	1	2	274	2846
+false	true	true	0	0	17	67654
+false	true	true	0	1	21	84038
+false	true	true	1	2	18	31636
+true	false	false	0	0	69	3144
+true	false	false	0	1	157	2300
+true	false	false	1	2	171	3020
+true	false	true	0	0	8	31580
+true	false	true	0	1	11	43868
+true	false	true	1	2	9	17560
+true	true	false	0	0	77	3240
+true	true	false	0	1	229	2460
+true	true	false	1	2	275	3084
+true	true	true	0	0	16	64684
+true	true	true	0	1	19	76972
+true	true	true	1	2	17	33240

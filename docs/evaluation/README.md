@@ -40,3 +40,27 @@ learning assessment. They check the concrete source-error cause and independent
 EXIF orientation without ICC. Run them with `just guide-learning-audit`; record
 these results separately, without changing the frozen four-task score. A model
 can pass an initial coding oracle while copying a debugging defect from a sample.
+
+## Compiler-feedback reader study (2026-10-27)
+
+A separate owner-requested SWE-2 study uses frozen selections from `code.html`,
+with actual build/run attempts between exposures. It does not replace or alter
+the earlier Sol study's frozen tasks or scoring. Two fresh sessions cover the
+consumer path and the adapter/implementor path. Each preserves initial code and
+name predictions, then expands context and records compiler-driven repairs.
+
+`read_selection.py FLOW STEP visible|expanded --page CAPTURED_CODE_HTML` extracts
+one rendered step, preserving source hyperlinks and whether nested context was
+closed. It neither invents examples nor supplies missing dependencies. A whole
+source file behind an expansion remains whole, so its reading cost stays visible.
+This text intake assesses explanation and naming; it is not a visual usability
+measurement. First-attempt compile, repaired compile, runtime correctness and
+environment/setup blockers must be reported separately. Extra source/catalog
+lookups are recorded rescues, never hidden first-attempt knowledge.
+
+Results are pending. No success rate or naming recommendation has been inferred
+from merely launching the readers. Preserve their code, diagnostics, exposure
+sequence and exact site revision before independently checking their findings.
+
+[The 2026-10-27 reader record](reader-study-20261027.md) separates verified
+intermediate findings, remaining tasks and source corrections to reader guesses.

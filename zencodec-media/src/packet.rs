@@ -32,6 +32,9 @@ pub enum PacketPayload {
         /// Payload length.
         len: usize,
     },
+    /// Admitted storage. Clones and subviews retain the backing allocation's
+    /// charge until its last owner drops.
+    Accounted(zencodec_io::storage::SharedStorage<u8>),
 }
 
 impl PacketPayload {
@@ -40,6 +43,7 @@ impl PacketPayload {
         match self {
             Self::Owned(v) => v,
             Self::Shared { bytes, start, len } => &bytes[*start..*start + *len],
+            Self::Accounted(bytes) => bytes.as_slice(),
         }
     }
 
@@ -53,11 +57,14 @@ impl PacketPayload {
         self.len() == 0
     }
 
-    /// The payload as an owned vector: free for `Owned`, a copy for `Shared`.
+    /// The payload as an ordinary, unaccounted vector: free for `Owned`, a copy
+    /// for `Shared` and `Accounted`. The copy is outside a storage budget.
+    /// Budget-enforcing adapters keep the accounted payload instead of calling
+    /// this legacy ownership bridge.
     pub fn into_vec(self) -> Vec<u8> {
         match self {
             Self::Owned(v) => v,
-            Self::Shared { .. } => self.as_bytes().to_vec(),
+            Self::Shared { .. } | Self::Accounted(_) => self.as_bytes().to_vec(),
         }
     }
 }
@@ -189,6 +196,39 @@ impl fmt::Display for PacketError {
 impl core::error::Error for PacketError {}
 
 impl Packet {
+    #[cfg(feature = "std")]
+    pub(crate) fn map_payloads(
+        mut self,
+        mut map: impl FnMut(&PacketPayload) -> Result<PacketPayload, crate::staged::Cause>,
+    ) -> Result<Self, crate::staged::Cause> {
+        if let Some(payload) = &self.payload {
+            self.payload = Some(map(payload)?);
+        }
+        for addition in &mut self.additions {
+            addition.payload = map(&addition.payload)?;
+        }
+        Ok(self)
+    }
+
+    #[cfg(feature = "std")]
+    pub(crate) fn accounted(
+        mut self,
+        budget: &zencodec::storage::StorageBudget,
+    ) -> Result<Self, zencodec::storage::StorageError> {
+        let copy = |source: &[u8]| {
+            let mut bytes = budget.bytes(source.len())?;
+            bytes.as_mut_slice().copy_from_slice(source);
+            Ok::<_, zencodec::storage::StorageError>(PacketPayload::Accounted(bytes.freeze()))
+        };
+        if let Some(payload) = &self.payload {
+            self.payload = Some(copy(payload.as_bytes())?);
+        }
+        for addition in &mut self.additions {
+            addition.payload = copy(addition.payload.as_bytes())?;
+        }
+        Ok(self)
+    }
+
     fn with_payload(payload: PacketPayload) -> Self {
         Self {
             payload: Some(payload),
@@ -215,6 +255,17 @@ impl Packet {
             return Err(PacketError::Empty);
         }
         Ok(Self::with_payload(PacketPayload::Owned(bytes)))
+    }
+
+    /// A packet over already admitted storage, without copying or releasing
+    /// the charge. Packet clones and `take()` retain the same allocation owner.
+    pub fn from_accounted(
+        bytes: zencodec_io::storage::SharedStorage<u8>,
+    ) -> Result<Self, PacketError> {
+        if bytes.is_empty() {
+            return Err(PacketError::Empty);
+        }
+        Ok(Self::with_payload(PacketPayload::Accounted(bytes)))
     }
 
     /// A packet over `len` bytes of `bytes` from `start`, without copying.
@@ -380,5 +431,49 @@ impl Packet {
     /// Side data carried with the packet.
     pub fn additions(&self) -> &[PacketAddition] {
         &self.additions
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod accounted_tests {
+    use super::*;
+    use alloc::vec;
+    use zencodec::{storage::StorageBudget, time::TimeBase};
+    #[test]
+    fn staging_preserves_packet_and_additions_and_releases_partial_admission() {
+        let original = Packet::from_vec(vec![1, 2, 3])
+            .unwrap()
+            .with_track(7)
+            .with_pts(Timestamp::new(19, TimeBase::MILLIS))
+            .with_dts(Timestamp::new(17, TimeBase::MILLIS))
+            .with_duration_ticks(2)
+            .with_config_epoch(3)
+            .with_ordinal(9)
+            .with_input_offset(123)
+            .with_random_access(RandomAccess::Yes)
+            .with_addition(PacketAddition::new(6, PacketPayload::Owned(vec![4, 5])));
+        let small = StorageBudget::new(4, 8);
+        assert!(original.clone().accounted(&small).is_err());
+        assert_eq!(small.reserved_bytes(), 0);
+        assert_eq!(small.reserved_objects(), 0);
+        let budget = StorageBudget::new(5, 2);
+        let output = original.clone().accounted(&budget).unwrap();
+        assert_eq!(output.bytes(), original.bytes());
+        assert_eq!(output.track(), original.track());
+        assert_eq!(output.pts(), original.pts());
+        assert_eq!(output.dts(), original.dts());
+        assert_eq!(output.duration_ticks(), original.duration_ticks());
+        assert_eq!(output.config_epoch(), original.config_epoch());
+        assert_eq!(output.ordinal(), original.ordinal());
+        assert_eq!(output.input_offset(), original.input_offset());
+        assert_eq!(output.random_access(), original.random_access());
+        assert_eq!(output.additions()[0].id(), 6);
+        assert_eq!(output.additions()[0].payload().as_bytes(), &[4, 5]);
+        assert_eq!(budget.reserved_bytes(), 5);
+        let retained = output.clone();
+        drop(output);
+        assert_eq!(budget.reserved_bytes(), 5);
+        drop(retained);
+        assert_eq!(budget.reserved_bytes(), 0);
     }
 }

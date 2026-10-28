@@ -2,11 +2,11 @@
 
 use alloc::vec::Vec;
 
-use enough::{Stop, Unstoppable};
 use how_far::{Pulse, Total};
 use zencodec::decode::{
     ByteRange, DecodeRowSink, Event, IncrementalDecode, Input, OutputInfo, StepError,
 };
+use zencodec::how_far::NoPulse;
 use zencodec::source::ReadAt;
 
 use crate::stepper::{DriveFailure, ReadAtCursor};
@@ -22,6 +22,10 @@ pub struct DriveOptions {
     /// Bytes read per round for a sequential request, on top of the
     /// decoder's minimum.
     pub read_size: usize,
+    /// Admission for driver-owned input. Defaults to historical unlimited behavior.
+    pub limits: crate::IoLimits,
+    /// Scheduling quota for async cursors and compute batches, independent of output draining.
+    pub work_quota: crate::WorkQuota,
 }
 
 impl Default for DriveOptions {
@@ -29,6 +33,8 @@ impl Default for DriveOptions {
         Self {
             max_gap: 0,
             read_size: 64 * 1024,
+            limits: crate::IoLimits::unlimited(),
+            work_quota: crate::WorkQuota::unlimited(),
         }
     }
 }
@@ -36,7 +42,24 @@ impl Default for DriveOptions {
 impl DriveOptions {
     /// Options with the given coalescing gap and sequential read size.
     pub const fn new(max_gap: u64, read_size: usize) -> Self {
-        Self { max_gap, read_size }
+        Self {
+            max_gap,
+            read_size,
+            limits: crate::IoLimits::unlimited(),
+            work_quota: crate::WorkQuota::unlimited(),
+        }
+    }
+
+    /// Apply input admission to synchronous and asynchronous drivers alike.
+    pub const fn with_limits(mut self, limits: crate::IoLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// Bound uninterrupted async work without coupling it to destination reads.
+    pub const fn with_work_quota(mut self, quota: crate::WorkQuota) -> Self {
+        self.work_quota = quota;
+        self
     }
 }
 
@@ -101,10 +124,10 @@ impl<'a> Progressor<'a> {
         }
     }
 
-    pub(crate) fn stop(&self) -> &'a dyn Stop {
+    pub(crate) fn pulse(&self) -> &'a dyn zencodec::Pulse {
         match self.pulse {
             Some(p) => p,
-            None => &Unstoppable,
+            None => &NoPulse,
         }
     }
 
@@ -144,7 +167,7 @@ where
     D: IncrementalDecode + ?Sized,
 {
     let mut progress = Progressor::new(pulse);
-    let stop = progress.stop();
+    let stop = progress.pulse();
     let total = bytes.len() as u64;
     let window = window.max(1);
     let mut stats = DriveStats::default();
@@ -206,7 +229,7 @@ where
             .map_err(DriveFailure::widen);
     }
     let mut progress = Progressor::new(pulse);
-    let stop = progress.stop();
+    let stop = progress.pulse();
     let mut cursor = ReadAtCursor::new(opts);
     let mut rows = 0u64;
     loop {

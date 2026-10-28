@@ -1,0 +1,124 @@
+{
+  "base": "2dfd7769a4c89f14d0a19a538f31d68e52ed65b7",
+  "origin": {
+    "repository": "imazen/zqi",
+    "revision": "f7652c97119c936b53d739098e2eab789a42592a",
+    "client": "tools/codec-speed/src/bin/iqa_http_access.rs",
+    "server": "tools/codec-speed/http_range_study.py",
+    "license": "Imazen-owned code adapted under this repository Apache-2.0 OR MIT license"
+  },
+  "command": "just spatial-http-check <fresh-artifacts> 3568",
+  "summary": {
+    "scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+    "requests": 2186,
+    "cases": 32,
+    "statuses": {
+      "200": 1,
+      "206": 2181,
+      "302": 1,
+      "412": 3
+    },
+    "conditional_after_open": true
+  },
+  "controls": {
+    "/stable/control-false-false-false.tif?at=0": {
+      "requests": 236,
+      "body_bytes": 2977
+    },
+    "/stable/control-false-false-true.tif?at=0": {
+      "requests": 13,
+      "body_bytes": 47877
+    },
+    "/stable/control-false-true-false.tif?at=0": {
+      "requests": 340,
+      "body_bytes": 3041
+    },
+    "/stable/control-false-true-true.tif?at=0": {
+      "requests": 21,
+      "body_bytes": 80773
+    },
+    "/stable/control-true-false-false.tif?at=0": {
+      "requests": 239,
+      "body_bytes": 3353
+    },
+    "/stable/control-true-false-true.tif?at=0": {
+      "requests": 12,
+      "body_bytes": 44257
+    },
+    "/stable/control-true-true-false.tif?at=0": {
+      "requests": 343,
+      "body_bytes": 3417
+    },
+    "/stable/control-true-true-true.tif?at=0": {
+      "requests": 20,
+      "body_bytes": 77153
+    }
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/http-snapshot1",
+  "requests_sha256": "925eb32ccd4d6c4986e52cddaaa347981b24e0212ba9b6b0a1cc2d1b3ae56be9",
+  "lock_sha256": "fdc7d74690d0f49513e5699ebec7b7e2ad90cd048636a4b7cdb7025d4a423020",
+  "receipts": [
+    {
+      "log": "zencodec-http-resolve-2026-10-26.log",
+      "sha256": "45488ee645d6ef5ef892b990b5063afe2a6e96dea95c36ec17ca2c504323418b",
+      "results": [
+        "run-heavy: done rc=0 1s | peak-RSS 0.05GiB | min-avail 13317MiB | peak-load 0.22"
+      ]
+    },
+    {
+      "log": "zencodec-http-snapshot1-2026-10-26.log",
+      "sha256": "4ad01d7cde09fefd7afaa7a730dd050dfe10d6fad39a7211af9eba24258f7c90",
+      "results": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 2.15s",
+        "run-heavy: done rc=0 9s | peak-RSS 0.58GiB | min-avail 12907MiB | peak-load 0.28"
+      ]
+    },
+    {
+      "log": "zencodec-http-guide-2026-10-26.log",
+      "sha256": "0ea6f990dc75e16719b62b78a45497d4f4ed91d0a01d301b1a24d59e235a2ca3",
+      "results": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13030MiB | peak-load 0.22"
+      ]
+    }
+  ],
+  "scope": [
+    "Classic/BigTIFF and chunky/planar SubIFD exact pixels through direct and buffered real HTTP/1.1 reads",
+    "Native selected decode rejects a replacement immediately after discovery and cannot reopen on retry",
+    "Fourteen malformed/changed response cases preserve typed causes through native open",
+    "Weak/missing/malformed/duplicate initial validators refuse; empty strong tag succeeds",
+    "Range admission rejects before a network call"
+  ],
+  "limits": [
+    "Local HTTP/1.1, no TLS/CDN/browser/multipart qualification",
+    "Trusts server strong-validator semantics; cannot detect a lying unchanged ETag",
+    "No atomic multi-object manifest or disk-file snapshot guarantee",
+    "No performance, total-memory or cancellation-latency conclusion",
+    "Private optional http feature in validation crate; no shipped HTTP dependency or new public API"
+  ],
+  "late_fault_followthrough": {
+    "base": "5f8a2c47025cd1ec6c07e7e4214b14f34154b7e9",
+    "scope": "Four additional failures at the last range observed in a successful selected decode, on classic and BigTIFF: HTTP 412, changed returned validator, changed total length, truncated body. No output; retry preserves cause without another request.",
+    "summary": {
+      "scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+      "requests": 4918,
+      "cases": 40,
+      "statuses": {
+        "200": 1,
+        "206": 4911,
+        "302": 1,
+        "412": 5
+      },
+      "conditional_after_open": true
+    },
+    "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/http-snapshot2",
+    "requests_sha256": "763936c8310b4e9779987c765a78cd3fa828ce1d229e2058619228766bf859bc",
+    "receipt": {
+      "log": "zencodec-http-snapshot2-2026-10-26.log",
+      "sha256": "70c95308117567a071d4a2638b06031d590dddd3d8fffd628a4174b3695cf08d",
+      "results": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 4.79s",
+        "run-heavy: done rc=0 8s | peak-RSS 0.58GiB | min-avail 13236MiB | peak-load 0.31"
+      ]
+    }
+  }
+}

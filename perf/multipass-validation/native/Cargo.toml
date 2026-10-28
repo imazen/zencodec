@@ -1,0 +1,41 @@
+[package]
+name = "multipass-native"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Native IMI gates for the multi-pass raster input prototype (private codec)"
+
+[workspace]
+
+[dependencies]
+multipass-validation = { path = ".." }
+zencodec = { path = "../../..", features = ["std"] }
+zencodec-io = { path = "../../../zencodec-io", features = ["std"] }
+zenpixels = ">=0.2.14, <0.4.0"
+enough = "0.4.4"
+# Private repository (imazen/zqi); fetch with CARGO_NET_GIT_FETCH_WITH_CLI=true.
+# imij takes zencodec, zenpixels and how-far as registry versions, so the patches
+# below give it this harness's core and pixel types.
+imij = { git = "https://github.com/imazen/zqi", rev = "0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5", default-features = false, features = ["std", "encode"] }
+# The how-far release imij is built against, for its native progress argument.
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
+
+[profile.release]
+debug = 1
+lto = "thin"
+
+# The native encoder is slow unoptimized; keep correctness checks enabled.
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
+[profile.dev.package.imij]
+opt-level = 2
+
+# One source per shared crate for this harness and imij.
+[patch.crates-io]
+zencodec = { path = "../../.." }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }

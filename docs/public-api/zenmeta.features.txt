@@ -11,11 +11,11 @@
 #
 #   pub modules                                12
 #   pub types (struct/enum/trait/alias)        34
-#   pub consts/statics                         20
+#   pub consts/statics                         23
 #   free functions                             32
-#   inherent methods                           96
+#   inherent methods                           97
 #   struct fields                              81
-#   enum variants                              43
+#   enum variants                              45
 #   trait roster entries (type × trait)        83
 #   auto-trait-complete types                  31
 #   auto-trait exceptions                       2
@@ -25,11 +25,11 @@
 #   apple                            30
 #   audit                            24
 #   bplist                           11
-#   ifd                             169
+#   ifd                             175
 #   rewrite                          21
 #   xmp                              57
 
-## items (315 lines)
+## items (321 lines)
 
 pub mod apple
 pub mod apple::compatibility
@@ -104,6 +104,8 @@ pub fn ifd::tags::tag_name(ifd::walk::Kind, u16) -> alloc::borrow::Cow<'static, 
 pub mod ifd::walk
 pub enum ifd::walk::Count
 pub ifd::walk::Count::Bytes(u64)
+pub ifd::walk::Count::JpegHuffman
+pub ifd::walk::Count::JpegQuantization
 pub ifd::walk::Count::Tag(u16)
 pub ifd::walk::Count::ToEnd
 pub enum ifd::walk::Kind
@@ -228,8 +230,11 @@ pub const ifd::walk::FREE_BYTE_COUNTS: u16
 pub const ifd::walk::FREE_OFFSETS: u16
 pub const ifd::walk::GPS_IFD: u16
 pub const ifd::walk::INTEROP_IFD: u16
+pub const ifd::walk::JPEG_AC_TABLES: u16
+pub const ifd::walk::JPEG_DC_TABLES: u16
 pub const ifd::walk::JPEG_IF_LENGTH: u16
 pub const ifd::walk::JPEG_IF_OFFSET: u16
+pub const ifd::walk::JPEG_Q_TABLES: u16
 pub const ifd::walk::STRIP_BYTE_COUNTS: u16
 pub const ifd::walk::STRIP_OFFSETS: u16
 pub const ifd::walk::SUB_IFDS: u16
@@ -246,6 +251,7 @@ pub fn ifd::walk::Rules::header_extension(&self, &ifd::walk::Walk<'_>) -> core::
 pub fn ifd::walk::Rules::ifd(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
 pub fn ifd::walk::Rules::image_data(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
 pub fn ifd::walk::Rules::jpeg_stream(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::jpeg_table(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, u16) -> ifd::walk::Fate
 pub fn ifd::walk::Rules::magic(&self, u16) -> bool
 pub fn ifd::walk::Rules::pointer(&self, ifd::walk::Kind, &ifd::walk::Entry) -> core::option::Option<(ifd::walk::Kind, &'static str)>
 pub fn ifd::walk::Rules::pointer_offsets(&self, &ifd::walk::Walk<'_>, &ifd::walk::Entry, usize) -> alloc::vec::Vec<u64>
@@ -272,7 +278,7 @@ pub fn rewrite::Context<'a>::check(&self) -> core::result::Result<(), zencodec::
 pub fn rewrite::Context<'a>::decompress(&self, zencodec::metadata_rewrite::Compression, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::exif(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::icc(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
-pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::packet(&self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::with_input(self, &'a [u8]) -> Self

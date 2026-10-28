@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {declarations,example,maskRust} from './source.mjs';
+import {declarations,example,maskRust,snapshotMethods} from './source.mjs';
 import {api,chapterApi,entries,supplementalExamples} from './api.mjs';
 import {lanes} from './content.mjs';
 const root=new URL('../../',import.meta.url);
@@ -41,6 +41,32 @@ impl Example {
   assert.throws(()=>declarations(rust,{scope:'pub trait Source:',methods:['nested']}),/exactly one/);
   assert.throws(()=>declarations(rust+rust,{scope:'pub trait Source:',methods:['read']}),/match once/);
   assert.throws(()=>declarations(rust,{methods:['absent']}),/exactly one/);
+});
+
+test('the flat API catalog cannot silently overwrite a source contract',async()=>{
+  const catalog=await readFile(new URL('docs/site/api.mjs',root),'utf8');
+  const apiSource=catalog.split('export const api = {')[1].split('\n};')[0];
+  const declared=[...apiSource.matchAll(/^  (\w+): \{/gm)].map(m=>m[1]);
+  assert.equal(declared.length,new Set(declared).size,'duplicate API catalog key');
+  assert.deepEqual(declared,Object.keys(api),'every declared contract must survive evaluation');
+  assert.match(api.collectionOpen.path,/TiffCollection/);
+  assert.match(api.collectionOpenRequest.path,/OpenRequest/);
+});
+
+test('complete error declarations retain named fields and non-exhaustive context',()=>{
+  const rust=`// pub enum Refusal { Wrong }
+#[non_exhaustive]
+pub enum Refusal {
+    Limits { unsupported: Limits },
+    Policy { unsupported: Policy },
+}
+fn hidden() {}`;
+  const spec={scope:'#[non_exhaustive]\npub enum Refusal',methods:[],item:true};
+  const found=declarations(rust,spec);
+  assert.equal(found.line,2);
+  assert.equal(found.code,rust.slice(rust.indexOf('#['),rust.indexOf('\nfn hidden')));
+  assert.throws(()=>declarations(rust,{...spec,methods:['hidden']}),/no method selection/);
+  assert.throws(()=>declarations(rust+rust,spec),/match once/);
 });
 
 test('every displayed contract is extracted from a unique current source declaration',async()=>{
@@ -88,4 +114,75 @@ test('above, focus and below reconstruct complete independently compiled example
   assert.match(example(source,'codecset').above,/with_decoder\(BmpDecoderConfig::new\(\)\)/);
   assert.throws(()=>example(source,'missing'),/unique/);
   assert.throws(()=>example(source+source,'preview'),/unique/);
+});
+
+test('integration method discovery retains generic callbacks and range sources',()=>{
+  const snapshot=`pub fn Request<'a>::new() -> Self
+pub fn Request<'a>::transcode_with<R: PolicyResolver>(&self, &mut R)
+pub fn Request<'a>::transcode_from_read_at<S: ReadAt>(&self, &mut S)
+pub fn Request<'a>::transcode_from_read_at_with<S, R>(&self, &mut S, &mut R)
+pub const fn Request<'a>::configured() -> bool
+pub fn Other::transcode_with<R>(&self, R)
+pub Request<'a>::field: bool`;
+  assert.deepEqual(snapshotMethods(snapshot,"Request<'a>"),[
+    'new','transcode_with','transcode_from_read_at','transcode_from_read_at_with','configured',
+  ]);
+});
+
+test('pinned integration exposes every synchronous callback and source entry point',async()=>{
+  const {surface}=JSON.parse(await readFile(new URL('docs/integration-api.json',root),'utf8'));
+  for(const method of ['transcode_with','transcode_from_read_at','transcode_from_read_at_with'])
+    assert.match(surface,new RegExp(`pub fn ${method}<`),method);
+});
+
+test('native integration signatures retain the operation policy used by copied examples',async()=>{
+  const snapshot=JSON.parse(await readFile(new URL('docs/integration-api.json',root),'utf8'));
+  const manifest=await readFile(new URL('perf/jpeg-policy-validation/Cargo.toml',root),'utf8');
+  const dependency=manifest.split('\n').find(line=>line.startsWith('zencodecs = '));
+  assert.ok(dependency?.includes(`rev = "${snapshot.revision}"`),'captured signatures and native examples must use the same revision');
+  const sync=declarations(snapshot.surface,{scope:"impl<'a> TranscodeRequest<'a> {",methods:['transcode_with','transcode_from_read_at_with'],associated:false}).code;
+  const async=declarations(snapshot.surface,{scope:"impl TranscodeRequest<'_> {",methods:['transcode_async_with'],associated:false}).code;
+  for(const surface of [sync,async]) {
+    assert.doesNotMatch(surface,/\bPolicyResolver\b/,'a callback-only bound cannot accept BoundPolicy');
+    assert.match(surface,/\bOperationPolicy\b/);
+  }
+});
+
+// A selected trait view must not look like a complete implementation checklist.
+test('signature selections identify omitted and required methods independently',()=>{
+  const rust=`pub trait Config: Clone {
+    fn format() -> u8;
+    fn job(self);
+    fn encode(self) { todo!() }
+  }`;
+  const view=declarations(rust,{scope:'pub trait Config',methods:['encode']});
+  assert.deepEqual(view.omittedMethods,['format','job']);
+  assert.deepEqual(view.requiredMethods,['format','job']);
+  assert.ok(!view.code.includes('fn format'));
+});
+
+test('implementor selections include required method signatures but omit unrelated defaults',()=>{
+  const rust=`pub trait Config {
+    type Job;
+    fn format() -> u8;
+    fn job(self) -> Self::Job;
+    fn encode(self) { todo!() }
+    fn estimate(&self) -> usize { 0 }
+  }`;
+  const view=declarations(rust,{scope:'pub trait Config',methods:['encode'],includeRequired:true});
+  assert.match(view.code,/fn format\(\) -> u8;/);
+  assert.match(view.code,/fn job\(self\) -> Self::Job;/);
+  assert.match(view.code,/fn encode\(self\);/);
+  assert.deepEqual(view.omittedMethods,['estimate']);
+  assert.deepEqual(view.requiredMethods,['format','job']);
+});
+
+test('array and const-generic signatures keep internal semicolons and braces',()=>{
+  const rust=`impl Converter {
+    pub fn new<const N: usize>(planes: [Plane; 3], table: &[u8; N]) -> Result<Self, Error> { todo!() }
+    pub fn map(&self) -> Buffer<{ 2 * 3 }> { todo!() }
+}`;
+  const view=declarations(rust,{scope:'impl Converter',methods:['new','map']});
+  assert.match(view.code,/planes: \[Plane; 3\], table: &\[u8; N\]\) -> Result<Self, Error>;/);
+  assert.match(view.code,/fn map\(&self\) -> Buffer<\{ 2 \* 3 \}>;/);
 });

@@ -2,7 +2,7 @@
 //! decision. No codec or container is reconfigured by the resolver itself.
 #![allow(dead_code)]
 use crate::policy::*;
-use zencodec::{At, enough::Stop};
+use zencodec::At;
 use zencodec_media::{
     packet::{Packet, RandomAccess},
     track::{TrackInfo, TrackKind},
@@ -27,7 +27,7 @@ pub(crate) fn select_track<R: PolicyResolver + ?Sized>(
     source: u64,
     may_drop: bool,
     resolver: &mut R,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<TrackSelection, At<Failure<R::Error>>> {
     assert_eq!(track.index(), first.track());
     let facts = MediaFacts {

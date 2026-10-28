@@ -1,0 +1,329 @@
+--- a/zenjpeg/Cargo.toml
++++ b/zenjpeg/Cargo.toml
+@@ -106,7 +106,7 @@
+ # `__picker-research` feature for the dev/picker_v0_3_holdout_ab.rs
+ # held-out A/B harness. Path-only because the v3 schema lives on the
+ # sibling `../zenanalyze/zenpredict` and isn't published yet.
+-zenpredict = { path = "../../zenanalyze/zenpredict", optional = true }
++zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "05de3cbc44b19d8769077d99710b0146c761d6df", optional = true }
+ # zenanalyze-api: the frozen 1.0 feature contract. Optional, enabled by
+ # `__picker-research`, so the picker can reuse a shared feature `Offer`. Git-rev
+ # (workspace dep) — see the workspace Cargo.toml note.
+--- a/zenjpeg/src/codec/encode.rs
++++ b/zenjpeg/src/codec/encode.rs
+@@ -538,6 +538,7 @@
+ ///
+ /// Created by [`JpegEncoderConfig::job()`]. Borrows temporary data (stop token,
+ /// metadata) and is consumed by creating a [`JpegEncoder`].
++#[derive(Clone)]
+ pub struct JpegEncodeJob {
+     config: JpegEncoderConfig,
+     stop: Option<zencodec::StopToken>,
+@@ -547,6 +548,24 @@
+     /// Image dimensions, set via `with_canvas_size`. When known, enables true
+     /// streaming in `push_rows` → `finish` (no full-image accumulation).
+     image_size: Option<(u32, u32)>,
++}
++
++impl JpegEncodeJob {
++    /// Experimental effective-job preflight. Does not begin native pixel storage.
++    /// Metadata/configuration preparation may allocate; this is not a memory bound.
++    pub fn plan_rows(
++        &self,
++        width: u32,
++        height: u32,
++        descriptor: PixelDescriptor,
++        context: Option<&zenpixels::ColorContext>,
++        _access: zencodec::output_patch::OutputAccess,
++    ) -> Result<zencodec::encode::OutputTiming, At<CodecError>> {
++        use zencodec::encode::EncodeJob;
++        self.clone()
++            .encoder()?
++            .plan_rows(width, height, descriptor, context)
++    }
+ }
+ 
+ impl zencodec::encode::EncodeJob for JpegEncodeJob {
+@@ -684,6 +703,38 @@
+         }
+     }
+ 
++    fn plan_rows(
++        &self,
++        width: u32,
++        height: u32,
++        descriptor: PixelDescriptor,
++        context: Option<&zenpixels::ColorContext>,
++    ) -> Result<zencodec::encode::OutputTiming, At<CodecError>> {
++        use zencodec::encode::OutputTiming;
++        if self.stop_ref().should_stop() {
++            return Err(Error::cancelled().into());
++        }
++        if self.image_size.is_some_and(|s| s != (width, height)) {
++            return Err(Error::invalid_state("plan: size differs from with_canvas_size").into());
++        }
++        let layout = self.pixel_layout(descriptor)?;
++        self.check_limits(width, height, layout)?;
++        self.check_declared_context(descriptor, context)?;
++        let lag = self
++            .build_request(Some(layout.channels() as u8))?
++            .plan_byte_output(width, height, layout)?;
++        let configured_lag = match self.effective_config.color_mode {
++            crate::encode::encoder_types::ColorMode::YCbCr {
++                subsampling: ChromaSubsampling::Quarter,
++            } => 31,
++            _ => 15,
++        };
++        Ok(match lag.map(|lag| lag.max(configured_lag)) {
++            Some(lag) if lag < height => OutputTiming::streaming(lag),
++            _ => OutputTiming::AT_FINISH,
++        })
++    }
++
+     /// Build an EncodeRequest from current config + metadata, applying policy.
+     ///
+     /// `channel_count` is the channel count of the pixels being encoded
+@@ -784,11 +835,22 @@
+     }
+ 
+     fn check_profile_context(&self, pixels: &PixelSlice<'_>) -> Result<(), Error> {
++        self.check_declared_context(
++            pixels.descriptor(),
++            pixels.color_context().map(|c| c.as_ref()),
++        )
++    }
++
++    fn check_declared_context(
++        &self,
++        descriptor: PixelDescriptor,
++        context: Option<&zenpixels::ColorContext>,
++    ) -> Result<(), Error> {
+         if matches!(
+-            pixels.descriptor().transfer(),
++            descriptor.transfer(),
+             zenpixels::TransferFunction::Unknown | zenpixels::TransferFunction::Gamma22
+-        ) && pixels.descriptor().channel_type() == zenpixels::ChannelType::U8
+-            && let Some(context) = pixels.color_context()
++        ) && descriptor.channel_type() == zenpixels::ChannelType::U8
++            && let Some(context) = context
+             && (context.cicp.is_some()
+                 || context.icc.as_ref()
+                     != self.metadata.as_ref().and_then(|m| m.icc_profile.as_ref()))
+--- a/zenjpeg/src/encode/streaming.rs
++++ b/zenjpeg/src/encode/streaming.rs
+@@ -249,46 +249,9 @@
+ 
+     /// Creates a streaming encoder from builder configuration.
+     pub(crate) fn from_builder(mut builder: StreamingEncoderBuilder) -> Result<Self> {
+-        // Header, coefficient order, frequency counting and restart units must
+-        // all agree for a single-component frame, including direct builders.
+-        if builder.gray_output || builder.pixel_format.is_grayscale() {
+-            builder.subsampling = Subsampling::S444;
+-        }
++        builder.validate_input()?;
+         let width = builder.width as usize;
+         let height = builder.height as usize;
+-
+-        if width == 0 || height == 0 {
+-            return Err(Error::invalid_dimensions(
+-                builder.width,
+-                builder.height,
+-                "dimensions must be non-zero",
+-            ));
+-        }
+-
+-        if builder.use_rgb {
+-            if builder.use_xyb {
+-                return Err(Error::invalid_config(
+-                    "RGB passthrough mode and XYB mode are mutually exclusive".into(),
+-                ));
+-            }
+-            if builder.subsampling != Subsampling::S444 {
+-                return Err(Error::invalid_config(
+-                    "RGB passthrough mode requires 4:4:4 (no chroma subsampling)".into(),
+-                ));
+-            }
+-            match builder.pixel_format {
+-                crate::types::PixelFormat::Rgb
+-                | crate::types::PixelFormat::Rgba
+-                | crate::types::PixelFormat::Bgr
+-                | crate::types::PixelFormat::Bgra
+-                | crate::types::PixelFormat::Bgrx => {}
+-                _ => {
+-                    return Err(Error::unsupported_feature(
+-                        "RGB passthrough mode requires an 8-bit RGB-family pixel format",
+-                    ));
+-                }
+-            }
+-        }
+ 
+         // Generate quantization tables and zero-bias params. Shared with
+         // `EncoderConfig::resolve_plan` (encode::plan::resolve_quant_tables)
+@@ -317,10 +280,7 @@
+ 
+         // Determine if we can use streaming-through encoding early,
+         // so StripProcessor can allocate minimal block storage.
+-        let enable_streaming = !matches!(builder.huffman, HuffmanStrategy::Optimize)
+-            && builder.mode != JpegMode::Progressive
+-            && !builder.use_xyb
+-            && !builder.use_rgb;
++        let enable_streaming = builder.streams_output();
+ 
+         // Create strip processor with quant tables provided at construction.
+         // In streaming-through mode, only allocate one strip of block storage.
+--- a/zenjpeg/src/encode/streaming_builder.rs
++++ b/zenjpeg/src/encode/streaming_builder.rs
+@@ -331,6 +331,74 @@
+         self
+     }
+ 
++    // Shared by planning and startup. No native pixel/coefficients allocation.
++    pub(crate) fn validate_input(&mut self) -> Result<()> {
++        use crate::error::Error;
++        // Header, coefficient order, frequency counting and restart units must
++        // all agree for a single-component frame, including direct builders.
++        if self.gray_output || self.pixel_format.is_grayscale() {
++            self.subsampling = Subsampling::S444;
++        }
++
++        if self.width == 0 || self.height == 0 {
++            return Err(Error::invalid_dimensions(
++                self.width,
++                self.height,
++                "dimensions must be non-zero",
++            ));
++        }
++
++        if self.use_rgb {
++            if self.use_xyb {
++                return Err(Error::invalid_config(
++                    "RGB passthrough mode and XYB mode are mutually exclusive".into(),
++                ));
++            }
++            if self.subsampling != Subsampling::S444 {
++                return Err(Error::invalid_config(
++                    "RGB passthrough mode requires 4:4:4 (no chroma subsampling)".into(),
++                ));
++            }
++            match self.pixel_format {
++                crate::types::PixelFormat::Rgb
++                | crate::types::PixelFormat::Rgba
++                | crate::types::PixelFormat::Bgr
++                | crate::types::PixelFormat::Bgra
++                | crate::types::PixelFormat::Bgrx => {}
++                _ => {
++                    return Err(Error::unsupported_feature(
++                        "RGB passthrough mode requires an 8-bit RGB-family pixel format",
++                    ));
++                }
++            }
++        }
++
++        Ok(())
++    }
++
++    pub(crate) fn streams_output(&self) -> bool {
++        !matches!(self.huffman, HuffmanStrategy::Optimize)
++            && self.mode != JpegMode::Progressive
++            && !self.use_xyb
++            && !self.use_rgb
++    }
++
++    #[cfg(feature = "zencodec")]
++    pub(crate) fn planned_output_lag(mut self) -> Result<Option<u32>> {
++        self.validate_input()?;
++        if !self.streams_output() {
++            return Ok(None);
++        }
++        let layout = LayoutParams::new_xyb(
++            self.width as usize,
++            self.height as usize,
++            self.subsampling,
++            self.use_xyb,
++            self.xyb_subsampling,
++        );
++        Ok(Some((2 * layout.strip_height - 1) as u32))
++    }
++
+     /// Starts a streaming encoder for row-by-row input.
+     pub(crate) fn start(self) -> Result<StreamingEncoder> {
+         StreamingEncoder::from_builder(self)
+--- a/zenjpeg/src/encode/byte_encoders.rs
++++ b/zenjpeg/src/encode/byte_encoders.rs
+@@ -246,6 +246,31 @@
+         builder
+     }
+ 
++    #[cfg(feature = "zencodec")]
++    pub(crate) fn plan_output(
++        config: &EncoderConfig,
++        width: u32,
++        height: u32,
++        layout: PixelLayout,
++        exif: Option<&super::exif::Exif>,
++    ) -> Result<Option<u32>> {
++        validate_metadata(config, exif)?;
++        if width as u64 * height as u64 > u32::MAX as u64 {
++            return Err(Error::invalid_dimensions(
++                width,
++                height,
++                "dimensions too large",
++            ));
++        }
++        let lag = Self::streaming_builder(config, width, height, layout).planned_output_lag()?;
++        if (cfg!(feature = "target-zq") && config.quality.is_perceptual_target())
++            || config.segments.as_ref().is_some_and(|s| s.has_mpf_images())
++        {
++            return Ok(None);
++        }
++        Ok(lag)
++    }
++
+     /// Build a StreamingEncoder from v2 config.
+     fn build_streaming_encoder(
+         config: &EncoderConfig,
+@@ -253,6 +278,15 @@
+         height: u32,
+         layout: PixelLayout,
+     ) -> Result<StreamingEncoder> {
++        Self::streaming_builder(config, width, height, layout).start()
++    }
++
++    fn streaming_builder(
++        config: &EncoderConfig,
++        width: u32,
++        height: u32,
++        layout: PixelLayout,
++    ) -> crate::encode::streaming_builder::StreamingEncoderBuilder {
+         use crate::encode::streaming::StreamingEncoder as SE;
+         use crate::types::PixelFormat;
+ 
+@@ -287,7 +321,7 @@
+         } else {
+             subsampling
+         };
+-        Self::apply_common_builder_config(builder, config, width, height, subsampling).start()
++        Self::apply_common_builder_config(builder, config, width, height, subsampling)
+     }
+ 
+     /// Push rows with explicit stride.
+--- a/zenjpeg/src/encode/request.rs
++++ b/zenjpeg/src/encode/request.rs
+@@ -149,6 +149,17 @@
+     }
+ 
+     // === Build Streaming Encoders ===
++
++    #[cfg(feature = "zencodec")]
++    pub(crate) fn plan_byte_output(
++        self,
++        width: u32,
++        height: u32,
++        layout: PixelLayout,
++    ) -> Result<Option<u32>> {
++        let (config, _icc, exif, _xmp) = self.extract_metadata();
++        BytesEncoder::plan_output(&config, width, height, layout, exif.as_ref())
++    }
+ 
+     /// Create a streaming encoder from raw byte input with explicit pixel layout.
+     ///

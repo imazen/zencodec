@@ -13,7 +13,7 @@
 //! let mut dec = job.dyn_incremental_decoder(&[])?;
 //! let mut input = Input::empty();
 //! loop {
-//!     let p = dec.step(input, &mut sink, &stop)?;
+//!     let p = dec.step(input, &mut sink, &pulse)?;
 //!     // drop p.consumed bytes from the front of what was offered
 //!     match p.event {
 //!         Event::Need => { /* satisfy one of dec.requested(), build the next Input */ }
@@ -37,12 +37,12 @@
 //! **Requests.** After [`Event::Need`], [`IncrementalDecode::requested`]
 //! lists what the decoder needs, never empty. The driver satisfies any one
 //! request and steps again:
-//! - [`Request::AtLeast`]: an input starting at `offset` holding at least
+//! - [`InputRequest::AtLeast`]: an input starting at `offset` holding at least
 //!   `min_len` bytes, or every remaining byte with `total_len` set if the
 //!   source ends first. More is welcome.
-//! - [`Request::Range`]: an input holding exactly that span (or a larger
+//! - [`InputRequest::Range`]: an input holding exactly that span (or a larger
 //!   input starting at its offset).
-//! - [`Request::Len`]: any input (even empty) carrying `total_len`.
+//! - [`InputRequest::Len`]: any input (even empty) carrying `total_len`.
 //!
 //! A decoder never requests bytes it knows do not exist: once `total_len` is
 //! known, a request that cannot be met is a [`StepError::Codec`] error
@@ -64,20 +64,24 @@
 //!
 //! **Termination.** After [`Event::Done`], every step returns `Done` again
 //! with nothing consumed. After any error, every step returns
-//! [`StepError::Finished`]. `stop` is checked at least once per step; a
-//! tripped stop is [`StepError::Cancelled`], and terminal. [`Fused`] enforces
+//! [`StepError::Finished`]. `pulse` is checked at least once per step; a
+//! tripped pulse is [`StepError::Cancelled`], and terminal. [`Fused`] enforces
 //! all three for any decoder, and
 //! [`erase_incremental`](crate::decode::erase_incremental) applies it.
 //!
 //! **Events.** [`Event`] is non-exhaustive. Variants added later are
 //! informational: a driver that does not recognise one steps again. Anything
-//! that needs the driver to act is expressed as `Need` plus a [`Request`].
+//! that needs the driver to act is expressed as `Need` plus a [`InputRequest`].
 
 use alloc::boxed::Box;
 use core::fmt;
 
-use enough::{Stop, StopReason};
+use enough::StopReason;
 
+use super::control::{
+    BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+    DecodeBoundary, GuardedSink, InterpretationFacts,
+};
 use crate::sink::{DecodeRowSink, SinkError};
 use crate::{ImageInfo, OutputInfo};
 
@@ -120,7 +124,7 @@ impl ByteRange {
 /// What an incremental decoder needs before it can continue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum Request {
+pub enum InputRequest {
     /// Bytes from `offset` on: an input starting there with at least
     /// `min_len` bytes, or every remaining byte (with `total_len` set) when
     /// the source ends first. More is welcome. A sequential decoder asks
@@ -138,7 +142,11 @@ pub enum Request {
     Len,
 }
 
-impl Request {
+/// Legacy ambiguous name for a byte acquisition request.
+#[deprecated(note = "use InputRequest")]
+pub type Request = InputRequest;
+
+impl InputRequest {
     /// A request for at least `min_len` bytes from `offset`.
     #[inline]
     pub const fn at_least(offset: u64, min_len: usize) -> Self {
@@ -361,10 +369,12 @@ pub enum StepError<E> {
     Codec(E),
     /// The sink refused rows or failed.
     Sink(SinkError),
-    /// The stop token tripped.
+    /// The pulse token tripped.
     Cancelled(StopReason),
     /// The decoder was stepped again after an error.
     Finished,
+    /// A mandatory control boundary was unhandled or violated.
+    Control(ControlError),
 }
 
 impl<E> StepError<E> {
@@ -375,6 +385,7 @@ impl<E> StepError<E> {
             Self::Sink(e) => StepError::Sink(e),
             Self::Cancelled(r) => StepError::Cancelled(r),
             Self::Finished => StepError::Finished,
+            Self::Control(e) => StepError::Control(e),
         }
     }
 }
@@ -392,6 +403,7 @@ impl<E: fmt::Display> fmt::Display for StepError<E> {
             Self::Sink(e) => write!(f, "row sink: {e}"),
             Self::Cancelled(r) => write!(f, "decode cancelled: {r:?}"),
             Self::Finished => write!(f, "decoder stepped after it failed"),
+            Self::Control(e) => e.fmt(f),
         }
     }
 }
@@ -401,6 +413,7 @@ impl<E: core::error::Error + 'static> core::error::Error for StepError<E> {
         match self {
             Self::Codec(e) => Some(e),
             Self::Sink(e) => Some(e.as_ref()),
+            Self::Control(e) => Some(e),
             _ => None,
         }
     }
@@ -420,12 +433,12 @@ pub trait IncrementalDecode {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<Self::Error>>;
 
     /// What the decoder needs, valid after a step returned [`Event::Need`]
     /// (never empty then). Empty otherwise.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 
     /// Image metadata, once the header has been parsed.
     fn info(&self) -> Option<&ImageInfo>;
@@ -507,12 +520,12 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<D::Error>> {
-        (**self).step(input, sink, stop)
+        (**self).step(input, sink, pulse)
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         (**self).requested()
     }
 
@@ -536,12 +549,12 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<D::Error>> {
-        (**self).step(input, sink, stop)
+        (**self).step(input, sink, pulse)
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         (**self).requested()
     }
 
@@ -560,8 +573,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 
 /// Enforces the termination rules for any decoder: steps after `Done`
 /// return `Done` again, steps after an error return
-/// [`StepError::Finished`], and `stop` is checked before every step, a
-/// tripped stop being terminal.
+/// [`StepError::Finished`], and `pulse` is checked before every step, a
+/// tripped pulse being terminal.
 ///
 /// Wrap a hand-written decoder in `Fused` and its own state machine need
 /// not track any of this.
@@ -569,11 +582,14 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 pub struct Fused<D> {
     inner: D,
     state: FusedState,
+    controlled: bool,
+    interpretation: Option<InterpretationFacts>,
 }
 
 #[derive(Debug)]
 enum FusedState {
     Running,
+    Suspended(DecodeBoundary),
     Done(OutputInfo),
     Failed,
 }
@@ -584,6 +600,15 @@ impl<D> Fused<D> {
         Self {
             inner,
             state: FusedState::Running,
+            controlled: false,
+            interpretation: None,
+        }
+    }
+
+    pub(super) fn controlled(inner: D) -> Self {
+        Self {
+            controlled: true,
+            ..Self::new(inner)
         }
     }
 
@@ -605,21 +630,32 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<D::Error>> {
         match &self.state {
             FusedState::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone()))),
             FusedState::Failed => return Err(StepError::Finished),
+            FusedState::Suspended(_) => {
+                self.state = FusedState::Failed;
+                return Err(StepError::Control(ControlError::UnhandledBoundary));
+            }
             FusedState::Running => {}
         }
-        if let Err(reason) = stop.check() {
+        if self.controlled {
+            self.state = FusedState::Failed;
+            return Err(StepError::Control(ControlError::UnhandledBoundary));
+        }
+        if let Err(reason) = pulse.check() {
             self.state = FusedState::Failed;
             return Err(StepError::Cancelled(reason));
         }
-        match self.inner.step(input, sink, stop) {
+        self.state = FusedState::Failed;
+        match self.inner.step(input, sink, pulse) {
             Ok(p) => {
                 if let Event::Done(info) = &p.event {
                     self.state = FusedState::Done(info.clone());
+                } else {
+                    self.state = FusedState::Running;
                 }
                 Ok(p)
             }
@@ -630,7 +666,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         }
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         match self.state {
             FusedState::Running => self.inner.requested(),
             _ => &[],
@@ -650,6 +686,98 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
     }
 }
 
+impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
+    fn step_controlled(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        pulse: &dyn crate::Pulse,
+    ) -> Result<ControlledProgress, StepError<D::Error>> {
+        self.controlled = true;
+        match &self.state {
+            FusedState::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone())).into()),
+            FusedState::Failed => return Err(StepError::Finished),
+            _ => {}
+        }
+        if let Err(reason) = pulse.check() {
+            self.state = FusedState::Failed;
+            return Err(StepError::Cancelled(reason));
+        }
+        if let FusedState::Suspended(boundary) = self.state {
+            return Ok(ControlledProgress::Suspended {
+                consumed: 0,
+                boundary,
+            });
+        }
+        // Caught unwinds cannot resume a half-mutated native decoder.
+        self.state = FusedState::Failed;
+        let mut guarded = GuardedSink::new(sink, self.interpretation);
+        let result = self.inner.step_controlled(input, &mut guarded, pulse);
+        if let Some(error) = guarded.refused {
+            return Err(StepError::Control(error));
+        }
+        let progress = result?;
+        if self.interpretation.is_none()
+            && matches!(
+                &progress,
+                ControlledProgress::Decode(Progress {
+                    event: Event::Done(_) | Event::Rows { .. },
+                    ..
+                })
+            )
+        {
+            return Err(StepError::Control(ControlError::OutputBeforeInterpretation));
+        }
+        if let ControlledProgress::Suspended { boundary, .. } = &progress
+            && self
+                .interpretation
+                .is_some_and(|facts| facts != boundary.facts())
+        {
+            return Err(StepError::Control(ControlError::FinalInterpretationChanged));
+        }
+        self.state = match &progress {
+            ControlledProgress::Decode(Progress {
+                event: Event::Done(info),
+                ..
+            }) => {
+                if self.interpretation.is_some_and(|facts| {
+                    facts.width != info.width
+                        || facts.height != info.height
+                        || facts.descriptor != Some(info.native_format)
+                }) {
+                    return Err(StepError::Control(ControlError::InconsistentFacts));
+                }
+                FusedState::Done(info.clone())
+            }
+            ControlledProgress::Suspended { boundary, .. } => FusedState::Suspended(*boundary),
+            _ => FusedState::Running,
+        };
+        Ok(progress)
+    }
+
+    fn resume(
+        &mut self,
+        id: BoundaryId,
+        action: BoundaryAction,
+        pulse: &dyn crate::Pulse,
+    ) -> Result<(), StepError<D::Error>> {
+        let state = core::mem::replace(&mut self.state, FusedState::Failed);
+        let FusedState::Suspended(boundary) = state else {
+            return Err(StepError::Finished);
+        };
+        pulse.check()?;
+        if boundary.id() != id || !action.permits(boundary.facts()) {
+            return Err(StepError::Control(ControlError::InvalidReply));
+        }
+        self.inner.resume(id, action, pulse)?;
+        if action == BoundaryAction::AdoptInterpretation {
+            self.interpretation = Some(boundary.facts());
+        }
+        self.state = FusedState::Running;
+        Ok(())
+    }
+}
+
 /// Shim erasing a decoder's error type to [`ErasedError`].
 pub struct IncrementalDecoderShim<D>(pub D);
 
@@ -660,14 +788,14 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<ErasedError>> {
         self.0
-            .step(input, sink, stop)
+            .step(input, sink, pulse)
             .map_err(|e| e.map_codec(|c| ErasedError(Box::new(c))))
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.0.requested()
     }
 
@@ -719,7 +847,7 @@ mod tests {
             &mut self,
             _input: Input<'_>,
             _sink: &mut dyn DecodeRowSink,
-            _stop: &dyn Stop,
+            _pulse: &dyn crate::Pulse,
         ) -> Result<Progress, StepError<core::fmt::Error>> {
             self.0 += 1;
             if self.0 == 2 {
@@ -728,8 +856,8 @@ mod tests {
                 Ok(Progress::need(0))
             }
         }
-        fn requested(&self) -> &[Request] {
-            &[Request::Len]
+        fn requested(&self) -> &[InputRequest] {
+            &[InputRequest::Len]
         }
         fn info(&self) -> Option<&ImageInfo> {
             None
@@ -739,31 +867,35 @@ mod tests {
     #[test]
     fn fused_makes_errors_and_cancellation_terminal() {
         let mut d = Fused::new(Flaky(0));
-        let stop = enough::Unstoppable;
-        assert!(d.step(Input::empty(), &mut NullSink, &stop).is_ok());
+        let pulse = &crate::how_far::NoPulse;
+        assert!(d.step(Input::empty(), &mut NullSink, &pulse).is_ok());
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &stop),
+            d.step(Input::empty(), &mut NullSink, &pulse),
             Err(StepError::Codec(_))
         ));
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &stop),
+            d.step(Input::empty(), &mut NullSink, &pulse),
             Err(StepError::Finished)
         ));
         assert!(d.requested().is_empty());
 
         struct Tripped;
-        impl Stop for Tripped {
+        impl enough::Stop for Tripped {
             fn check(&self) -> Result<(), StopReason> {
                 Err(StopReason::Cancelled)
             }
         }
         let mut d = Fused::new(Flaky(0));
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &Tripped),
+            d.step(
+                Input::empty(),
+                &mut NullSink,
+                &how_far::StopOnly::borrowed(&Tripped)
+            ),
             Err(StepError::Cancelled(StopReason::Cancelled))
         ));
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &stop),
+            d.step(Input::empty(), &mut NullSink, &pulse),
             Err(StepError::Finished)
         ));
     }
@@ -771,15 +903,15 @@ mod tests {
     #[test]
     fn requests_know_what_satisfies_them() {
         let bytes = [0u8; 10];
-        let r = Request::at_least(4, 8);
+        let r = InputRequest::at_least(4, 8);
         assert!(!r.is_satisfied_by(&Input::new(4, &bytes[..6])));
         assert!(r.is_satisfied_by(&Input::new(4, &bytes[..8])));
         assert!(r.is_satisfied_by(&Input::new(4, &bytes[..6]).with_total_len(10)));
         assert!(!r.is_satisfied_by(&Input::new(3, &bytes)));
-        let r = Request::range(2, 3);
+        let r = InputRequest::range(2, 3);
         assert!(r.is_satisfied_by(&Input::new(2, &bytes[..3])));
         assert!(!r.is_satisfied_by(&Input::new(2, &bytes[..2])));
-        assert!(Request::Len.is_satisfied_by(&Input::empty().with_total_len(10)));
-        assert!(!Request::Len.is_satisfied_by(&Input::empty()));
+        assert!(InputRequest::Len.is_satisfied_by(&Input::empty().with_total_len(10)));
+        assert!(!InputRequest::Len.is_satisfied_by(&Input::empty()));
     }
 }

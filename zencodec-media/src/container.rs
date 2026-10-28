@@ -20,8 +20,10 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use enough::Stop;
-pub use zencodec::decode::{ByteRange, Input, Request};
+pub use zencodec::decode::{ByteRange, Input, InputRequest};
+/// Deprecated byte-input request name; use [`InputRequest`].
+#[deprecated(note = "use InputRequest")]
+pub type Request = InputRequest;
 pub use zencodec::source::AccessPattern;
 
 use crate::packet::{Packet, RandomAccess};
@@ -176,12 +178,12 @@ pub trait Demuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<DemuxProgress, SessionError<Self::Error>>;
 
     /// What the demuxer needs next, after [`DemuxEvent::Need`]. Never empty
     /// then.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 
     /// The tracks; empty before [`DemuxEvent::Headers`].
     fn tracks(&self) -> &[TrackInfo];
@@ -254,24 +256,8 @@ impl MuxHint {
     }
 }
 
-/// Bytes to write over earlier output.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Patch {
-    /// File offset of the first byte.
-    pub offset: u64,
-    /// The new bytes.
-    pub bytes: Vec<u8>,
-}
-
-#[derive(Debug, Default)]
-#[non_exhaustive]
-/// What a muxer's `finish` returns.
-pub struct MuxFinish {
-    /// Bytes not yet consumed through `pending_output`.
-    pub tail: Vec<u8>,
-    /// Earlier bytes to overwrite; empty for a forward-only layout.
-    pub patches: Vec<Patch>,
-}
+/// Shared completion and patch types; retained paths for media implementations.
+pub use zencodec::output_patch::{OutputFinish as MuxFinish, Patch, PatchError};
 
 /// A container writer whose bytes the caller pulls. See the
 /// [module docs](self).
@@ -287,12 +273,35 @@ pub trait Muxer {
         hint: MuxHint,
     ) -> Result<MuxTiming, SessionError<Self::Error>>;
 
+    /// Prepare a layout that preserves supplied PTS, DTS and explicit sample
+    /// durations exactly, or refuse without making output available.
+    ///
+    /// Unlike a capability query, success binds this muxer instance. Later
+    /// packets that cannot be represented must fail before their payload or
+    /// timing affects pending output. Missing timestamps/durations may be
+    /// refused; values must not be guessed, rounded or rebased to make a packet
+    /// fit. A missing DTS may use its PTS as decode time when the format requires
+    /// one. This does not certify metadata, packet additions or workspace bounds.
+    ///
+    /// Preparation cannot prove facts about future packets. A driver reports
+    /// already committed output on a subsequent failure and must not retry a
+    /// different layout. The default refuses: calling legacy `begin` alone is
+    /// not evidence of this stronger contract.
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Self::Error>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    }
+
     /// Write one packet. Takes the packet so its payload can be reused
     /// without a copy.
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<Self::Error>>;
 
     /// Bytes ready to send, not yet consumed.
@@ -305,13 +314,22 @@ pub trait Muxer {
     fn take_output(&mut self, into: &mut Vec<u8>);
 
     /// Finish: the bytes not yet consumed, and any patches.
-    fn finish(self, stop: &dyn Stop) -> Result<MuxFinish, SessionError<Self::Error>>
+    fn finish(self, pulse: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<Self::Error>>
     where
         Self: Sized;
 }
 
 /// Object-safe muxer (`finish` by box), the `DynAnimationFrameEncoder` pattern.
 pub trait DynMuxer {
+    /// See [`Muxer::begin_exact_timing`]. Default refuses without calling `begin`.
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    }
     /// See [`Muxer::begin`].
     fn begin(
         &mut self,
@@ -322,7 +340,7 @@ pub trait DynMuxer {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ErasedError>>;
     /// See [`Muxer::pending_output`].
     fn pending_output(&self) -> &[u8];
@@ -331,7 +349,10 @@ pub trait DynMuxer {
     /// See [`Muxer::take_output`].
     fn take_output(&mut self, into: &mut Vec<u8>);
     /// See [`Muxer::finish`].
-    fn finish(self: Box<Self>, stop: &dyn Stop) -> Result<MuxFinish, SessionError<ErasedError>>;
+    fn finish(
+        self: Box<Self>,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<MuxFinish, SessionError<ErasedError>>;
 }
 
 /// Shim erasing a muxer's error type (the `DynAnimationFrameEncoder` pattern:
@@ -339,6 +360,15 @@ pub trait DynMuxer {
 pub struct MuxerShim<M>(pub M);
 
 impl<M: Muxer> DynMuxer for MuxerShim<M> {
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        self.0
+            .begin_exact_timing(tracks, hint)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
     fn begin(
         &mut self,
         tracks: &[TrackInfo],
@@ -351,10 +381,10 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ErasedError>> {
         self.0
-            .write_packet(packet, stop)
+            .write_packet(packet, pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
     fn pending_output(&self) -> &[u8] {
@@ -366,9 +396,12 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     fn take_output(&mut self, into: &mut Vec<u8>) {
         self.0.take_output(into)
     }
-    fn finish(self: Box<Self>, stop: &dyn Stop) -> Result<MuxFinish, SessionError<ErasedError>> {
+    fn finish(
+        self: Box<Self>,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<MuxFinish, SessionError<ErasedError>> {
         self.0
-            .finish(stop)
+            .finish(pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
 }
@@ -378,45 +411,17 @@ pub fn erase_muxer<M: Muxer + Send + 'static>(m: M) -> Box<dyn DynMuxer + Send> 
     Box::new(MuxerShim(m))
 }
 
-impl MuxFinish {
-    /// The remaining bytes and the patches to apply after them.
-    pub fn new(tail: Vec<u8>, patches: Vec<Patch>) -> Self {
-        Self { tail, patches }
-    }
-}
-
 /// Apply a finish to an in-memory file: append the tail, then patch.
 ///
 /// # Errors
 ///
-/// [`PatchError::OutOfRange`] for a patch outside the file.
+/// See [`MuxFinish::apply_to`].
+#[deprecated(
+    note = "use finish.apply_to(file); use finish.validate(emitted_bytes) before external writes"
+)]
 pub fn apply_finish(file: &mut Vec<u8>, finish: MuxFinish) -> Result<(), PatchError> {
-    file.extend_from_slice(&finish.tail);
-    for p in finish.patches {
-        let start = usize::try_from(p.offset).map_err(|_| PatchError::OutOfRange)?;
-        let end = start
-            .checked_add(p.bytes.len())
-            .ok_or(PatchError::OutOfRange)?;
-        let dst = file.get_mut(start..end).ok_or(PatchError::OutOfRange)?;
-        dst.copy_from_slice(&p.bytes);
-    }
-    Ok(())
+    finish.apply_to(file)
 }
-
-/// A patch that does not fit the file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum PatchError {
-    /// The patch lies outside the written bytes.
-    OutOfRange,
-}
-
-impl core::fmt::Display for PatchError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("patch lies outside the written file")
-    }
-}
-impl core::error::Error for PatchError {}
 
 /// A [`Demuxer`] as a [`ByteStepper`], so every `zencodec-io` cursor drives
 /// it: `Need` maps to [`Step::Need`], `Done` to [`Step::Finished`], and
@@ -431,9 +436,9 @@ impl<D: Demuxer + ?Sized> ByteStepper for DemuxStage<'_, D> {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Stepped<DemuxEvent>, Self::Error> {
-        let p = self.0.step(input, stop)?;
+        let p = self.0.step(input, pulse)?;
         let step = match p.event {
             DemuxEvent::Need => Step::Need,
             DemuxEvent::Done => Step::Finished(DemuxEvent::Done),
@@ -445,7 +450,7 @@ impl<D: Demuxer + ?Sized> ByteStepper for DemuxStage<'_, D> {
         })
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.0.requested()
     }
 }

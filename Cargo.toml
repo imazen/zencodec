@@ -16,12 +16,12 @@ members = [
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.
-exclude = ["fuzz", "apidoc"]
+exclude = ["fuzz", "apidoc", "zencodec-render"]
 resolver = "3"
 
 [package]
 name = "zencodec"
-version = "0.1.27"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
@@ -60,11 +60,13 @@ std = []
 # Published manifest uses crates.io versions (CI + `cargo publish` build the
 # real artifact). Local development builds against the in-tree zen sources via
 # a gitignored `.cargo/config.toml` `paths` override — see CONTRIBUTING note.
-zenpixels = { version = ">=0.2.14, <0.4.0", features = ["icc"] }
+zenpixels = { version = ">=0.2.17, <0.4.0", features = ["icc"] }
 almost-enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
 enough = "0.4.4"
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5" }
+# Preserve the exact first cancellation reason without a std-only lock.
+spin = { version = "0.12.3", default-features = false, features = ["once"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "io-util", "macros"] }
@@ -81,3 +83,12 @@ moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 name = "exif_filter"
 harness = false
 
+[[bench]]
+name = "frame_policy"
+harness = false
+
+
+# Paired precision verifier; release requires these APIs in published zenpixels.
+[patch.crates-io]
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }

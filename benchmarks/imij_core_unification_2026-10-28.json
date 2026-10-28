@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-28",
+  "kind": "native contract validation, not a performance benchmark",
+  "source": "e91849dbcae3a75dc6de1ff6a8f764299cd557ed",
+  "imij": "0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5",
+  "command": "just multipass-native-check <artifacts>",
+  "environment": "isolated source export; run-heavy --mem 3G --jobs 2; timeout 900; dev/test debuginfo disabled",
+  "tests": {"imi_native": 13, "pass_plan_native": 4, "failed": 0},
+  "strict_clippy": "pass, all targets, locked, -D warnings",
+  "lock_unchanged": true,
+  "shared_packages": {"zencodec": 1, "zenpixels": 1, "how-far": 1},
+  "run_heavy_receipt": "rc=0 45s | peak-RSS 1.00GiB | min-avail 4118MiB | peak-load 1.94",
+  "limits": "Existing multipass prototype only. Not production driver integration, precision migration, throughput, or whole-operation memory qualification."
+}
