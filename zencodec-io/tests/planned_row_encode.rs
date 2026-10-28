@@ -231,7 +231,7 @@ impl<F: FnMut()> PolicyResolver for Resolver<F> {
     type Error = std::convert::Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>> {
         (self.0)();
-        let Question::OutputSchedule { choices, .. } = question else {
+        let Question::EncodeRoute { choices, .. } = question else {
             panic!("unexpected question")
         };
         Ok(Decision::Choose(choices.first().unwrap().id()))
@@ -554,3 +554,6 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
 // Additive draft controls: reuse the existing recording encoders and assertions.
 #[path = "planned_row_encode/exact_depth.rs"]
 mod exact_depth_tests;
+
+#[path = "planned_row_encode/replay.rs"]
+mod replay_tests;

@@ -13,6 +13,12 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Source candidate: planned row drivers execute shared replay pulls with actual
+  retained raster borrows, private RAM snapshots, positional digests or a separate
+  raw disk store. Planned callbacks/records use the joint route. Core unknown-job
+  evidence construction and all executable/native qualification remain pending;
+  see `docs/row-replay-driver.md`.
+
 - Add joint `Question::EncodeRoute` admission over a borrowed retained plan,
   input replay and output schedule. Source-pass caps, exact replay and raw RAM
   staging restrictions join existing mandatory requirements; diagnostics use
@@ -61,7 +67,8 @@
 - Add job-to-writer/destination row adapters that admit policy before driver
   allocation and native construction, bind current color at startup, and reject
   changed source/destination/plan facts before pixel reads or publication.
-  Whole-raster/replay execution and checked registry convenience remain open.
+  Whole-raster execution and checked registry convenience remain open; the replay
+  source candidate is described above.
 
 - Add explicit effective-job encode planning and declared startup, including
   current color, actual destination access, input acquisition, bounded source

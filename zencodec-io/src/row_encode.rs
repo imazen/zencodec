@@ -48,6 +48,8 @@ use zencodec::{
 };
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, sample::ExactDepth};
 
+mod planned;
+
 /// Fixed sample declaration for this operation. Color conversion is not implicit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Description {
@@ -100,6 +102,23 @@ pub trait Source {
     fn mechanism(&self) -> OutputSource {
         OutputSource::PullRows
     }
+    /// Return a real immutable raster view retained for the entire operation.
+    /// The default supplies no borrow. The driver uses this returned storage,
+    /// never `mechanism()` or a capability flag, as exact replay evidence.
+    fn borrowed_pixels(&self) -> Option<PixelSlice<'_>> {
+        None
+    }
+    /// Whether ordered traversals can restart at row zero without reconstructing
+    /// this source. Defaults to forward-only. This proves no sample identity;
+    /// positional replay is checked with per-row digests and optional identity.
+    fn supports_positional_replay(&self) -> bool {
+        false
+    }
+    /// Optional opaque identity/version of this retained source. A stable value
+    /// is weaker than sample-exact replay. The driver also checks row digests.
+    fn replay_identity(&self) -> Result<Option<[u64; 4]>, Self::Error> {
+        Ok(None)
+    }
     /// Fill every active sample of the requested consecutive rows, honoring
     /// destination stride. No reading beyond the declared image is requested.
     /// A late interpretation change must fail, never relabel earlier samples.
@@ -131,6 +150,9 @@ impl Source for Raster<'_> {
     }
     fn mechanism(&self) -> OutputSource {
         OutputSource::BorrowedRaster
+    }
+    fn borrowed_pixels(&self) -> Option<PixelSlice<'_>> {
+        Some(self.0.clone())
     }
     fn read_rows(
         &mut self,
@@ -167,6 +189,7 @@ pub struct Options {
     batch_rows: NonZeroU32,
     preset: PolicySet,
     disk: Option<Disk>,
+    raw_disk: Option<planned::RawDisk>,
 }
 impl Options {
     /// Row buffers and compressed staging share this admission pool.
@@ -178,6 +201,7 @@ impl Options {
             batch_rows: NonZeroU32::new(16).unwrap(),
             preset: PolicySet::new(),
             disk: None,
+            raw_disk: None,
         }
     }
     /// Stage finish-first output in an owned private scratch file at its end.
@@ -206,7 +230,28 @@ impl Options {
         });
         Ok(self)
     }
-    /// Maximum rows requested at once; native row preferences do not override it.
+    /// Offer a distinct owned scratch file for raw replay, never the compressed
+    /// output spool. Starts at the file end and preserves its prefix. The caller
+    /// owns path, permissions and deletion and must not alias this with output.
+    /// Raw disk bytes are capped separately; RAM digests use the storage budget.
+    /// Replay is hash-verified, not an exact private immutable snapshot.
+    pub fn with_raw_disk_staging(mut self, mut file: File, max_bytes: u64) -> io::Result<Self> {
+        let origin = file.stream_position()?;
+        if file.seek(SeekFrom::End(0))? != origin {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "raw scratch must start at its end",
+            ));
+        }
+        self.raw_disk = Some(planned::RawDisk {
+            file,
+            origin,
+            max_bytes,
+        });
+        Ok(self)
+    }
+    /// Maximum rows per push for a `Rows` plan. Replay strips are native-owned
+    /// and follow the native encoder's requests; this does not bound their size.
     pub fn with_batch_rows(mut self, rows: NonZeroU32) -> Self {
         self.batch_rows = rows;
         self
@@ -226,7 +271,7 @@ impl Options {
 pub enum Stage {
     /// Validate declarations, begin the encoder and admit row storage.
     Prepare,
-    /// Select the actual output schedule.
+    /// Select the complete acquisition/output route (output only for raw encoders).
     Policy,
     /// Request source samples or detect changed interpretation.
     Read,
@@ -259,6 +304,20 @@ pub enum Refusal {
     Patches,
     /// Destination access changed while policy was deciding.
     DestinationChanged,
+    /// Encoder requests are out of order, inconsistent or outside the declaration.
+    RequestOrder { pass: u32, first: u32 },
+    /// The encoder exceeded its admitted native pass bound or final pass.
+    PassLimit { pass: u32 },
+    /// Completion or a new pass arrived before the current traversal completed.
+    IncompletePass { pass: u32 },
+    /// A pull did not perform exactly one successful fill, or swallowed a failure.
+    PullProtocol,
+    /// Samples or identity changed on a repeated source/disk traversal.
+    ReplayChanged { pass: u32, first: u32 },
+    /// Final-pass-only output appeared before its final traversal started.
+    EarlyOutput { pass: Option<u32> },
+    /// No executable input route could reserve its required managed storage.
+    NoInputRoute,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -488,10 +547,11 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: Operation
 /// Encode a configured job to a writer, admitting its plan before native startup.
 ///
 /// Unlike the raw-encoder adapter, this retains the lightweight job across policy
-/// and supplies current color before header creation. Unsupported preflight or
-/// non-row input refuses before encoder construction; there is no fallback.
-/// Pass a `PolicySet` or `BoundPolicy` for mandatory schedule/wait requirements. This
-/// primitive does not add or infer metadata/fidelity requirements on the job.
+/// and supplies current color before header creation. `Rows` pushes strips;
+/// `Replay` fills native-owned strips. Unsupported preflight and whole-raster
+/// input refuse before encoder construction; there is no fallback.
+/// Pass a `PolicySet` or `BoundPolicy` for mandatory requirements. Evidence
+/// unavailable from the generic job stays unknown, including metadata/fidelity.
 /// The complete checked request-to-destination convenience is a separate layer.
 pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: OperationPolicy>(
     job: J,
@@ -529,7 +589,7 @@ pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: Ope
 where
     J::Enc: Encoder,
 {
-    run_rows(
+    planned::run(
         PlannedStartup(job),
         source,
         writer,
@@ -544,7 +604,8 @@ where
 /// This is the erased-job counterpart of [`encode_job`]. The retained job plans
 /// before policy and constructs its encoder only after admission. Native errors
 /// keep their concrete causes; no typed-job shim or policy error conversion is
-/// required from the caller. This does not add metadata/fidelity requirements.
+/// required from the caller. Job evidence unavailable from these generic traits
+/// stays unknown; strict metadata, range and workspace requirements refuse.
 pub fn encode_dyn_job<S: Source, W: Write, R: OperationPolicy>(
     job: Box<dyn DynEncodeJob>,
     source: S,
@@ -569,7 +630,7 @@ pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: OperationPoli
     options: Options,
     pulse: &dyn zencodec::Pulse,
 ) -> Result<Completed, At<Failure>> {
-    run_rows(
+    planned::run(
         DynPlannedStartup(job),
         source,
         writer,
@@ -584,7 +645,7 @@ fn validate_row_plan(
     declaration: &EncodeDeclaration<'_>,
 ) -> Result<EncodePlan, Cause> {
     plan.validate(declaration)?;
-    if plan.input != InputRequirement::Rows {
+    if matches!(plan.input, InputRequirement::WholeRaster) {
         return Err(EncodePlanError::InputProtocol.into());
     }
     Ok(plan)
@@ -678,6 +739,13 @@ impl Encoder for DynRows {
     }
     fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Self::Error> {
         self.0.push_rows(pixels).map_err(Self::Error::new)
+    }
+    fn pull_rows(
+        &mut self,
+        rows: &mut dyn zencodec::encode::EncodeRows,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<zencodec::encode::PullProgress, Self::Error> {
+        self.0.pull_rows(rows, pulse).map_err(Self::Error::new)
     }
     fn finish(self) -> Result<EncodeOutput, Self::Error> {
         self.0.finish().map_err(Self::Error::new)

@@ -377,9 +377,13 @@ fn false_initial_and_later_claims_never_push_a_partial_bad_strip_or_retry() {
                 assert_eq!(*s.bytes.lock().unwrap(), expected);
                 let records: Vec<_> = error.error().report.decisions().collect();
                 assert_eq!(records.len(), 1);
-                assert!(
-                    matches!(records[0].selected, Some(Selection::OutputSchedule(offer)) if offer.schedule == schedule)
-                );
+                assert!(match records[0].selected {
+                    Some(Selection::OutputSchedule(offer)) if matches!(route, Route::Legacy) =>
+                        offer.schedule == schedule,
+                    Some(Selection::EncodeRoute(offer)) if !matches!(route, Route::Legacy) =>
+                        offer.output.schedule == schedule,
+                    _ => false,
+                });
                 assert_eq!(storage.reserved_bytes(), 0);
             }
         }
