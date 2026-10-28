@@ -4,8 +4,12 @@
 job's `Rows` or `Replay` plan through the shared `Encoder`/`DynEncoder` traits.
 The raw-encoder entry points keep their existing push-only ordering. Whole-raster
 jobs refuse with the original typed `EncodePlanError::InputProtocol`; there is
-no allocating fallback. This implementation is source-only and unqualified until
-the serialized controls and native integration are completed.
+no allocating fallback. Shared-driver qualification passes on `03b91e5d`: standard
+and all-feature I/O tests, strict Clippy, joint-policy controls, API snapshots,
+source catalogs and the full browser suite. Native public-driver qualification
+is still pending. [Qualification and retained failures](../benchmarks/replay_driver_2026-10-28.md)
+separate these scopes; no throughput, whole-process memory or compile-time
+comparison has been measured.
 
 ## Start with the configured job
 

@@ -6,13 +6,13 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3259 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
+# files: zencodec.txt 3260 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                20
 #   pub types (struct/enum/trait/alias)       387
-#   pub consts/statics                        339
+#   pub consts/statics                        340
 #   free functions                             95
 #   inherent methods                         1105
 #   struct fields                             518
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                      45
 #
 # per-module pub lines:
-#   (root)                         1013
+#   (root)                         1014
 #   animation                        11
 #   collection                      100
 #   decode                          284
@@ -45,7 +45,7 @@
 #   storage                          38
 #   time                             22
 
-## items (2939 lines)
+## items (2940 lines)
 
 pub mod zencodec
 pub use At
@@ -1818,6 +1818,7 @@ pub operation::EncodeEvidence::encoder: operation::EncodeOffer
 pub operation::EncodeEvidence::metadata: core::option::Option<operation::MetadataTransfer>
 pub operation::EncodeEvidence::retains_opaque_profile: core::option::Option<bool>
 pub const fn operation::EncodeEvidence::new(operation::EncodeOffer) -> Self
+pub const fn operation::EncodeEvidence::unknown() -> Self
 #[non_exhaustive] pub struct operation::EncodeFacts
 pub operation::EncodeFacts::descriptor: zenpixels::descriptor::PixelDescriptor
 pub operation::EncodeFacts::height: u32

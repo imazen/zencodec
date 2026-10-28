@@ -28,10 +28,24 @@ pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> core
 pub mod zencodec_io::row_encode
 #[non_exhaustive] pub enum zencodec_io::row_encode::Refusal
 pub zencodec_io::row_encode::Refusal::DestinationChanged
+pub zencodec_io::row_encode::Refusal::EarlyOutput
+pub zencodec_io::row_encode::Refusal::EarlyOutput::pass: core::option::Option<u32>
 pub zencodec_io::row_encode::Refusal::Empty
+pub zencodec_io::row_encode::Refusal::IncompletePass
+pub zencodec_io::row_encode::Refusal::IncompletePass::pass: u32
+pub zencodec_io::row_encode::Refusal::NoInputRoute
 pub zencodec_io::row_encode::Refusal::OutputLimit
 pub zencodec_io::row_encode::Refusal::Overflow
+pub zencodec_io::row_encode::Refusal::PassLimit
+pub zencodec_io::row_encode::Refusal::PassLimit::pass: u32
 pub zencodec_io::row_encode::Refusal::Patches
+pub zencodec_io::row_encode::Refusal::PullProtocol
+pub zencodec_io::row_encode::Refusal::ReplayChanged
+pub zencodec_io::row_encode::Refusal::ReplayChanged::first: u32
+pub zencodec_io::row_encode::Refusal::ReplayChanged::pass: u32
+pub zencodec_io::row_encode::Refusal::RequestOrder
+pub zencodec_io::row_encode::Refusal::RequestOrder::first: u32
+pub zencodec_io::row_encode::Refusal::RequestOrder::pass: u32
 pub zencodec_io::row_encode::Refusal::SourceChanged
 impl core::error::Error for zencodec_io::row_encode::Refusal
 impl core::fmt::Display for zencodec_io::row_encode::Refusal
@@ -84,24 +98,34 @@ pub fn zencodec_io::row_encode::Options::new(storage: zencodec::storage::Storage
 pub fn zencodec_io::row_encode::Options::with_batch_rows(self, rows: core::num::nonzero::NonZeroU32) -> Self
 pub fn zencodec_io::row_encode::Options::with_disk_staging(self, file: std::fs::File, replay_bytes: core::num::nonzero::NonZeroUsize) -> core::io::error::Result<Self>
 pub fn zencodec_io::row_encode::Options::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
+pub fn zencodec_io::row_encode::Options::with_raw_disk_staging(self, file: std::fs::File, max_bytes: u64) -> core::io::error::Result<Self>
 pub struct zencodec_io::row_encode::Raster<'a>(_)
 impl<'a> zencodec_io::row_encode::Raster<'a>
 pub const fn zencodec_io::row_encode::Raster<'a>::new(pixels: zenpixels::buffer::PixelSlice<'a>) -> Self
 impl zencodec_io::row_encode::Source for zencodec_io::row_encode::Raster<'_>
 pub type zencodec_io::row_encode::Raster<'_>::Error = zencodec::error::CodecError
+pub fn zencodec_io::row_encode::Raster<'_>::borrowed_pixels(&self) -> core::option::Option<zenpixels::buffer::PixelSlice<'_>>
 pub fn zencodec_io::row_encode::Raster<'_>::description(&self) -> zencodec_io::row_encode::Description
 pub fn zencodec_io::row_encode::Raster<'_>::mechanism(&self) -> zencodec::operation::scheduling::OutputSource
 pub fn zencodec_io::row_encode::Raster<'_>::read_rows(&mut self, first: u32, rows: zenpixels::buffer::PixelSliceMut<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), Self::Error>
+pub fn zencodec_io::row_encode::Raster<'_>::replay_identity(&self) -> core::result::Result<core::option::Option<[u64; 4]>, Self::Error>
+pub fn zencodec_io::row_encode::Raster<'_>::supports_positional_replay(&self) -> bool
 pub trait zencodec_io::row_encode::Source
 pub type zencodec_io::row_encode::Source::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec_io::row_encode::Source::borrowed_pixels(&self) -> core::option::Option<zenpixels::buffer::PixelSlice<'_>>
 pub fn zencodec_io::row_encode::Source::description(&self) -> zencodec_io::row_encode::Description
 pub fn zencodec_io::row_encode::Source::mechanism(&self) -> zencodec::operation::scheduling::OutputSource
 pub fn zencodec_io::row_encode::Source::read_rows(&mut self, first: u32, rows: zenpixels::buffer::PixelSliceMut<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), Self::Error>
+pub fn zencodec_io::row_encode::Source::replay_identity(&self) -> core::result::Result<core::option::Option<[u64; 4]>, Self::Error>
+pub fn zencodec_io::row_encode::Source::supports_positional_replay(&self) -> bool
 impl zencodec_io::row_encode::Source for zencodec_io::row_encode::Raster<'_>
 pub type zencodec_io::row_encode::Raster<'_>::Error = zencodec::error::CodecError
+pub fn zencodec_io::row_encode::Raster<'_>::borrowed_pixels(&self) -> core::option::Option<zenpixels::buffer::PixelSlice<'_>>
 pub fn zencodec_io::row_encode::Raster<'_>::description(&self) -> zencodec_io::row_encode::Description
 pub fn zencodec_io::row_encode::Raster<'_>::mechanism(&self) -> zencodec::operation::scheduling::OutputSource
 pub fn zencodec_io::row_encode::Raster<'_>::read_rows(&mut self, first: u32, rows: zenpixels::buffer::PixelSliceMut<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), Self::Error>
+pub fn zencodec_io::row_encode::Raster<'_>::replay_identity(&self) -> core::result::Result<core::option::Option<[u64; 4]>, Self::Error>
+pub fn zencodec_io::row_encode::Raster<'_>::supports_positional_replay(&self) -> bool
 pub fn zencodec_io::row_encode::encode<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(encoder: E, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
 pub fn zencodec_io::row_encode::encode_dyn_job<S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
 pub fn zencodec_io::row_encode::encode_dyn_job_to_destination<S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy>(job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>

@@ -2211,6 +2211,7 @@ pub zencodec::operation::EncodeEvidence::metadata: core::option::Option<zencodec
 pub zencodec::operation::EncodeEvidence::retains_opaque_profile: core::option::Option<bool>
 impl zencodec::operation::EncodeEvidence
 pub const fn zencodec::operation::EncodeEvidence::new(encoder: zencodec::operation::EncodeOffer) -> Self
+pub const fn zencodec::operation::EncodeEvidence::unknown() -> Self
 #[non_exhaustive] pub struct zencodec::operation::EncodeFacts
 pub zencodec::operation::EncodeFacts::descriptor: zenpixels::descriptor::PixelDescriptor
 pub zencodec::operation::EncodeFacts::height: u32
