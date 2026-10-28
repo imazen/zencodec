@@ -135,6 +135,19 @@ test('pinned integration exposes every synchronous callback and source entry poi
     assert.match(surface,new RegExp(`pub fn ${method}<`),method);
 });
 
+test('native integration signatures retain the operation policy used by copied examples',async()=>{
+  const snapshot=JSON.parse(await readFile(new URL('docs/integration-api.json',root),'utf8'));
+  const manifest=await readFile(new URL('perf/jpeg-policy-validation/Cargo.toml',root),'utf8');
+  const dependency=manifest.split('\n').find(line=>line.startsWith('zencodecs = '));
+  assert.ok(dependency?.includes(`rev = "${snapshot.revision}"`),'captured signatures and native examples must use the same revision');
+  const sync=declarations(snapshot.surface,{scope:"impl<'a> TranscodeRequest<'a> {",methods:['transcode_with','transcode_from_read_at_with'],associated:false}).code;
+  const async=declarations(snapshot.surface,{scope:"impl TranscodeRequest<'_> {",methods:['transcode_async_with'],associated:false}).code;
+  for(const surface of [sync,async]) {
+    assert.doesNotMatch(surface,/\bPolicyResolver\b/,'a callback-only bound cannot accept BoundPolicy');
+    assert.match(surface,/\bOperationPolicy\b/);
+  }
+});
+
 // A selected trait view must not look like a complete implementation checklist.
 test('signature selections identify omitted and required methods independently',()=>{
   const rust=`pub trait Config: Clone {
