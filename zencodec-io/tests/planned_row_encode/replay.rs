@@ -3,7 +3,7 @@ use super::*;
 use row_encode::{ExactDepthContradiction, Raster, Refusal};
 use zencodec::{
     encode::{EncodeRows, OutputPhase, PullProgress, RowDemand, SourcePasses},
-    operation::{InputAcquisition, OutputSchedule, Selection, UnmetRequirements},
+    operation::{DecisionCode, InputAcquisition, OutputSchedule, PolicyFailure, Selection},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -137,7 +137,8 @@ impl Encoder for PullEncoder {
         let desc = self.description.as_ref().unwrap();
         let count = 2.min(desc.height - self.first);
         let row_bytes = desc.width as usize * desc.descriptor.bytes_per_pixel();
-        let stride = row_bytes + 8;
+        let padding = 3 * desc.descriptor.bytes_per_pixel();
+        let stride = row_bytes + padding;
         let mut bytes = vec![0xc3; stride * count as usize];
         let repeats = if self.job.behavior == Behavior::DoubleFill {
             2
@@ -174,7 +175,10 @@ impl Encoder for PullEncoder {
             }
         }
         for y in 0..count as usize {
-            assert_eq!(&bytes[y * stride + row_bytes..(y + 1) * stride], &[0xc3; 8]);
+            assert_eq!(
+                &bytes[y * stride + row_bytes..(y + 1) * stride],
+                &vec![0xc3; padding]
+            );
         }
         if self.job.behavior == Behavior::NativeError {
             self.pending.extend_from_slice(b"must-not-publish");
@@ -337,6 +341,25 @@ fn reads(s: &Setup) -> usize {
         .filter(|e| **e == "read")
         .count()
 }
+// Mandatory route failures retain the domain Decline cause and expose their
+// named unmet evidence in the decision record; the early workspace check has
+// a different, direct UnmetRequirements error contract.
+fn assert_requirement_refusal(failure: &At<row_encode::Failure>) {
+    let policy = zencodec::find_cause::<PolicyFailure>(failure).expect("typed policy failure");
+    let record = policy.record();
+    assert_eq!(record.code, DecisionCode::Declined);
+    assert_eq!(record.admitted, 0);
+    assert!(!record.unmet_requirements.is_empty());
+    let retained = failure
+        .error()
+        .report
+        .decisions()
+        .last()
+        .expect("retained refusal record");
+    assert_eq!(retained.question, record.question);
+    assert_eq!(retained.unmet_requirements, record.unmet_requirements);
+}
+
 fn no_native_or_reads(s: &Setup) {
     let events = s.events.lock().unwrap();
     assert!(!events.contains(&"construct"));
@@ -348,8 +371,8 @@ fn no_native_or_reads(s: &Setup) {
 fn retained_padded_borrow_replays_actual_samples_in_typed_and_erased_drivers() {
     for erased in [false, true] {
         let s = Setup::new();
-        let bytes = [1, 2, 3, 4, 5, 6, 0xee, 0xee, 11, 12, 13, 14, 15, 16];
-        let pixels = PixelSlice::new(&bytes, 2, 2, 8, PixelDescriptor::RGB8_SRGB).unwrap();
+        let bytes = [1, 2, 3, 4, 5, 6, 0xee, 0xee, 0xee, 11, 12, 13, 14, 15, 16];
+        let pixels = PixelSlice::new(&bytes, 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
         let done = run(
             erased,
             PullJob::new(&s, 2, Some(2)),
@@ -461,10 +484,7 @@ fn native_one_pass_requires_no_snapshot_but_caps_and_exact_multi_pass_stay_stric
                         assert_eq!(selected(&result.unwrap()), InputAcquisition::DirectRows);
                         assert_eq!(reads(&s), passes as usize);
                     } else {
-                        assert!(
-                            zencodec::find_cause::<UnmetRequirements>(&result.unwrap_err())
-                                .is_some()
-                        );
+                        assert_requirement_refusal(&result.unwrap_err());
                         no_native_or_reads(&s);
                     }
                 }
@@ -488,7 +508,7 @@ fn bound_and_legacy_requirements_cannot_choose_different_halves_of_a_route() {
                 .with_policy_set(PolicySet::new().allow_raw_memory_staging(false)),
         )
         .unwrap_err();
-        assert!(zencodec::find_cause::<UnmetRequirements>(&failure).is_some());
+        assert_requirement_refusal(&failure);
         no_native_or_reads(&s);
     }
 }
@@ -715,7 +735,7 @@ fn raw_disk_and_compressed_spool_are_distinct_and_disk_never_claims_exact_replay
                 options,
             );
             if exact {
-                assert!(zencodec::find_cause::<UnmetRequirements>(&result.unwrap_err()).is_some());
+                assert_requirement_refusal(&result.unwrap_err());
                 no_native_or_reads(&s);
                 assert_eq!(std::fs::metadata(&raw.path).unwrap().len(), 0);
             } else {
@@ -746,7 +766,7 @@ fn insufficient_raw_disk_or_snapshot_allowance_refuses_before_effects() {
             s.options().with_raw_disk_staging(raw.take(), 11).unwrap(),
         )
         .unwrap_err();
-        assert!(zencodec::find_cause::<UnmetRequirements>(&failure).is_some());
+        assert_requirement_refusal(&failure);
         no_native_or_reads(&s);
         assert_eq!(std::fs::metadata(&raw.path).unwrap().len(), 0);
 
@@ -801,7 +821,7 @@ fn informational_source_mechanism_never_substitutes_for_a_retained_borrow() {
             s.options(),
         )
         .unwrap_err();
-        assert!(zencodec::find_cause::<UnmetRequirements>(&failure).is_some());
+        assert_requirement_refusal(&failure);
         no_native_or_reads(&s);
     }
 }
@@ -1104,7 +1124,7 @@ fn unknown_job_metadata_profile_range_and_wait_evidence_refuse_before_constructi
                 s.options(),
             )
             .unwrap_err();
-            assert!(zencodec::find_cause::<UnmetRequirements>(&failure).is_some());
+            assert_requirement_refusal(&failure);
             no_native_or_reads(&s);
         }
     }
