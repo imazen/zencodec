@@ -103,3 +103,51 @@ compare direct built-in policy use with a custom callback, retaining requirement
 names and typed causes without exposing metadata payloads. This is an API design
 item in [issue 173](https://github.com/imazen/zencodec/issues/173), not a reason to
 weaken the integration test or silently move the caller's requirements.
+
+## Qualified repairs and paired pixel proposal
+
+JPEG [PR 246](https://github.com/imazen/zenjpeg/pull/246) now contains the
+stack-construction and stop-reason repairs at
+`3d2c8d5b72036e1a6635a3ce364d56ed524f5f7b`. Independent before/after executables
+were built in separate target directories and preserved with SHA-256 hashes.
+At a 1 MiB thread stack, the old build aborts and the repaired build passes
+[`stack_demand`](https://github.com/imazen/zenjpeg/blob/3d2c8d5b72036e1a6635a3ce364d56ed524f5f7b/zenjpeg/tests/stack_demand.rs):
+baseline subsampling variants, progressive and grayscale inputs agree across
+one-shot, streaming and controlled decoding. A prior shared-target experiment
+was invalid and is excluded from the comparison.
+
+The subsequent broad native tests, two strict Clippy configurations, format
+check and fuzz compilation passed. Receipt: `rc=0`, 223 seconds, peak RSS
+1.90 GiB, minimum available memory 4898 MiB, peak load 3.02. This is a build/test
+resource reading. A preceding broad run exceeded its memory cap; that incomplete
+run is not a passing gate or a valid peak-RSS measurement. The consumer pipeline
+still needs to rerun against the pushed repair; orientation-only metadata remains
+outside this repair's scope.
+
+The paired pixel proposal is
+[zenpixels PR 95](https://github.com/imazen/zenpixels/pull/95), with approved
+documentation corrections and API snapshots pushed at
+`0c96114e81cbecf086952fc75e5bf696e5d81cd9`. It distinguishes source ancestry from
+current-sample exactness, carries bounded `ExactDepth` evidence, and invalidates
+that evidence on mutable access. Native code-plane conversion handles code depth
+and placement explicitly. This remains a review proposal; native encoder adoption
+and the coordinated dependency graph are not yet qualified.
+
+Its follow-up checks passed: precision evidence in both tested feature sets,
+strict workspace Clippy, the tests whose documentation changed, strict rustdoc,
+layout probes, and API snapshot regeneration/checking. The x86-64 structural
+comparison against the proposal's base is:
+
+| Type | Base size | Proposal size | Alignment |
+|---|---:|---:|---:|
+| `PixelSlice` | 48 bytes | 56 bytes | 8 bytes |
+| `PixelSliceMut` | 48 bytes | 48 bytes | 8 bytes |
+| `PixelBuffer` | 64 bytes | 72 bytes | 8 bytes |
+| `CodePlane` | 56 bytes | 64 bytes | 8 bytes |
+
+These are `size_of`/`align_of` results, not heap or process memory measurements.
+`ExactDepth` and `Option<ExactDepth>` each occupy four bytes; enclosing alignment
+accounts for the larger object-size changes. Other targets and throughput remain
+unmeasured. The standalone layout build/run receipts were 0.24 GiB and 0.18 GiB
+peak RSS, respectively; those compiler/process readings are separate from the
+struct sizes above.
