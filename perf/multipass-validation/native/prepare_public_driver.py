@@ -44,14 +44,16 @@ def main():
     parser.add_argument('destination', type=Path, help='new directory outside ambient workspace patches')
     parser.add_argument('--core-git-dir', type=Path, required=True)
     parser.add_argument('--native-git-dir', type=Path, required=True)
+    parser.add_argument('--core-rev', default=CORE, help='full frozen core commit identity')
+    parser.add_argument('--native-rev', default=NATIVE, help='full frozen native commit identity')
     args = parser.parse_args()
     root = args.destination.resolve()
     # Creating a new directory keeps every earlier export and run intact.
     root.mkdir()
     core, native, run = root / 'core', root / 'native', root / 'run'
     run.mkdir()
-    archive(args.core_git_dir.resolve(), CORE, core)
-    archive(args.native_git_dir.resolve(), NATIVE, native)
+    archive(args.core_git_dir.resolve(), args.core_rev, core)
+    archive(args.native_git_dir.resolve(), args.native_rev, native)
     harness = core / 'perf/multipass-validation/native'
     baseline = harness / 'dependencies.lock'
     shutil.copyfile(baseline, harness / 'Cargo.lock')
@@ -100,7 +102,7 @@ def main():
         (run / name).mkdir()
     evidence = {
         'status': 'SOURCE PREPARED; no Cargo resolution/build/test executed',
-        'core_commit': CORE, 'native_commit': NATIVE, 'pixels_commit': PIXELS,
+        'core_commit': args.core_rev, 'native_commit': args.native_rev, 'pixels_commit': PIXELS,
         'how_far_commit': HOW_FAR, 'core': str(core), 'native': str(native),
         'harness': str(harness), 'run': str(run), 'core_family': FAMILY,
         'baseline_lock_sha256': digest(baseline), 'preserved_native_source': preserved,
@@ -124,6 +126,7 @@ export CARGO_BUILD_JOBS=2
 export RAYON_NUM_THREADS=2
 export OMP_NUM_THREADS=2
 cd {q(str(harness))}
+python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 2 * 1024**3, "disk floor: need 2 GiB"'
 python3 audit_public_driver.py {q(str(run))} --prepared-only
 # Preserve the baseline; never generate a fresh lock or run a broad update.
 preserve_lock() {{ cp Cargo.lock {q(str(run / 'resolved.Cargo.lock'))}; }}
