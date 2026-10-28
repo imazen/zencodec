@@ -1,4 +1,7 @@
 //! Typed offers for adapters that prepare conversion and encode together.
+#[cfg(test)]
+#[path = "transcode_composition_tests.rs"]
+mod composition_tests;
 use super::{DecisionRecord, EncodeOffer, OperationPolicy, PolicyFailure, PolicySet};
 use crate::{
     At,
@@ -49,6 +52,11 @@ pub struct TranscodeOffer {
     /// are not upper bounds. Encoded staging and caller-owned source storage
     /// must also be included before claiming a whole-operation bound.
     pub workspace_upper_bound: Option<u64>,
+    /// Output schedule of this same retained executing route.
+    /// `None` remains unknown. Finish-first alone never proves a wait bound.
+    /// The adapter must retain the qualified route through execution and check
+    /// its output before publication; a decision record is not transferable proof.
+    pub output_schedule: Option<super::OutputScheduleOffer>,
 }
 impl TranscodeOffer {
     /// Describe a route whose resource scope and opaque-profile retention must
@@ -65,6 +73,7 @@ impl TranscodeOffer {
             retains_opaque_profile: None,
             admitted_bytes: 0,
             workspace_upper_bound: None,
+            output_schedule: None,
         }
     }
 }

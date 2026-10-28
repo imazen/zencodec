@@ -114,6 +114,7 @@ impl PolicySet {
         match question {
             Question::Transcode { choices, .. } => {
                 let offer = choices.first().expect("one admission candidate").value();
+                schedule = offer.output_schedule;
                 metadata = Some(offer.metadata);
                 opaque = offer.retains_opaque_profile.map(|retained| !retained);
                 workspace = offer.workspace_upper_bound;

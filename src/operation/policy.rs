@@ -454,7 +454,8 @@ impl PolicySet {
         })
     }
     fn permits_transcode(self, offer: &TranscodeOffer) -> bool {
-        self.metadata.is_none_or(|m| m == offer.metadata)
+        self.permits_output_schedule(offer.output_schedule.as_ref())
+            && self.metadata.is_none_or(|m| m == offer.metadata)
             && (self.allow_opaque_profiles || offer.retains_opaque_profile == Some(false))
             && self.workspace_limit.is_none_or(|limit| {
                 offer
@@ -470,6 +471,7 @@ impl PolicySet {
             && !matches!(
                 question,
                 Question::OutputSchedule { .. }
+                    | Question::Transcode { .. }
                     | Question::FrameRoute { .. }
                     | Question::Boundary { .. }
             )
