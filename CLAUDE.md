@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during native integration supervision (2026-10-28): the code-first
+  catalog fingerprint omitted crate READMEs, so zenmeta's `include_str!` crate
+  documentation could change without invalidating its generated entries.
+  Generation and site checks now include each crate README and verify exported
+  inputs against the checkout. A regression checks README creation and edits.
+
 - Fixed during standalone documentation qualification (2026-10-28): the guide
   vendor setup still fetched pre-Pulse bitmap/container revisions, while private
   resolver cancellation fixtures passed `Stop` directly to Pulse methods. The

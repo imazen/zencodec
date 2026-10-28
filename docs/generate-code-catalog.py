@@ -22,11 +22,19 @@ PACKAGES = [
 ]
 
 
-def fingerprint(root, directory):
+def source_inputs(root, directory):
     base = root / directory
     files = [base / "Cargo.toml", *sorted((base / "src").rglob("*.rs"), key=lambda p: p.as_posix())]
+    # Crate docs can include the README (zenmeta does). Treat each crate's
+    # README as a documentation input even when it is not embedded by rustdoc.
+    if (base / "README.md").is_file():
+        files.append(base / "README.md")
+    return files
+
+
+def fingerprint(root, directory):
     digest = hashlib.sha256()
-    for file in files:
+    for file in source_inputs(root, directory):
         digest.update(file.relative_to(root).as_posix().encode() + b"\0")
         digest.update(file.read_bytes() + b"\0")
     return digest.hexdigest()
@@ -93,8 +101,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     manifest = {"generator": "cargo public-api --all-features -sss -v", "packages": []}
     for package, directory in PACKAGES:
-        base = source_root / directory
-        for source in [base / "Cargo.toml", *sorted((base / "src").rglob("*.rs"))]:
+        for source in source_inputs(source_root, directory):
             built = root / source.relative_to(source_root)
             if source.read_bytes() != built.read_bytes():
                 raise RuntimeError(f"Export differs from source: {source}")

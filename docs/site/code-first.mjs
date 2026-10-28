@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, readdir, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { example, maskRust } from './source.mjs';
@@ -38,7 +38,11 @@ export function exampleImports(above) {
 }
 export async function sourceFingerprint(root,directory) {
   const base=path.join(root,directory),hash=createHash('sha256');
-  for(const file of [path.join(base,'Cargo.toml'),...await rustFiles(path.join(base,'src'))]) {
+  const files=[path.join(base,'Cargo.toml'),...await rustFiles(path.join(base,'src'))];
+  const readme=path.join(base,'README.md');
+  try {if((await stat(readme)).isFile())files.push(readme);}
+  catch(error) {if(error.code!=='ENOENT')throw error;}
+  for(const file of files) {
     hash.update(path.relative(root,file)+'\0');hash.update(await readFile(file));hash.update('\0');
   }
   return hash.digest('hex');

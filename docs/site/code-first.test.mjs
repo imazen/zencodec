@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { implementation, catalogItems, sourceFingerprint, exampleImports } from './code-first.mjs';
@@ -8,6 +10,22 @@ import { codeFlows } from './code-first-data.mjs';
 import { example } from './source.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const manifest=JSON.parse(await readFile(new URL('../code-api/manifest.json',import.meta.url),'utf8'));
+test('catalog invalidation includes README text embedded in crate documentation',async()=>{
+  const scratch=path.join(homedir(),'tmp');
+  await mkdir(scratch,{recursive:true});
+  const fixture=await mkdtemp(path.join(scratch,'zencodec-catalog-input-'));
+  try {
+    await mkdir(path.join(fixture,'src'));
+    await writeFile(path.join(fixture,'Cargo.toml'),'[package]\nname="fixture"\n');
+    await writeFile(path.join(fixture,'src/lib.rs'),'#![doc = include_str!("../README.md")]\n');
+    const absent=await sourceFingerprint(fixture,'.');
+    await writeFile(path.join(fixture,'README.md'),'Original contract\n');
+    const original=await sourceFingerprint(fixture,'.');
+    assert.notEqual(original,absent);
+    await writeFile(path.join(fixture,'README.md'),'Revised contract\n');
+    assert.notEqual(await sourceFingerprint(fixture,'.'),original);
+  } finally {await rm(fixture,{recursive:true,force:true});}
+});
 test('every catalog declaration survives rendering and metadata matches exact source inputs',async()=>{
   assert.equal(manifest.packages.length,8);
   for(const pkg of manifest.packages) {
