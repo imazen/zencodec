@@ -568,3 +568,25 @@ source supplement now preserves their declarations, docs and links; drift guards
 refuse stale supplementation. Actual Rust consumer tests cover all three forms.
 Existing compiler-surface and browser assertions remain intact. See
 `benchmarks/source_catalog_2026-10-28.json`.
+
+## Paired precision CI integration (2026-10-28)
+
+The first paired-precision CI run passed platform tests and native JPEG/TIFF/JXL
+and AV1 tests, but failed strict linting on a deprecated zenmeta test import and
+an enlarged inline conversion-plan enum. The import now uses `zenpixels::hdr`;
+the validation harness deliberately keeps its plan inline rather than adding
+an unadmitted heap allocation. No behavioral test expectation changes.
+
+Semver-checks' isolated current-crate placeholder does not inherit the workspace
+patch for unpublished zenpixels. `scripts/check-paired-semver.py` generates the
+current rustdoc in the actual workspace, then compares it against the unchanged
+registry baseline. Both feature configurations and testkit remain checked;
+this does not establish registry package availability. Publish the paired
+pixel dependency before publishing a crate that requires it.
+
+Local strict workspace and AV1 Clippy plus all three semver configurations pass.
+Both rustdoc inputs use Rust 1.98.1, whose JSON format is supported by the
+installed semver-checks. The approved 0.2.0 bump is semver-major: the tool skips
+compatibility lints; a green version check is not a backward-compatibility claim.
+Receipts and the two failed orchestration attempts are retained in
+`benchmarks/precision_ci_2026-10-28.json`.

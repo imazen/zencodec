@@ -116,6 +116,9 @@ enum Target {
 }
 const FLOAT_SRGB: PixelDescriptor =
     PixelDescriptor::RGBF32_LINEAR.with_transfer(zenpixels::TransferFunction::Srgb);
+// Keep the retained conversion plan inline: boxing would add an allocation
+// outside the prepared-storage admission exercised by this harness.
+#[expect(clippy::large_enum_variant, reason = "retained plans stay allocation-free")]
 enum OutputStorage<'a> {
     Integer {
         destination: PreparedStorage<[u16; 3]>,

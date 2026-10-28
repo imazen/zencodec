@@ -1,0 +1,41 @@
+{
+  "precision_head": "68e685038ce7a505b7bd90338163ea74ac93519e",
+  "ci": "https://github.com/imazen/zencodec/actions/runs/40756883202",
+  "documentation_ci": "https://github.com/imazen/zencodec/actions/runs/40756883093",
+  "passed_on_remote": [
+    "platform tests including Windows ARM64, macOS ARM64, i686",
+    "native JPEG, TIFF, JXL and AV1 tests",
+    "guide browser suite",
+    "fuzz"
+  ],
+  "initial_failures": [
+    "deprecated zenpixels root HDR alias in zenmeta test",
+    "AV1 retained inline plan exceeds large-enum lint heuristic",
+    "isolated current semver build cannot inherit unpublished workspace pixel patch"
+  ],
+  "fixes": [
+    "use zenpixels::hdr::DiffuseWhite",
+    "keep conversion plan inline with targeted lint expectation; no added allocation",
+    "generate both rustdoc inputs: patched current workspace, checksum-verified unpatched registry baseline; same supported Rust 1.98.1 JSON compiler"
+  ],
+  "validation": {
+    "workspace_clippy": "PASS --workspace --all-targets --all-features --locked -- -D warnings",
+    "av1_clippy": "PASS --all-targets --locked -- -D warnings",
+    "semver": [
+      "zencodec 0.1.26 -> 0.2.0 all features PASS",
+      "zencodec 0.1.26 -> 0.2.0 no features PASS",
+      "zencodec-testkit 0.1.0 -> 0.2.0 default features PASS"
+    ],
+    "receipt": "run-heavy: done rc=0 12s | peak-RSS 0.31GiB | min-avail 4491MiB | peak-load 0.46"
+  },
+  "orchestration_failures_retained": [
+    "First local semver attempt used incompatible CLI input modes; Clippy gates had passed. Wrapper rc1 22s peakRSS0.87GiB.",
+    "Second attempt generated Rust 1.99 JSON v61, unsupported by installed semver-checks0.49. Wrapper rc1 4s peakRSS0.26GiB. Pinning both JSON builds to1.98.1 resolved it."
+  ],
+  "script_sha256": "fdafb72e0451740437047f8611f696e717c77842f3cc720b85f96c7ca6d47eb6",
+  "limits": [
+    "The approved 0.2.0 version is a semver-major change from 0.1: semver-checks reports 0 checks and253 skipped, not backward compatibility.",
+    "This does not prove unpublished dependencies are available from crates.io; paired publication order remains required.",
+    "Build/test resource receipts are not codec workspace or performance comparisons."
+  ]
+}

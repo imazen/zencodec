@@ -54,7 +54,7 @@ metadata-check:
 
 # Compare the actual published contract, not an unpublished metadata branch.
 metadata-semver:
-    cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
+    python3 scripts/check-paired-semver.py zencodec 0.1.26 all
 
 # Complete source diff from the cargo-read artifact, with VCS provenance checks.
 contract-diff published_dir output revision="origin/main":
@@ -107,7 +107,7 @@ io-validation-oracle mp4 webm output:
     python3 perf/io-validation/strict-oracle.py "{{mp4}}" "{{webm}}" "{{output}}"
 
 contract-semver-minimal:
-    cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --only-explicit-features
+    python3 scripts/check-paired-semver.py zencodec 0.1.26 none
 
 contract-audit-check:
     cargo fmt -p zencodec --check
@@ -199,7 +199,7 @@ testkit-contract-check:
 # Check the independently versioned testkit against its published baseline.
 # Version 0.2.0 carries the approved implementor-only breaking changes.
 testkit-semver:
-    cargo semver-checks check-release -p zencodec-testkit --baseline-version 0.1.0
+    python3 scripts/check-paired-semver.py zencodec-testkit 0.1.0 default
 
 # Checked target selection and ordered preferences, without encoding retries.
 fidelity-check:
