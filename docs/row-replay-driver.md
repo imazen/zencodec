@@ -6,8 +6,8 @@ The raw-encoder entry points keep their existing push-only ordering. Whole-raste
 jobs refuse with the original typed `EncodePlanError::InputProtocol`; there is
 no allocating fallback. Shared-driver qualification passes on `03b91e5d`: standard
 and all-feature I/O tests, strict Clippy, joint-policy controls, API snapshots,
-source catalogs and the full browser suite. Native public-driver qualification
-is still pending. [Qualification and retained failures](../benchmarks/replay_driver_2026-10-28.md)
+source catalogs and the full browser suite. The native public-driver matrix and strict Clippy now pass on `a39616ba`,
+including direct configured-job erasure. [Qualification and retained failures](../benchmarks/replay_driver_2026-10-28.md)
 separate these scopes; no throughput, whole-process memory or compile-time
 comparison has been measured.
 
@@ -51,7 +51,7 @@ For a seek-back destination, use `encode_job_to_destination` with
 `zencodec_io::destination::SeekBack::new(writer)?`. For an already erased job,
 the corresponding functions are `encode_dyn_job` and
 `encode_dyn_job_to_destination`. No native codec type is needed by the source or
-destination adapters. The proposed provided `EncodeJob::into_dyn_job()` moves a
+destination adapters. The provided `EncodeJob::into_dyn_job()` moves a
 configured native job into that shared interface without recreating it:
 
 ```rust,ignore
@@ -61,9 +61,8 @@ let result = row_encode::encode_dyn_job(job, source, writer, policy, options, pu
 
 The method allocates one adapter box; it does not clone settings, plan again or
 create an encoder. It requires an owned `Send` job. Typed drivers remain available
-for borrowed or non-`Send` jobs. This convenience and its additional native matrix
-are source candidates awaiting execution; the earlier private configuration-wrapper
-controls remain in place. These are configured-job primitives; the checked registry
+for borrowed or non-`Send` jobs. This convenience passes the core ownership controls and the additional native
+matrix; the earlier private configuration-wrapper controls remain in place. These are configured-job primitives; the checked registry
 request-to-destination convenience is still a separate integration obligation.
 
 ## Admission and execution

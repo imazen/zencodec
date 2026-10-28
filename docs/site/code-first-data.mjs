@@ -108,10 +108,10 @@ export const codeFlows = [
   {id:'adapter-children',role:'adapter',title:'Top-level images → child / SubIFD selection',steps:[
     {scope:'pub fn first_child<C: Collection>',file:'perf/spatial-validation/src/collection.rs',api:['collectionSelection'],state:'Shared collection selection helper'},
   ]},
-  {id:'adapter-replay',role:'adapter',title:'Retain raster → replay exact rows',steps:[
-    {scope:'fn driver_retained_raster_is_exact_without_digest_or_raw_staging()',file:'perf/multipass-validation/tests/proof_substitution.rs',api:['multipassInput','multipassEncode','rasterOutput','encodeRows','rowDemand'],state:'Experimental driver over shared Encoder::pull_rows; native typed controls qualified separately'},
-    {scope:'fn unaligned_source_pitch_and_destination_padding_preserve_samples()',file:'perf/multipass-validation/tests/sources.rs',api:['multipassReader','multipassFile'],state:'Executed source contract: raw rows with independent source/destination padding'},
-    {scope:'fn cancellation_before_read_keeps_typed_timeout()',file:'perf/multipass-validation/tests/sources.rs',api:['multipassReader'],state:'Executed source contract: typed cancellation before input effects'},
+  {id:'adapter-replay',role:'adapter',title:'Configure once → replay rows → release before publication',evidence:'docs/row-replay-driver.md',note:'The public retained-job driver executes Rows and Replay. Real IMI controls pass for typed/configuration-erased/configured-job-erased calls, padded U8/U16 input, four acquisition routes and forward/seek-back output. IMI still retains compressed output until finish. Strict unknown metadata/workspace evidence refuses; this is not a whole-operation memory or privacy certificate.',steps:[
+    {scope:'pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: OperationPolicy>(',file:'zencodec-io/src/row_encode.rs',api:['plannedRowEncode','rowSource','rowEncodeOptions'],state:'Public driver: retain the configured job through admission'},
+    {scope:'fn configured_job_erasure_keeps_prepared_owner_without_startup_or_clone()',file:'src/traits/dyn_encoding/job_erasure_tests.rs',api:['encodePreflight'],state:'Executed ownership control: move the configured job before startup'},
+    {scope:'fn native_retained_jobs_match_in_place_bytes_across_public_routes_and_dispatches()',file:'perf/multipass-validation/native/tests/public_driver.rs',api:['plannedRowEncode','encodeRows','rowDemand'],state:'Executed native/public-driver parity matrix; same-native byte/readback controls'},
   ]},
   {id:'adapter-patches',role:'adapter',title:'Finish → validate tail + patches → apply',steps:[
     {scope:'fn finish_preflight_supports_tail_patches_and_ordered_overlaps_and_rejects_overflow()',file:'zencodec-media-testkit/tests/contracts.rs',api:['muxFinish','muxFinishApply'],state:'Media output contract test'},
@@ -245,9 +245,9 @@ const lessons = {
   'adapter-scope': [['Keep a late metadata obligation alive', 'An early decision cannot certify packets not yet seen. This private experiment retains the obligation until later inspection and final-effect admission.']],
   'adapter-children': [['Select a child image', 'A TIFF thumbnail or pyramid level is a child, not another animation frame. Use explicit child selection and preserve the parent relationship.']],
   'adapter-replay': [
-    ['Retain the exact raster for another pass', 'The codec needs analysis before coding. The shared Encoder::pull_rows asks EncodeRows to fill a strided RowDemand. Driver-held immutable pixels provide replay identity; a caller-supplied digest alone does not. This experimental driver still has a separate replay policy; the production row driver refuses replay.'],
-    ['Read raw rows with file padding', 'A larger image arrives through a reader with padding after each row. Supply the source pitch once; the adapter fills active destination samples while preserving destination padding. Encoded image bytes require a decoder first.'],
-    ['Keep the reason when a read is cancelled', 'The same reader now has a deadline. Pulse stops before input effects and the original timeout category survives the I/O error chain. Blocking backend reads still need their own interruption mechanism.'],
+    ['Start with the configured job', 'The image is already a raster. Pass its view and the retained job to encode_job; the actual plan selects row pushing or native pull requests. The default completes encoding before destination publication.'],
+    ['Erase after native configuration', 'The application now dispatches codecs dynamically. into_dyn_job moves native settings and any retained preparation into the existing adapter without cloning or starting an encoder. The control checks ownership identity, zero startup and eventual cleanup.'],
+    ['Add source replay and destination constraints', 'The input becomes forward-only or positional, or the destination permits seek-back. The same public driver admits a held raster, a private snapshot, positional digest checks or a separate raw file. The real-codec matrix checks every route against native bytes and both native readers; hashes never certify exact replay.'],
   ],
   'adapter-patches': [['Apply final seek-back patches', 'The container learns offsets or sizes at finish. Validate the full tail and patch plan before applying ordered writes to the actual destination.']],
   'adapter-metadata': [

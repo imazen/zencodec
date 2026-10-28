@@ -71,3 +71,21 @@ Windows targets before opening a file: the fixture required `HOME`, while those
 runners expose `USERPROFILE`. The fixture now accepts that home-directory variable
 and closes any still-owned file before cleanup. No production behavior, test
 expectation or disk-control applicability changed. The Windows rerun is pending.
+
+## Native public driver and configured erasure
+
+Frozen core `a39616ba599dd34b89720e03fb20aaf8a4815206`, native
+`136784e486b6d6da5c47604ecf37025c7b19193a`, paired zenpixels `283655c5`:
+the configured-job ownership tests and core strict Clippy pass. The complete
+native/public-driver harness passes all 25 tests and strict all-target Clippy.
+The parity matrix covers typed, configuration-erased and configured-job-erased
+calls, RGB8/RGB16 with padding, checksums on/off, four acquisition routes and
+Forward/SeekBack. Typed faults, admission refusal and owner cleanup pass. These
+are same-native byte/readback controls, not an independent decoder oracle.
+
+The separate native final integration gate passes 7+9+16 test executions; its
+strict Clippy stops on four constant-size chunk-iterator suggestions in the new
+fixture. That native gate remains incomplete. The aggregate run therefore exits
+101: 154 s, peak RSS 1.17 GiB, minimum available 13633 MiB, peak load 2.02 under
+`run-heavy --mem 3G --jobs 2`. Its following documentation stages were unrun and
+are continued separately. No test expectation or production behavior changed.
