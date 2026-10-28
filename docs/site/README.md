@@ -39,3 +39,17 @@ five new cancellation/publication controls, full JPEG harness, preflight, lint
 and browser checks. Captured integration signatures must match both the native
 dependency revision and the `OperationPolicy` accepted by the copied examples.
 Synchronous file writes are not transactional or preemptively cancellable.
+
+## Source-backed codec-detail methods (2026-10-28)
+
+The compiler catalog omits the three inherent `codec_details` methods on
+`dyn SourceEncodingDetails`, with `Send`, and with `Send + Sync`. The searchable
+site now adds their declarations and documentation directly from `src/detect.rs`.
+The original compiler files and counts remain unchanged. Source drift, lost public
+visibility, additional methods, or compiler coverage of these methods fails the
+build so the explicit supplement can be reviewed.
+
+`just source-details-check` executes real consumer calls for all three forms,
+including identity-preserving downcasts and mismatched-type refusal. Site and
+browser checks retain the existing catalog coverage and add search/source-link
+checks for the supplement. [Validation receipt](../../benchmarks/source_catalog_2026-10-28.json).

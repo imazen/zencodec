@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { codeFlows } from './code-first-data.mjs';
-import { example } from './source.mjs';
+import { example, declarations } from './source.mjs';
 import { implementation } from './code-first.mjs';
 
 export async function checkCodeFirst(browser,url,output) {
@@ -69,6 +69,25 @@ export async function checkCodeFirst(browser,url,output) {
     await page.selectOption('#cf-package','zencodec-render');await page.locator('#cf-search').fill('Renderer render_first');
     await page.waitForFunction(()=>document.querySelector('#cf-results').textContent.includes('first top-level')||document.querySelector('#cf-results').textContent.includes('render_first'));
     assert.ok((await page.locator('#cf-results').textContent()).includes('render_first'));
+    await page.selectOption('#cf-package','zencodec');await page.locator('#cf-search').fill('codec_details');
+    await page.waitForFunction(()=>[...document.querySelectorAll('.cf-signature')].filter(card=>card.textContent.includes('Source-backed supplement')).length===3);
+    const supplemented=page.locator('.cf-signature').filter({hasText:'Source-backed supplement'});
+    assert.equal(await supplemented.count(),3);
+    const detect=await readFile(new URL('../../src/detect.rs',import.meta.url),'utf8');
+    const scopes=['impl dyn SourceEncodingDetails {','impl dyn SourceEncodingDetails + Send {','impl dyn SourceEncodingDetails + Send + Sync {'];
+    for(const [i,scope] of scopes.entries()) {
+      const declaration=declarations(detect,{scope,methods:['codec_details'],associated:false});
+      const card=supplemented.nth(i);
+      assert.equal(await card.locator(':scope > pre code').textContent(),declaration.code);
+      assert.ok((await card.locator('header').textContent()).includes('Source-backed supplement'));
+      assert.ok((await card.locator('header a').getAttribute('href')).endsWith(`/src/detect.rs#L${declaration.line}`));
+      assert.ok((await card.locator(':scope > details').first().textContent()).includes('Downcast to a concrete codec probe type.'));
+    }
+    await page.locator('#cf-search').fill('codec_details Send Sync');
+    await page.waitForFunction(()=>document.getElementById('cf-count').textContent.startsWith('1 matching'));
+    assert.ok((await page.locator('.cf-signature > pre code').textContent()).includes('+ Send + Sync'));
+    await page.selectOption('#cf-package','zencodec-render');await page.locator('#cf-search').fill('codec_details');
+    await page.waitForFunction(()=>document.getElementById('cf-count').textContent.startsWith('0 matching'));
     await page.selectOption('#cf-package','zencodec');await page.locator('#cf-search').fill('');
     await page.waitForFunction(()=>document.querySelectorAll('.cf-signature').length===40);
     const before=parseInt(await page.locator('#cf-count').textContent());await page.locator('#cf-more').click();

@@ -544,3 +544,12 @@ rejects that successful completion with `InconsistentFacts` and remains terminal
 matching the coroutine helper. This does not roll back already delivered rows
 or a sink finish callback. Regression controls live in the two testkits'
 `policy_completion_review` and `policy_final_facts_review` targets.
+
+## Known Bugs: compiler catalog omits inherent dyn methods (2026-10-28, fixed)
+
+The site omitted all three `SourceEncodingDetails::codec_details` trait-object
+forms because neither rustdoc JSON nor cargo-public-api emitted them. An explicit
+source supplement now preserves their declarations, docs and links; drift guards
+refuse stale supplementation. Actual Rust consumer tests cover all three forms.
+Existing compiler-surface and browser assertions remain intact. See
+`benchmarks/source_catalog_2026-10-28.json`.

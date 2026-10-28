@@ -1,4 +1,5 @@
 import './ideal-ui.mjs';
+import { filterCatalog } from './catalog-search.mjs';
 const tabs=[...document.querySelectorAll('[data-role-tab]')];
 const flows=[...document.querySelectorAll('[data-flow]')];
 const remembered=new Map();
@@ -24,7 +25,7 @@ selectRole('consumer');followHash();addEventListener('hashchange',followHash);
 
 const packageSelect=document.getElementById('cf-package'),search=document.getElementById('cf-search'),kind=document.getElementById('cf-kind'),legacy=document.getElementById('cf-legacy');
 const results=document.getElementById('cf-results'),status=document.getElementById('cf-count'),more=document.getElementById('cf-more');
-let manifest,filtered=[],limit=40,version=0;
+let manifest,supplements,filtered=[],limit=40,version=0;
 const cache=new Map();
 async function json(url){const response=await fetch(url);if(!response.ok)throw Error(`${url}: HTTP ${response.status}`);return response.json();}
 function element(tag,text,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
@@ -33,6 +34,7 @@ function draw(){
   for(const item of filtered.slice(0,limit)) {
     const article=element('article',undefined,'cf-signature');article.id=`signature-${item.id}`;
     const header=element('header'),label=element('span',`${item.package} / ${item.kind}`);header.append(label);
+    if(item.provenance)header.append(element('span',item.provenance));
     if(item.detail?.deprecated)header.append(element('span','Deprecated','deprecated'));
     const link=element('a','Source ↗');link.href=`https://github.com/imazen/zencodec/blob/${manifest.sha}/${item.detail?.file||manifest.packages.find(p=>p.name===item.package).directory+'/src/lib.rs'}${item.detail?'#L'+item.detail.line:''}`;header.append(link);article.append(header);
     if(item.context!==item.signature)article.append(element('div',item.context,'cf-context'));
@@ -59,11 +61,12 @@ async function update(){
   const request=++version;status.textContent='Loading signatures…';
   try {
     manifest ||= await json('code-api/manifest.json');
+    supplements ||= await json(manifest.source_supplements.file);
+    if(supplements.length!==manifest.source_supplements.count)throw Error('Incomplete source supplement');
     const names=packageSelect.value==='all'?manifest.packages.map(p=>p.name):[packageSelect.value];
     const arrays=await Promise.all(names.map(async name=>{if(!cache.has(name))cache.set(name,json(`code-api/${name}.json`).then(items=>items.map(item=>({...item,package:name}))));return cache.get(name);}));
     if(request!==version)return;
-    const words=search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    filtered=arrays.flat().filter(item=>(kind.value==='all'||kind.value===item.kind)&&(legacy.checked||!item.detail?.deprecated)&&words.every(word=>`${item.signature} ${item.context} ${item.detail?.docs||''} ${item.detail?.deprecated?.note||''}`.toLowerCase().includes(word)));
+    filtered=filterCatalog([...arrays.flat(),...supplements.filter(item=>names.includes(item.package))],{search:search.value,kind:kind.value,legacy:legacy.checked});
     limit=40;draw();
   }catch(error){if(request===version){status.textContent=`Could not load the catalog: ${error.message}`;results.replaceChildren();more.hidden=true;}}
 }

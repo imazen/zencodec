@@ -132,7 +132,7 @@ await writeFile(path.join(dest,'code.html'),await codeFirstPage({sha,apiPanels,d
 await writeFile(path.join(dest,'migration.html'),await migrationPage({sha,codePanel,apiPanels,flow}));
 await writeFile(path.join(dest,'ideal.html'),await idealPage({sha,codePanel,apiPanels,flow,docs}));
 await writeFile(path.join(dest,'gaps.html'),gapsPage({sha,apiPanels,flow,compile:await readFile(path.join(docs,'site/compile-time.html'),'utf8')}));
-for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs','ideal.css','ideal-ui.mjs','code-first.css','code-first-ui.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
+for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs','ideal.css','ideal-ui.mjs','code-first.css','code-first-ui.mjs','catalog-search.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
 await copyFile(path.join(docs,'migration-baseline.json'),path.join(dest,'migration-baseline.json'));
 await copyFile(path.join(docs,'examples/journeys.rs'),path.join(dest,'journeys.rs'));
 await copyFile(path.join(docs,'examples/jpeg_policy.rs'),path.join(dest,'jpeg_policy.rs'));

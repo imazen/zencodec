@@ -1085,9 +1085,14 @@ io-transport-model:
 code-catalog export:
     python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/code-api
 
+# Exercise actual consumer calls for source-supplemented dyn-trait methods.
+source-details-check:
+    cargo test -p zencodec --test source_encoding_details --locked
+    cargo clippy -p zencodec --test source_encoding_details --locked -- -D warnings
+
 docs-site-check:
     node docs/build-site.mjs
-    node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs
+    node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs docs/site/source-catalog.test.mjs
 
 docs-site-serve:
     python3 -m http.server 3537 --bind 0.0.0.0 --directory docs/_site
