@@ -732,6 +732,11 @@ spatial-samples-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Typed and erased planned jobs share the complete destination driver.
+planned-row-check:
+    cargo test -p zencodec-io --features std --locked
+    cargo clippy -p zencodec-io --features std --all-targets --locked -- -D warnings
+
 # Private concrete policy-binding experiment; no production API added.
 policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked

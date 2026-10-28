@@ -34,6 +34,7 @@ export const api = {
   muxFinish: {path:'zencodec::output_patch::OutputFinish (media alias: MuxFinish)',file:'src/output_patch.rs',scope:'impl<T: AsRef<[u8]>> OutputFinish<T>',methods:['new','validate']},
   muxFinishApply: {path:'zencodec::output_patch::OutputFinish<Vec<u8>>',file:'src/output_patch.rs',scope:'impl OutputFinish {',methods:['apply_to']},
   videoEncoderFidelity: {path:'zencodec_media::session::VideoEncoder::output_fidelity',file:'zencodec-media/src/session.rs',scope:'pub trait VideoEncoder',methods:['output_config','output_fidelity']},
+  plannedRowEncode: {path:'zencodec_io::row_encode (std)',file:'zencodec-io/src/row_encode.rs',methods:['encode_job','encode_job_to_destination','encode_dyn_job','encode_dyn_job_to_destination']},
   rowEncode: {path:'zencodec_io::row_encode::encode (std)',file:'zencodec-io/src/row_encode.rs',methods:['encode','encode_to_destination']},
   rasterOutput: {path:'zencodec::encode::Encoder',file:'src/traits/encoder.rs',scope:'pub trait Encoder',methods:['begin_output','finish_output']},
   rasterOutputTiming: {path:'zencodec::encode::OutputTiming',file:'src/output.rs',scope:'impl OutputTiming',methods:['with_patches','patches_at_finish']},

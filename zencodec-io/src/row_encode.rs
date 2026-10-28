@@ -37,7 +37,8 @@ use zencodec::output_patch::OutputAccess;
 use zencodec::{
     At,
     encode::{
-        EncodeDeclaration, EncodeJob, EncodePlan, EncodePlanError, Encoder, InputRequirement,
+        DynEncodeJob, DynEncoder, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
+        EncodePlanError, Encoder, InputRequirement,
     },
     operation::{
         OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
@@ -495,6 +496,57 @@ where
     )
 }
 
+/// Run an already configured registry job through the planned row driver.
+///
+/// This is the erased-job counterpart of [`encode_job`]. The retained job plans
+/// before policy and constructs its encoder only after admission. Native errors
+/// keep their concrete causes; no typed-job shim or policy error conversion is
+/// required from the caller. This does not add metadata/fidelity requirements.
+pub fn encode_dyn_job<S: Source, W: Write, R: PolicyResolver>(
+    job: Box<dyn DynEncodeJob>,
+    source: S,
+    writer: W,
+    resolver: R,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<Completed, At<Failure>> {
+    encode_dyn_job_to_destination(job, source, Forward(writer), resolver, options, pulse)
+}
+
+/// Run a retained erased job against a forward or seek-back destination.
+///
+/// Admission, source revalidation, declared startup, output limits, staging and
+/// partial-publication reporting are identical to [`encode_job_to_destination`].
+/// Only construction and native calls use the existing object-safe codec traits.
+pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: PolicyResolver>(
+    job: Box<dyn DynEncodeJob>,
+    source: S,
+    writer: D,
+    resolver: R,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<Completed, At<Failure>> {
+    run_rows(
+        DynPlannedStartup(job),
+        source,
+        writer,
+        resolver,
+        options,
+        pulse,
+    )
+}
+
+fn validate_row_plan(
+    plan: EncodePlan,
+    declaration: &EncodeDeclaration<'_>,
+) -> Result<EncodePlan, Cause> {
+    plan.validate(declaration)?;
+    if plan.input != InputRequirement::Rows {
+        return Err(EncodePlanError::InputProtocol.into());
+    }
+    Ok(plan)
+}
+
 trait RowStartup {
     type Enc: Encoder;
     // Preserve legacy allocation/start ordering on the existing raw adapter.
@@ -531,12 +583,7 @@ where
     type Enc = J::Enc;
     const EARLY_BUFFER: bool = false;
     fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
-        let plan = self.0.plan_encode(declaration)?;
-        plan.validate(declaration)?;
-        if plan.input != InputRequirement::Rows {
-            return Err(EncodePlanError::InputProtocol.into());
-        }
-        Ok(plan)
+        validate_row_plan(self.0.plan_encode(declaration)?, declaration)
     }
     fn start(
         self,
@@ -547,6 +594,55 @@ where
         let observed = encoder.begin_declared(declaration)?;
         plan.validate_started(&observed)?;
         Ok(encoder)
+    }
+}
+
+struct DynPlannedStartup(Box<dyn DynEncodeJob>);
+impl RowStartup for DynPlannedStartup {
+    type Enc = DynRows;
+    const EARLY_BUFFER: bool = false;
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+        validate_row_plan(self.0.plan_encode(declaration)?, declaration)
+    }
+    fn start(
+        self,
+        declaration: &EncodeDeclaration<'_>,
+        plan: &EncodePlan,
+    ) -> Result<Self::Enc, Cause> {
+        let mut encoder = self.0.into_encoder()?;
+        let observed = encoder.begin_declared(declaration)?;
+        plan.validate_started(&observed)?;
+        Ok(DynRows(encoder))
+    }
+}
+
+// Private, already-started executor for the common loop. It does not pretend to
+// be a typed EncodeJob: that trait's checked setters have narrower error types.
+struct DynRows(Box<dyn DynEncoder>);
+impl Encoder for DynRows {
+    type Error = zencodec::decode::ErasedError;
+    fn reject(operation: zencodec::UnsupportedOperation) -> Self::Error {
+        Self::Error::new(Box::new(operation))
+    }
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+        self.0.encode(pixels).map_err(Self::Error::new)
+    }
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n);
+    }
+    fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Self::Error> {
+        self.0.push_rows(pixels).map_err(Self::Error::new)
+    }
+    fn finish(self) -> Result<EncodeOutput, Self::Error> {
+        self.0.finish().map_err(Self::Error::new)
+    }
+    fn finish_output(
+        self,
+    ) -> Result<zencodec::output_patch::OutputFinish<EncodeOutput>, Self::Error> {
+        self.0.finish_output().map_err(Self::Error::new)
     }
 }
 

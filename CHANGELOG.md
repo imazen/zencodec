@@ -617,6 +617,13 @@ removes that whole class).
 
 ### [Unreleased]
 
+#### Added
+
+- `row_encode::encode_dyn_job` and `encode_dyn_job_to_destination` accept retained
+  registry jobs directly. They share typed-job admission, declared color startup,
+  source validation, staging and seek-back patch execution, preserving native
+  error causes. Metadata/fidelity postconditions remain the caller's checked layer.
+
 #### QUEUED BREAKING CHANGES
 
 - `FileReadAt` and `BufferedReadAt` return `StdSourceError`, preserving native

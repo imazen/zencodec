@@ -64,6 +64,10 @@ export const codeFlows = [
   {id:'adapter-control',role:'adapter',title:'Suspend → resolve → resume → exact rows',steps:[
     {scope:'fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destination()',file:'perf/jpeg-policy-validation/src/control.rs',api:['operationControl','operationResolver'],state:'Native JPEG integration test'},
   ]},
+  {id:'adapter-registry-output',role:'adapter',title:'Registry job → plan → writer or seek-back destination',note:'The shared planned driver accepts the erased registry job directly. Policy precedes native construction; current color reaches startup. These controls use a scripted codec. Native pipeline adoption remains a separate gate.',steps:[
+    {scope:'fn registry_job_to_writer<W: io::Write>',file:'zencodec-io/tests/planned_row_encode.rs',api:['plannedRowEncode','rowRaster','rowEncodeOptions'],state:'Compiled registry-to-writer usage with an executable control'},
+    {scope:'fn erased_destination_preserves_negotiated_patches_and_forward_refusal()',file:'zencodec-io/tests/planned_row_encode.rs',api:['plannedRowEncode'],state:'Shared driver regression: forward refusal and seek-back patches'},
+  ]},
   {id:'adapter-output',role:'adapter',title:'Rows → schedule → forward / seek-back output',steps:[
     {scope:'fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context()',file:'perf/jpeg-policy-validation/src/row_driver.rs',api:['rowEncode','rowSource','rowEncodeOptions'],state:'Native JPEG integration test'},
   ]},
@@ -140,6 +144,10 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'adapter-registry-output': [
+    ['Send the configured registry job to a writer', 'The gallery already chose and configured an encoder. Pass that job directly to the planned driver; it retains the job through admission and starts with the current pixel color. The example uses a small test output budget, not a production recommendation.'],
+    ['Allow patches only on an actual seek-back destination', 'A layout that overwrites earlier bytes must refuse a forward writer before startup. When the destination can seek, preserve the final patch plan and account for appended and overwritten bytes separately.'],
+  ],
   'adapter-declaration': [['Keep one job across admission', 'Declare actual color and destination access before native startup. Plan the retained job, admit the route, then compare every startup fact before reading pixels or publishing bytes. This fixture checks forwarding; the checked driver must enforce the sequence for callers.']],
   'codec-preflight': [
     ['Plan without native image state', 'Use the effective job settings and the complete declaration. Return native errors intact; a codec without preflight explicitly refuses.'],

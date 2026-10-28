@@ -9,8 +9,8 @@ use std::{
 use zencodec::{
     At, Cicp, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
     encode::{
-        BoxedError, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan, EncodePlanError,
-        Encoder, OutputTiming,
+        BoxedError, DynEncoderConfig, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
+        EncodePlanError, Encoder, EncoderConfig, OutputTiming,
     },
     operation::{Decision, PolicyResolver, PolicySet, Question},
     storage::StorageBudget,
@@ -23,11 +23,13 @@ fn event(events: &Events, name: &'static str) {
     events.lock().unwrap().push(name);
 }
 
+#[derive(Clone)]
 struct Job {
     events: Events,
     plan: EncodePlan,
     drift: bool,
     fail_start: bool,
+    patches: bool,
 }
 impl EncodeJob for Job {
     type Error = io::Error;
@@ -57,6 +59,7 @@ impl EncodeJob for Job {
             plan: self.plan,
             drift: self.drift,
             fail_start: self.fail_start,
+            patches: self.patches,
             pending: vec![],
         })
     }
@@ -64,11 +67,50 @@ impl EncodeJob for Job {
         Err(io::Error::other("no animation"))
     }
 }
+#[derive(Clone)]
+struct Config(Job);
+impl EncoderConfig for Config {
+    type Error = io::Error;
+    type Job = Job;
+    fn format() -> ImageFormat {
+        ImageFormat::Pnm
+    }
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        &[PixelDescriptor::RGB8_SRGB]
+    }
+    fn job(self) -> Job {
+        self.0
+    }
+}
+
+fn run_job(
+    erased: bool,
+    job: Job,
+    rows: Rows,
+    writer: Writer,
+    resolver: impl PolicyResolver,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<row_encode::Completed, At<row_encode::Failure>> {
+    if erased {
+        row_encode::encode_dyn_job(
+            Config(job).dyn_job(),
+            rows,
+            writer,
+            resolver,
+            options,
+            pulse,
+        )
+    } else {
+        row_encode::encode_job(job, rows, writer, resolver, options, pulse)
+    }
+}
 struct Enc {
     events: Events,
     plan: EncodePlan,
     drift: bool,
     fail_start: bool,
+    patches: bool,
     pending: Vec<u8>,
 }
 impl Encoder for Enc {
@@ -125,6 +167,22 @@ impl Encoder for Enc {
             self.pending.extend_from_slice(pixels.row(row));
         }
         Ok(())
+    }
+    fn finish_output(
+        self,
+    ) -> Result<zencodec::output_patch::OutputFinish<EncodeOutput>, Self::Error> {
+        let patches = if self.patches {
+            vec![zencodec::output_patch::Patch {
+                offset: 0,
+                bytes: vec![81],
+            }]
+        } else {
+            vec![]
+        };
+        Ok(zencodec::output_patch::OutputFinish::new(
+            self.finish()?,
+            patches,
+        ))
     }
     fn finish(mut self) -> Result<EncodeOutput, Self::Error> {
         event(&self.events, "finish");
@@ -201,6 +259,7 @@ impl Setup {
             plan: EncodePlan::rows(OutputTiming::streaming(0)),
             drift: false,
             fail_start: false,
+            patches: false,
         }
     }
     fn rows(&self) -> Rows {
@@ -222,136 +281,237 @@ impl Setup {
 
 #[test]
 fn policy_precedes_construction_and_finish_precedes_destination_waits() {
-    let s = Setup::new();
-    let storage = StorageBudget::new(4096, 16);
-    let completed = row_encode::encode_job(
-        s.job(),
-        s.rows(),
-        s.writer(),
-        Resolver(|| {
-            assert_eq!(storage.reserved_bytes(), 0);
-            assert_eq!(*s.events.lock().unwrap(), ["plan"]);
-            event(&s.events, "policy");
-        }),
-        Options::new(storage.clone(), 4096),
-        &zencodec::NoPulse,
-    )
-    .unwrap();
-    assert_eq!(
-        &s.events.lock().unwrap()[..6],
-        ["plan", "policy", "construct", "start", "read", "push"]
-    );
-    let events = s.events.lock().unwrap();
-    assert!(
-        events.iter().position(|e| *e == "finish").unwrap()
-            < events.iter().position(|e| *e == "write").unwrap()
-    );
-    assert_eq!(
-        *s.bytes.lock().unwrap(),
-        [80, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]
-    );
-    assert_eq!(completed.emitted, 14);
-    assert_eq!(storage.reserved_bytes(), 0);
+    for erased in [false, true] {
+        let s = Setup::new();
+        let storage = StorageBudget::new(4096, 16);
+        let completed = run_job(
+            erased,
+            s.job(),
+            s.rows(),
+            s.writer(),
+            Resolver(|| {
+                assert_eq!(storage.reserved_bytes(), 0);
+                assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+                event(&s.events, "policy");
+            }),
+            Options::new(storage.clone(), 4096),
+            &zencodec::NoPulse,
+        )
+        .unwrap();
+        assert_eq!(
+            &s.events.lock().unwrap()[..6],
+            ["plan", "policy", "construct", "start", "read", "push"]
+        );
+        let events = s.events.lock().unwrap();
+        assert!(
+            events.iter().position(|e| *e == "finish").unwrap()
+                < events.iter().position(|e| *e == "write").unwrap()
+        );
+        assert_eq!(
+            *s.bytes.lock().unwrap(),
+            [80, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]
+        );
+        assert_eq!(completed.emitted, 14);
+        assert_eq!(storage.reserved_bytes(), 0);
+    }
 }
 
 #[test]
 fn strict_unknown_workspace_refuses_before_callback_allocation_or_start() {
-    let s = Setup::new();
-    let error = row_encode::encode_job(
-        s.job(),
-        s.rows(),
-        s.writer(),
-        Resolver(|| panic!("inadmissible route reached callback")),
-        s.options()
-            .with_policy_set(PolicySet::new().with_workspace_limit(0)),
-        &zencodec::NoPulse,
-    )
-    .unwrap_err();
-    assert_eq!(error.error().stage, Stage::Policy);
-    assert_eq!(*s.events.lock().unwrap(), ["plan"]);
-    assert!(s.bytes.lock().unwrap().is_empty());
+    for erased in [false, true] {
+        let s = Setup::new();
+        let error = run_job(
+            erased,
+            s.job(),
+            s.rows(),
+            s.writer(),
+            Resolver(|| panic!("inadmissible route reached callback")),
+            s.options()
+                .with_policy_set(PolicySet::new().with_workspace_limit(0)),
+            &zencodec::NoPulse,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().stage, Stage::Policy);
+        assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+        assert!(s.bytes.lock().unwrap().is_empty());
+    }
 }
 
 #[test]
 fn source_changed_by_policy_refuses_before_native_startup() {
-    let s = Setup::new();
-    let error = row_encode::encode_job(
-        s.job(),
-        s.rows(),
-        s.writer(),
-        Resolver(|| {
-            s.description.lock().unwrap().width = 3;
-        }),
-        s.options(),
-        &zencodec::NoPulse,
-    )
-    .unwrap_err();
-    assert_eq!(error.error().stage, Stage::Read);
-    assert_eq!(
-        zencodec::find_cause::<row_encode::Refusal>(&error),
-        Some(&row_encode::Refusal::SourceChanged)
-    );
-    assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+    for erased in [false, true] {
+        let s = Setup::new();
+        let error = run_job(
+            erased,
+            s.job(),
+            s.rows(),
+            s.writer(),
+            Resolver(|| {
+                s.description.lock().unwrap().width = 3;
+            }),
+            s.options(),
+            &zencodec::NoPulse,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().stage, Stage::Read);
+        assert_eq!(
+            zencodec::find_cause::<row_encode::Refusal>(&error),
+            Some(&row_encode::Refusal::SourceChanged)
+        );
+        assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+    }
 }
 
 #[test]
 fn unsupported_input_and_storage_refuse_before_construction() {
-    for raster in [true, false] {
-        let s = Setup::new();
-        let mut job = s.job();
-        if raster {
-            job.plan = EncodePlan::whole_raster();
-        }
-        let error = row_encode::encode_job(
-            job,
-            s.rows(),
-            s.writer(),
-            PolicySet::new(),
-            Options::new(StorageBudget::new(0, 0), 4096),
-            &zencodec::NoPulse,
-        )
-        .unwrap_err();
-        assert_eq!(error.error().stage, Stage::Prepare);
-        assert_eq!(*s.events.lock().unwrap(), ["plan"]);
-        if raster {
-            assert_eq!(
-                zencodec::find_cause::<EncodePlanError>(&error),
-                Some(&EncodePlanError::InputProtocol)
-            );
+    for erased in [false, true] {
+        for raster in [true, false] {
+            let s = Setup::new();
+            let mut job = s.job();
+            if raster {
+                job.plan = EncodePlan::whole_raster();
+            }
+            let error = run_job(
+                erased,
+                job,
+                s.rows(),
+                s.writer(),
+                PolicySet::new(),
+                Options::new(StorageBudget::new(0, 0), 4096),
+                &zencodec::NoPulse,
+            )
+            .unwrap_err();
+            assert_eq!(error.error().stage, Stage::Prepare);
+            assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+            if raster {
+                assert_eq!(
+                    zencodec::find_cause::<EncodePlanError>(&error),
+                    Some(&EncodePlanError::InputProtocol)
+                );
+            }
         }
     }
 }
 
 #[test]
 fn startup_drift_or_native_failure_preserves_cause_and_publishes_nothing() {
-    for drift in [true, false] {
-        let s = Setup::new();
-        let mut job = s.job();
-        job.drift = drift;
-        job.fail_start = !drift;
-        let error = row_encode::encode_job(
-            job,
-            s.rows(),
-            s.writer(),
-            PolicySet::new(),
-            s.options(),
-            &zencodec::NoPulse,
-        )
-        .unwrap_err();
-        assert_eq!(error.error().stage, Stage::Start);
-        assert_eq!(error.error().emitted, 0);
-        assert_eq!(*s.events.lock().unwrap(), ["plan", "construct", "start"]);
-        assert!(s.bytes.lock().unwrap().is_empty());
-        if drift {
-            assert_eq!(
-                zencodec::find_cause::<EncodePlanError>(&error),
-                Some(&EncodePlanError::Changed)
-            );
-        } else {
-            assert_eq!(
-                zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
-                io::ErrorKind::InvalidData
-            );
+    for erased in [false, true] {
+        for drift in [true, false] {
+            let s = Setup::new();
+            let mut job = s.job();
+            job.drift = drift;
+            job.fail_start = !drift;
+            let error = run_job(
+                erased,
+                job,
+                s.rows(),
+                s.writer(),
+                PolicySet::new(),
+                s.options(),
+                &zencodec::NoPulse,
+            )
+            .unwrap_err();
+            assert_eq!(error.error().stage, Stage::Start);
+            assert_eq!(error.error().emitted, 0);
+            assert_eq!(*s.events.lock().unwrap(), ["plan", "construct", "start"]);
+            assert!(s.bytes.lock().unwrap().is_empty());
+            if drift {
+                assert_eq!(
+                    zencodec::find_cause::<EncodePlanError>(&error),
+                    Some(&EncodePlanError::Changed)
+                );
+            } else {
+                assert_eq!(
+                    zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                    io::ErrorKind::InvalidData
+                );
+            }
         }
     }
+}
+
+#[test]
+fn erased_destination_preserves_negotiated_patches_and_forward_refusal() {
+    let s = Setup::new();
+    let mut job = s.job();
+    job.patches = true;
+    job.plan = EncodePlan::rows(OutputTiming::streaming(0).with_patches());
+    let error = row_encode::encode_dyn_job(
+        Config(job.clone()).dyn_job(),
+        s.rows(),
+        s.writer(),
+        PolicySet::new(),
+        s.options(),
+        &zencodec::NoPulse,
+    )
+    .unwrap_err();
+    assert_eq!(error.error().stage, Stage::Prepare);
+    assert_eq!(
+        zencodec::find_cause::<EncodePlanError>(&error),
+        Some(&EncodePlanError::DestinationAccess)
+    );
+    assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+    assert!(s.bytes.lock().unwrap().is_empty());
+    s.events.lock().unwrap().clear();
+    let mut writer = io::Cursor::new(Vec::new());
+    let completed = row_encode::encode_dyn_job_to_destination(
+        Config(job).dyn_job(),
+        s.rows(),
+        zencodec_io::destination::SeekBack::new(&mut writer).unwrap(),
+        PolicySet::new(),
+        s.options(),
+        &zencodec::NoPulse,
+    )
+    .unwrap();
+    assert_eq!(completed.emitted, 14);
+    assert_eq!(completed.patched_bytes, 1);
+    assert_eq!(
+        writer.into_inner(),
+        [81, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]
+    );
+}
+
+// The small application-facing path shown in the source guide. Registry jobs
+// retain their configured controls; the row driver gets current pixel color.
+fn registry_job_to_writer<W: io::Write>(
+    codecs: &zencodec::CodecSet,
+    pixels: PixelSlice<'_>,
+    writer: W,
+    storage: StorageBudget,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<row_encode::Completed, BoxedError> {
+    let job = codecs.encode_job(ImageFormat::Pnm)?;
+    Ok(row_encode::encode_dyn_job(
+        job,
+        row_encode::Raster::new(pixels),
+        writer,
+        PolicySet::new(),
+        Options::new(storage, 4096),
+        pulse,
+    )?)
+}
+
+#[test]
+fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
+    let s = Setup::new();
+    let codecs = zencodec::CodecSet::new().with_encoder(Config(s.job()));
+    let bytes = [7; 12];
+    let pixels = PixelSlice::new(&bytes, 2, 2, 6, PixelDescriptor::RGB8_SRGB)
+        .unwrap()
+        .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3)));
+    let mut output = Vec::new();
+    let done = registry_job_to_writer(
+        &codecs,
+        pixels,
+        &mut output,
+        StorageBudget::new(4096, 16),
+        &zencodec::NoPulse,
+    )
+    .unwrap();
+    assert_eq!(done.emitted, 14);
+    assert_eq!(output, [80, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]);
+    assert_eq!(
+        *s.events.lock().unwrap(),
+        ["plan", "construct", "start", "push", "finish"]
+    );
 }
