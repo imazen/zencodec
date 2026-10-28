@@ -19,20 +19,20 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
 zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "874a3856841bfcf5f8e223ec62d75a159fa42895", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
 zencodec = { path = "../.." }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-coroutine = { path = "../../zencodec-coroutine" }
 zenmeta = { path = "../../zenmeta" }
 # zenjpeg depends on ultrahdr-core unconditionally; crates.io 0.6.0 requires
 # zencodec ^0.1, so use the review revision on the zencodec 0.2 family pin.
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "cc57c57abc491001c69ca85dab8213102df93825" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "610975047bcb0bb266e952f15bcd978ba3f34950" }
 # The harness's own zenpixels revision: the docs examples it compiles use its
 # `ConvertOptions::retain_channels`. It descends from f8596aae, the revision the
 # pinned zenjpeg and zenpng heads (and zenpipe 874a3856) were tested with.
