@@ -115,5 +115,28 @@
         "merge": "595949e02e76ae85eff433f5fbe9d2e7b11751e4"
       }
     }
+  },
+  "native_media": {
+    "source": "cfd8734b715b376e688c74e9284b3668582a8259",
+    "pins": {
+      "avif_mp4": "94116d266299f347cfd10a75d440a5bc3b598d2c",
+      "ivf_webm": "403d46b9973a58b212def0602f4dd8cdee9560dc",
+      "ultrahdr": "7e9d296c9e037e626234c9f0e8673d48278f83f0"
+    },
+    "graph": "I/O lock unchanged. AV1 lock changes exactly six explicit source pins; all package versions and dependency lists unchanged. One shared core/pixel family; no unreviewed transitive changes. Initial automatic AV1 audit refusal retained before explicit review.",
+    "tests": {
+      "guide": 87,
+      "native_av1": 47,
+      "native_containers": 61,
+      "ignored": 0
+    },
+    "clippy": "PASS for exact guide targets, AV1 all-targets, and all three container all-targets",
+    "independent": "54 planar presentations pass float and deliberate-clipping controls; Gamma22 verification passes; exact transport model CSV unchanged",
+    "receipts": [
+      "run-heavy: done rc=1 10s | peak-RSS 0.28GiB | min-avail 15153MiB | peak-load 0.17",
+      "run-heavy: done rc=0 87s | peak-RSS 1.04GiB | min-avail 13772MiB | peak-load 0.96",
+      "run-heavy: done rc=0 7s | peak-RSS 0.30GiB | min-avail 14827MiB | peak-load 0.76"
+    ],
+    "scope": "Linux harness and container controls; native AVIF repository-specific optional-control regressions, full features/platforms and zenpipe application still require qualification."
   }
 }

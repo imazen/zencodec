@@ -1,23 +1,23 @@
 # I/O validation experiments
 
 Current policy, disclosure, execution and stream harness boundaries accept
-optional borrowed Pulse controls. They preserve absence through public
-forwarders and resolve a no-op only for local checks/private helpers. The source
-migration has not been compiled or run; existing receipts retain their original
-revision scope.
+optional borrowed Pulse controls. Forwarders preserve absence and resolve a no-op
+only for local checks/private helpers.
 
-The source downloader now selects optional-control MP4 `94116d26`, IVF/WebM
-`403d46b9` and bitmaps `5abfba28`. Existing vendor directories are not
-rewritten: use a fresh export, retaining the old source manifest and measured
-artifacts. These pins and the current harness require lock resolution, runtime
-and Clippy qualification. They do not inherit performance results measured on
-the prior revisions, and no existing pixel/protocol assertion is relaxed.
+On `cfd8734b`, the exact guide suite passes 87 tests and strict Clippy; the native
+MP4/IVF/WebM suites pass 61 tests and strict all-target Clippy. The transport
+simulation's committed CSV is unchanged. The source downloader pins MP4
+`94116d26`, IVF/WebM `403d46b9` and bitmaps `5abfba28`. The existing harness lock
+remains byte-identical after resolution and the shared-family graph audit passes.
+See the [receipt](../../benchmarks/optional_pulse_2026-10-29.json).
 
 The consumer root patches both registry and git edges for the shared family.
 The optional IVF/WebM sources use version requirements: a git-source patch alone
 does not supply their unpublished `zencodec-media` dependency. The initial CI
-resolution failure is retained; the registry patches still require a fresh
-resolved lock and execution of the unchanged guide controls.
+resolution failure is retained. Existing vendor directories are not rewritten;
+use a fresh export, retaining the old source manifest and measured artifacts.
+These correctness checks do not transfer previous performance measurements to the
+new sources, or certify every native feature/platform.
 
 Private harnesses for the [2026-10-24 investigation](../../benchmarks/io_validation_2026-10-24.md).
 They add no library API. Run builds and benchmarks serially under your host's

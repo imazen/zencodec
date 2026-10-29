@@ -1,17 +1,23 @@
 # Native AV1 policy qualification
 
-Borrowed controls in current session/mux wrappers and route experiments are
-optional. Forwarders retain the original `Option`; `None` leaves native retained
-controls and policy/storage checks active. This signature migration has not been
-built or run against the pinned native crates. Dated receipts below describe
-their recorded revisions.
+Borrowed controls in session/mux wrappers and route experiments are optional.
+Forwarders retain the original `Option`; `None` leaves native retained controls
+and policy/storage checks active.
 
-The optional-control candidate now pins AVIF/MP4 `94116d26` and IVF/WebM
-`403d46b9`, retaining the merged native packet-context changes. Ultra HDR uses
-version edges through `7e9d296c`, with both registry and git core-family edges
-mapped to this checkout. The previous `dependencies.lock` remains retained;
-resolution/audit, runtime, strict Clippy and independent readback must be rerun
-before this graph qualifies. No container timing or pixel expectations change.
+The candidate at `cfd8734b` qualifies AVIF/MP4 `94116d26`, IVF/WebM `403d46b9`
+and Ultra HDR `7e9d296c` in this harness: 47 native tests, strict all-target
+Clippy, independent float readback of 54 presentations, and the Gamma22 controls
+pass. The refreshed lock changes only six explicit source pins, with unchanged
+package versions and dependency lists; the graph has one shared core/pixel
+family. The automatic source-change audit refusal remains recorded before the
+explicit review. No container timing or pixel expectations changed.
+
+The sibling I/O harness also passes 61 native container tests and strict Clippy
+on those same sources. These are Linux harness receipts, not full codec or
+cross-platform certification. AVIF's own newly added optional-control regressions
+and the complete application graph remain separate gates. See the
+[optional-control receipt](../../benchmarks/optional_pulse_2026-10-29.json).
+Older dated sections below retain their original revision scope.
 
 ## Container destination and timing qualification
 

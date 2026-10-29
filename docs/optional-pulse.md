@@ -112,8 +112,9 @@ pixel, converter and Pulse package in each checked root.
 The combined three-codec wrapper still reports failure because bitmap Clippy
 failed. Successful JPEG/WebP steps do not erase that failure. The
 [receipt](../benchmarks/optional_pulse_2026-10-29.json) records both results.
-AVIF, IMI, the remaining container integrations and the complete zenpipe graph
-still need qualification against the optional signatures.
+The AVIF/container harness now passes on the optional signatures, as recorded
+below. IMI, native AVIF-specific regression controls and the complete zenpipe
+graph still need qualification.
 
 
 The follow-up at bitmap `7d89635c`, WebP `fb4388e2` and JPEG `31b789f3`
@@ -132,3 +133,20 @@ the earlier reviewed root dependency change. The initial audit failure remains
 recorded, followed by the explicit review and passing JPEG compile. JPEG's
 inventory fuzzer retains an existing deprecated-policy warning. These are
 compile checks, not fuzz campaigns or full feature/platform certification.
+
+## Native media and executable guide follow-through
+
+At `cfd8734b`, the guide's 87 executable tests and strict Clippy pass. The native
+AV1 harness passes 47 tests and strict Clippy with AVIF/MP4 `94116d26` and
+IVF/WebM `403d46b9`; the container repositories' suites pass 61 tests and strict
+Clippy through the isolated guide consumer graph. Independent float readback and
+deliberate-clipping controls pass for 54 presentations, the Gamma22 verifier
+passes, and the transport simulation CSV is unchanged. The AV1 lock changes
+only the six explicitly selected package sources. The guide lock is unchanged.
+
+CI on `441399e6` also passes the matching Rustdoc/site build, source/browser
+checks and native TIFF/JXL spatial selection. Its failed native I/O resolution,
+old AV1 lock and old zenpipe signatures are retained as separate failures. The
+first two now have the local qualification above; JPEG/zenpipe integration still
+needs its updated dependency graph. None of these receipts certifies all native
+features or platforms.
