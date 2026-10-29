@@ -257,3 +257,13 @@ rc1, 26s, peak RSS 0.02 GiB, minimum available 14879 MiB, peak load 1.44;
 Raw data and both logs remain in `~/tmp/retained-arm-20261029`; the regenerable
 Cargo target was deleted after verified exit. Earlier invalid x86 runs remain
 retained and invalid.
+
+### Native reuse candidate
+
+The [retained metadata reuse experiment](../perf/retained-metadata-reuse/README.md)
+now removes two redundant header parses without replacing the full metadata
+scan or actual decode extras. It retains the configured owner for repeated
+preparation and releases scanned carriers before reconstruction. The native
+matrix passes with exact extra-segment comparisons and eight post-preparation
+cancellation cases; strict Clippy passes. It remains an experiment: changed
+layout, retained memory and runtime need matched measurement before adoption.

@@ -1,0 +1,5 @@
+{
+  "native/zenjpeg/src/codec/decode.rs": "4427990cd3f4315cf1069a351b150130b1e871fa683c2032dc06517d0b682b04",
+  "native/zenjpeg/src/decode/mod.rs": "2dd0024274dbe3398d8cd479364c89b195ca3ae5eb6de1896c9a5d44700e6dc4",
+  "core/perf/jpeg-policy-validation/src/decode_admission.rs": "18f27b6338e6ab72a1e26e32eae2d129a446df17a9d3025d6ad6d594104d9c85"
+}

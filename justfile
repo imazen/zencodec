@@ -1697,3 +1697,7 @@ testkit-pulse-check:
 native-pulse-diagnostics-check artifacts="$HOME/tmp/zencodec-native-pulse":
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --locked --manifest-path perf/jpeg-policy-validation/Cargo.toml pulse_diagnostics:: -- --nocapture
     cargo clippy --locked --manifest-path perf/jpeg-policy-validation/Cargo.toml --tests -- -D warnings
+
+# Source-only application to a hash-verified PR183 prepared export; no checkout edits.
+retained-metadata-reuse-apply export:
+    python3 perf/retained-metadata-reuse/apply.py "{{export}}"

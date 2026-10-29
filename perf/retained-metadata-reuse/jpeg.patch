@@ -1,0 +1,160 @@
+--- a/src/codec/decode.rs
++++ b/src/codec/decode.rs
+@@ -480,6 +480,7 @@
+     ) -> Result<Self::Dec, Self::Error> {
+         self.check_input_size(&data)?;
+         Ok(JpegDecoder {
++            prepared: None,
+             config: self.config,
+             stop: self.stop,
+             limits: self.limits,
+@@ -1278,6 +1279,7 @@
+ 
+ /// One-shot JPEG decoder implementing [`zencodec::decode::Decode`].
+ pub struct JpegDecoder<'a> {
++    prepared: Option<(crate::decode::JpegInfo, PixelDescriptor)>,
+     config: JpegDecoderConfig,
+     /// Cancellation (and progress) control, polled as a `Stop`.
+     stop: Option<zencodec::SharedPulse>,
+@@ -1307,21 +1309,42 @@
+         {
+             return Ok(None);
+         }
+-        let cfg = build_decode_config(&self.config.inner, &self.limits,
+-            self.crop_hint, self.orientation, self.policy.as_ref());
+-        let stop: &dyn enough::Stop = self.stop.as_ref()
++        if let Some((_, descriptor)) = &self.prepared {
++            if let Some(pulse) = &self.stop {
++                enough::Stop::check(pulse).map_err(Error::from)?;
++            }
++            return Ok(Some(*descriptor));
++        }
++        let cfg = build_decode_config(
++            &self.config.inner,
++            &self.limits,
++            self.crop_hint,
++            self.orientation,
++            self.policy.as_ref(),
++        );
++        let stop: &dyn enough::Stop = self
++            .stop
++            .as_ref()
+             .map_or(&enough::Unstoppable as &dyn enough::Stop, |s| s);
+         stop.check().map_err(Error::from)?;
+         let header = read_job_info(&cfg, &self.data, self.policy.as_ref())?;
+         check_progressive_policy(&header, self.policy.as_ref())?;
+-        self.limits.check_dimensions(header.dimensions.width, header.dimensions.height)
++        self.limits
++            .check_dimensions(header.dimensions.width, header.dimensions.height)
+             .map_err(Error::from)?;
+-        let info = cfg.read_full_info_preserving(&self.data,
+-            &metadata_preserve(self.policy.as_ref()), stop)?;
++        let (info, _) = cfg.read_full_details_from_info_preserving(
++            &self.data,
++            &metadata_preserve(self.policy.as_ref()),
++            stop,
++            false,
++            header,
++        )?;
+         if info.precision != 8 || !matches!(info.num_components, 1 | 3) || info.is_xyb {
+             return Ok(None);
+         }
+-        Ok(Some(decode_descriptor(&self.preferred, &info, None)))
++        let descriptor = decode_descriptor(&self.preferred, &info, None);
++        self.prepared = Some((info, descriptor));
++        Ok(Some(descriptor))
+     }
+ 
+     fn decode(self) -> Result<DecodeOutput, Self::Error> {
+@@ -1376,7 +1399,10 @@
+             // Single header parse for all pre-decode checks: dimension limits,
+             // progressive policy, CMYK detection, and output format hinting.
+             // Previously three separate read_info() calls.
+-            let header = read_job_info(&cfg, &data, self.policy.as_ref())?;
++            let header = match self.prepared {
++                Some((info, _)) => info,
++                None => read_job_info(&cfg, &data, self.policy.as_ref())?,
++            };
+ 
+             // Choose precision from the first supported preference, just like
+             // layout selection. A later float alternative must not override U8.
+@@ -1421,6 +1447,12 @@
+                 Some(s) => s,
+                 None => &enough::Unstoppable,
+             };
++            // Output metadata/extras come from the actual native decode below.
++            // Once selection is fixed, release scanned carrier buffers before
++            // allocating native pixels or coefficients, including cached ones.
++            let (source_precision, source_components, source_is_xyb) =
++                (header.precision, header.num_components, header.is_xyb);
++            drop(header);
+             let mut result = cfg.decode(&data, stop)?;
+ 
+             let w = result.width();
+@@ -1433,8 +1465,8 @@
+             // SOURCE depth: an f32 output buffer still carries only
+             // `bit_depth` significant bits (#146).
+             let mut info = ImageInfo::new(w, h, ImageFormat::Jpeg)
+-                .with_bit_depth(header.precision)
+-                .with_channel_count(header.num_components);
++                .with_bit_depth(source_precision)
++                .with_channel_count(source_components);
+             if let Some(extras) = result.extras() {
+                 info = populate_info_from_jpeg_extras(info, extras, self.orientation);
+             }
+@@ -1444,7 +1476,7 @@
+             // Derive correct pixel format descriptor from source color metadata.
+             // XYB inversion already returns sRGB; preserve the source profile
+             // in ImageInfo but describe the pixels after that codec transform.
+-            let corrected_cicp = (header.is_xyb || self.config.inner.correct_color.is_some())
++            let corrected_cicp = (source_is_xyb || self.config.inner.correct_color.is_some())
+                 .then_some(zenpixels::ColorProfileSource::Cicp(zenpixels::Cicp::SRGB));
+ 
+             // Build PixelBuffer with zero-copy where possible
+@@ -1467,7 +1499,7 @@
+                     }
+                     _ => {
+                         let pixel_count = (w as usize) * (h as usize);
+-                        let selected = select_decode_descriptor(preferred, header.num_components);
++                        let selected = select_decode_descriptor(preferred, source_components);
+                         if selected == PixelDescriptor::RGBAF32_LINEAR
+                             && pixels_f32.len() == pixel_count * 3
+                         {
+@@ -1545,7 +1577,7 @@
+                     .map_err(|_| Error::internal("pixel buffer creation failed"))?
+             } else {
+                 let pixels_u8 = result.into_pixels_u8().unwrap_or_default();
+-                let selected = select_decode_descriptor(preferred, header.num_components);
++                let selected = select_decode_descriptor(preferred, source_components);
+                 let filler = selected.alpha() == Some(zenpixels::AlphaMode::Undefined);
+                 let pf = match format {
+                     PixelFormat::Gray => zenpixels::PixelFormat::Gray8,
+--- a/src/decode/mod.rs
++++ b/src/decode/mod.rs
+@@ -825,10 +825,25 @@
+         stop: &dyn enough::Stop,
+         retain_all: bool,
+     ) -> Result<(JpegInfo, DecodedExtras)> {
++        stop.check()?;
++        let info = self.read_info_preserving(data, preserve)?;
++        self.read_full_details_from_info_preserving(data, preserve, stop, retain_all, info)
++    }
++
++    // The caller owns this header from the same immutable input and preserve
++    // configuration. Keep the complete scan and its late-carrier checks.
++    #[cfg(feature = "zencodec")]
++    pub(crate) fn read_full_details_from_info_preserving(
++        &self,
++        data: &[u8],
++        preserve: &PreserveConfig,
++        stop: &dyn enough::Stop,
++        retain_all: bool,
++        mut info: JpegInfo,
++    ) -> Result<(JpegInfo, DecodedExtras)> {
+         use crate::container::{MarkerIter, MarkerKind};
+         use extras::{detect_segment_type, should_preserve_segment};
+         stop.check()?;
+-        let mut info = self.read_info_preserving(data, preserve)?;
+         let mut extras = DecodedExtras::new();
+         let mut retained = 0u64;
+         let mut primary_eoi = None;

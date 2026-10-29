@@ -1,0 +1,75 @@
+--- a/perf/jpeg-policy-validation/src/decode_admission.rs
++++ b/perf/jpeg-policy-validation/src/decode_admission.rs
+@@ -418,6 +418,22 @@
+                     .decode()
+                     .unwrap();
+                 assert_eq!(decoded.metadata(), direct.metadata());
++                let actual_extras = decoded.extras::<zenjpeg::decoder::DecodedExtras>().unwrap();
++                let expected_extras = direct.extras::<zenjpeg::decoder::DecodedExtras>().unwrap();
++                assert_eq!(
++                    actual_extras.segments().len(),
++                    expected_extras.segments().len()
++                );
++                for (actual, expected) in actual_extras
++                    .segments()
++                    .iter()
++                    .zip(expected_extras.segments())
++                {
++                    assert_eq!(
++                        (actual.marker, actual.segment_type, &actual.data),
++                        (expected.marker, expected.segment_type, &expected.data)
++                    );
++                }
+                 for row in 0..decoded.height() {
+                     assert_eq!(decoded.pixels().row(row), direct.pixels().row(row));
+                 }
+@@ -433,3 +449,49 @@
+         }
+     }
+ }
++
++#[cfg(feature = "retained-output")]
++#[test]
++fn retained_preparation_cache_preserves_later_cancellation() {
++    use std::sync::{
++        Arc,
++        atomic::{AtomicBool, Ordering},
++    };
++    use zencodec::enough::{Stop, StopReason};
++    use zencodec::{CodecErrorExt, Pulse};
++    struct Trip(Arc<AtomicBool>, StopReason);
++    impl Stop for Trip {
++        fn check(&self) -> Result<(), StopReason> {
++            if self.0.load(Ordering::SeqCst) {
++                Err(self.1)
++            } else {
++                Ok(())
++            }
++        }
++    }
++    for reason in [StopReason::Cancelled, StopReason::TimedOut] {
++        for progressive in [false, true] {
++            for prepare_again in [false, true] {
++                let trip = Arc::new(AtomicBool::new(false));
++                let pulse = zencodec::how_far::StopOnly::new(Trip(trip.clone(), reason));
++                let bytes = fixtures::fixture(progressive, fixtures::Placement::SplitIcc);
++                let mut decoder = JpegDecoderConfig::new()
++                    .job()
++                    .with_pulse(pulse.share().unwrap())
++                    .decoder(Cow::Borrowed(&bytes), &[PixelDescriptor::RGB8_SRGB])
++                    .unwrap();
++                assert!(decoder.prepare_output().unwrap().is_some());
++                trip.store(true, Ordering::SeqCst);
++                let error = if prepare_again {
++                    decoder.prepare_output().unwrap_err()
++                } else {
++                    decoder.decode().unwrap_err()
++                };
++                assert_eq!(
++                    error.error_category(),
++                    Some(zencodec::ErrorCategory::Stopped(reason))
++                );
++            }
++        }
++    }
++}
