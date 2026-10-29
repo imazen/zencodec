@@ -392,12 +392,7 @@ fn exact(source: &ImageOutput, output: &ImageOutput, color: bool) {
 pub(crate) fn qualify_auxiliaries(source: &ImageOutput, region: Rect) {
     let renderer = renderer(source, Some(region));
     let output = renderer
-        .render(
-            source.clone(),
-            &mut PolicySet::new(),
-
-            &NoPulse,
-        )
+        .render(source.clone(), &mut PolicySet::new(), Some(&NoPulse))
         .unwrap();
     exact(source, output.output(), false);
     drop(output);
@@ -424,8 +419,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
             &mut |_: Question<'_>| -> Result<Decision, At<ApplicationFailure>> {
                 Err(At::wrap(ApplicationFailure))
             },
-
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(failure.error().stage, Stage::Publication);
@@ -438,12 +432,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
     // descriptor with the ICC-resolved descriptor needs a second owner in
     // this candidate; that cost cannot be hidden by exceeding the pool.
     let failure = renderer
-        .render(
-            source,
-            &mut PolicySet::new(),
-
-            &NoPulse,
-        )
+        .render(source, &mut PolicySet::new(), Some(&NoPulse))
         .unwrap_err();
     assert_eq!(failure.error().stage, Stage::Color);
     assert!(zencodec::find_cause::<StorageError>(&failure).is_some());
@@ -484,8 +473,7 @@ fn canvas_render_native_tiff_all_orientations_depths_and_containers() {
                                 exact(&source, image, true);
                                 Ok(Decision::UsePreset)
                             },
-
-                            &NoPulse,
+                            Some(&NoPulse),
                         )
                         .unwrap();
                     assert_eq!(calls, 1);
@@ -518,12 +506,7 @@ fn canvas_render_native_jxl_color_auxiliaries_and_named_profile() {
         );
         renderer.request.target = Target::Named(Cicp::DISPLAY_P3);
         let output = renderer
-            .render(
-                source.clone(),
-                &mut PolicySet::new(),
-
-                &NoPulse,
-            )
+            .render(source.clone(), &mut PolicySet::new(), Some(&NoPulse))
             .unwrap();
         exact(&source, output.output(), false);
         output
@@ -548,8 +531,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             .render(
                 source.clone(),
                 &mut PolicySet::new(),
-
-                &zencodec::how_far::StopOnly::borrowed(&counted),
+                Some(&zencodec::how_far::StopOnly::borrowed(&counted)),
             )
             .unwrap(),
     );
@@ -565,8 +547,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                 .render(
                     source.clone(),
                     &mut PolicySet::new(),
-
-                    &zencodec::how_far::StopOnly::borrowed(&stop),
+                    Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
                 )
                 .unwrap_err();
             let codec = zencodec::find_cause::<CodecError>(&failure);
@@ -584,8 +565,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 Ok(Decision::decline(Decline::ApplicationRule))
             },
-
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(refused.error().stage, Stage::Publication);
@@ -597,8 +577,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 panic!("injected publication panic")
             },
-
-            &NoPulse,
+            Some(&NoPulse),
         )
     }));
     assert!(unwind.is_err());
@@ -606,15 +585,10 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
     let mut tiny = renderer;
     tiny.storage = StorageBudget::new(1, 1);
     assert_eq!(
-        tiny.render(
-            source,
-            &mut PolicySet::new(),
-
-            &NoPulse
-        )
-        .unwrap_err()
-        .error()
-        .stage,
+        tiny.render(source, &mut PolicySet::new(), Some(&NoPulse))
+            .unwrap_err()
+            .error()
+            .stage,
         Stage::Geometry
     );
     assert_eq!(tiny.storage.reserved_bytes(), 0);
@@ -631,7 +605,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
         Ok(Decision::UsePreset)
     };
     let error = renderer
-        .render(source, &mut policy, &NoPulse)
+        .render(source, &mut policy, Some(&NoPulse))
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::ColorPlan);
     assert_eq!(renderer.storage.reserved_bytes(), 0);
@@ -641,7 +615,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
     );
     renderer.request.required = p3_descriptor(&raw);
     let error = renderer
-        .render(raw, &mut policy, &NoPulse)
+        .render(raw, &mut policy, Some(&NoPulse))
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::Geometry);
     assert!(zencodec::find_cause::<crate::canvas_projection::Refusal>(&error).is_some());
@@ -656,12 +630,7 @@ fn canvas_render_public_default_delivers_oriented_srgb_rgba_and_retains_alpha() 
         let source = native_tiff(exif, exif % 2 == 0, 8);
         let before = source.clone();
         let output = renderer
-            .render(
-                source,
-                &mut PolicySet::new(),
-
-                &NoPulse,
-            )
+            .render(source, &mut PolicySet::new(), Some(&NoPulse))
             .unwrap();
         let dimensions = if exif <= 4 { (7, 5) } else { (5, 7) };
         assert_eq!(

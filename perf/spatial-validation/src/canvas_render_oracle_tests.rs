@@ -97,12 +97,7 @@ fn canvas_render_independent_cms_after_native_jxl_and_tiff_reconstruction() {
         assert_eq!(expected.len(), original.len());
         let exif = source.interpretation().orientation.unwrap().to_exif();
         let output = renderer
-            .render(
-                source.clone(),
-                &mut PolicySet::new(),
-
-                &NoPulse,
-            )
+            .render(source.clone(), &mut PolicySet::new(), Some(&NoPulse))
             .unwrap();
         exact(&source, output.output(), false);
         let mut max_abs = 0.0f64;
