@@ -1599,3 +1599,8 @@ release-workspace-check:
     cargo test --workspace --all-targets --locked
     cargo test --workspace --doc --locked
     cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# Collector completeness and terminal-state controls, plus all I/O adapters.
+collector-coverage-check:
+    cargo test --locked -p zencodec-io --all-features
+    cargo clippy --locked -p zencodec-io --all-targets --all-features -- -D warnings

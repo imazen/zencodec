@@ -31,6 +31,9 @@
 
 ### Fixed
 
+- Collected decode completion now requires every row to have been supplied;
+  duplicates cannot hide missing rows, and writes after finish refuse.
+
 - Shared media, coroutine, metadata and testkit pixel requirements now match
   the core minimum, preventing registry 0.2.16 from crossing the paired pixel
   boundary in downstream graphs with older development dependencies.

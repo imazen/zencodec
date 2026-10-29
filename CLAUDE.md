@@ -729,3 +729,12 @@ The default workspace all-target gate exposed std-only output/staged imports in
 media/std via its dev dependency, so default tests execute those controls without
 changing production defaults. No assertions or target coverage were removed.
 See `benchmarks/release_workspace_2026-10-29.md`.
+
+## Collector completion integrity (2026-10-29)
+
+CollectSink formerly accepted missing rows at finish and returned writable rows
+after finish. Fallible coverage storage now distinguishes unique supplied rows
+from rows_written (which intentionally counts duplicates). Out-of-order and
+overlapping strips remain valid; missing coverage and terminal writes refuse.
+Three independent failing-first controls and the full I/O feature suite pass.
+See `benchmarks/collector_coverage_2026-10-29.md`.

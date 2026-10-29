@@ -158,3 +158,16 @@ are unchanged. The owner uses the existing zenpixels API: zero zenpixels API
 changes. Alignment slack is less than one sample alignment; native coefficients,
 metadata, full encoded input and sink budgeting retain their existing scope.
 No throughput or process-memory reduction is inferred from pointer identity.
+
+## Complete collected rows
+
+`CollectSink::finish` refuses before `begin` and until every row has been
+supplied at least once. Repeated rows cannot hide a missing row. Overlapping and
+out-of-order strips remain supported; the sink rejects further row buffers after
+successful finish. `into_buffer` still requires successful driver completion,
+not merely a successful sink finish.
+
+Coverage adds a fallibly allocated bitmap with logical payload
+`8 * ceil(height / 64)` bytes and one coverage-bit update per supplied row.
+This is implementation storage accounting, not a measured whole-operation bound.
+The sink cannot prove that a codec wrote every byte of a supplied buffer.

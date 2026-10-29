@@ -9,7 +9,11 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 /// A sink that collects every final row into one tightly packed image.
 ///
 /// `begin` sizes the buffer; `provide_next_buffer` hands out the rows in
-/// place, so the decoder writes straight into the final image.
+/// place, so the decoder writes straight into the final image. Final-row
+/// coverage is tracked separately: repeated or overlapping strips cannot hide
+/// missing rows at finish. The coverage bitmap uses eight bytes per 64 rows
+/// (rounded up), independent of image width. Supplying a buffer does not prove
+/// that the codec actually wrote every byte; native correctness remains required.
 #[derive(Default)]
 pub struct CollectSink {
     data: Option<PixelBuffer>,
@@ -17,6 +21,8 @@ pub struct CollectSink {
     height: u32,
     descriptor: Option<PixelDescriptor>,
     rows_written: u64,
+    covered_rows: Vec<u64>,
+    unique_rows: u32,
     finished: bool,
 }
 
@@ -126,6 +132,12 @@ impl DecodeRowSink for CollectSink {
         data.try_reserve_exact(capacity)?;
         data.resize(capacity, 0);
         let buffer = PixelBuffer::from_vec(data, width, height, descriptor)?;
+        let words = usize::try_from(u64::from(height).div_ceil(64))
+            .map_err(|_| SinkError::from("CollectSink: coverage too large"))?;
+        let mut coverage = Vec::new();
+        coverage.try_reserve_exact(words)?;
+        coverage.resize(words, 0);
+        self.covered_rows = coverage;
         self.data = Some(buffer);
         self.width = width;
         self.height = height;
@@ -140,6 +152,9 @@ impl DecodeRowSink for CollectSink {
         width: u32,
         descriptor: PixelDescriptor,
     ) -> Result<PixelSliceMut<'_>, SinkError> {
+        if self.finished {
+            return Err("CollectSink: rows after finish".into());
+        }
         let Some(desc) = self.descriptor else {
             return Err("CollectSink: rows before begin".into());
         };
@@ -159,6 +174,14 @@ impl DecodeRowSink for CollectSink {
                     self.height
                 ))
             })?;
+        for row in y..y + height {
+            let word = &mut self.covered_rows[(row / 64) as usize];
+            let bit = 1u64 << (row % 64);
+            if *word & bit == 0 {
+                self.unique_rows += 1;
+                *word |= bit;
+            }
+        }
         self.rows_written += height as u64;
         Ok(self
             .data
@@ -168,6 +191,12 @@ impl DecodeRowSink for CollectSink {
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
+        if self.descriptor.is_none() {
+            return Err("CollectSink: finish before begin".into());
+        }
+        if self.unique_rows != self.height {
+            return Err("CollectSink: finish before every row was supplied".into());
+        }
         self.finished = true;
         Ok(())
     }
@@ -176,6 +205,51 @@ impl DecodeRowSink for CollectSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finish_without_begin_is_not_completion() {
+        let mut sink = CollectSink::new();
+        assert!(sink.finish().is_err());
+        assert!(!sink.finished());
+        assert!(sink.into_buffer().is_none());
+    }
+
+    #[test]
+    fn completed_pixels_cannot_be_reopened_for_writing() {
+        let mut sink = CollectSink::new();
+        sink.begin(1, 1, PixelDescriptor::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+            .unwrap();
+        sink.finish().unwrap();
+        assert!(
+            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn completion_requires_unique_coverage_and_closes_writes() {
+        let mut sink = CollectSink::new();
+        sink.begin(1, 65, PixelDescriptor::GRAY8_SRGB).unwrap();
+        for _ in 0..65 {
+            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+                .unwrap();
+        }
+        assert_eq!(sink.rows_written(), 65);
+        assert!(sink.finish().is_err());
+        assert!(!sink.finished());
+        // Out-of-order and overlapping delivery remain valid.
+        sink.provide_next_buffer(32, 33, 1, PixelDescriptor::GRAY8_SRGB)
+            .unwrap();
+        sink.provide_next_buffer(1, 32, 1, PixelDescriptor::GRAY8_SRGB)
+            .unwrap();
+        sink.finish().unwrap();
+        assert!(
+            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+                .is_err()
+        );
+        assert!(sink.into_buffer().is_some());
+    }
 
     #[test]
     fn finished_storage_moves_without_copy_for_integer_and_float_rows() {
