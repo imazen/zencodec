@@ -38,7 +38,7 @@ fn gate(cap: usize) -> Gate {
 fn final_color(gate: &mut Gate, engine: &mut Engine) -> Receipt {
     gate.discover(Knowledge::Final(Interpretation::Srgb))
         .unwrap();
-    gate.resolve(engine, &mut first, &NoPulse).unwrap()
+    gate.resolve(engine, &mut first, Some(&NoPulse)).unwrap()
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn real_incremental_step_has_started_the_encoder_before_metadata_observation() {
         .step(
             Input::new(0, encoded.data()).with_total_len(encoded.data().len() as u64),
             &mut sink,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     assert_eq!(progress.event, Event::Metadata(MetadataUpdate::HeaderReady));
@@ -106,7 +106,7 @@ fn a_late_fact_resumes_native_encoding_and_preserves_strided_pixels_exactly() {
         first(q)
     };
     let wait = gate
-        .resolve(&mut engine, &mut resolver, &NoPulse)
+        .resolve(&mut engine, &mut resolver, Some(&NoPulse))
         .unwrap();
     assert_eq!(wait.action(), BoundaryAction::Wait);
     assert_eq!(
@@ -114,7 +114,7 @@ fn a_late_fact_resumes_native_encoding_and_preserves_strided_pixels_exactly() {
         &GateCode::Suspended
     );
     for row in 0..2 {
-        gate.stage(&wait, pixels.row(row), &NoPulse).unwrap();
+        gate.stage(&wait, pixels.row(row), Some(&NoPulse)).unwrap();
     }
     assert_eq!(gate.bytes_held(), 24);
     assert!(
@@ -126,7 +126,7 @@ fn a_late_fact_resumes_native_encoding_and_preserves_strided_pixels_exactly() {
         &GateCode::Stale
     );
     let ready = gate
-        .resolve(&mut engine, &mut resolver, &NoPulse)
+        .resolve(&mut engine, &mut resolver, Some(&NoPulse))
         .unwrap();
     assert_eq!(calls, 2);
     assert_eq!(ready.action(), BoundaryAction::Adopt);
@@ -167,10 +167,12 @@ fn a_late_fact_resumes_native_encoding_and_preserves_strided_pixels_exactly() {
 fn wait_means_bounded_storage_or_refusal_not_unbounded_raw_retention() {
     let mut gate = gate(12);
     let mut engine = engine();
-    let wait = gate.resolve(&mut engine, &mut first, &NoPulse).unwrap();
-    gate.stage(&wait, &[1; 8], &NoPulse).unwrap();
+    let wait = gate
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
+        .unwrap();
+    gate.stage(&wait, &[1; 8], Some(&NoPulse)).unwrap();
     assert_eq!(gate.bytes_held(), 8);
-    let err = gate.stage(&wait, &[2; 8], &NoPulse).unwrap_err();
+    let err = gate.stage(&wait, &[2; 8], Some(&NoPulse)).unwrap_err();
     assert_eq!(err.error(), &GateCode::Capacity(admission::Refusal::Bytes));
     assert_eq!(gate.bytes_held(), 0);
     assert_eq!(gate.storage().occupancy().peak_bytes, 8);
@@ -191,7 +193,7 @@ fn pending_provisional_and_unavailable_are_not_false_or_srgb_defaults() {
     ] {
         let mut gate = gate(8);
         gate.discover(fact).unwrap();
-        let result = gate.resolve(&mut engine(), &mut first, &NoPulse);
+        let result = gate.resolve(&mut engine(), &mut first, Some(&NoPulse));
         if fact == Knowledge::Unavailable {
             assert_eq!(
                 zencodec::find_cause::<Failure<Infallible>>(&result.err().unwrap())
@@ -215,12 +217,17 @@ fn pending_provisional_and_unavailable_are_not_false_or_srgb_defaults() {
 fn duplicate_facts_rows_and_stalls_do_not_trigger_more_policy_calls() {
     let mut gate = gate(64);
     let mut engine = engine();
-    let wait = gate.resolve(&mut engine, &mut first, &NoPulse).unwrap();
+    let wait = gate
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
+        .unwrap();
     for _ in 0..8 {
         assert!(!gate.discover(Knowledge::Pending).unwrap());
-        gate.stage(&wait, &[1, 2, 3, 4], &NoPulse).unwrap();
+        gate.stage(&wait, &[1, 2, 3, 4], Some(&NoPulse)).unwrap();
     }
-    assert!(gate.resolve(&mut engine, &mut first, &NoPulse).is_err());
+    assert!(
+        gate.resolve(&mut engine, &mut first, Some(&NoPulse))
+            .is_err()
+    );
     assert_eq!(engine.records().count(), 1);
     let ready = final_color(&mut gate, &mut engine);
     for _ in 0..8 {
@@ -249,7 +256,7 @@ fn all_four_commitments_independently_prevent_reinterpreting_existing_work() {
             let mut gate = gate(8).with_prior_effects(Interpretation::Srgb, commitments);
             gate.discover(Knowledge::Final(value)).unwrap();
             let mut engine = engine();
-            let result = gate.resolve(&mut engine, &mut first, &NoPulse);
+            let result = gate.resolve(&mut engine, &mut first, Some(&NoPulse));
             assert_eq!(
                 result.is_ok(),
                 mask == 0 || value == Interpretation::Srgb,
@@ -311,7 +318,7 @@ fn receipts_cannot_cross_source_operation_fact_revision_or_media_epoch() {
         .discover(Knowledge::Final(Interpretation::Linear))
         .unwrap();
     let new = media
-        .resolve(&mut engine, &mut first, &NoPulse)
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
         .unwrap();
     media.before_effect(&new).unwrap();
     assert_eq!(media.context().epoch, 1);
@@ -331,15 +338,17 @@ impl Error for AccountError {}
 fn late_callback_error_preserves_its_cause_and_trace_and_releases_staging() {
     let mut gate = gate(8);
     let mut engine = engine();
-    let wait = gate.resolve(&mut engine, &mut first, &NoPulse).unwrap();
-    gate.stage(&wait, &[42; 8], &NoPulse).unwrap();
+    let wait = gate
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
+        .unwrap();
+    gate.stage(&wait, &[42; 8], Some(&NoPulse)).unwrap();
     gate.discover(Knowledge::Final(Interpretation::Srgb))
         .unwrap();
     let mut fail = |_: Question<'_>| -> Result<Decision, At<AccountError>> {
         Err(At::wrap(AccountError).at_named("late application rule"))
     };
     let error = gate
-        .resolve(&mut engine, &mut fail, &NoPulse)
+        .resolve(&mut engine, &mut fail, Some(&NoPulse))
         .unwrap_err();
     assert!(zencodec::find_cause::<AccountError>(&error).is_some());
     assert!(format!("{}", error.full_trace()).contains("late application rule"));
@@ -368,8 +377,10 @@ impl Stop for Cancel {
 fn cancellation_and_panic_never_implicitly_resume_the_suspended_stream() {
     let mut gate = gate(8);
     let mut engine = engine();
-    let wait = gate.resolve(&mut engine, &mut first, &NoPulse).unwrap();
-    gate.stage(&wait, &[1; 8], &NoPulse).unwrap();
+    let wait = gate
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
+        .unwrap();
+    gate.stage(&wait, &[1; 8], Some(&NoPulse)).unwrap();
     gate.discover(Knowledge::Final(Interpretation::Srgb))
         .unwrap();
     let stop = Cancel(AtomicBool::new(false));
@@ -381,7 +392,7 @@ fn cancellation_and_panic_never_implicitly_resume_the_suspended_stream() {
         gate.resolve(
             &mut engine,
             &mut cancel,
-            &zencodec::how_far::StopOnly::borrowed(&stop),
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
         )
         .is_err()
     );
@@ -389,8 +400,10 @@ fn cancellation_and_panic_never_implicitly_resume_the_suspended_stream() {
     assert_eq!(gate.commitments(), Commitments::default());
     let mut gate = Gate::new(7, 8, false).unwrap();
     let mut engine = Engine::new(PolicySet::default(), 4);
-    let wait = gate.resolve(&mut engine, &mut first, &NoPulse).unwrap();
-    gate.stage(&wait, &[1; 8], &NoPulse).unwrap();
+    let wait = gate
+        .resolve(&mut engine, &mut first, Some(&NoPulse))
+        .unwrap();
+    gate.stage(&wait, &[1; 8], Some(&NoPulse)).unwrap();
     let memory = gate.storage();
     gate.discover(Knowledge::Final(Interpretation::Srgb))
         .unwrap();
@@ -400,7 +413,7 @@ fn cancellation_and_panic_never_implicitly_resume_the_suspended_stream() {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| gate.resolve(
             &mut engine,
             &mut panic,
-            &NoPulse
+            Some(&NoPulse)
         )))
         .is_err()
     );
@@ -431,7 +444,7 @@ fn trailing_opaque_metadata_is_dropped_before_disclosure_without_replanning_colo
         Privacy::OrientationOnlyV1,
         TranscodeRoute::Media,
     )
-    .resolve(&mut engine, gate.context(), &mut first, &NoPulse)
+    .resolve(&mut engine, gate.context(), &mut first, Some(&NoPulse))
     .unwrap();
     assert_eq!(approved.action, BoundaryAction::Drop);
     gate.before_effect(&ready).unwrap();
@@ -445,7 +458,7 @@ fn trailing_opaque_metadata_is_dropped_before_disclosure_without_replanning_colo
         Privacy::OrientationOnlyV1,
         TranscodeRoute::Media,
     )
-    .resolve(&mut engine, gate.context(), &mut first, &NoPulse);
+    .resolve(&mut engine, gate.context(), &mut first, Some(&NoPulse));
     assert!(required.is_err());
     gate.abort();
     assert_eq!(

@@ -85,7 +85,7 @@ fn original_error_type_and_trace_survive_typed_and_erased_resolution() {
             requirements(),
             context(),
             &mut callback_error,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(typed.error().code(), Code::Callback);
@@ -107,7 +107,7 @@ fn original_error_type_and_trace_survive_typed_and_erased_resolution() {
             requirements(),
             context(),
             erased.as_mut(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(error.frame_count(), 3);
@@ -133,7 +133,7 @@ fn deliberate_decline_has_its_own_code_native_cause_and_callback_location() {
             requirements(),
             context(),
             &mut resolver,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(error.error().code(), Code::Declined);
@@ -198,7 +198,7 @@ fn one_closure_handles_metadata_execution_and_fidelity_with_preset_fallback() {
                 requirements(),
                 context(),
                 &mut resolver,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap()
             .index,
@@ -216,7 +216,7 @@ fn one_closure_handles_metadata_execution_and_fidelity_with_preset_fallback() {
                 requirements(),
                 context(),
                 &mut resolver,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap()
             .index,
@@ -238,7 +238,7 @@ fn one_closure_handles_metadata_execution_and_fidelity_with_preset_fallback() {
                 requirements(),
                 context(),
                 &mut resolver,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap()
             .index,
@@ -268,7 +268,7 @@ fn a_configured_policy_works_directly_or_as_the_single_fallback() {
                 requirements(),
                 context(),
                 &mut { configured },
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         let mut calls = 0;
@@ -284,7 +284,7 @@ fn a_configured_policy_works_directly_or_as_the_single_fallback() {
                 requirements(),
                 context(),
                 &mut defer,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         assert_eq!(calls, 1);
@@ -307,7 +307,7 @@ fn empty_or_unsupported_choices_refuse_before_calling_application_code() {
             requirements(),
             context(),
             &mut resolver,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(missing.error().code(), Code::NoAlternative);
@@ -322,7 +322,7 @@ fn empty_or_unsupported_choices_refuse_before_calling_application_code() {
         has_rights: Some(true),
     });
     let unsupported = engine()
-        .resolve(q, &[offer], r, context(), &mut resolver, &NoPulse)
+        .resolve(q, &[offer], r, context(), &mut resolver, Some(&NoPulse))
         .unwrap_err();
     assert_eq!(unsupported.error().code(), Code::NoAlternative);
     assert!(!called);
@@ -345,7 +345,7 @@ fn stale_choices_fail_across_calls_engine_instances_sources_and_epochs() {
             requirements(),
             context(),
             &mut capture,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     let mut stale = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
@@ -374,7 +374,7 @@ fn stale_choices_fail_across_calls_engine_instances_sources_and_epochs() {
                     requirements(),
                     changed,
                     &mut stale,
-                    &NoPulse,
+                    Some(&NoPulse),
                 )
                 .unwrap_err();
             assert_eq!(error.error().code(), Code::InvalidChoice);
@@ -397,7 +397,7 @@ fn unknown_questions_delegate_once_then_refuse() {
             requirements(),
             context(),
             &mut resolver,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(calls, 1);
@@ -433,7 +433,7 @@ fn accounting_scope_applies_to_disk_caps_without_a_ram_cap() {
                         req,
                         context(),
                         &mut resolver,
-                        &NoPulse,
+                        Some(&NoPulse),
                     );
                     let refuse = (ram.is_some() || disk.is_some())
                         && required == Accounting::Operation
@@ -474,7 +474,7 @@ fn a_hard_cap_accepts_upper_or_enforced_bounds_but_not_estimates_or_wrong_scope(
             requirements(),
             context(),
             &mut first,
-            &NoPulse,
+            Some(&NoPulse),
         );
         assert_eq!(
             result.is_ok(),
@@ -490,7 +490,7 @@ fn a_hard_cap_accepts_upper_or_enforced_bounds_but_not_estimates_or_wrong_scope(
             requirements(),
             context(),
             &mut first,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(error.error().code(), Code::NoAlternative);
@@ -507,7 +507,7 @@ fn a_hard_cap_accepts_upper_or_enforced_bounds_but_not_estimates_or_wrong_scope(
             requirements(),
             context(),
             &mut first,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     assert_eq!(error.error().code(), Code::InvalidOffer);
@@ -531,7 +531,7 @@ fn malformed_choices_are_not_hidden_by_an_earlier_valid_choice() {
                 requirements(),
                 context(),
                 &mut first,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap_err();
         assert_eq!(error.error().code(), Code::InvalidOffer);
@@ -548,7 +548,7 @@ fn malformed_choices_are_not_hidden_by_an_earlier_valid_choice() {
                 requirements(),
                 context(),
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap_err()
             .error()
@@ -565,7 +565,7 @@ fn malformed_choices_are_not_hidden_by_an_earlier_valid_choice() {
                 invalid,
                 context(),
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap_err()
             .error()
@@ -589,7 +589,7 @@ fn rewind_and_prefix_changes_are_removed_when_input_or_output_cannot_be_replayed
             requirements(),
             context(),
             &mut first,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     assert_eq!(initial.index, 0);
@@ -605,7 +605,7 @@ fn rewind_and_prefix_changes_are_removed_when_input_or_output_cannot_be_replayed
                 requirements(),
                 forward,
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap()
             .index,
@@ -623,7 +623,7 @@ fn rewind_and_prefix_changes_are_removed_when_input_or_output_cannot_be_replayed
                 requirements(),
                 published,
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap()
             .index,
@@ -661,7 +661,7 @@ fn cancellation_before_and_after_callback_prevents_selection() {
                 requirements(),
                 context(),
                 &mut resolver,
-                &stop,
+                Some(&stop),
             )
             .unwrap_err();
         assert_eq!(calls, usize::from(!initially_stopped));
@@ -686,7 +686,7 @@ fn panic_is_not_relabelled_as_a_policy_refusal_and_the_engine_cannot_be_reused()
             requirements(),
             context(),
             &mut panic,
-            &NoPulse,
+            Some(&NoPulse),
         )
     }));
     assert!(unwind.is_err());
@@ -697,7 +697,7 @@ fn panic_is_not_relabelled_as_a_policy_refusal_and_the_engine_cannot_be_reused()
             requirements(),
             context(),
             &mut first,
-            &NoPulse
+            Some(&NoPulse)
         )
         .unwrap_err()
         .error()
@@ -718,7 +718,7 @@ fn planning_candidate_and_ticket_limits_refuse_without_wrapping() {
                 requirements(),
                 context(),
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .is_ok()
     );
@@ -731,7 +731,7 @@ fn planning_candidate_and_ticket_limits_refuse_without_wrapping() {
                 requirements(),
                 context(),
                 &mut first,
-                &NoPulse
+                Some(&NoPulse)
             )
             .unwrap_err()
             .error()
@@ -745,7 +745,7 @@ fn planning_candidate_and_ticket_limits_refuse_without_wrapping() {
         requirements(),
         context(),
         &mut first,
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(
@@ -755,7 +755,7 @@ fn planning_candidate_and_ticket_limits_refuse_without_wrapping() {
             requirements(),
             context(),
             &mut first,
-            &NoPulse
+            Some(&NoPulse)
         )
         .unwrap_err()
         .error()
@@ -779,7 +779,7 @@ fn diagnostic_ring_is_bounded_and_chronological() {
             requirements(),
             context(),
             &mut first,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     }
@@ -827,7 +827,7 @@ fn independent_thread_local_policies_do_not_share_mutable_state_or_tickets() {
                                 requirements(),
                                 context(),
                                 &mut callback,
-                                &NoPulse,
+                                Some(&NoPulse),
                             )
                             .unwrap();
                         assert_eq!(selected.index, 1);
@@ -867,7 +867,7 @@ fn callback_errors_without_frames_or_at_the_trace_limit_keep_their_cause() {
                 requirements(),
                 context(),
                 &mut callback,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap_err();
         assert_eq!(
@@ -901,7 +901,7 @@ fn callback_failure_remains_primary_when_cancellation_also_arrives() {
             requirements(),
             context(),
             &mut callback,
-            &stop,
+            Some(&stop),
         )
         .unwrap_err();
     assert_eq!(error.error().code(), Code::Callback);
@@ -955,7 +955,7 @@ fn all_64_choice_bits_obey_budget_effect_and_irreversibility_monotonicity() {
                             ..context()
                         },
                         &mut last,
-                        &NoPulse,
+                        Some(&NoPulse),
                     );
                     let mask = e.records().last().unwrap().admitted;
                     if mask == 0 {

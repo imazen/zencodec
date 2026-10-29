@@ -1,10 +1,10 @@
 //! Compare real container events across chunked async random and forward I/O.
 #![forbid(unsafe_code)]
-use zencodec::how_far::NoPulse;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use zencodec::decode::BoxedError;
+use zencodec::how_far::NoPulse;
 use zencodec_io::tokio_io::{AsyncCursor, AsyncReadSource, AsyncSource};
 use zencodec_io::{DriveOptions, SliceCursor};
 use zencodec_media::container::{DemuxEvent, DemuxStage, Demuxer};
@@ -78,7 +78,7 @@ async fn from_async<D: Demuxer, S: AsyncSource>(
     let mut events = Vec::new();
     loop {
         let y = cur
-            .next(src, &mut DemuxStage(&mut dem), &NoPulse)
+            .next(src, &mut DemuxStage(&mut dem), Some(&NoPulse))
             .await
             .map_err(|e| format!("{e:?}"))?;
         let done = y.is_finished();
@@ -94,7 +94,7 @@ async fn check<D: Demuxer>(name: &str, data: Arc<[u8]>, make: impl Fn() -> D) {
     let mut expected = Vec::new();
     loop {
         let y = cur
-            .next(&data, &mut DemuxStage(&mut d), &NoPulse)
+            .next(&data, &mut DemuxStage(&mut d), Some(&NoPulse))
             .unwrap();
         let done = y.is_finished();
         record(&d, y.into_inner(), &mut expected);
