@@ -27,6 +27,29 @@ on the optional-control graph at `6ab547aa`; its Undefined-slot native/shared
 controls preserve the existing slot bytes and row-padding invariance. See [the optional-control receipt](../benchmarks/optional_pulse_2026-10-29.json) and
 [the public-driver receipt](../benchmarks/replay_driver_2026-10-28.md).
 
+## Current main documentation and platform qualification
+
+On `eb4b9835217ed13b2b025de5a5a7d8b94600fb40`, the complete
+[CI workflow](https://github.com/imazen/zencodec/actions/runs/40869926926),
+[documentation workflow](https://github.com/imazen/zencodec/actions/runs/40869926872)
+and [fuzz workflow](https://github.com/imazen/zencodec/actions/runs/40869926834)
+passed. The CI jobs include Windows x64/ARM64, Linux x64/ARM64, macOS ARM64,
+i686, WASM, MSRV, metadata features, Clippy, format and semver checks.
+
+An isolated export of that same revision also regenerated the eight-crate
+Rustdoc reference and passed all 24 guide source tests and the complete browser
+suite: migration and checked-API examples, code-first roles/search/copy,
+independent context expansion, keyboard interaction and responsive layouts.
+The serialized `run-heavy --mem 3G --jobs 2` invocation of
+`timeout 180s bash run.sh` ran `just docs-reference` followed by
+`just docs-site-browser-check 3547`; it exited 0 in 50 seconds, with wrapper
+peak RSS 0.32 GiB and minimum available memory 13045 MiB. Those resource figures
+measure documentation validation, not codec execution.
+
+This verifies the current core documentation and platform gates. It does not
+qualify the separate application graph, resolve its orientation expectations,
+or establish the still-open native workspace and deferred-policy contracts.
+
 ## Core landing evidence
 
 1. **Passed on `6ab547aa`, receipts pushed as IMI `daa9c13d`:** native retained-job,
