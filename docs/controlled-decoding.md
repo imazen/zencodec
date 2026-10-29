@@ -258,3 +258,16 @@ Preparation confirms requested fidelity and encode policy and inherits registry
 controls. It does not prove output-carrier support, apply a privacy policy, or
 bound native allocations. Those remain obligations of the executing transcode
 adapter. Replacing checked configuration after preparation invalidates its offer.
+
+## Destination failures remain terminal
+
+After final interpretation is adopted, `Fused` still guards each sink effect.
+A failure from `begin`, final-row acquisition, provisional-row acquisition or
+`finish` remains an operation failure even if a faulty native decoder ignores
+it and returns `Done`. Subsequent sink effects in that native call are blocked,
+and subsequent decoder steps return `Finished` without calling the backend.
+
+The guard shares the original error on the failure path so both the backend and
+the operation retain its typed cause. Successful row buffers stay borrowed;
+this adds no success-path error allocation. It cannot interrupt computation
+inside a backend that ignores errors, nor roll back previously successful I/O.

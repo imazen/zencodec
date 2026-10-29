@@ -31,6 +31,9 @@
 
 ### Fixed
 
+- Controlled decoders cannot turn swallowed destination failures into success;
+  original typed causes survive and later sink effects are blocked.
+
 - Collected decode completion now requires every row to have been supplied;
   duplicates cannot hide missing rows, and writes after finish refuse.
 

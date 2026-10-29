@@ -4,7 +4,7 @@ use super::{
     ErasedError, Fused, IncrementalDecode, IncrementalDecoderShim, Input, Progress, StepError,
 };
 use crate::DecodeRowSink;
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
@@ -310,11 +310,37 @@ pub fn erase_controlled<D: ControlledIncrementalDecode + Send + 'static>(
     Box::new(IncrementalDecoderShim(Fused::controlled(decoder)))
 }
 
+// Share an error only on failure: the codec receives it while the guard retains
+// the same cause in case the codec ignores it. Successful buffers stay borrowed.
+#[derive(Clone, Debug)]
+struct RetainedSinkError(Arc<dyn core::error::Error + Send + Sync>);
+impl fmt::Display for RetainedSinkError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+impl core::error::Error for RetainedSinkError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
+fn retain_sink_failure<T>(
+    retained: &mut Option<Arc<dyn core::error::Error + Send + Sync>>,
+    result: Result<T, crate::sink::SinkError>,
+) -> Result<T, crate::sink::SinkError> {
+    result.map_err(|error| {
+        let cause: Arc<dyn core::error::Error + Send + Sync> = Arc::from(error);
+        *retained = Some(cause.clone());
+        Box::new(RetainedSinkError(cause)) as crate::sink::SinkError
+    })
+}
+
 /// No sink effects before adoption, even if a faulty codec ignores a refusal.
 pub(super) struct GuardedSink<'a> {
     inner: &'a mut dyn DecodeRowSink,
     facts: Option<InterpretationFacts>,
     pub(super) refused: Option<ControlError>,
+    sink_error: Option<Arc<dyn core::error::Error + Send + Sync>>,
 }
 impl<'a> GuardedSink<'a> {
     pub(super) fn new(
@@ -325,7 +351,13 @@ impl<'a> GuardedSink<'a> {
             inner,
             facts,
             refused: None,
+            sink_error: None,
         }
+    }
+    pub(super) fn take_sink_error(&mut self) -> Option<crate::sink::SinkError> {
+        self.sink_error
+            .take()
+            .map(|cause| Box::new(RetainedSinkError(cause)) as crate::sink::SinkError)
     }
     fn check(
         &mut self,
@@ -333,6 +365,9 @@ impl<'a> GuardedSink<'a> {
         extent: Option<(u32, u32)>,
         descriptor: Option<PixelDescriptor>,
     ) -> Result<(), crate::sink::SinkError> {
+        if let Some(cause) = &self.sink_error {
+            return Err(Box::new(RetainedSinkError(cause.clone())));
+        }
         let error = match self.facts {
             None => Some(ControlError::OutputBeforeInterpretation),
             Some(facts)
@@ -369,7 +404,10 @@ impl DecodeRowSink for GuardedSink<'_> {
             self.refused = Some(ControlError::InconsistentFacts);
             return Err(Box::new(ControlError::InconsistentFacts));
         }
-        self.inner.begin(width, height, descriptor)
+        retain_sink_failure(
+            &mut self.sink_error,
+            self.inner.begin(width, height, descriptor),
+        )
     }
     fn provide_next_buffer(
         &mut self,
@@ -379,7 +417,10 @@ impl DecodeRowSink for GuardedSink<'_> {
         descriptor: PixelDescriptor,
     ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
         self.check(Some(width), Some((y, height)), Some(descriptor))?;
-        self.inner.provide_next_buffer(y, height, width, descriptor)
+        retain_sink_failure(
+            &mut self.sink_error,
+            self.inner.provide_next_buffer(y, height, width, descriptor),
+        )
     }
     fn provide_pass_buffer(
         &mut self,
@@ -389,15 +430,21 @@ impl DecodeRowSink for GuardedSink<'_> {
         descriptor: PixelDescriptor,
     ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
         self.check(Some(width), Some((meta.y, height)), Some(descriptor))?;
-        self.inner
-            .provide_pass_buffer(meta, height, width, descriptor)
+        retain_sink_failure(
+            &mut self.sink_error,
+            self.inner
+                .provide_pass_buffer(meta, height, width, descriptor),
+        )
     }
     fn accepts_provisional(&self) -> bool {
-        self.facts.is_some() && self.refused.is_none() && self.inner.accepts_provisional()
+        self.facts.is_some()
+            && self.refused.is_none()
+            && self.sink_error.is_none()
+            && self.inner.accepts_provisional()
     }
     fn finish(&mut self) -> Result<(), crate::sink::SinkError> {
         self.check(None, None, None)?;
-        self.inner.finish()
+        retain_sink_failure(&mut self.sink_error, self.inner.finish())
     }
 }
 
@@ -413,6 +460,7 @@ mod tests {
         calls: Arc<AtomicUsize>,
         boundary: DecodeBoundary,
         early_output: u8,
+        late_output: u8,
     }
     impl IncrementalDecode for Hostile {
         type Error = core::fmt::Error;
@@ -444,8 +492,13 @@ mod tests {
             sink: &mut dyn DecodeRowSink,
             _: Option<&dyn crate::Pulse>,
         ) -> Result<ControlledProgress, StepError<Self::Error>> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            match self.early_output {
+            let calls = self.calls.fetch_add(1, Ordering::SeqCst);
+            let late = calls >= 2 && self.late_output != 0;
+            match if late {
+                self.late_output
+            } else {
+                self.early_output
+            } {
                 1 => {
                     let _ = sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB);
                 }
@@ -464,6 +517,14 @@ mod tests {
                     let _ = sink.finish();
                 }
                 _ => {}
+            }
+            if late {
+                let _ = sink.finish(); // A swallowed failure must block later effects too.
+                return Ok(Progress::new(
+                    0,
+                    Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::RGBA8_SRGB)),
+                )
+                .into());
             }
             Ok(ControlledProgress::Suspended {
                 consumed: 0,
@@ -522,6 +583,7 @@ mod tests {
                 calls,
                 boundary,
                 early_output: 0,
+                late_output: 0,
             }),
             boundary,
         )
@@ -589,6 +651,80 @@ mod tests {
                 Err(StepError::Control(ControlError::OutputBeforeInterpretation))
             ));
             assert_eq!(calls.load(Ordering::SeqCst), 1);
+        }
+    }
+    #[derive(Debug, PartialEq)]
+    struct DestinationFailure(u8);
+    impl fmt::Display for DestinationFailure {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "destination failure {}", self.0)
+        }
+    }
+    impl core::error::Error for DestinationFailure {}
+    struct RefusingSink {
+        effects: usize,
+    }
+    impl RefusingSink {
+        fn fail<T>(&mut self, kind: u8) -> Result<T, SinkError> {
+            self.effects += 1;
+            Err(Box::new(DestinationFailure(kind)))
+        }
+    }
+    impl DecodeRowSink for RefusingSink {
+        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+            self.fail(1)
+        }
+        fn provide_next_buffer(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            self.fail(2)
+        }
+        fn provide_pass_buffer(
+            &mut self,
+            _: super::super::BatchMeta,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            self.fail(3)
+        }
+        fn finish(&mut self) -> Result<(), SinkError> {
+            self.fail(4)
+        }
+    }
+    #[test]
+    fn adopted_decoder_cannot_swallow_destination_failures() {
+        for effect in 1..=4 {
+            let (calls, dec, boundary) = fixture();
+            let mut inner = dec.into_inner();
+            inner.late_output = effect;
+            let mut decoder = Fused::new(inner);
+            let mut sink = RefusingSink { effects: 0 };
+            decoder
+                .step_controlled(Input::empty(), &mut sink, None)
+                .unwrap();
+            decoder
+                .resume(boundary.id(), BoundaryAction::AdoptInterpretation, None)
+                .unwrap();
+            let error = decoder
+                .step_controlled(Input::empty(), &mut sink, None)
+                .unwrap_err();
+            assert!(matches!(error, StepError::Sink(_)));
+            assert_eq!(
+                crate::find_cause::<DestinationFailure>(&error),
+                Some(&DestinationFailure(effect))
+            );
+            assert_eq!(sink.effects, 1, "later sink effects must be blocked");
+            assert!(matches!(
+                decoder.step_controlled(Input::empty(), &mut sink, None),
+                Err(StepError::Finished)
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 3);
+            assert_eq!(sink.effects, 1);
         }
     }
 }

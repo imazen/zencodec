@@ -738,3 +738,13 @@ from rows_written (which intentionally counts duplicates). Out-of-order and
 overlapping strips remain valid; missing coverage and terminal writes refuse.
 Three independent failing-first controls and the full I/O feature suite pass.
 See `benchmarks/collector_coverage_2026-10-29.md`.
+
+## Controlled destination failures (2026-10-29)
+
+Fused previously guarded interpretation refusals but could accept Done after a
+backend swallowed an underlying sink error. The guard now retains the typed
+sink cause, blocks further sink effects and keeps the decoder terminal. All four
+sink hooks have an adversarial control. Before/after root-package exports sharing
+a Cargo target can reuse stale executables: separate targets or force a package
+rebuild, and verify compilation paths before accepting evidence. See
+`benchmarks/controlled_sink_errors_2026-10-29.md`.

@@ -1604,3 +1604,10 @@ release-workspace-check:
 collector-coverage-check:
     cargo test --locked -p zencodec-io --all-features
     cargo clippy --locked -p zencodec-io --all-targets --all-features -- -D warnings
+
+# Retain typed sink errors even when an adopted native decoder ignores them.
+controlled-sink-errors-check:
+    cargo test --locked -p zencodec --lib adopted_decoder_cannot_swallow_destination_failures
+    cargo test --locked -p zencodec-io --all-features
+    cargo clippy --locked -p zencodec -p zencodec-io --all-features --all-targets -- -D warnings
+    just jpeg-decode-admission-check

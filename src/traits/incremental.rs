@@ -753,6 +753,9 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         if let Some(error) = guarded.refused {
             return Err(StepError::Control(error));
         }
+        if let Some(error) = guarded.take_sink_error() {
+            return Err(StepError::Sink(error));
+        }
         let progress = result?;
         if self.interpretation.is_none()
             && matches!(
