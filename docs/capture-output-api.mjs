@@ -12,7 +12,7 @@ const {code,line}=declarations(source,{scope:'impl OutputPlan {',methods:[
 ]});
 const policyPath='zenpixels/src/policy.rs';
 const policySource=execFileSync('git',['-C',checkout,'show',`${revision}:${policyPath}`],{encoding:'utf8'});
-const policy=declarations(policySource,{scope:'impl ConvertOptions {',methods:['retain_channels','with_clip_out_of_gamut','forbid_lossy']});
+const policy=declarations(policySource,{scope:'impl ConvertOptions {',methods:['retain_channels','with_clip_out_of_gamut']});
 const surface=`use alloc::sync::Arc;
 use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut};
 use zenpixels_convert::{ConvertError, ConvertOptions, OutputPlan, output::{OutputMetadata, OutputProfile}};

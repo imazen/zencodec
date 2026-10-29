@@ -169,7 +169,7 @@ color byte. Transfer/gamut changes, alpha reassociation, sample removal and
 depth reduction refuse before execution. This is an exactness requirement,
 not a claim that ordinary color conversion can be lossless.
 
-The misleading `ConvertOptions::forbid_lossy()` preset is now deprecated.
+The misleading `ConvertOptions::forbid_lossy()` preset was deprecated in 0.2 and removed in the paired pixel 0.3 release.
 `retain_channels()` preserves its channel/depth restrictions and enabled
 clipping without promising exactness. Native color-conversion examples add
 `with_clip_out_of_gamut(false)`; exact carriage uses `new_preserving_samples`.
