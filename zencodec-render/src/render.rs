@@ -215,6 +215,7 @@ impl<'a> Renderer<'a> {
         policy: &mut R,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
+        self.admit(policy, PolicySet::new(), pulse)?;
         let output = self.apply(image, pulse)?;
         resolve_image(output, policy, PolicySet::new(), pulse)
             .map_err(|e| fail(RenderStage::Publication, e))
@@ -230,9 +231,26 @@ impl<'a> Renderer<'a> {
         preset: PolicySet,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
+        self.admit(resolver, preset, pulse)?;
         let output = self.apply(image, pulse)?;
         resolve_image(output, resolver, preset, pulse)
             .map_err(|e| fail(RenderStage::Publication, e))
+    }
+
+    fn admit<R: OperationPolicy + ?Sized>(
+        &self,
+        policy: &R,
+        preset: PolicySet,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), At<RenderFailure>> {
+        check(pulse.unwrap_or(&zencodec::NoPulse)).map_err(|e| fail(RenderStage::ColorPlan, e))?;
+        // Managed output storage is not a bound on conversion/CMS preparation.
+        policy
+            .requirements()
+            .unwrap_or_default()
+            .check_workspace(None)
+            .and_then(|()| preset.check_workspace(None))
+            .map_err(|e| fail(RenderStage::ColorPlan, e))
     }
 
     fn apply(

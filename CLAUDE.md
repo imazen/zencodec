@@ -774,3 +774,13 @@ The Tokio bridge checked Pulse only after a non-ready channel attempt. A cancell
 strip sink could publish Begin into an available channel. The helper now checks
 before every attempt; the failing-first driver control asserts zero publication.
 Backoff caps requested sleep, not wall-clock cancellation latency.
+
+## Collection/render workspace admission (2026-10-29)
+
+CheckedCollection opening and subsequent native calls, plus direct rendering,
+previously reached effects before refusing unknown required workspace. Bound
+and legacy workspace checks now precede factory/discovery/decode/transform and
+color preparation. Request-local refusal preserves the collection owner;
+unconstrained rendering stays available. Three failing-first controls, existing
+renderer controls and core tests qualify the fix. See
+[validation](benchmarks/render_workspace_2026-10-29.md).

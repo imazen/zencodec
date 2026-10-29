@@ -1675,3 +1675,8 @@ io-source-errors-check:
 async-batch-cancellation-check:
     cargo test -p zencodec-io --features tokio --test drivers --test work_quota --locked
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
+
+# Fail-before-effects workspace admission, plus existing renderer and core controls.
+render-workspace-check: render-check
+    cargo test -p zencodec --lib --locked
+    cargo clippy -p zencodec --lib --locked -- -D warnings

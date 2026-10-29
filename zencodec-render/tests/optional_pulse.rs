@@ -141,3 +141,35 @@ fn none_preserves_storage_admission_and_blocks_publication_on_failure() {
     assert_eq!(storage.reserved_bytes(), 0);
     assert_eq!(storage.reserved_objects(), 0);
 }
+
+#[test]
+#[allow(deprecated)]
+fn required_workspace_refuses_before_projection_for_bound_and_legacy_policies() {
+    use zencodec::operation::{
+        BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
+    };
+    for entry in 0..3 {
+        // Zero output allowance makes premature projection observably fail with
+        // StorageError instead of the required workspace admission cause.
+        let storage = StorageBudget::new(0, 0);
+        let renderer = Renderer::new(storage.clone());
+        let strict = PolicySet::new().with_workspace_limit(u64::MAX);
+        let callback = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+            panic!("unknown workspace must refuse before callback")
+        };
+        let mut bound = BoundPolicy::new(strict, callback);
+        let error = match entry {
+            0 => renderer.render(image(), &mut bound, None),
+            1 => renderer.render_with_preset(image(), &mut bound, PolicySet::new(), None),
+            _ => renderer.render_with_preset(image(), &mut PolicySet::new(), strict, None),
+        }
+        .unwrap_err();
+        let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
+        assert_eq!(
+            unmet.iter().collect::<Vec<_>>(),
+            vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+        );
+        assert!(zencodec::find_cause::<StorageError>(&error).is_none());
+        assert_eq!(storage.reserved_bytes(), 0);
+    }
+}

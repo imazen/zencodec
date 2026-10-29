@@ -5,9 +5,9 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "29b3c3c098a7a4628d7fc0f138cce12b23176ac4b35ba3d0ae7b901f1eae8cd2",
+      "fingerprint": "5cf3de482bdad150833ca6fbe5e28b313c0a6281520a39c34327c15a87a0b15c",
       "surface_sha256": "97b17049208fbded0d33c48d46fe7535ca9fcaaa06063254e2a415c082deeaeb",
-      "details_sha256": "50a84ba6f9aefbfdd3f89ea525b30872cc558aeb613c357e4d68f7e89945f5c6"
+      "details_sha256": "3334660ac1ec62c1c8ae3cc56681eaa0f8cd41fe1143e72a2e1f4ed57fcf141b"
     },
     {
       "name": "zencodec-io",
@@ -61,9 +61,9 @@
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
-      "fingerprint": "6403b77819a38c107737af9e1ae072d29ae56fdf56e99406b0b409f9e07e252c",
+      "fingerprint": "8b78e7b86cafc414833ed82651ace8eb4ca29e843ee7f02fc4989ef67c8147b4",
       "surface_sha256": "7ea275e869edeb32f973a0b3b40b5c734e6ba4d1a21a1ac6ea02232978c8cc9a",
-      "details_sha256": "c30f8aff44d2b449ae013092d04908bf320d9a8396baaf4313820fb398bd8f64"
+      "details_sha256": "f3751e02cf7d4d18067d84c1596913cdac0a45f8b0bb66f353963b108e68b9d8"
     }
   ]
 }

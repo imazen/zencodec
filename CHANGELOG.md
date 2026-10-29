@@ -31,6 +31,11 @@
 
 ### Fixed
 
+- Checked collection and rendering workspace requirements now refuse unknown
+  bounds before factory, discovery, decoding or color preparation effects. Both
+  bound and legacy requirements retain named typed causes; unconstrained paths
+  remain available.
+
 - Seek-back container output checks cancellation after restoring its final
   position and before flush, preserving prior effects and original seek errors.
 

@@ -139,6 +139,8 @@ pub struct CheckedCollection<C, R> {
 impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
     /// Bind the same token to the native adapter and publication checks. The
     /// factory is adapter setup; ordinary selection methods need no callback args.
+    /// Required workspace limits refuse before the factory: this adapter has no
+    /// qualified bound for native preparation, decode and transform workspace.
     pub fn open(
         pulse: SharedPulse,
         resolver: R,
@@ -155,6 +157,11 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         let report = OperationReport::default();
         let run = || {
             check(&pulse, &report)?;
+            resolver
+                .requirements()
+                .unwrap_or_default()
+                .check_workspace(None)
+                .map_err(|e| failure(CollectionStage::Policy, &report, e))?;
             let collection =
                 open(pulse.clone()).map_err(|e| failure(CollectionStage::Open, &report, e));
             // Observe the final seam on failed opening too. Preserve the native
@@ -217,6 +224,23 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         if let Err(stopped) = check(&self.pulse, &self.report) {
             self.observed_stop = stopped.stop_reason();
             return Err(At::wrap(stopped));
+        }
+        // No qualified native/transform workspace bound is available here.
+        // Preserve the owner on this request-local refusal, but do not invoke
+        // discovery, decoding, or the transform before admission.
+        let admission = self
+            .resolver
+            .requirements()
+            .unwrap_or_default()
+            .check_workspace(None)
+            .and_then(|()| self.preset.check_workspace(None));
+        if let Err(cause) = admission {
+            self.collection = Some(collection);
+            return Err(At::wrap(failure(
+                CollectionStage::Policy,
+                &self.report,
+                cause,
+            )));
         }
         let result = operation(
             &mut collection,

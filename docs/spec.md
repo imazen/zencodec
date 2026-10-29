@@ -323,6 +323,11 @@ The completed `ImageOutput` reaches the resolver; a failed transform does not.
 The transform must honor its configured requirements and update interpretation
 with its samples; the hook does not independently prove its math or workspace.
 Native `decode` delegates through the same path with an identity transform.
+No qualified collection/transform workspace bound is available: an explicit
+workspace limit refuses before the collection factory and before subsequent
+native calls. Both bound and legacy requirements apply, and refusal retains
+`UnmetRequirements` with `Workspace(Unknown)`. A request-local refusal preserves
+the existing collection owner.
 
 `CodecSet::with_collection(factory)` registers immutable `CollectionFactory`
 configurations. `open_collection(format, source, request, resolver, pulse)` returns

@@ -106,3 +106,33 @@ fn render_first_keeps_the_collections_retained_stop_without_a_call_control() {
     assert_eq!(storage.reserved_bytes(), 0);
     assert_eq!(storage.reserved_objects(), 0);
 }
+
+#[test]
+fn required_workspace_refuses_before_collection_factory() {
+    use zencodec::operation::UnmetRequirements;
+    let result = CheckedCollection::<Empty, _>::open(
+        SharedPulse::default(),
+        PolicySet::new().with_workspace_limit(u64::MAX),
+        |_| panic!("workspace admission must precede native factory"),
+    );
+    let error = match result {
+        Ok(_) => panic!("unknown workspace admitted"),
+        Err(error) => error,
+    };
+    assert!(zencodec::find_cause::<UnmetRequirements>(&error).is_some());
+}
+
+#[test]
+#[allow(deprecated)]
+fn late_legacy_workspace_refuses_before_discovery_without_losing_owner() {
+    use zencodec::operation::UnmetRequirements;
+    let mut images = CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |_| {
+        Ok(Empty { fail: false })
+    })
+    .unwrap()
+    .with_policy_set(PolicySet::new().with_workspace_limit(u64::MAX));
+    let error = images.images().unwrap_err();
+    assert!(zencodec::find_cause::<UnmetRequirements>(&error).is_some());
+    assert!(!images.is_finished());
+    assert_eq!(images.report().decisions().count(), 0);
+}

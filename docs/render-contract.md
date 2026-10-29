@@ -30,7 +30,7 @@ an explicit cursor with `render_selected`.
 collection's stored policy runs once on the final image. Cancellation is shared
 through decoding and rendering. `render(ImageOutput, &mut policy, pulse)`
 provides the corresponding operation for an already-decoded image, using
-`OperationPolicy` and `&dyn Pulse`. `render_with_preset(ImageOutput,
+`OperationPolicy` and `Option<&dyn Pulse>`. `render_with_preset(ImageOutput,
 &mut resolver, preset, pulse)` is the deprecated compatibility call. Failure
 retains stage and concrete cause; rejected or partial output is not published.
 
@@ -44,7 +44,12 @@ canvas pixels or perform blending.
 The current implementation decodes the complete native selection. A small
 requested display region is not a promise of proportional decoding work.
 Identity geometry still copies; source and destination owners can coexist.
-Managed output admission excludes codec/CMS workspaces and bookkeeping. Planar
+Managed output admission excludes codec/CMS workspaces and bookkeeping.
+A required workspace limit therefore refuses with typed `Workspace(Unknown)`
+before color planning or projection, including the deprecated separate-preset
+entry point. Unconstrained rendering remains available. Checked collections
+apply the same admission before their factory and before subsequent native
+calls; already-created source owners are outside that boundary. Planar
 video, resizing, HDR presentation and general auxiliary resampling are not
 qualified by this API. These limits remain explicit errors or unprovided
 operations, not silently weakened requests.
