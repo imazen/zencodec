@@ -6,7 +6,7 @@ codec family or every native mode qualified from this candidate's evidence.
 
 ## Freeze
 
-Use main plus PR175's joint route and production Rows/Replay driver. The retained-job API candidate in this batch is `EncodeJob::into_dyn_job`: an additive
+PR175 merged as `aa30ebba`, including the joint route and production Rows/Replay driver. The retained-job API candidate in this batch is `EncodeJob::into_dyn_job`: an additive
 provided method using the existing adapter, needed to retain native job-specific
 configuration through shared dispatch. No new policy domains, proof framework,
 source abstraction or rendering redesign enters this landing batch.
@@ -27,7 +27,7 @@ on the optional-control graph at `6ab547aa`; its Undefined-slot native/shared
 controls preserve the existing slot bytes and row-padding invariance. See [the optional-control receipt](../benchmarks/optional_pulse_2026-10-29.json) and
 [the public-driver receipt](../benchmarks/replay_driver_2026-10-28.md).
 
-## Required before merging this batch
+## Core landing evidence
 
 1. **Passed on `6ab547aa`, receipts pushed as IMI `daa9c13d`:** native retained-job,
    encode/row/one-shot controls and strict library Clippy, including the corrected
@@ -80,7 +80,7 @@ returns to candidate review.
 The older [companion compile study](../benchmarks/compile_adapters_2026-10-27.md)
 is exploratory: all samples recorded background CPU load, six recorded heavy
 processes, and supported features differ between baselines. It is not a clean
-comparison of this final candidate. Final-candidate compile time, native replay
+comparison of this final candidate. The final-candidate compile observation below remains exploratory. Native replay
 throughput, total workspace and whole-operation memory costs remain unmeasured;
 validation-wrapper receipts do not establish those bounds. Paired pixel changes
 and their migration costs remain documented in the precision contracts.
@@ -111,3 +111,14 @@ unpatched crates.io consumer graph.
 [The 45-build comparison](../benchmarks/compile_candidate_2026-10-29.md) completed.
 Load flags prevent a confirmed performance claim; retained medians describe only
 the measured core/io/media consumer, not crates.io or full native applications.
+
+## Native migration landing update
+
+RAW PR26 merged as `316e6f53`: optional Pulse and retained job cancellation
+are on main. Its platform/backend CI jobs passed; a legacy inventory-test
+deprecation lint was corrected with scoped compatibility allowances, followed
+by passing inventory cancellation tests and all-feature strict Clippy.
+
+AVIF PR75 `122b1474` repairs its standalone consumer lock. The unchanged
+locked default consumer passes with the unified core/pixel family. This does
+not settle the two application encode-orientation assertions described above.
