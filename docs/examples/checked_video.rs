@@ -12,7 +12,7 @@ mod ordinary {
         // ANCHOR: checked_video
         let decoder = PolicyDecoder::new(native, PolicySet::new());
         // END: checked_video
-        // Configure and drive it through the existing VideoDecoder trait.
+        // Configure and drive it through VideoDecoder; None adds no per-call Pulse.
         // Every receive checks policy before returning a native Frame.
         Ok(decoder)
     }

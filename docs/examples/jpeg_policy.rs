@@ -94,12 +94,9 @@ mod inspected {
                     Privacy::OrientationOnlyV1,
                     TranscodeRoute::Rewrite,
                 )
-                .resolve(
-                    &mut engine,
-                    Context::default(),
-                    resolver,
-                    &NoPulse,
-                )?;
+                // This private prototype helper still takes a resolved Pulse.
+                // Public borrowed-control arguments accept None for no extra control.
+                .resolve(&mut engine, Context::default(), resolver, &NoPulse)?;
             }
         }
         // END: jpeg_icc_admission
