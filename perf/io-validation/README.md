@@ -6,6 +6,13 @@ forwarders and resolve a no-op only for local checks/private helpers. The source
 migration has not been compiled or run; existing receipts retain their original
 revision scope.
 
+The source downloader now selects optional-control MP4 `94116d26`, IVF/WebM
+`403d46b9` and bitmaps `5abfba28`. Existing vendor directories are not
+rewritten: use a fresh export, retaining the old source manifest and measured
+artifacts. These pins and the current harness require lock resolution, runtime
+and Clippy qualification. They do not inherit performance results measured on
+the prior revisions, and no existing pixel/protocol assertion is relaxed.
+
 Private harnesses for the [2026-10-24 investigation](../../benchmarks/io_validation_2026-10-24.md).
 They add no library API. Run builds and benchmarks serially under your host's
 resource limiter. The disk probe uses Linux/Unix positional file I/O; the

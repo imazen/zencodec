@@ -10,7 +10,7 @@ exclude = ["vendor/zenbitmaps"]
 resolver = "3"
 
 [dependencies]
-zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
+zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["tokio"] }
 zencodec-media = { path = "../../zencodec-media" }
 zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
