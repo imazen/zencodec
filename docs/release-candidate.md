@@ -122,3 +122,15 @@ by passing inventory cancellation tests and all-feature strict Clippy.
 AVIF PR75 `122b1474` repairs its standalone consumer lock. The unchanged
 locked default consumer passes with the unified core/pixel family. This does
 not settle the two application encode-orientation assertions described above.
+
+## Native video queue naming and admission
+
+AVIF PR75 `9be62c4d` adds `Av1EncodeSettings::with_output_pull_threshold`
+and deprecates `with_max_queued_frames`. The setting triggers an output pull;
+it does not bound retained input or process memory. Small thresholds continue
+to make progress. The four-case native audit, all21 media-session tests and
+strict queue-consumer Clippy pass; the old builder retains compatibility coverage.
+
+Native pre-allocation capacity evidence and an explicit hard admission requirement
+remain required contract work in [issue160](https://github.com/imazen/zencodec/issues/160#issuecomment-6488692572).
+A callback cannot establish a bound from output readiness or lookahead alone.
