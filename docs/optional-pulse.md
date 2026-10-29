@@ -48,7 +48,7 @@ controls, no-default checks and the core/coroutine WASM build also pass.
 source snapshots and preserves the earlier fixture and orchestration failures.
 This establishes the shared protocol, not every native codec's implementation.
 The eight-crate generated API catalog and Rustdoc reference also build cleanly.
-The guide source checks (24/24) and browser checks pass on `f4b9fdc1`,
+The guide source checks (24/24) and browser checks pass on `7a26c718`,
 including responsive roles, signatures, full-example copying and inline
 expansion. Native qualification is partial, as detailed below. Core CI on
 `feb09f9f` passes for the optional signatures. Its documentation
@@ -113,8 +113,8 @@ The combined three-codec wrapper still reports failure because bitmap Clippy
 failed. Successful JPEG/WebP steps do not erase that failure. The
 [receipt](../benchmarks/optional_pulse_2026-10-29.json) records both results.
 The AVIF/container harness now passes on the optional signatures, as recorded
-below. IMI, native AVIF-specific regression controls and the complete zenpipe
-graph still need qualification.
+below. Focused standalone AVIF and IMI controls also pass as recorded below;
+the complete zenpipe graph and broader native profiles remain unqualified.
 
 
 The follow-up at bitmap `7d89635c`, WebP `fb4388e2` and JPEG `31b789f3`
@@ -150,3 +150,24 @@ old AV1 lock and old zenpipe signatures are retained as separate failures. The
 first two now have the local qualification above; JPEG/zenpipe integration still
 needs its updated dependency graph. None of these receipts certifies all native
 features or platforms.
+
+## Standalone native and guide synchronization follow-through
+
+AVIF's own media-session and incremental suites pass 24 tests and strict Clippy
+on `dee1a361`. Its serializer uses the paired workspace parser; the old 0.6 dev
+dependency had pulled a second core into the standalone graph. A fixture-only
+correction at `e5760d1c` explicitly admits the existing 70,000-square header while
+checking default-budget refusal. All 101 serializer tests and strict Clippy
+pass without changing dimensions, roundtrip assertions or independent oracles.
+These changes and the resolved root lock are pushed to AVIF PR75 as `d8454a6f`;
+its downstream/fuzz graphs, full features and platform matrix remain separate.
+
+IMI at `6ab547aa` passes 13 retained-job controls, 26 encode/row/one-shot controls
+and strict library Clippy on one paired graph. Its new lock and owning receipt
+still need landing; earlier lab/no-std/WASM results retain their earlier scope.
+
+The guide CI failure on `3739a49a` occurred at an immediate URL assertion after
+Enter activated the skip link. `7a26c718` waits for the exact fragment and keeps
+the focus/destination assertions. Matching eight-crate Rustdoc, 24 source checks
+and the complete browser suite pass. This does not remove the remaining JPEG
+harness failure from its old zenpipe pin.

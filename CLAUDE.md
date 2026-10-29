@@ -249,7 +249,8 @@ CHANGELOGs. Full design context:
 - Guide browser CI on `3739a49a` failed an immediate URL assertion after the
   focused skip link received Enter. The check now waits for the exact
   `#journeys` fragment before retaining the original destination assertion.
-  Source checks pass; browser qualification is pending in this change.
+  Matching Rustdoc, all 24 guide source checks and the complete browser suite
+  pass on `7a26c718`; the original CI failure remains recorded.
 
 - Fixed in the multipass experiment (2026-10-28): a short source stride could
   consume input before subtraction panicked; malformed file requests could

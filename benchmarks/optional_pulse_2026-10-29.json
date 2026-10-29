@@ -138,5 +138,28 @@
       "run-heavy: done rc=0 7s | peak-RSS 0.30GiB | min-avail 14827MiB | peak-load 0.76"
     ],
     "scope": "Linux harness and container controls; native AVIF repository-specific optional-control regressions, full features/platforms and zenpipe application still require qualification."
+  },
+  "standalone_native": {
+    "avif_source": "dee1a361a9902beea3fd1b84df64f6e80666c080",
+    "serializer_fixture": "e5760d1c",
+    "pushed_receipt": "d8454a6f",
+    "avif": "21 media_session + 3 sansio PASS; strict Clippy PASS",
+    "serializer": "initial100/101 with resource-budget fixture failure; corrected101/101 and strict Clippy PASS; assertions/dimensions/oracles retained",
+    "imi_source": "6ab547aa3a5c8a6cb0d4702c340182fcef839d47",
+    "imi": "retained13 + codec_encode9 + codec_rows16 + pulse_one_shot1 PASS; strict library Clippy PASS; owning lock/receipt landing pending",
+    "wrappers": {
+      "avif02-wrapper.log": "run-heavy: done rc=1 140s | peak-RSS 1.18GiB | min-avail 13699MiB | peak-load 1.93",
+      "avif02-remaining-wrapper.log": "run-heavy: done rc=101 43s | peak-RSS 0.86GiB | min-avail 14353MiB | peak-load 1.40",
+      "avif03-wrapper.log": "run-heavy: done rc=0 14s | peak-RSS 0.46GiB | min-avail 14613MiB | peak-load 0.78",
+      "imi-wrapper.log": "run-heavy: done rc=0 53s | peak-RSS 1.71GiB | min-avail 13670MiB | peak-load 1.15"
+    },
+    "scope": "Focused Linux contract qualification, not full features/platforms or memory bounds; all initial failures preserved."
+  },
+  "site_navigation_followup": {
+    "source": "7a26c718b096dfbbaf8ec9ea70751453f7b40161",
+    "reference": "eight-crate Rustdoc PASS",
+    "guide": "24 source tests and complete browser suite PASS",
+    "change": "wait for exact skip-link fragment before unchanged destination assertion",
+    "wrapper": "run-heavy: done rc=0 46s | peak-RSS 0.32GiB | min-avail 14258MiB | peak-load 1.18"
   }
 }
