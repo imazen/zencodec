@@ -79,6 +79,8 @@
 //! [`EncoderConfig`]: zencodec::encode::EncoderConfig
 //! [`DecoderConfig`]: zencodec::decode::DecoderConfig
 
+mod preparation;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -932,7 +934,9 @@ where
 ///
 /// Encode paths: one-shot, plus incremental `push_rows` when the encoder's
 /// capabilities advertise it. Decode paths: one-shot, push-sink, plus streaming
-/// when advertised. All decoded results must equal each other *and* the input.
+/// when advertised. Typed and erased output preparation must preserve ordinary
+/// pixels, color context and metadata; any claimed descriptor must match the actual output.
+/// All decoded results must equal each other *and* the input.
 pub fn check_cross_path_pixel_equivalence<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -946,13 +950,11 @@ where
     let canonical = enc_oneshot(&enc, img, Metadata::none(), MetadataPolicy::PreserveExact)
         .map_err(|e| fail(CHECK, format!("canonical encode: {e}")))?;
 
+    let baseline =
+        dec_output(&dec, &canonical).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+    preparation::check(&dec, &canonical, &baseline)?;
     let mut decoded: Vec<(&str, Pixels)> = Vec::new();
-    decoded.push((
-        "decode",
-        dec_oneshot(&dec, &canonical)
-            .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?
-            .0,
-    ));
+    decoded.push(("decode", grab(baseline.pixels())));
     decoded.push((
         "push_decoder",
         dec_push(&dec, &canonical).map_err(|e| fail(CHECK, format!("push decode: {e}")))?,

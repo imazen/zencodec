@@ -261,3 +261,18 @@ fn native_png_controlled_streaming_meets_incremental_contract() {
         .unwrap();
     }
 }
+
+#[test]
+fn native_png_preserves_results_through_preparation() {
+    for image in [
+        zencodec_testkit::TestImage::rgb8_gradient(97, 65),
+        zencodec_testkit::TestImage::rgba8_gradient(97, 65),
+    ] {
+        zencodec_testkit::check_cross_path_pixel_equivalence(
+            zenpng::PngEncoderConfig::new(),
+            zenpng::PngDecoderConfig::new(),
+            &image,
+        )
+        .unwrap();
+    }
+}

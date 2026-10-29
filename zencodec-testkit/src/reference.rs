@@ -1659,6 +1659,10 @@ pub struct RefDec<'a> {
 impl Decode for RefDec<'_> {
     type Error = RefError;
 
+    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, RefError> {
+        Ok(Some(descriptor_for_header(&parse_header(&self.data)?)?))
+    }
+
     fn decode(self) -> Result<DecodeOutput, RefError> {
         let h = parse_header(&self.data)?;
         let desc = descriptor_for_header(&h)?;
