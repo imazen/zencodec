@@ -80,3 +80,18 @@ HEIC/RAW feature-profile compilation and API snapshot generation; that is not
 whole-codec/platform runtime coverage. Two AVIF encode-orientation carrier
 assertions still conflict with native baking and remain unresolved.
 See [the receipt](../../benchmarks/guide_integration_2026-10-29.json).
+
+## Deterministic method ownership (2026-10-29)
+
+Rustdoc lists some implementations under multiple involved types. The source
+catalog must attach a method to the implementation's resolved `for` type,
+not whichever type happens to appear first in the JSON index. Generic blanket
+methods remain documented at their trait declaration; they must not acquire
+an arbitrary concrete owner. Compiler-generated signature files are unchanged.
+
+`docs/test_code_catalog.py` permutes an index containing shared conversion and
+blanket implementations. It failed before the ownership filter and passes after
+it; the documentation workflow and `just docs-site-check` retain this control.
+Regenerate all eight catalogs after changes to crate source, manifests or
+READMEs. Rebuild Rustdoc and the guide from the same revision before browser
+checks; a stale reference is deliberately refused.

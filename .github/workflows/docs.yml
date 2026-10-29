@@ -236,6 +236,10 @@ jobs:
           cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
           python3 docs/build-reference.py
       - run: npm ci --prefix docs --ignore-scripts
+      - name: Check source catalog ownership
+        run: |
+          mkdir -p "$HOME/tmp"
+          TMPDIR="$HOME/tmp" python3 docs/test_code_catalog.py
       - run: npm run build --prefix docs
       - run: npm test --prefix docs
       - name: Install browser

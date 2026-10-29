@@ -1125,6 +1125,7 @@ publication-witness-check export results:
     python3 perf/publication-validation/check.py "{{export}}" "{{results}}"
 
 docs-site-check:
+    TMPDIR="$HOME/tmp" python3 docs/test_code_catalog.py
     node docs/build-site.mjs
     node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs docs/site/source-catalog.test.mjs
 

@@ -64,6 +64,14 @@ def source_details(rustdoc, root, directory):
                 paths.setdefault(str(member), paths[key] + "::" + child["name"])
         for implementation in body.get("impls", []):
             impl = index.get(str(implementation), {}).get("inner", {}).get("impl", {})
+            # Rustdoc can reference an impl from both the input and output
+            # types (for example From<Input> for Output). Generic blanket impls
+            # also repeat under concrete types. Only the actual implementing
+            # owner may acquire these method names; trait declarations above
+            # retain generic methods without inventing a concrete owner.
+            owner = impl.get("for", {}).get("resolved_path", {}).get("id")
+            if owner is None or str(owner) != str(key):
+                continue
             for member in impl.get("items", []):
                 child = index.get(str(member))
                 if child and child["crate_id"] == 0 and child["name"]:
