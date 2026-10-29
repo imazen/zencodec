@@ -358,3 +358,21 @@ and strict Clippy pass. Buffered encoders may observe cancellation only during
 finalization; this adds no latency or memory bound. Exact scope, failed fixture
 attempts and resource receipts are in the
 [consumer qualification](https://github.com/imazen/zenpipe/blob/2908ce178f86196da1b72e557ac5194d1fcfa2b5/benchmarks/row_consumers_2026-10-29.md).
+
+## Collection admission and consumer strict-fit follow-through
+
+Core `ca325bc81096d5d5894a21b4fbe9669f02b218bc` passes
+[CI](https://github.com/imazen/zencodec/actions/runs/40957663410),
+[documentation/native qualification](https://github.com/imazen/zencodec/actions/runs/40957663398)
+and [fuzz checks](https://github.com/imazen/zencodec/actions/runs/40957663485).
+This includes the early collection/render workspace checks and the corrected
+native JXL expectation for a named pre-effect refusal. The independent placement
+oracle and remaining canvas limits are indexed in [the rendering contract](render-contract.md).
+
+Zenpipe `43301b4cbad056bf5b30256b2063e3d31a5b3377` fixes a consumer CI regression:
+strict lossless sRGB-to-PNM fitting succeeded in the pipeline but the native
+setter rejected the already-enforced strict flag. Fitted one-shot and streaming
+paths now discharge that flag while retaining all native emission requirements;
+unfitted retained jobs still receive the complete policy. Nine native color-fit
+controls and strict Clippy pass with unchanged dependency lock. Full application
+CI is separate. See the [consumer receipt](https://github.com/imazen/zenpipe/blob/43301b4cbad056bf5b30256b2063e3d31a5b3377/benchmarks/strict_color_fit_2026-10-29.md).
