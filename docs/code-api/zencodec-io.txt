@@ -1,30 +1,30 @@
 pub mod zencodec_io
 pub mod zencodec_io::destination
 pub struct zencodec_io::destination::Forward<W>(pub W)
-impl<W: core::io::write::Write> core::io::write::Write for zencodec_io::destination::Forward<W>
-pub fn zencodec_io::destination::Forward<W>::flush(&mut self) -> core::io::error::Result<()>
-pub fn zencodec_io::destination::Forward<W>::write(&mut self, bytes: &[u8]) -> core::io::error::Result<usize>
-impl<W: core::io::write::Write> zencodec_io::destination::Destination for zencodec_io::destination::Forward<W>
+impl<W: std::io::Write> std::io::Write for zencodec_io::destination::Forward<W>
+pub fn zencodec_io::destination::Forward<W>::flush(&mut self) -> std::io::error::Result<()>
+pub fn zencodec_io::destination::Forward<W>::write(&mut self, bytes: &[u8]) -> std::io::error::Result<usize>
+impl<W: std::io::Write> zencodec_io::destination::Destination for zencodec_io::destination::Forward<W>
 pub fn zencodec_io::destination::Forward<W>::can_patch(&self) -> bool
-pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> core::io::error::Result<()>
+pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> std::io::error::Result<()>
 pub struct zencodec_io::destination::SeekBack<W>
-impl<W: core::io::write::Write + core::io::seek::Seek> zencodec_io::destination::SeekBack<W>
-pub fn zencodec_io::destination::SeekBack<W>::new(writer: W) -> core::io::error::Result<Self>
-impl<W: core::io::write::Write + core::io::seek::Seek> zencodec_io::destination::Destination for zencodec_io::destination::SeekBack<W>
+impl<W: std::io::Write + std::io::Seek> zencodec_io::destination::SeekBack<W>
+pub fn zencodec_io::destination::SeekBack<W>::new(writer: W) -> std::io::error::Result<Self>
+impl<W: std::io::Write + std::io::Seek> zencodec_io::destination::Destination for zencodec_io::destination::SeekBack<W>
 pub fn zencodec_io::destination::SeekBack<W>::can_patch(&self) -> bool
-pub fn zencodec_io::destination::SeekBack<W>::position(&mut self, relative: u64) -> core::io::error::Result<()>
-impl<W: core::io::write::Write> core::io::write::Write for zencodec_io::destination::SeekBack<W>
-pub fn zencodec_io::destination::SeekBack<W>::flush(&mut self) -> core::io::error::Result<()>
-pub fn zencodec_io::destination::SeekBack<W>::write(&mut self, bytes: &[u8]) -> core::io::error::Result<usize>
-pub trait zencodec_io::destination::Destination: core::io::write::Write + zencodec_io::destination::sealed::Sealed
+pub fn zencodec_io::destination::SeekBack<W>::position(&mut self, relative: u64) -> std::io::error::Result<()>
+impl<W: std::io::Write> std::io::Write for zencodec_io::destination::SeekBack<W>
+pub fn zencodec_io::destination::SeekBack<W>::flush(&mut self) -> std::io::error::Result<()>
+pub fn zencodec_io::destination::SeekBack<W>::write(&mut self, bytes: &[u8]) -> std::io::error::Result<usize>
+pub trait zencodec_io::destination::Destination: std::io::Write + zencodec_io::destination::sealed::Sealed
 pub fn zencodec_io::destination::Destination::can_patch(&self) -> bool
-pub fn zencodec_io::destination::Destination::position(&mut self, relative: u64) -> core::io::error::Result<()>
-impl<W: core::io::write::Write + core::io::seek::Seek> zencodec_io::destination::Destination for zencodec_io::destination::SeekBack<W>
+pub fn zencodec_io::destination::Destination::position(&mut self, relative: u64) -> std::io::error::Result<()>
+impl<W: std::io::Write + std::io::Seek> zencodec_io::destination::Destination for zencodec_io::destination::SeekBack<W>
 pub fn zencodec_io::destination::SeekBack<W>::can_patch(&self) -> bool
-pub fn zencodec_io::destination::SeekBack<W>::position(&mut self, relative: u64) -> core::io::error::Result<()>
-impl<W: core::io::write::Write> zencodec_io::destination::Destination for zencodec_io::destination::Forward<W>
+pub fn zencodec_io::destination::SeekBack<W>::position(&mut self, relative: u64) -> std::io::error::Result<()>
+impl<W: std::io::Write> zencodec_io::destination::Destination for zencodec_io::destination::Forward<W>
 pub fn zencodec_io::destination::Forward<W>::can_patch(&self) -> bool
-pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> core::io::error::Result<()>
+pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> std::io::error::Result<()>
 pub mod zencodec_io::row_encode
 #[non_exhaustive] pub enum zencodec_io::row_encode::Refusal
 pub zencodec_io::row_encode::Refusal::DestinationChanged
@@ -66,14 +66,14 @@ pub zencodec_io::row_encode::Completed::patched_bytes: u64
 pub zencodec_io::row_encode::Completed::report: zencodec::operation::policy::OperationReport
 pub zencodec_io::row_encode::Completed::schedule: zencodec::operation::scheduling::OutputSchedule
 pub struct zencodec_io::row_encode::Description
-pub zencodec_io::row_encode::Description::color_context: core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
+pub zencodec_io::row_encode::Description::color_context: core::option::Option<alloc::sync::Arc<zenpixels::color::ColorContext>>
 pub zencodec_io::row_encode::Description::descriptor: zenpixels::descriptor::PixelDescriptor
 pub zencodec_io::row_encode::Description::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
 pub zencodec_io::row_encode::Description::height: u32
 pub zencodec_io::row_encode::Description::width: u32
 impl zencodec_io::row_encode::Description
 pub const fn zencodec_io::row_encode::Description::new(width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
-pub fn zencodec_io::row_encode::Description::with_color_context(self, context: alloc::rcs::arc::Arc<zenpixels::color::ColorContext>) -> Self
+pub fn zencodec_io::row_encode::Description::with_color_context(self, context: alloc::sync::Arc<zenpixels::color::ColorContext>) -> Self
 pub const fn zencodec_io::row_encode::Description::with_exact_depth(self, exact: zenpixels::sample::exact::ExactDepth) -> Self
 pub struct zencodec_io::row_encode::ExactDepthContradiction
 pub zencodec_io::row_encode::ExactDepthContradiction::claim: zenpixels::sample::exact::ExactDepth
@@ -96,9 +96,9 @@ pub struct zencodec_io::row_encode::Options
 impl zencodec_io::row_encode::Options
 pub fn zencodec_io::row_encode::Options::new(storage: zencodec::storage::StorageBudget, max_output_bytes: u64) -> Self
 pub fn zencodec_io::row_encode::Options::with_batch_rows(self, rows: core::num::nonzero::NonZeroU32) -> Self
-pub fn zencodec_io::row_encode::Options::with_disk_staging(self, file: std::fs::File, replay_bytes: core::num::nonzero::NonZeroUsize) -> core::io::error::Result<Self>
+pub fn zencodec_io::row_encode::Options::with_disk_staging(self, file: std::fs::File, replay_bytes: core::num::nonzero::NonZeroUsize) -> std::io::error::Result<Self>
 pub fn zencodec_io::row_encode::Options::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
-pub fn zencodec_io::row_encode::Options::with_raw_disk_staging(self, file: std::fs::File, max_bytes: u64) -> core::io::error::Result<Self>
+pub fn zencodec_io::row_encode::Options::with_raw_disk_staging(self, file: std::fs::File, max_bytes: u64) -> std::io::error::Result<Self>
 pub struct zencodec_io::row_encode::Raster<'a>(_)
 impl<'a> zencodec_io::row_encode::Raster<'a>
 pub const fn zencodec_io::row_encode::Raster<'a>::new(pixels: zenpixels::buffer::PixelSlice<'a>) -> Self
@@ -126,10 +126,10 @@ pub fn zencodec_io::row_encode::Raster<'_>::mechanism(&self) -> zencodec::operat
 pub fn zencodec_io::row_encode::Raster<'_>::read_rows(&mut self, first: u32, rows: zenpixels::buffer::PixelSliceMut<'_>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
 pub fn zencodec_io::row_encode::Raster<'_>::replay_identity(&self) -> core::result::Result<core::option::Option<[u64; 4]>, Self::Error>
 pub fn zencodec_io::row_encode::Raster<'_>::supports_positional_replay(&self) -> bool
-pub fn zencodec_io::row_encode::encode<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(encoder: E, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
-pub fn zencodec_io::row_encode::encode_dyn_job<S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
+pub fn zencodec_io::row_encode::encode<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, W: std::io::Write, R: zencodec::operation::binding::OperationPolicy>(encoder: E, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
+pub fn zencodec_io::row_encode::encode_dyn_job<S: zencodec_io::row_encode::Source, W: std::io::Write, R: zencodec::operation::binding::OperationPolicy>(job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
 pub fn zencodec_io::row_encode::encode_dyn_job_to_destination<S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy>(job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
-pub fn zencodec_io::row_encode::encode_job<J: zencodec::traits::encoding::EncodeJob, S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(job: J, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
+pub fn zencodec_io::row_encode::encode_job<J: zencodec::traits::encoding::EncodeJob, S: zencodec_io::row_encode::Source, W: std::io::Write, R: zencodec::operation::binding::OperationPolicy>(job: J, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
 pub fn zencodec_io::row_encode::encode_job_to_destination<J: zencodec::traits::encoding::EncodeJob, S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy>(job: J, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
 pub fn zencodec_io::row_encode::encode_to_destination<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy>(encoder: E, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
 pub mod zencodec_io::storage
@@ -145,7 +145,7 @@ pub zencodec_io::tokio_io::AsyncDriveError::Input(zencodec_io::InputError)
 pub zencodec_io::tokio_io::AsyncDriveError::Protocol(zencodec_io::ProtocolViolation)
 pub zencodec_io::tokio_io::AsyncDriveError::Source(zencodec::traits::BoxedError)
 pub zencodec_io::tokio_io::AsyncDriveError::Step(zencodec::traits::incremental::StepError<E>)
-pub zencodec_io::tokio_io::AsyncDriveError::Write(core::io::error::Error)
+pub zencodec_io::tokio_io::AsyncDriveError::Write(std::io::error::Error)
 impl<E: core::error::Error + 'static> core::error::Error for zencodec_io::tokio_io::AsyncDriveError<E>
 pub fn zencodec_io::tokio_io::AsyncDriveError<E>::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl<E: core::fmt::Display> core::fmt::Display for zencodec_io::tokio_io::AsyncDriveError<E>
@@ -177,7 +177,7 @@ impl core::error::Error for zencodec_io::tokio_io::BridgeError
 pub fn zencodec_io::tokio_io::BridgeError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Display for zencodec_io::tokio_io::BridgeError
 pub fn zencodec_io::tokio_io::BridgeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub struct zencodec_io::tokio_io::BytesSource(pub alloc::rcs::arc::Arc<[u8]>)
+pub struct zencodec_io::tokio_io::BytesSource(pub alloc::sync::Arc<[u8]>)
 impl zencodec_io::tokio_io::AsyncSource for zencodec_io::tokio_io::BytesSource
 pub async fn zencodec_io::tokio_io::BytesSource::len(&mut self) -> core::result::Result<u64, zencodec::traits::BoxedError>
 pub fn zencodec_io::tokio_io::BytesSource::len_hint(&self) -> core::option::Option<u64>
@@ -226,7 +226,7 @@ pub fn F::spawn(&self, job: zencodec_io::tokio_io::Job)
 pub fn zencodec_io::tokio_io::decode_async<'a, D, S, Src, C>(decoder: D, sink: S, source: &'a mut Src, compute: C, opts: zencodec_io::DriveOptions, pulse: core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<(zencodec::cost::OutputInfo, S), zencodec_io::tokio_io::AsyncDriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>>> + core::marker::Send + 'a where D: zencodec::traits::incremental::IncrementalDecode + core::marker::Send + 'static, S: zencodec::sink::DecodeRowSink + core::marker::Send + 'static, Src: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, C: zencodec_io::tokio_io::Compute + 'a
 pub fn zencodec_io::tokio_io::pull_decode_on_thread<'a, R, S, Src, C>(run: R, sink: S, source: &'a mut Src, compute: C, pulse: core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<(zencodec::cost::OutputInfo, S), zencodec_io::tokio_io::AsyncDriveError<zencodec::traits::BoxedError>>> + core::marker::Send + 'a where R: core::ops::function::FnOnce(&mut dyn zencodec::source::DynReadAt, &mut dyn zencodec::sink::DecodeRowSink) -> core::result::Result<zencodec::cost::OutputInfo, zencodec::traits::BoxedError> + core::marker::Send + 'static, S: zencodec::sink::DecodeRowSink + core::marker::Send + 'static, Src: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, C: zencodec_io::tokio_io::Compute + 'a
 pub fn zencodec_io::tokio_io::transcode_async<'a, D, E, Src, W, C>(decoder: D, encoder: E, source: &'a mut Src, out: &'a mut W, compute: C, opts: zencodec_io::DriveOptions, pulse: core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<u64, zencodec_io::tokio_io::AsyncDriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>>> + core::marker::Send + 'a where D: zencodec::traits::incremental::IncrementalDecode + core::marker::Send + 'static, E: zencodec::traits::encoder::Encoder + core::marker::Send + 'static, <E as zencodec::traits::encoder::Encoder>::Error: core::marker::Send + core::marker::Sync, Src: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, W: tokio::io::async_write::AsyncWrite + core::marker::Unpin + core::marker::Send + ?core::marker::Sized, C: zencodec_io::tokio_io::Compute + 'a
-pub async fn zencodec_io::tokio_io::write_pending_async<E, W>(enc: &mut E, w: &mut W) -> core::io::error::Result<usize> where E: zencodec::traits::encoder::Encoder, W: tokio::io::async_write::AsyncWrite + core::marker::Unpin + ?core::marker::Sized
+pub async fn zencodec_io::tokio_io::write_pending_async<E, W>(enc: &mut E, w: &mut W) -> std::io::error::Result<usize> where E: zencodec::traits::encoder::Encoder, W: tokio::io::async_write::AsyncWrite + core::marker::Unpin + ?core::marker::Sized
 pub type zencodec_io::tokio_io::Job = alloc::boxed::Box<(dyn core::ops::function::FnOnce() + core::marker::Send + 'static)>
 #[non_exhaustive] pub enum zencodec_io::BufferPolicy
 pub zencodec_io::BufferPolicy::Spool
@@ -254,7 +254,7 @@ impl<E: core::fmt::Display, SE: core::fmt::Display> core::fmt::Display for zenco
 pub fn zencodec_io::DriveFailure<E, SE>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum zencodec_io::EncodeWriteError<E>
 pub zencodec_io::EncodeWriteError::Encoder(E)
-pub zencodec_io::EncodeWriteError::Io(core::io::error::Error)
+pub zencodec_io::EncodeWriteError::Io(std::io::error::Error)
 impl<E: core::error::Error + 'static> core::error::Error for zencodec_io::EncodeWriteError<E>
 pub fn zencodec_io::EncodeWriteError<E>::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl<E: core::fmt::Display> core::fmt::Display for zencodec_io::EncodeWriteError<E>
@@ -299,7 +299,7 @@ impl core::fmt::Display for zencodec_io::ProtocolViolation
 pub fn zencodec_io::ProtocolViolation::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum zencodec_io::PumpFailure<E>
 pub zencodec_io::PumpFailure::Input(zencodec_io::InputError)
-pub zencodec_io::PumpFailure::Io(core::io::error::Error)
+pub zencodec_io::PumpFailure::Io(std::io::error::Error)
 pub zencodec_io::PumpFailure::NeedsRandomAccess(zencodec::traits::incremental::InputRequest)
 pub zencodec_io::PumpFailure::Protocol(zencodec_io::ProtocolViolation)
 pub zencodec_io::PumpFailure::Step(E)
@@ -314,10 +314,10 @@ pub fn zencodec_io::PumpFailure<E>::fmt(&self, f: &mut core::fmt::Formatter<'_>)
 pub zencodec_io::StdSourceError::Allocation
 pub zencodec_io::StdSourceError::Allocation::requested: usize
 pub zencodec_io::StdSourceError::Allocation::source: alloc::collections::TryReserveError
-pub zencodec_io::StdSourceError::Io(core::io::error::Error)
+pub zencodec_io::StdSourceError::Io(std::io::error::Error)
 pub zencodec_io::StdSourceError::Source(zencodec::source::SourceError)
-impl core::convert::From<core::io::error::Error> for zencodec_io::StdSourceError
-pub fn zencodec_io::StdSourceError::from(error: core::io::error::Error) -> Self
+impl core::convert::From<std::io::error::Error> for zencodec_io::StdSourceError
+pub fn zencodec_io::StdSourceError::from(error: std::io::error::Error) -> Self
 impl core::convert::From<zencodec::source::SourceError> for zencodec_io::StdSourceError
 pub fn zencodec_io::StdSourceError::from(error: zencodec::source::SourceError) -> Self
 impl core::error::Error for zencodec_io::StdSourceError
@@ -334,12 +334,12 @@ pub zencodec_io::Yield::Output(O)
 impl<O> zencodec_io::Yield<O>
 pub fn zencodec_io::Yield<O>::into_inner(self) -> O
 pub fn zencodec_io::Yield<O>::is_finished(&self) -> bool
-pub struct zencodec_io::BufferedReadAt<R: alloc::io::read::Read>
-impl<R: alloc::io::read::Read> zencodec_io::BufferedReadAt<R>
+pub struct zencodec_io::BufferedReadAt<R: std::io::Read>
+impl<R: std::io::Read> zencodec_io::BufferedReadAt<R>
 pub fn zencodec_io::BufferedReadAt<R>::new(reader: R, policy: zencodec_io::BufferPolicy) -> Self
 pub fn zencodec_io::BufferedReadAt<R>::retained_bytes(&self) -> usize
 pub fn zencodec_io::BufferedReadAt<R>::watermark(&self) -> u64
-impl<R: alloc::io::read::Read> zencodec::source::ReadAt for zencodec_io::BufferedReadAt<R>
+impl<R: std::io::Read> zencodec::source::ReadAt for zencodec_io::BufferedReadAt<R>
 pub type zencodec_io::BufferedReadAt<R>::Error = zencodec_io::StdSourceError
 pub fn zencodec_io::BufferedReadAt<R>::len(&mut self) -> core::result::Result<u64, Self::Error>
 pub fn zencodec_io::BufferedReadAt<R>::len_hint(&self) -> core::option::Option<u64>
@@ -406,7 +406,7 @@ pub fn zencodec_io::EncoderSink<E>::output_timing(&self) -> core::option::Option
 pub fn zencodec_io::EncoderSink<E>::pending_output(&self) -> &[u8]
 pub fn zencodec_io::EncoderSink<E>::rows_pushed(&self) -> u64
 pub fn zencodec_io::EncoderSink<E>::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_io::EncoderSink<E>::write_pending(&mut self, w: &mut impl core::io::write::Write) -> core::io::error::Result<usize>
+pub fn zencodec_io::EncoderSink<E>::write_pending(&mut self, w: &mut impl std::io::Write) -> std::io::error::Result<usize>
 impl<E: zencodec::traits::encoder::Encoder> core::fmt::Debug for zencodec_io::EncoderSink<E>
 pub fn zencodec_io::EncoderSink<E>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl<E: zencodec::traits::encoder::Encoder> zencodec::sink::DecodeRowSink for zencodec_io::EncoderSink<E> where <E as zencodec::traits::encoder::Encoder>::Error: core::marker::Send + core::marker::Sync
@@ -457,15 +457,15 @@ pub struct zencodec_io::ReadAtReader<S>
 impl<S> zencodec_io::ReadAtReader<S>
 pub fn zencodec_io::ReadAtReader<S>::into_inner(self) -> S
 pub const fn zencodec_io::ReadAtReader<S>::new(source: S) -> Self
-impl<S: zencodec::source::ReadAt> alloc::io::read::Read for zencodec_io::ReadAtReader<S>
-pub fn zencodec_io::ReadAtReader<S>::read(&mut self, out: &mut [u8]) -> core::io::error::Result<usize>
-impl<S: zencodec::source::ReadAt> core::io::seek::Seek for zencodec_io::ReadAtReader<S>
-pub fn zencodec_io::ReadAtReader<S>::seek(&mut self, to: core::io::seek::SeekFrom) -> core::io::error::Result<u64>
-pub fn zencodec_io::ReadAtReader<S>::stream_position(&mut self) -> core::io::error::Result<u64>
+impl<S: zencodec::source::ReadAt> std::io::Read for zencodec_io::ReadAtReader<S>
+pub fn zencodec_io::ReadAtReader<S>::read(&mut self, out: &mut [u8]) -> std::io::error::Result<usize>
+impl<S: zencodec::source::ReadAt> std::io::Seek for zencodec_io::ReadAtReader<S>
+pub fn zencodec_io::ReadAtReader<S>::seek(&mut self, to: std::io::SeekFrom) -> std::io::error::Result<u64>
+pub fn zencodec_io::ReadAtReader<S>::stream_position(&mut self) -> std::io::error::Result<u64>
 pub struct zencodec_io::ReadCursor
 impl zencodec_io::ReadCursor
 pub fn zencodec_io::ReadCursor::new(read_size: usize, max_window: usize) -> Self
-pub fn zencodec_io::ReadCursor::next<S, R>(&mut self, reader: &mut R, stage: &mut S, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::Yield<<S as zencodec_io::ByteStepper>::Output>, zencodec_io::PumpFailure<<S as zencodec_io::ByteStepper>::Error>> where S: zencodec_io::ByteStepper + ?core::marker::Sized, R: alloc::io::read::Read + ?core::marker::Sized
+pub fn zencodec_io::ReadCursor::next<S, R>(&mut self, reader: &mut R, stage: &mut S, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::Yield<<S as zencodec_io::ByteStepper>::Output>, zencodec_io::PumpFailure<<S as zencodec_io::ByteStepper>::Error>> where S: zencodec_io::ByteStepper + ?core::marker::Sized, R: std::io::Read + ?core::marker::Sized
 pub fn zencodec_io::ReadCursor::retained_input_capacity(&self) -> usize
 pub struct zencodec_io::SliceCursor
 impl zencodec_io::SliceCursor
@@ -496,9 +496,9 @@ pub fn zencodec_io::coalesce_byte_ranges(ranges: &[zencodec::traits::incremental
 pub fn zencodec_io::coalesce_into(ranges: &[zencodec::traits::incremental::ByteRange], max_gap: u64, out: &mut alloc::vec::Vec<zencodec::traits::incremental::ByteRange>)
 pub fn zencodec_io::drive_from_read_at<D, S>(decoder: &mut D, source: &mut S, sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, opts: zencodec_io::DriveOptions) -> core::result::Result<(zencodec::cost::OutputInfo, zencodec_io::DriveStats), zencodec_io::DriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error, <S as zencodec::source::ReadAt>::Error>> where D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized, S: zencodec::source::ReadAt + ?core::marker::Sized
 pub fn zencodec_io::drive_from_slice<D>(decoder: &mut D, bytes: &[u8], sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, window: usize) -> core::result::Result<(zencodec::cost::OutputInfo, zencodec_io::DriveStats), zencodec_io::DriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error, core::convert::Infallible>> where D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized
-pub fn zencodec_io::encode_to_writer<E: zencodec::traits::encoder::Encoder>(enc: E, pixels: zenpixels::buffer::PixelSlice<'_>, w: &mut impl core::io::write::Write) -> core::result::Result<zencodec_io::EncodeWriteReport, zencodec_io::EncodeWriteError<<E as zencodec::traits::encoder::Encoder>::Error>>
-pub fn zencodec_io::pump_read_to_sink<R, D>(reader: R, decoder: &mut D, sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, read_size: usize, max_window: usize) -> core::result::Result<zencodec::cost::OutputInfo, zencodec_io::PumpError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>> where R: alloc::io::read::Read, D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized
-pub fn zencodec_io::write_pending<E: zencodec::traits::encoder::Encoder>(enc: &mut E, w: &mut impl core::io::write::Write) -> core::io::error::Result<usize>
-pub fn zencodec_io::write_pending_animation<A: zencodec::traits::encoder::AnimationFrameEncoder>(enc: &mut A, w: &mut impl core::io::write::Write) -> core::io::error::Result<usize>
+pub fn zencodec_io::encode_to_writer<E: zencodec::traits::encoder::Encoder>(enc: E, pixels: zenpixels::buffer::PixelSlice<'_>, w: &mut impl std::io::Write) -> core::result::Result<zencodec_io::EncodeWriteReport, zencodec_io::EncodeWriteError<<E as zencodec::traits::encoder::Encoder>::Error>>
+pub fn zencodec_io::pump_read_to_sink<R, D>(reader: R, decoder: &mut D, sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, read_size: usize, max_window: usize) -> core::result::Result<zencodec::cost::OutputInfo, zencodec_io::PumpError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>> where R: std::io::Read, D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized
+pub fn zencodec_io::write_pending<E: zencodec::traits::encoder::Encoder>(enc: &mut E, w: &mut impl std::io::Write) -> std::io::error::Result<usize>
+pub fn zencodec_io::write_pending_animation<A: zencodec::traits::encoder::AnimationFrameEncoder>(enc: &mut A, w: &mut impl std::io::Write) -> std::io::error::Result<usize>
 pub type zencodec_io::DriveError<CE, SE> = zencodec_io::DriveFailure<zencodec::traits::incremental::StepError<CE>, SE>
 pub type zencodec_io::PumpError<E> = zencodec_io::PumpFailure<zencodec::traits::incremental::StepError<E>>

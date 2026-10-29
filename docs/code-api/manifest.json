@@ -5,17 +5,17 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "0b3a52ffaaafb32aec002ce1919b8e7a24aabeb7dca82fe9224846b1537d761a",
-      "surface_sha256": "00f864f1ea49f5940bb999fe59c61e0486f8d3c8b49f1ea0acfcf6c4170c9510",
-      "details_sha256": "b7f7486b0ad78ae93070de62f448a362237a8737465fbd1da23c411d2bed963c"
+      "fingerprint": "29b3c3c098a7a4628d7fc0f138cce12b23176ac4b35ba3d0ae7b901f1eae8cd2",
+      "surface_sha256": "97b17049208fbded0d33c48d46fe7535ca9fcaaa06063254e2a415c082deeaeb",
+      "details_sha256": "50a84ba6f9aefbfdd3f89ea525b30872cc558aeb613c357e4d68f7e89945f5c6"
     },
     {
       "name": "zencodec-io",
       "directory": "zencodec-io",
       "features": "all",
-      "fingerprint": "e7829ecb537826cbba399f368407243b5b508590a89779476cb7b456c22dd5d3",
-      "surface_sha256": "8592df57ddab2e7aaaab39f99ad8b1ff4cc09b5a2cae8002f8a7e06d89bd9014",
-      "details_sha256": "8f43314230ad4134831b407ef936b5dc3285cd5cfab8c185fd4854e68c6da98b"
+      "fingerprint": "f3090ba359c6c9d09cdc41eb86b5afd567f3cbe5c5d1d953e89376e972d9d8cf",
+      "surface_sha256": "d5a2767f93da45a78cf12560228af9bd454e1eb8ccfd754a3c6adfa65e88bb1e",
+      "details_sha256": "de3e7969869c8400bc25c823f5f76ee6eac745c95f0c6bd7c5f7ef9237dbcd0a"
     },
     {
       "name": "zencodec-coroutine",
@@ -30,8 +30,8 @@
       "directory": "zencodec-media",
       "features": "all",
       "fingerprint": "89a56b2861b5f1941eaf6272f6c70e1f662d139a0dfee29979f944380597906a",
-      "surface_sha256": "d5965d201f60f33442d1e44c4778172867404a7273868b058c206504de347fc4",
-      "details_sha256": "0663352bd47bf701c539248b6c2db8c7928ff114f9adad15a4fd27ae676bca99"
+      "surface_sha256": "76f3c5e212008487f198448f3de83bf116930607bee54102f3ec3ac6e77bfa67",
+      "details_sha256": "4292a5e9b8d36e97db25d5a0ac51f20bac67b7507e24e0b48635c745add705d5"
     },
     {
       "name": "zencodec-testkit",
@@ -62,7 +62,7 @@
       "directory": "zencodec-render",
       "features": "all",
       "fingerprint": "6403b77819a38c107737af9e1ae072d29ae56fdf56e99406b0b409f9e07e252c",
-      "surface_sha256": "e8cf095bf46b03712b0d77f9c1f613691c48590b22013e0d7fbb182acd92fd73",
+      "surface_sha256": "7ea275e869edeb32f973a0b3b40b5c734e6ba4d1a21a1ac6ea02232978c8cc9a",
       "details_sha256": "c30f8aff44d2b449ae013092d04908bf320d9a8396baaf4313820fb398bd8f64"
     }
   ]
