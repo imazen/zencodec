@@ -172,3 +172,28 @@ existing authority/fallback controls remain unchanged. Full workspace tests and
 strict all-feature/all-target Clippy pass on that pair. Native/application
 consumers and the published registry graph remain separate release gates;
 no package publication is authorized by this qualification.
+
+### Native pixel-pair qualification (2026-10-29)
+
+The JPEG policy harness also passes against pixel retirement source
+`c6772adbb89fcc35d75375c48c4da6dd6a059bb9`: 55 library controls, all-target
+all-feature compilation, and strict all-target all-feature Clippy. The graph
+retains the committed JPEG, PNG, UltraHDR and zencodecs revisions; its only
+package identity changes are zenpixels and zenpixels-convert from pinned
+0.2.17 to candidate 0.3.1. No native source migration was needed in this subset.
+
+The first run passed 47 controls and failed eight because its runner omitted
+`JPEG_POLICY_ARTIFACTS`. Repeating with an explicit artifact directory passed
+all 55 without changing tests or libraries. Wrapper receipts: first run rc101,
+14 seconds, peak RSS 0.70 GiB; corrected run rc0, 1 second, peak RSS 0.23 GiB.
+These are incremental qualification costs, not codec performance measurements.
+
+Reproduction: export the core compatibility change and pixel candidate; replace
+only the harness's two pixel patches with candidate paths; start from
+`perf/jpeg-policy-validation/dependencies.lock`; resolve and verify that only
+those two package identities changed. Set `JPEG_POLICY_ARTIFACTS`, then run
+`cargo check --all-targets --all-features --locked`,
+`cargo test --lib --all-features --locked`, and
+`cargo clippy --all-targets --all-features --locked -- -D warnings`
+from the harness directory. The full zenpipe feature graph, other native codecs
+and required-platform release checks remain unqualified for this pixel pair.
