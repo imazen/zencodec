@@ -99,7 +99,7 @@ pub fn zencodec_testkit::reference::RefIncDec::access_pattern(&self) -> zencodec
 pub fn zencodec_testkit::reference::RefIncDec::info(&self) -> core::option::Option<&zencodec::info::ImageInfo>
 pub fn zencodec_testkit::reference::RefIncDec::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec_testkit::reference::RefIncDec::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
-pub fn zencodec_testkit::reference::RefIncDec::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, _stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<zencodec_testkit::reference::RefError>>
+pub fn zencodec_testkit::reference::RefIncDec::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, _stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<zencodec_testkit::reference::RefError>>
 pub struct zencodec_testkit::reference::RefStreamDec<'a>
 impl zencodec::traits::decoder::StreamingDecode for zencodec_testkit::reference::RefStreamDec<'_>
 pub type zencodec_testkit::reference::RefStreamDec<'_>::Error = zencodec_testkit::reference::RefError
