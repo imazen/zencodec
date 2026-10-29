@@ -26,15 +26,14 @@ Mandatory admission runs before either direct callback selection or built-in
 preferences. Missing evidence and contradictory evidence remain distinct named
 refusals.
 
-The shared implementation and adversarial controls are qualified. The native
-publication-owner experiment passed the isolated controls listed below; early
-workspace admission and source metadata completeness were not established by
-those controls. Its public convenience API is not adopted. This change does
-not add a high-level writer convenience, establish a native workspace bound or
-implement deferred requirements across arbitrary question domains. A successful
-transcode decision does not authorize a separate bare decoder boundary.
+The shared implementation and adversarial controls are qualified. The original
+native publication-owner experiment below did not establish early workspace
+admission or source metadata completeness. Subsequent application work adopted
+a retained execution owner; see the current-source audit below. No native
+workspace bound or general deferred-obligation mechanism is established. A
+successful transcode decision does not authorize a separate bare decoder boundary.
 
-## What remains to prove in the executing adapter
+## Original prototype obligations (historical)
 
 ```rust,ignore
 // Adapter entry: freeze and check both sets before native preparation.
@@ -63,7 +62,7 @@ later EXIF/XMP updates without changing the final pixels. Comparing the encoded
 output only against that earlier expectation can therefore miss reported source
 metadata. This is a source-level counterexample, not an executed native failure.
 
-The production owner must qualify the metadata required by its treatment over
+An executing production owner must qualify the metadata required by its treatment over
 the same retained source, track relevant later metadata/color/orientation
 changes, and fail before releasing output when that obligation cannot be met.
 An extra scan cannot silently bypass input/replay admission. Copying no source
@@ -86,6 +85,40 @@ control can itself retain data: adding `&pulse` must not turn an owner-layout
 calculation into an unsupported whole-route wait bound. Unknown remains unknown.
 Disk staging needs separate accounting for replay storage and blocking spool I/O.
 Neither mechanism certifies arbitrary opaque metadata as PII-free.
+
+## Current application owner: source audit 2026-10-29
+
+At [zenpipe 43301b4c](https://github.com/imazen/zenpipe/tree/43301b4cbad056bf5b30256b2063e3d31a5b3377),
+`zencodecs::checked_transcode` has a retained `Execution` shared by sync and async
+drivers. The historical missing-owner and ignored-event descriptions above must
+not be read as its present implementation:
+
+- `Execution::prepare` checks both legacy and bound workspace requirements
+  against unknown evidence **before** preparing encoder jobs or starting the
+  controlled decoder. Positive native workspace bounds remain unknown.
+- `evidence::qualify` retains dimensions, format, color, orientation, density and
+  descriptive metadata in an `Epoch` for the selected route. Complete-input
+  qualification inspects actual inventory. PNG late metadata is conservatively
+  refused; JPEG relies on the pinned full native metadata scan.
+- After selection, both metadata events and completion call `revalidate` against
+  the actual held decoder's current information. Later reported descriptions
+  therefore do not silently disappear from the retained expectation.
+- `Execution::finish` keeps the encoded result private while checking output
+  limits, inspecting the actual output, qualifying its metadata and comparing
+  it with the selected expectation. Publication has its own cancellation and
+  partial-write contract; verification cannot roll back earlier external effects.
+
+This is a source audit, not a new runtime or memory measurement. An arbitrary
+codec can still violate reporting/completeness contracts, and these checks do
+not certify opaque content as free of PII. Source acquisition, preparation,
+verification and output-wait accounting must keep their distinct scopes.
+
+The current unconditional EXIF/XMP epoch equality also refuses harmless late
+changes on `DiscardDescriptive`. The [native candidate](../perf/late-metadata-validation/README.md)
+allows only that discarded effect while keeping interpretation and preservation
+checks strict. Its production adoption requires approval of the existing
+blanket-refusal expectation. No caller capability query or extra callback is
+needed to permit an effect the selected encoder never performs.
 
 ## Executed shared-contract checks
 
