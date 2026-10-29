@@ -207,7 +207,7 @@ pub trait Encoder: Sized {
     fn pull_rows(
         &mut self,
         _rows: &mut dyn crate::encode::EncodeRows,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::encode::PullProgress, Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::PullEncode))
     }

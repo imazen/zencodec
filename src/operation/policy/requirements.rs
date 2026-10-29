@@ -337,7 +337,7 @@ mod tests {
                             })
                         },
                         preset,
-                        &crate::how_far::NoPulse,
+                        Some(&crate::how_far::NoPulse),
                     );
                     match (early, joint) {
                         (Ok(()), Ok(_)) => assert_eq!(callbacks, 1),
@@ -384,7 +384,7 @@ mod tests {
                 panic!("workspace success must not clear metadata requirements")
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(
@@ -405,7 +405,7 @@ mod tests {
                 panic!("standalone final adoption must remain refused")
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert!(
@@ -455,7 +455,7 @@ mod tests {
                 Ok(Decision::choose(choice))
             },
             requirements(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 63);
@@ -486,7 +486,7 @@ mod tests {
                 panic!("requirements must precede callback")
             },
             requirements(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         let record = error.error().record();
@@ -532,7 +532,7 @@ mod tests {
                 Ok(Decision::choose(choices.first().unwrap()))
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 0);
@@ -541,7 +541,7 @@ mod tests {
             &offers,
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 1);

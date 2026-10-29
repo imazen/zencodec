@@ -940,8 +940,9 @@ pub fn resolve_boundary<R: OperationPolicy + ?Sized>(
     boundary: DecodeBoundary,
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = boundary.facts();
     let action = match facts.state {
         InterpretationState::Pending | InterpretationState::Provisional => {
@@ -1128,7 +1129,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert!(called);
@@ -1184,7 +1185,7 @@ mod tests {
                 Ok(Decision::Choose(token.unwrap()))
             },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);

@@ -1088,7 +1088,7 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         &mut self,
         input: crate::traits::Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::traits::Progress, crate::traits::StepError<CodecSetError>> {
         use crate::traits::{Progress, StepError};
         self.set.check_operation_stop()?;

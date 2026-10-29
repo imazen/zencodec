@@ -85,8 +85,9 @@ pub fn resolve_image<R: OperationPolicy + ?Sized>(
     image: ImageOutput,
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<Outcome<ImageOutput>, At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = ImageFacts::new(&image);
     let (_, record) = policy::choose(
         &[PublicationOffer::ReturnHeld],

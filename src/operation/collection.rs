@@ -337,7 +337,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
             let image = transform(image, pulse)
                 .map_err(|e| failure(CollectionStage::Transform, report, e))?;
             check(pulse, report)?;
-            match resolve_image(image, resolver, preset, pulse) {
+            match resolve_image(image, resolver, preset, Some(pulse)) {
                 Ok(output) => {
                     for &record in output.report().decisions() {
                         report.record(record);

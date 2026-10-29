@@ -72,8 +72,9 @@ pub fn resolve_frame<R: OperationPolicy + ?Sized>(
     timing: FrameTiming,
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<DecisionRecord, At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = FrameFacts::new(interpretation, timing);
     let (_, record) = policy::choose(
         &[PublicationOffer::ReturnHeld],

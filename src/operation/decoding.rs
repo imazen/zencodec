@@ -62,7 +62,7 @@ impl IncrementalDecode for CheckedDecoder {
         &mut self,
         _: Input<'_>,
         _: &mut dyn DecodeRowSink,
-        _: &dyn crate::Pulse,
+        _: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<Self::Error>> {
         Err(StepError::Control(ControlError::UnhandledBoundary))
     }
@@ -87,7 +87,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
         self.codecs.check_operation_stop()?;
         if self.inner.is_none() {
@@ -125,7 +125,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<Self::Error>> {
         self.codecs.check_operation_stop()?;
         self.inner

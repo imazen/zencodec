@@ -47,7 +47,7 @@ fn resolve(
         offers,
         &mut { requirements },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
 }
 fn failures(error: &At<PolicyFailure>) -> Vec<(PolicyRequirement, RequirementEvidence)> {
@@ -178,7 +178,7 @@ fn callback_cannot_bypass_requirements_and_only_sees_original_admitted_slots() {
             Ok(Decision::choose(choice))
         },
         requirements,
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap();
     assert_eq!(calls, 1);
@@ -195,7 +195,7 @@ fn callback_cannot_bypass_requirements_and_only_sees_original_admitted_slots() {
                 panic!("mandatory refusal must precede callback")
             },
             requirements,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().admitted, 0);
@@ -240,7 +240,7 @@ fn input_and_output_are_selected_together_under_bound_and_legacy_conjunction() {
             &candidates,
             &mut bound,
             legacy,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 2);
@@ -260,7 +260,7 @@ fn input_and_output_are_selected_together_under_bound_and_legacy_conjunction() {
         &candidates,
         &mut bound,
         legacy,
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap_err();
     assert!(failures(&error).contains(&(
@@ -306,7 +306,7 @@ fn metadata_workspace_profile_and_range_require_evidence_from_the_same_job() {
             &[candidate],
             &mut { requirements },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
     };
     assert!(resolve_job(evidence, candidate).is_ok());
@@ -388,7 +388,7 @@ fn final_pass_timing_is_not_wait_retention_and_the_plan_is_borrowed() {
             Ok(Decision::choose(choices.first().unwrap()))
         },
         requirements,
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap();
     assert!(
@@ -426,7 +426,7 @@ fn incompatible_routes_are_filtered_before_callback_even_without_requirements() 
             Ok(Decision::choose(choices.first().unwrap()))
         },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap();
     assert_eq!(index, 3);
@@ -447,7 +447,7 @@ fn incompatible_routes_are_filtered_before_callback_even_without_requirements() 
         &candidates,
         &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> { panic!("invalid plan") },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().record().admitted, 0);
@@ -470,7 +470,7 @@ fn unrelated_domains_do_not_discharge_new_requirements() {
                 panic!("wrong-domain evidence")
             },
             required,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(failures(&error).len(), 1);
@@ -498,7 +498,7 @@ fn callback_errors_keep_their_original_cause_and_tokens_cannot_cross_questions()
             Err(At::wrap(ApplicationFailure))
         },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap_err();
     assert!(crate::find_cause::<ApplicationFailure>(error.error()).is_some());
@@ -522,7 +522,7 @@ fn callback_errors_keep_their_original_cause_and_tokens_cannot_cross_questions()
             Ok(Decision::UsePreset)
         },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap();
     let error = resolve_encode_route(
@@ -534,7 +534,7 @@ fn callback_errors_keep_their_original_cause_and_tokens_cannot_cross_questions()
             Ok(Decision::Choose(token.unwrap()))
         },
         PolicySet::new(),
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);
@@ -567,7 +567,7 @@ fn discovery_may_continue_but_final_adoption_cannot_bypass_replay_obligations() 
                     Ok(Decision::choose(choices.first().unwrap()))
                 },
                 requirements,
-                &crate::how_far::NoPulse,
+                Some(&crate::how_far::NoPulse),
             );
             if state == InterpretationState::Final {
                 assert_eq!(calls, 0);
@@ -632,7 +632,7 @@ fn proven_single_native_pass_needs_no_replay_evidence_or_raw_snapshot() {
                     &[candidate],
                     &mut bound,
                     required,
-                    &crate::how_far::NoPulse,
+                    Some(&crate::how_far::NoPulse),
                 )
                 .unwrap();
                 // No fabricated exact-borrow or snapshot evidence in the record.
@@ -649,7 +649,7 @@ fn proven_single_native_pass_needs_no_replay_evidence_or_raw_snapshot() {
                     panic!("zero cap still forbids source reads")
                 },
                 required.with_max_source_passes(0),
-                &crate::how_far::NoPulse,
+                Some(&crate::how_far::NoPulse),
             )
             .unwrap_err();
             assert_eq!(
@@ -688,7 +688,7 @@ fn one_external_staging_pass_does_not_exempt_unknown_or_multiple_native_passes()
                         panic!("native replay remains unqualified")
                     },
                     PolicySet::new().require_exact_replay(true),
-                    &crate::how_far::NoPulse,
+                    Some(&crate::how_far::NoPulse),
                 )
                 .unwrap_err();
                 assert_eq!(
@@ -756,7 +756,7 @@ fn single_pass_exemption_does_not_admit_incompatible_routes_or_metadata() {
                 panic!("incompatible route")
             },
             PolicySet::new().require_exact_replay(true),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::Declined);
@@ -816,7 +816,7 @@ fn invalid_shared_plans_keep_typed_causes_including_with_no_offers() {
                     panic!("invalid plan")
                 },
                 PolicySet::new().require_exact_replay(true),
-                &crate::how_far::NoPulse,
+                Some(&crate::how_far::NoPulse),
             )
             .unwrap_err();
             assert_eq!(error.error().record().code, DecisionCode::InvalidOffers);
@@ -875,7 +875,7 @@ fn shared_job_metadata_applies_to_every_route_and_survives_in_context() {
             Ok(Decision::choose(choices.first().unwrap()))
         },
         required,
-        &crate::how_far::NoPulse,
+        Some(&crate::how_far::NoPulse),
     )
     .unwrap();
     assert_eq!(index, 1);
@@ -925,7 +925,7 @@ fn shared_job_metadata_applies_to_every_route_and_survives_in_context() {
                 panic!("shared job evidence applies to every route")
             },
             required,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::Declined);
@@ -938,4 +938,38 @@ fn shared_job_metadata_applies_to_every_route_and_survives_in_context() {
         );
         assert!(failures(&error).contains(&(requirement, reason)));
     }
+}
+
+#[test]
+fn no_pulse_keeps_default_success_and_mandatory_admission_distinct() {
+    let offers = [offer(InputAcquisition::BorrowedRaster)];
+    let result = resolve_encode_route(
+        &declaration(),
+        &plan(Some(1)),
+        job_evidence(),
+        &offers,
+        &mut PolicySet::new(),
+        PolicySet::new(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(result.0, 0);
+    assert_eq!(result.1.admitted, 1);
+
+    let error = resolve_encode_route(
+        &declaration(),
+        &plan(Some(1)),
+        job_evidence(),
+        &offers,
+        &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+            panic!("a callback cannot bypass mandatory metadata evidence")
+        },
+        PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(error.error().record().admitted, 0);
+    assert!(
+        failures(&error).contains(&(PolicyRequirement::Metadata, RequirementEvidence::Unknown))
+    );
 }

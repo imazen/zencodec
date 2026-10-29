@@ -244,8 +244,9 @@ pub fn resolve_encode_route<R: OperationPolicy + ?Sized>(
     offers: &[EncodeRouteOffer],
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = EncodeRouteFacts::new(declaration, plan, evidence);
     policy::choose(
         offers,

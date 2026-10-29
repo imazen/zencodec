@@ -96,7 +96,7 @@ pub trait DynEncoder: Send {
     fn pull_rows(
         &mut self,
         _rows: &mut dyn crate::encode::EncodeRows,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::encode::PullProgress, BoxedError> {
         Err(Box::new(crate::UnsupportedOperation::PullEncode))
     }
@@ -165,7 +165,7 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
     fn pull_rows(
         &mut self,
         rows: &mut dyn crate::encode::EncodeRows,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::encode::PullProgress, BoxedError> {
         self.0
             .pull_rows(rows, pulse)
@@ -908,7 +908,7 @@ mod begin_dispatch_tests {
     fn default_pull_refuses_before_source_for_typed_shim_and_direct_dyn() {
         let mut typed = OneShot;
         assert_eq!(
-            Encoder::pull_rows(&mut typed, &mut NoFill, &crate::how_far::NoPulse),
+            Encoder::pull_rows(&mut typed, &mut NoFill, Some(&crate::how_far::NoPulse)),
             Err(UnsupportedOperation::PullEncode)
         );
         for mut erased in [
@@ -916,7 +916,7 @@ mod begin_dispatch_tests {
             Box::new(OneShot) as Box<dyn DynEncoder>,
         ] {
             let error = erased
-                .pull_rows(&mut NoFill, &crate::how_far::NoPulse)
+                .pull_rows(&mut NoFill, Some(&crate::how_far::NoPulse))
                 .unwrap_err();
             assert_eq!(
                 error.downcast_ref::<UnsupportedOperation>(),
@@ -1157,7 +1157,7 @@ mod pull_dispatch_tests {
         fn pull_rows(
             &mut self,
             rows: &mut dyn EncodeRows,
-            _: &dyn crate::Pulse,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<PullProgress, Self::Error> {
             if self.done {
                 return Ok(PullProgress::Done);
@@ -1219,13 +1219,13 @@ mod pull_dispatch_tests {
         };
         assert_eq!(
             typed
-                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .pull_rows(&mut source, Some(&crate::how_far::NoPulse))
                 .unwrap(),
             PullProgress::Filled
         );
         assert_eq!(
             typed
-                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .pull_rows(&mut source, Some(&crate::how_far::NoPulse))
                 .unwrap(),
             PullProgress::Done
         );
@@ -1233,13 +1233,13 @@ mod pull_dispatch_tests {
         let mut erased: Box<dyn DynEncoder> = Box::new(EncoderShim(encoder()));
         assert_eq!(
             erased
-                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .pull_rows(&mut source, Some(&crate::how_far::NoPulse))
                 .unwrap(),
             PullProgress::Filled
         );
         assert_eq!(
             erased
-                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .pull_rows(&mut source, Some(&crate::how_far::NoPulse))
                 .unwrap(),
             PullProgress::Done
         );
@@ -1254,7 +1254,7 @@ mod pull_dispatch_tests {
             fail: true,
         };
         let error = erased
-            .pull_rows(&mut source, &crate::how_far::NoPulse)
+            .pull_rows(&mut source, Some(&crate::how_far::NoPulse))
             .unwrap_err();
         assert_eq!(source.calls, 1);
         let native = error

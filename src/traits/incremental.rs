@@ -13,7 +13,7 @@
 //! let mut dec = job.dyn_incremental_decoder(&[])?;
 //! let mut input = Input::empty();
 //! loop {
-//!     let p = dec.step(input, &mut sink, &pulse)?;
+//!     let p = dec.step(input, &mut sink, Some(&pulse))?;
 //!     // drop p.consumed bytes from the front of what was offered
 //!     match p.event {
 //!         Event::Need => { /* satisfy one of dec.requested(), build the next Input */ }
@@ -429,11 +429,15 @@ pub trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Take bytes from the front of `input` and advance by one event.
+    ///
+    /// `None` adds no per-call control. A decoder must still honor its retained
+    /// operation pulse. Forwarding adapters preserve absence; they must not
+    /// replace it with a new no-op control that overrides the retained pulse.
     fn step(
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<Self::Error>>;
 
     /// What the decoder needs, valid after a step returned [`Event::Need`]
@@ -520,7 +524,7 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<D::Error>> {
         (**self).step(input, sink, pulse)
     }
@@ -549,7 +553,7 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<D::Error>> {
         (**self).step(input, sink, pulse)
     }
@@ -630,7 +634,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<D::Error>> {
         match &self.state {
             FusedState::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone()))),
@@ -645,7 +649,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
             self.state = FusedState::Failed;
             return Err(StepError::Control(ControlError::UnhandledBoundary));
         }
-        if let Err(reason) = pulse.check() {
+        if let Err(reason) = pulse.unwrap_or(&crate::NoPulse).check() {
             self.state = FusedState::Failed;
             return Err(StepError::Cancelled(reason));
         }
@@ -691,7 +695,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<D::Error>> {
         self.controlled = true;
         match &self.state {
@@ -699,7 +703,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             FusedState::Failed => return Err(StepError::Finished),
             _ => {}
         }
-        if let Err(reason) = pulse.check() {
+        if let Err(reason) = pulse.unwrap_or(&crate::NoPulse).check() {
             self.state = FusedState::Failed;
             return Err(StepError::Cancelled(reason));
         }
@@ -759,13 +763,13 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         &mut self,
         id: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<D::Error>> {
         let state = core::mem::replace(&mut self.state, FusedState::Failed);
         let FusedState::Suspended(boundary) = state else {
             return Err(StepError::Finished);
         };
-        pulse.check()?;
+        pulse.unwrap_or(&crate::NoPulse).check()?;
         if boundary.id() != id || !action.permits(boundary.facts()) {
             return Err(StepError::Control(ControlError::InvalidReply));
         }
@@ -788,7 +792,7 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<ErasedError>> {
         self.0
             .step(input, sink, pulse)
@@ -847,7 +851,7 @@ mod tests {
             &mut self,
             _input: Input<'_>,
             _sink: &mut dyn DecodeRowSink,
-            _pulse: &dyn crate::Pulse,
+            _pulse: Option<&dyn crate::Pulse>,
         ) -> Result<Progress, StepError<core::fmt::Error>> {
             self.0 += 1;
             if self.0 == 2 {
@@ -868,13 +872,13 @@ mod tests {
     fn fused_makes_errors_and_cancellation_terminal() {
         let mut d = Fused::new(Flaky(0));
         let pulse = &crate::how_far::NoPulse;
-        assert!(d.step(Input::empty(), &mut NullSink, &pulse).is_ok());
+        assert!(d.step(Input::empty(), &mut NullSink, Some(&pulse)).is_ok());
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &pulse),
+            d.step(Input::empty(), &mut NullSink, Some(&pulse)),
             Err(StepError::Codec(_))
         ));
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &pulse),
+            d.step(Input::empty(), &mut NullSink, Some(&pulse)),
             Err(StepError::Finished)
         ));
         assert!(d.requested().is_empty());
@@ -890,12 +894,12 @@ mod tests {
             d.step(
                 Input::empty(),
                 &mut NullSink,
-                &how_far::StopOnly::borrowed(&Tripped)
+                Some(&how_far::StopOnly::borrowed(&Tripped))
             ),
             Err(StepError::Cancelled(StopReason::Cancelled))
         ));
         assert!(matches!(
-            d.step(Input::empty(), &mut NullSink, &pulse),
+            d.step(Input::empty(), &mut NullSink, Some(&pulse)),
             Err(StepError::Finished)
         ));
     }
@@ -915,3 +919,6 @@ mod tests {
         assert!(!InputRequest::Len.is_satisfied_by(&Input::empty()));
     }
 }
+
+#[cfg(test)]
+mod optional_pulse_tests;
