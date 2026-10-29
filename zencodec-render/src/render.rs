@@ -203,16 +203,17 @@ impl<'a> Renderer<'a> {
         image: &ImageId,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
         images.decode_with(image, &ImageRequest::new(), |held, pulse| {
-            self.apply(held, pulse)
+            self.apply(held, Some(pulse))
         })
     }
 
     /// Render an already decoded image, then publish once through policy.
+    /// `None` adds no per-call control; policy and storage checks still apply.
     pub fn render<R: OperationPolicy + ?Sized>(
         &self,
         image: ImageOutput,
         policy: &mut R,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
         let output = self.apply(image, pulse)?;
         resolve_image(output, policy, PolicySet::new(), pulse)
@@ -227,7 +228,7 @@ impl<'a> Renderer<'a> {
         image: ImageOutput,
         resolver: &mut R,
         preset: PolicySet,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
         let output = self.apply(image, pulse)?;
         resolve_image(output, resolver, preset, pulse)
@@ -237,9 +238,10 @@ impl<'a> Renderer<'a> {
     fn apply(
         &self,
         image: ImageOutput,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<ImageOutput, At<RenderFailure>> {
-        check(pulse).map_err(|e| fail(RenderStage::ColorPlan, e))?;
+        let control = pulse.unwrap_or(&zencodec::NoPulse);
+        check(control).map_err(|e| fail(RenderStage::ColorPlan, e))?;
         // Prepare the actual transform before allocating projected samples.
         let mut plan = image
             .with_pixels(|pixels| {
@@ -280,7 +282,7 @@ impl<'a> Renderer<'a> {
             projected
         } else {
             let color = projected
-                .with_pixels(|pixels| self.convert(pixels, &mut plan, pulse))
+                .with_pixels(|pixels| self.convert(pixels, &mut plan, control))
                 .map_err(|e| fail(RenderStage::Color, e))?
                 .map_err(|e| fail(RenderStage::Color, e))?;
             projected
