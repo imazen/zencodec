@@ -77,6 +77,21 @@ FFmpeg/libdav1d remains the independent pixel decoder. Every exact PTS/duration
 assertion remains required. `just av1-timing-oracle-build <directory> 6.1.1`
 reproduces the older reader; the recipe defaults to 8.0.1.
 
+Source downloads try HTTPS at FFmpeg first, then the
+[OmniOS distribution mirror](https://mirrors.omnios.org/ffmpeg/) after a transport
+failure. Both 6.1.1 and 8.0.1 mirror archives were downloaded and matched the
+existing committed SHA-256 pins on 2026-10-29. Each attempt has a 15-second
+connection deadline, a 60-second transfer deadline and a 65-second process
+deadline; neither host can redirect to HTTP. Failed partials are retained.
+Verification precedes cache publication. A checksum mismatch (including in an
+existing cache) is terminal and never triggers a fallback or extraction.
+`just av1-timing-source-check` exercises cache reuse, corrupt-cache retention,
+transport exit/timeout fallback, corrupt-download refusal and exhausted hosts.
+The production downloader completed both versions with the unchanged pins:
+run-heavy rc=0, 37 seconds, peak RSS 0.04 GiB. Five transport/cache unit
+tests passed. This validates fetching, not a new inspector build or codec run.
+No inspector version, source bytes, build flags or timing assertions changed.
+
 The builder also recovers a partially restored external source directory: when
 `configure` is absent it preserves that directory and extracts the verified
 archive again. A reproduced partial-cache build produced FFprobe 8.0.1 while

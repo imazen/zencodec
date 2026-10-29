@@ -1533,3 +1533,7 @@ media-staged-admission-check artifacts:
 jpeg-decode-admission-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked decode_admission:: -- --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib --tests -- -D warnings
+
+# Check pinned oracle download integrity and bounded transport fallback.
+av1-timing-source-check:
+    python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py

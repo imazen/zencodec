@@ -110,6 +110,8 @@ jobs:
           sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
           sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
           timeout --kill-after=5s 10s ffmpeg -version
+      - name: Check pinned source transport and integrity
+        run: python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py
       - name: Build pinned container timing inspector
         timeout-minutes: 7
         run: |
