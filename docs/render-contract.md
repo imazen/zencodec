@@ -91,3 +91,21 @@ native workspace bounds. Evidence on r7900x:
 log `/home/lilith/tmp/zencodec-render-first-http-verified-20261027.log`.
 Run-heavy: `rc=0 9s | peak-RSS 0.47GiB | min-avail 11652MiB | peak-load 0.69`.
 No additional zenpixels API or dependency change was required.
+
+## Canvas and raw-layer boundaries
+
+| Contract | Owning path and evidence | Remaining limit |
+|---|---|---|
+| Default display size is the oriented presentation canvas | `Renderer::new` → `geometry::project`; native JXL canvas and all-eight-orientation controls | Native codec must first supply composited samples; projection does not blend raw layers |
+| Raw layer samples remain intact, including samples outside the canvas | `Composition::Uncomposited` is explicit; native oversized-layer control retains 1024×576 samples with a 188×202 visible intersection | Rendering raw input refuses; it never clips away a future reference owner |
+| Crop coordinates map between local samples and presentation canvas | `Placement::visible`; independent sample-membership oracle in `tests/placement_oracle.rs` | Arithmetic coverage does not establish native blend/disposal or reference reuse |
+| Entirely off-canvas means no visible intersection, not collection exhaustion | `Placement::visible` returns `Ok(None)`; collection traversal separately returns item IDs | The application must not flatten visibility into end-of-stream |
+| A partial native region cannot masquerade as the full canvas | Projection requires every requested stored sample; native TIFF region controls | A small display crop still does not promise proportional native work |
+| Admission precedes covered effects | Checked collection factory/calls and direct render planning check required workspace; managed output owners retain their charges | Unknown native/CMS workspace bounds refuse strict limits; existing input allocations are not undone |
+
+The native layer fixtures and independent display comparisons are different
+oracles. Exact projection compares against retained source samples; independent
+F32 libjxl comparisons preserve the existing absolute tolerance of 1/256.
+Neither proves every possible blend/disposal sequence, later reference reuse,
+planar-video epoch ownership, or auxiliary resampling. Those remain explicit
+qualification work under [issue 170](https://github.com/imazen/zencodec/issues/170).

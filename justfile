@@ -1681,3 +1681,8 @@ render-workspace-check: render-check
     cargo test -p zencodec --lib --locked
     cargo test -p zencodec --test collection_workspace --locked
     cargo clippy -p zencodec --lib --test collection_workspace --locked -- -D warnings
+
+# Independent sample-membership oracle; native composition remains a separate gate.
+placement-oracle-check:
+    cargo test -p zencodec --test placement_oracle --locked
+    cargo clippy -p zencodec --test placement_oracle --locked -- -D warnings
