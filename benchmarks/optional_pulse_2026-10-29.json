@@ -10,11 +10,13 @@
     "workspace_strict_clippy": "PASS (core09)",
     "renderer_no_default_clippy_tests_doctest": "PASS (core09)",
     "workspace_no_default": "PASS (core09)",
-    "core_coroutine_wasm32_unknown_unknown": "PASS (core09)"
+    "core_coroutine_wasm32_unknown_unknown": "PASS (core09)",
+    "generated_api_snapshots_catalog_rustdoc": "PASS (reference, source a7c2a6ca)"
   },
   "receipts": [
     "run-heavy: done rc=101 21s | peak-RSS 0.47GiB | min-avail 14613MiB | peak-load 1.44",
-    "run-heavy: done rc=0 20s | peak-RSS 0.39GiB | min-avail 14652MiB | peak-load 1.32"
+    "run-heavy: done rc=0 20s | peak-RSS 0.39GiB | min-avail 14652MiB | peak-load 1.32",
+    "run-heavy: done rc=0 20s | peak-RSS 0.27GiB | min-avail 14722MiB | peak-load 0.69"
   ],
   "retained_failures": [
     "core01/core02/core03/core04: incomplete source migration diagnostics",
@@ -26,9 +28,9 @@
   ],
   "not_qualified": [
     "native codecs/adapters against optional signatures",
-    "new site/browser/source catalog",
     "new Windows/macOS/i686 CI",
-    "latency, memory and throughput performance"
+    "latency, memory and throughput performance",
+    "new site/browser"
   ],
   "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained."
 }

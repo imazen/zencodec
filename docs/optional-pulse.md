@@ -47,6 +47,7 @@ controls, no-default checks and the core/coroutine WASM build also pass.
 [Qualification receipt](../benchmarks/optional_pulse_2026-10-29.json) records the
 source snapshots and preserves the earlier fixture and orchestration failures.
 This establishes the shared protocol, not every native codec's implementation.
-Native adapters and the generated site still require qualification against these
+The eight-crate generated API catalog and Rustdoc reference also build cleanly.
+The guide browser and native adapters still require qualification against these
 optional signatures. Earlier green platform CI covers the required-reference
 contract, not this migration.
