@@ -157,3 +157,18 @@ including controlled decode. Existing registration and job-isolation controls
 and native JPEG controlled decoding pass. See the
 [clone-count qualification](../benchmarks/registry_cloning_2026-10-29.md);
 this establishes removed config clones, not a measured throughput improvement.
+
+## Paired pixel retirement integration
+
+Pixel main `7d28c4b7` has exactly the tree already pinned at `283655c5`; PR95
+and its output-plan parent PR92 are merged. The separate 0.3.1 retirement PR77
+needed reconciliation with those new APIs. Its candidate preserves current
+precision and output-plan code while retiring the previously deprecated APIs.
+
+An isolated zencodec workspace resolves to one 0.3.1 pixel core and converter,
+with no other package changes. The only core source migration found by that
+workspace was removal of an unreachable ambiguous-color constructor call;
+existing authority/fallback controls remain unchanged. Full workspace tests and
+strict all-feature/all-target Clippy pass on that pair. Native/application
+consumers and the published registry graph remain separate release gates;
+no package publication is authorized by this qualification.

@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- Source color-context construction no longer references the retired ambiguous
+  pixel constructor, preserving authority and fallback behavior with both the
+  current 0.2 pixel pin and the paired 0.3 release candidate.
+
 - Retained-job `Rows` encoding borrows raster strips directly, preserving stride,
   color and exact-depth checks without allocating a copying row buffer. Replay
   and legacy raw-encoder input retain their existing contracts.

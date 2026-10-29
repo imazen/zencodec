@@ -369,10 +369,9 @@ impl SourceColor {
             }
             _ => {
                 // Authoritative field absent — keep whatever we have.
-                #[allow(deprecated)]
-                if let (Some(icc), Some(cicp)) = (&self.icc_profile, self.cicp) {
-                    zenpixels::ColorContext::from_icc_and_cicp(icc.clone(), cicp)
-                } else if let Some(icc) = &self.icc_profile {
+                // If both fields were present, one of the authority arms above
+                // already selected its field. No ambiguous constructor is needed.
+                if let Some(icc) = &self.icc_profile {
                     zenpixels::ColorContext::from_icc(icc.clone())
                 } else if let Some(cicp) = self.cicp {
                     zenpixels::ColorContext::from_cicp(cicp)
