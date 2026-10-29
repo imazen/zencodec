@@ -756,3 +756,11 @@ sink hooks have an adversarial control. Before/after root-package exports sharin
 a Cargo target can reuse stale executables: separate targets or force a package
 rebuild, and verify compilation paths before accepting evidence. See
 `benchmarks/controlled_sink_errors_2026-10-29.md`.
+
+## Retained preparation cancellation precedence (PR183)
+
+A successful `prepare_output` could signal a stop and return mismatching facts;
+required-output admission returned a descriptor error before its post-call Pulse
+check. The check now precedes comparison, retaining Cancelled/TimedOut and native
+failure priority. The regression also checks no reconstruction and exact owner
+cleanup. See docs/decode-descriptor-admission.md for the boundary contract.

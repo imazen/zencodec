@@ -212,7 +212,7 @@ impl EncodeRouteOffer {
                 self.acquisition,
                 InputAcquisition::DirectRows | InputAcquisition::DiskReplay
             ) && plan.input == InputRequirement::WholeRaster)
-            && !(self.output.schedule == OutputSchedule::Live && !plan.timing.streams())
+            && (self.output.schedule != OutputSchedule::Live || plan.timing.streams())
             && match self.replay {
                 ReplayEvidence::ImmutableBorrow => {
                     self.acquisition == InputAcquisition::BorrowedRaster

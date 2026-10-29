@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-29",
+  "base": "9efb21077dc446ba2285eb7d71efca80324130e1",
+  "failing_first": "f79ba341",
+  "source_sha256": "34cf739050bd00f5606c18a5fcef86a8f1c29da8b1c0a55002cd8e1eb031a1ae",
+  "lock_sha256": "d7ffaeec33f642b5cb59d1103f13975fb2d7aa58eb3f2db463ff39c1c99554bb",
+  "target": "aarch64-unknown-linux-gnu",
+  "qualified_toolchain": "1.96.0",
+  "commands": [
+    "cargo test -p zencodec --all-features --locked --lib",
+    "cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings"
+  ],
+  "before": {
+    "passed": 1,
+    "failed": 1,
+    "reason": "Successful preparation returned mismatching facts and signalled Cancelled; descriptor rejection masked stop."
+  },
+  "after": {
+    "passed": 682,
+    "failed": 0,
+    "clippy": "pass",
+    "wrapper": "rc=0 15s | peak-RSS 0.48GiB | min-avail 14413MiB | peak-load 1.15"
+  },
+  "preserved_attempts": [
+    "Two initial --locked attempts refused missing root Cargo.lock before compilation; generated lock offline and retained it for all later runs.",
+    "First fixed run: 682 tests passed; strict Clippy found pre-existing nonminimal_bool. Applied identical correction already on main.",
+    "Rust 1.99.1: 682 tests passed; Clippy unavailable on installed toolchain. Final complete test/lint gate uses 1.96.0."
+  ],
+  "scope": "Boundary ordering with both stop reasons, unknown/matching/mismatching facts, pre-cancel and during-call stop, native error priority, no reconstruction and exact owner drop. No native preemption or new progress guarantee.",
+  "logs": "~/tmp/preparation-stop-20261029/"
+}

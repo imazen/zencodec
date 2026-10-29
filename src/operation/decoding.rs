@@ -149,15 +149,21 @@ pub(super) fn decode_owned(
     pulse: &dyn crate::Pulse,
 ) -> Result<crate::DecodeOutput, OperationError> {
     pulse.check().map_err(OperationError::Stopped)?;
-    if let Some(requested) = required
-        && let Some(actual) = decoder
+    // Preserve native failures, then observe cancellation before interpreting
+    // successful facts (including facts that would reject the requested output).
+    let prepared = if required.is_some() {
+        decoder
             .prepare_output()
             .map_err(|e| OperationError::Codec(e.into()))?
+    } else {
+        None
+    };
+    pulse.check().map_err(OperationError::Stopped)?;
+    if let (Some(requested), Some(actual)) = (required, prepared)
         && actual != requested
     {
         return Err(OperationError::OutputDescriptor { requested, actual });
     }
-    pulse.check().map_err(OperationError::Stopped)?;
     let output = decoder
         .decode()
         .map_err(|e| OperationError::Codec(e.into()))?;

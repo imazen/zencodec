@@ -177,3 +177,21 @@ unknown facts preserve the existing decode-and-validate path. Actual output is
 always checked. Native JPEG layout/late-ICC witnesses and matched heap profiles
 are recorded there, including the successful-path allocation cost. This is not
 a whole-operation memory bound or blanket native adoption.
+
+### Cancellation after successful preparation
+
+Preparation can signal cancellation while returning usable output facts. The
+operation polls Pulse after a successful preparation and before comparing those
+facts to the required descriptor. This preserves `Cancelled` and `TimedOut`
+instead of replacing them with a descriptor mismatch. A native preparation
+error remains primary; pre-existing cancellation prevents preparation entirely.
+The retained decoder is dropped exactly once and reconstruction does not start.
+
+The regression exercises unknown, matching and mismatching facts, both stop
+reasons, cancellation before/during preparation and native preparation failure.
+This checks boundary ordering; it cannot preempt a native call that never polls.
+
+The [ARM regression receipt](../benchmarks/preparation_stop_2026-10-29.json)
+records the failing-first mismatch, all 682 core library tests passing, and
+strict all-target Clippy. Earlier missing-lock and toolchain/lint failures are
+retained separately; no behavioral assertion was weakened.
