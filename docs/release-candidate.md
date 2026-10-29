@@ -216,3 +216,13 @@ when only registry edges were patched. The full-profile compile then stopped
 at GIF before broader qualification: rc101, 6 seconds, peak RSS 0.58 GiB.
 No feature was removed, no test expectation changed, and the candidate remains
 unqualified for this full application profile.
+
+The GIF migration subsequently landed as `67a7e5f3`: 45 adapter tests and strict
+Clippy pass on both pixel 0.2.17 and candidate 0.3.1. With that single additional
+pin change, the unchanged full codec API profile compiles (rc0, 7 seconds,
+peak RSS 0.59 GiB). Its strict Clippy and zenpipe's Tokio/job/JPEG/PNG/GIF/WebP/
+filter compilation also pass (rc0, 9 seconds, peak RSS 0.55 GiB). The graph audit
+allows exactly seven package identity changes: core family, pixels and GIF.
+This qualifies compilation, not every native runtime route. Reconciled pixel
+PR77 head `7b502075` now includes the source and qualification record; its final
+workspace run passes 1,450 tests with 49 existing ignores and strict Clippy.
