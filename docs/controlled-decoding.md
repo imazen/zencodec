@@ -283,14 +283,28 @@ is recorded. Refusal drops the retained decoder and makes later steps terminal.
 Without a workspace requirement, normal metadata discovery remains available.
 
 ```rust,ignore
-let policy = PolicySet::new().with_workspace_limit(limit);
-let mut decoder = PolicyDecoder::new(native_decoder, policy);
-// Refuses on the first step: this adapter has no native workspace proof.
+// Default success: construct only after entry admission, then reuse this policy.
+let decoder = PolicyDecoder::try_from_factory(
+    || request.start_controlled(&codecs, storage),
+    policy,
+)?;
+
+// Strict native workspace is currently unqualified: refuses BEFORE the closure.
+let result = PolicyDecoder::try_from_factory(
+    || request.start_controlled(&codecs, storage),
+    PolicySet::new().with_workspace_limit(limit),
+);
 // find_cause::<UnmetRequirements>(&error) identifies Workspace(Unknown).
 ```
 
-This admission check cannot undo construction of `native_decoder`, which happens
-before it is passed to the adapter. Callers needing a preparation-inclusive bound
-must admit the native factory before calling it. Deferred metadata discovery is
-not permission to defer allocation requirements. The constructor/factory contract
-and shared per-effect deferred obligations remain open.
+Use `try_from_factory` when construction may allocate: it refuses an unqualified
+workspace requirement before invoking the factory, and otherwise invokes it once.
+It preserves native factory errors and moves the unchanged policy into the
+session. Metadata requirements remain pending for later interpretation boundaries;
+factory admission does not discharge them.
+
+`new(native_decoder, policy)` remains useful for an already-owned decoder, but
+cannot undo its construction. Neither entry point accounts for allocations made
+while evaluating captured values before the closure runs. Positive qualification
+of bounded native factories and shared per-effect deferred obligations remain
+open; discovery never postpones a required allocation deadline.

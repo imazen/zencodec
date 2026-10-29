@@ -288,11 +288,18 @@ fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
             .decode()
             .unwrap();
         let codecs = CodecSet::new().with_decoder(config);
-        let native = DecodeRequest::new()
-            .with_output(PixelDescriptor::RGBA8_SRGB)
-            .start_controlled(&codecs, StorageBudget::new(1 << 20, 4))
-            .unwrap();
-        let mut session = PolicyDecoder::new(native, PolicySet::new());
+        let mut factory_calls = 0;
+        let mut session = PolicyDecoder::try_from_factory(
+            || {
+                factory_calls += 1;
+                DecodeRequest::new()
+                    .with_output(PixelDescriptor::RGBA8_SRGB)
+                    .start_controlled(&codecs, StorageBudget::new(1 << 20, 4))
+            },
+            PolicySet::new(),
+        )
+        .unwrap();
+        assert_eq!(factory_calls, 1);
         let mut sink = CollectSink::new();
         assert!(session.take_details().is_none());
         drive_from_slice(&mut session, &bytes, &mut sink, None, 7).unwrap();
