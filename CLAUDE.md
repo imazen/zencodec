@@ -707,3 +707,10 @@ StagedEncode::with_staging initially prepared its mux before checking required
 workspace at frame/finish policy. The new gate precedes configuration reads,
 track creation and mux preparation. Supplied object construction remains outside
 that boundary; explicit unknown bounds refuse. See docs/video-workspace-admission.md.
+
+## Fixed collector capacity panic (2026-10-29)
+
+`CollectSink::begin` formerly allocated decoder-supplied dimensions with `vec!`,
+which panicked when a representable usize exceeded Vec's capacity limit. It now
+checks row/total arithmetic and reserves fallibly before committing state.
+The regression covers refusal and successful reuse; this is not a RAM budget.

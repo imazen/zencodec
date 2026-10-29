@@ -87,3 +87,21 @@ The original failing control remains in the run log `jpeg-ranked-before.log`.
 Early allocation admission remains open. These mismatches demonstrate why a
 second prediction implementation cannot substitute for the actual configured
 decoder's output-selection boundary.
+
+## Streaming-result audit
+
+The current JPEG controlled route returns `OutputInfo` after row delivery.
+Its context retains updated `ImageInfo`, but it does not return the one-shot
+`DecodeOutput` extension map or owned source-encoding details. `CollectSink`
+returns pixel storage only, and `to_buffer` copies that storage. Reconstructing
+a complete one-shot result from these APIs would therefore silently discard
+owned extras and add a second full-raster allocation. These are separate from
+the descriptor adoption barrier, which already precedes native strip execution.
+
+A shared completion owner must move final metadata, source-encoding details and
+extensions alongside the collected pixels, distinguish unsupported/incomplete
+completion from an empty but complete result, and preserve terminal/error/drop
+ownership. Until those native paths are qualified, retain the one-shot route
+and its final descriptor validation. Do not invent an empty extras map as proof
+of completeness. Collector capacity refusal is now fallible, but this does not
+supply that missing completion contract or native workspace evidence.

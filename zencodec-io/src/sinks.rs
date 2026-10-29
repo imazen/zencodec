@@ -106,11 +106,16 @@ impl DecodeRowSink for CollectSink {
         if self.descriptor.is_some() {
             return Err("CollectSink: begin called twice".into());
         }
-        let stride = width as usize * descriptor.bytes_per_pixel();
+        let stride = (width as usize)
+            .checked_mul(descriptor.bytes_per_pixel())
+            .ok_or_else(|| SinkError::from("CollectSink: row too large"))?;
         let total = stride
             .checked_mul(height as usize)
             .ok_or_else(|| SinkError::from("CollectSink: image too large"))?;
-        self.data = alloc::vec![0u8; total];
+        let mut data = Vec::new();
+        data.try_reserve_exact(total)?;
+        data.resize(total, 0);
+        self.data = data;
         self.width = width;
         self.height = height;
         self.descriptor = Some(descriptor);
@@ -161,5 +166,47 @@ impl DecodeRowSink for CollectSink {
     fn finish(&mut self) -> Result<(), SinkError> {
         self.finished = true;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_sink_refuses_unrepresentable_capacity_without_panic_or_state_change() {
+        let mut sink = CollectSink::new();
+        // On 64-bit this fits usize but exceeds Vec's isize capacity limit;
+        // on 32-bit the multiplication itself must refuse. Neither allocates.
+        assert!(
+            sink.begin(u32::MAX, u32::MAX, PixelDescriptor::GRAY8_SRGB)
+                .is_err()
+        );
+        assert_eq!(sink.descriptor(), None);
+        assert_eq!((sink.width(), sink.height()), (0, 0));
+        assert!(sink.bytes().is_empty());
+        assert!(!sink.finished());
+        sink.begin(3, 2, PixelDescriptor::GRAY8_SRGB).unwrap();
+        for y in 0..2 {
+            sink.provide_next_buffer(y, 1, 3, PixelDescriptor::GRAY8_SRGB)
+                .unwrap()
+                .row_mut(0)
+                .copy_from_slice(&[1 + y as u8, 3, 5]);
+        }
+        sink.finish().unwrap();
+        assert_eq!(sink.bytes(), &[1, 3, 5, 2, 3, 5]);
+        assert_eq!(sink.rows_written(), 2);
+        assert!(sink.finished());
+    }
+
+    #[test]
+    fn collect_sink_refuses_geometry_overflow() {
+        let mut sink = CollectSink::new();
+        assert!(
+            sink.begin(u32::MAX, u32::MAX, PixelDescriptor::RGBAF32_LINEAR)
+                .is_err()
+        );
+        assert!(sink.bytes().is_empty());
+        assert_eq!(sink.descriptor(), None);
     }
 }

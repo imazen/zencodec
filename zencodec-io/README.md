@@ -120,3 +120,18 @@ snapshot, and positional sources use row digests plus optional version checks.
 `with_raw_disk_staging` offers a separate raw store; disk and hashes do not prove
 exact replay. Whole-raster jobs still refuse explicitly. See the
 [driver contract and source-only qualification status](../docs/row-replay-driver.md).
+
+### Collecting untrusted dimensions
+
+`CollectSink::begin` checks stride and total-size arithmetic and reserves its
+raster fallibly before changing sink state. Capacity/allocation refusal is a
+`SinkError`; the native reservation error remains downcastable. This prevents
+the former capacity-overflow panic for extreme decoder-supplied dimensions.
+It is not a memory budget: callers still need explicit input/output limits.
+`to_buffer` copies the collected image and can temporarily retain two rasters.
+
+`just collect-allocation-check` covers capacity refusal, geometry overflow,
+retry after refusal, ordinary driver tests, strict Clippy and the no-default-
+features build. The 2026-10-29 run passed (rc0, 6s, peak RSS 0.30 GiB). The
+pre-fix capacity regression failed with `capacity overflow`, without allocating
+a giant image. No thresholds or existing behavior assertions were relaxed.

@@ -1558,3 +1558,10 @@ paired-harness-check:
     for manifest in fuzz/Cargo.toml zencodec-render/Cargo.toml perf/api-usability-validation/Cargo.toml perf/av1-policy-validation/Cargo.toml perf/io-validation/Cargo.toml perf/jpeg-policy-validation/Cargo.toml perf/multipass-validation/Cargo.toml perf/multipass-validation/native/Cargo.toml perf/native-contract-validation/Cargo.toml perf/native-contract-validation/spatial-native/Cargo.toml perf/native-contract-validation/video-native/Cargo.toml perf/policy-check/Cargo.toml perf/spatial-validation/Cargo.toml; do
         cargo check --manifest-path "$manifest" --all-targets --locked
     done
+
+# Decoder-controlled collector dimensions must refuse without panicking.
+collect-allocation-check:
+    cargo test -p zencodec-io --lib --locked
+    cargo test -p zencodec-io --features std --test drivers --locked
+    cargo clippy -p zencodec-io --lib --tests --all-features --locked -- -D warnings
+    cargo check -p zencodec-io --no-default-features --locked
