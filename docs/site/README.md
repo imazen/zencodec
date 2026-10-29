@@ -65,3 +65,15 @@ build so the explicit supplement can be reviewed.
 including identity-preserving downcasts and mismatched-type refusal. Site and
 browser checks retain the existing catalog coverage and add search/source-link
 checks for the supplement. [Validation receipt](../../benchmarks/source_catalog_2026-10-28.json).
+
+## Qualified integration snapshot (2026-10-29)
+
+The JPEG harness now uses zenpipe `e5cd3f9a`. Recapture its named declarations
+with `just checked-guide-api <zenpipe-checkout> <full-revision>` whenever that
+dependency changes. The generated integration revision must match the native
+manifest even when the declarations themselves are unchanged. The optional-Pulse
+repin initially failed this identity check; recapture preserved the displayed
+signatures and restored the build. The complete source and browser gates pass
+on `99fa6e0e`, including inline expansion, exact copying and all three viewports.
+See [the receipt](../../benchmarks/guide_snapshot_2026-10-29.json). This does not
+qualify zenpipe's outstanding full-feature HEIC/RAW graph.

@@ -678,3 +678,10 @@ warnings remain enabled; final reference generation verifies the correction.
 Adding the Rustdoc reference link exposed a 768 px header overflow. The main
 navigation now wraps at all widths and the header grows with its contents.
 The existing browser no-overflow assertions remain unchanged.
+
+## Known Bugs: integration guide identity (2026-10-29, fixed)
+
+Repinning the native JPEG harness to zenpipe e5cd3f9a without recapturing
+docs/integration-api.json made the guide build refuse its stale revision.
+Recapture from the pinned commit preserves the signatures and identity guard;
+the full source/browser gates pass. Receipt: benchmarks/guide_snapshot_2026-10-29.json.
