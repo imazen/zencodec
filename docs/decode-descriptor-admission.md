@@ -140,3 +140,30 @@ Therefore switching every successful decode to this route is not justified.
 Keep the ordinary success path, expose the controlled route for pre-effect
 requirements, and qualify remaining native modes before promising equivalent
 fallback. Do not turn unknown workspace evidence into a numeric bound.
+
+## Required descriptors with complete, late ICC profiles
+
+The native `7c5a9501` matrix now covers baseline/progressive JPEG, a complete
+Display P3 profile in the header, before EOI or split across scans, and five
+layouts: RGBA8, BGRA8, RGBX8, BGRX8 and RGBAF32. It first obtains the native
+profile-tagged result, then requires that exact descriptor through `DecodeRequest`.
+All 30 combinations preserve exact row bytes and metadata. Each case also requires
+the complete original ICC bytes and verifies that its actual descriptor differs
+from the initial sRGB/linear layout preference; a dropped profile cannot make
+this control pass accidentally.
+
+The suspected constant-comparison mismatch was not reproduced: native
+`select_decode_descriptor` first normalizes channel layout and sample type,
+then final output derives color interpretation from the retained source metadata.
+Do not add a second header-only predictor to reproduce that logic. A future
+one-shot admission hook must retain the configured decoder and account for those
+late color facts before claiming an exact output descriptor. The current required
+output API remains correct but may refuse after raster allocation.
+
+`just jpeg-decode-admission-check` passes all eight admission tests and strict
+native-harness Clippy on test source `90186109`: wrapper `rc=0 9s`, peak RSS
+0.59 GiB, minimum available 13621 MiB. Full logs:
+`~/tmp/zencodec-profile-layout-20261029/qualified.log`. The initial, weaker matrix
+also passed and is retained in `before.log`; the stronger assertions were added
+before landing. No production changes, new public API, native allocation bound,
+CMYK qualification or HDR reconstruction qualification are claimed here.

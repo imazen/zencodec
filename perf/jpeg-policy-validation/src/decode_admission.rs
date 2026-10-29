@@ -334,3 +334,49 @@ fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
         }
     }
 }
+
+#[test]
+fn required_profile_tagged_layout_is_negotiated_without_losing_channels() {
+    for progressive in [false, true] {
+        for placement in [
+            fixtures::Placement::Header,
+            fixtures::Placement::BeforeEoi,
+            fixtures::Placement::SplitIcc,
+        ] {
+            let bytes = fixtures::fixture(progressive, placement);
+            for preference in [
+                PixelDescriptor::RGBA8_SRGB,
+                PixelDescriptor::BGRA8_SRGB,
+                PixelDescriptor::RGBX8_SRGB,
+                PixelDescriptor::BGRX8_SRGB,
+                PixelDescriptor::RGBAF32_LINEAR,
+            ] {
+                let expected = JpegDecoderConfig::new()
+                    .job()
+                    .decoder(Cow::Borrowed(&bytes), &[preference])
+                    .unwrap()
+                    .decode()
+                    .unwrap();
+                assert_eq!(
+                    expected.metadata().icc_profile.as_deref(),
+                    Some(fixtures::profile().as_slice()),
+                    "native output must retain the complete profile at {placement:?}",
+                );
+                let required = expected.pixels().descriptor();
+                assert_ne!(
+                    required, preference,
+                    "fixture must change color interpretation"
+                );
+                let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
+                let actual = DecodeRequest::new().with_output(required)
+                    .decode(&codecs, &bytes)
+                    .unwrap_or_else(|e| panic!("progressive={progressive}, placement={placement:?}, preference={preference:?}, required={required:?}: {e}"));
+                assert_eq!(actual.pixels().descriptor(), required);
+                assert_eq!(actual.metadata(), expected.metadata());
+                for row in 0..actual.height() {
+                    assert_eq!(actual.pixels().row(row), expected.pixels().row(row));
+                }
+            }
+        }
+    }
+}
