@@ -227,8 +227,9 @@ impl Demuxer for ToyDemuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<DemuxProgress, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         self.requests.clear();
         match self.state {
@@ -478,8 +479,9 @@ impl Muxer for ToyMuxer {
     fn write_packet(
         &mut self,
         mut packet: Packet,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if !self.begun {
             return Err(SessionError::Protocol(ProtocolViolation::NoBegin));
@@ -513,7 +515,11 @@ impl Muxer for ToyMuxer {
         self.out.take_into(into)
     }
 
-    fn finish(self, stop: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<ToyError>> {
+    fn finish(
+        self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if !self.begun {
             return Err(SessionError::Protocol(ProtocolViolation::NoBegin));
@@ -566,8 +572,9 @@ impl VideoDecoder for ToyDecoder {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         let video = config
             .video
@@ -593,8 +600,9 @@ impl VideoDecoder for ToyDecoder {
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if self.ended {
             return Err(SessionError::Protocol(ProtocolViolation::SendAfterEnd));
@@ -662,8 +670,9 @@ impl VideoDecoder for ToyDecoder {
 
     fn receive(
         &mut self,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Frame>, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if let Some(f) = self.ready.pop_front() {
             return Ok(Receive::Ready(f));
@@ -786,8 +795,9 @@ impl VideoEncoder for ToyEncoder {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if self.ended {
             return Err(SessionError::Protocol(ProtocolViolation::SendAfterEnd));
@@ -821,8 +831,9 @@ impl VideoEncoder for ToyEncoder {
 
     fn receive(
         &mut self,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Packet>, SessionError<ToyError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check()?;
         if let Some(p) = self.out.pop_front() {
             return Ok(Receive::Ready(p));

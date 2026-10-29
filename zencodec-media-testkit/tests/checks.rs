@@ -99,10 +99,13 @@ fn toy_file(n: u32, keyint: u32, write_count: bool) -> Vec<u8> {
     m.begin(&[track()], MuxHint::default()).unwrap();
     let mut out = Vec::new();
     for p in simple_packets(n, keyint) {
-        m.write_packet(p, &NoPulse).unwrap();
+        m.write_packet(p, Some(&NoPulse)).unwrap();
         m.take_output(&mut out);
     }
-    m.finish(&NoPulse).unwrap().apply_to(&mut out).unwrap();
+    m.finish(Some(&NoPulse))
+        .unwrap()
+        .apply_to(&mut out)
+        .unwrap();
     out
 }
 
@@ -219,14 +222,14 @@ impl VideoDecoder for GreedyDecoder {
     fn configure(
         &mut self,
         c: &CodecConfig,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ToyError>> {
         self.0.configure(c, s)
     }
     fn send(
         &mut self,
         p: &mut Packet,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<ToyError>> {
         let st = self.0.send(p, s)?;
         if st == SendStatus::ReceivePending {
@@ -236,7 +239,7 @@ impl VideoDecoder for GreedyDecoder {
     }
     fn receive(
         &mut self,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Frame>, SessionError<ToyError>> {
         self.0.receive(s)
     }
@@ -267,13 +270,13 @@ impl VideoEncoder for AmnesiacEncoder {
     fn send(
         &mut self,
         f: &Frame,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<ToyError>> {
         self.0.send(f, s)
     }
     fn receive(
         &mut self,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Packet>, SessionError<ToyError>> {
         Ok(match self.0.receive(s)? {
             Receive::Ready(p) => {
@@ -309,7 +312,7 @@ impl Demuxer for GullibleDemuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<DemuxProgress, SessionError<ToyError>> {
         let p = self.0.step(input, s)?;
         if matches!(p.event, zencodec_media::container::DemuxEvent::Need) && !input.bytes.is_empty()
@@ -351,7 +354,7 @@ impl Muxer for LeakyMuxer {
     fn write_packet(
         &mut self,
         p: Packet,
-        s: &dyn zencodec::Pulse,
+        s: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ToyError>> {
         self.0.write_packet(p, s)
     }
@@ -366,7 +369,7 @@ impl Muxer for LeakyMuxer {
     fn take_output(&mut self, into: &mut Vec<u8>) {
         self.0.take_output(into)
     }
-    fn finish(self, s: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<ToyError>> {
+    fn finish(self, s: Option<&dyn zencodec::Pulse>) -> Result<MuxFinish, SessionError<ToyError>> {
         self.0.finish(s)
     }
 }

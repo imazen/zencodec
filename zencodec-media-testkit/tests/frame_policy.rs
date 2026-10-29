@@ -89,7 +89,7 @@ fn frame_route_preset_does_not_trade_required_workspace_for_preferred_fidelity()
                 .prefer_lossless(true)
                 .with_workspace_limit(limit),
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(selected, expected);
@@ -107,7 +107,7 @@ fn frame_route_preset_does_not_trade_required_workspace_for_preferred_fidelity()
             &offers,
             &mut preset,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::Declined);
@@ -126,6 +126,7 @@ struct Queued {
     frames: VecDeque<Frame>,
     calls: Arc<AtomicUsize>,
     fail_at: Option<u8>,
+    expected_none: Option<bool>,
 }
 impl Queued {
     fn new(frames: impl IntoIterator<Item = Frame>) -> Self {
@@ -133,6 +134,16 @@ impl Queued {
             frames: frames.into_iter().collect(),
             calls: Arc::new(AtomicUsize::new(0)),
             fail_at: None,
+            expected_none: None,
+        }
+    }
+    fn check_pulse(&self, pulse: Option<&dyn zencodec::Pulse>) {
+        if let Some(expected) = self.expected_none {
+            assert_eq!(
+                pulse.is_none(),
+                expected,
+                "policy changed per-call control presence"
+            );
         }
     }
     fn call(&self, at: u8) -> Result<(), SessionError<Native>> {
@@ -149,19 +160,25 @@ impl VideoDecoder for Queued {
     fn configure(
         &mut self,
         _: &CodecConfig,
-        _: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(0)
     }
     fn send(
         &mut self,
         _: &mut Packet,
-        _: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(1)?;
         Ok(SendStatus::Accepted)
     }
-    fn receive(&mut self, _: &dyn zencodec::Pulse) -> Result<Receive<Frame>, SessionError<Native>> {
+    fn receive(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Receive<Frame>, SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(2)?;
         Ok(self
             .frames
@@ -182,6 +199,45 @@ impl VideoDecoder for Queued {
 }
 fn config() -> CodecConfig {
     CodecConfig::new(CodecId::Av1, TimeBase::new(1, 1000).unwrap())
+}
+
+#[test]
+fn absent_control_reaches_native_policy_calls_and_preserves_required_workspace_gate() {
+    for refuse in [false, true] {
+        let budget = StorageBudget::new(16, 1);
+        let input = frame(&budget, 0);
+        let owner = Arc::downgrade(input.picture());
+        let mut native = Queued::new([input]);
+        native.expected_none = Some(true);
+        let policy = if refuse {
+            PolicySet::new().with_workspace_limit(0)
+        } else {
+            PolicySet::new()
+        };
+        let mut decoder = PolicyDecoder::new(native, policy);
+        decoder.configure(&config(), None).unwrap();
+        decoder
+            .send(&mut Packet::from_vec(vec![1]).unwrap(), None)
+            .unwrap();
+        if refuse {
+            assert!(decoder.receive(None).is_err());
+            assert!(decoder.is_failed());
+            assert_eq!(budget.reserved_bytes(), 0);
+            assert!(owner.upgrade().is_none());
+            assert_eq!(
+                decoder.report().decisions().next().unwrap().code,
+                DecisionCode::Declined
+            );
+            assert!(matches!(decoder.receive(None), Err(SessionError::Finished)));
+        } else {
+            let Receive::Ready(output) = decoder.receive(None).unwrap() else {
+                panic!("missing output")
+            };
+            assert!(Arc::ptr_eq(output.picture(), &owner.upgrade().unwrap()));
+            assert_eq!(decoder.report().decisions().count(), 1);
+            assert_eq!(output.interpretation().encoding.code_bits(), 10);
+        }
+    }
 }
 
 #[test]
@@ -213,7 +269,7 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
         },
     );
     for (i, owner) in source_owners.iter().enumerate() {
-        let Receive::Ready(output) = decoder.receive(&NoPulse).unwrap() else {
+        let Receive::Ready(output) = decoder.receive(Some(&NoPulse)).unwrap() else {
             panic!("missing native output")
         };
         assert!(Arc::ptr_eq(output.picture(), &owner.upgrade().unwrap()));
@@ -234,7 +290,7 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
     };
     assert_eq!(facts.timing.pts.unwrap().ticks(), 8);
     assert!(matches!(
-        decoder.receive(&NoPulse).unwrap(),
+        decoder.receive(Some(&NoPulse)).unwrap(),
         Receive::EndOfStream
     ));
     assert_eq!(budget.reserved_bytes(), 0);
@@ -247,15 +303,15 @@ fn assert_finished<R: zencodec::operation::OperationPolicy>(
 ) {
     let mut packet = Packet::from_vec(vec![1]).unwrap();
     assert!(matches!(
-        decoder.configure(&config(), &NoPulse),
+        decoder.configure(&config(), Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
     assert!(matches!(
-        decoder.send(&mut packet, &NoPulse),
+        decoder.send(&mut packet, Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
     assert!(matches!(
-        decoder.receive(&NoPulse),
+        decoder.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
     assert!(matches!(decoder.end_input(), Err(SessionError::Finished)));
@@ -280,10 +336,10 @@ fn stale_policy_choice_publishes_no_second_frame_and_releases_all_native_owners(
             Ok(Decision::UsePreset)
         },
     );
-    let Receive::Ready(old) = decoder.receive(&NoPulse).unwrap() else {
+    let Receive::Ready(old) = decoder.receive(Some(&NoPulse)).unwrap() else {
         panic!("missing first frame")
     };
-    let error = decoder.receive(&NoPulse).unwrap_err();
+    let error = decoder.receive(Some(&NoPulse)).unwrap_err();
     let SessionError::Codec(error) = error else {
         panic!("expected policy failure")
     };
@@ -317,8 +373,9 @@ fn policy_refusal_callback_error_and_unwind_drop_unpublished_frames() {
                 }
             },
         );
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.receive(&NoPulse)));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            decoder.receive(Some(&NoPulse))
+        }));
         if mode == 2 {
             assert!(result.is_err());
         } else {
@@ -374,7 +431,7 @@ fn cancellation_after_callback_prevents_publication_and_keeps_its_decision() {
         },
     );
     let SessionError::Codec(error) = decoder
-        .receive(&zencodec::how_far::StopOnly::borrowed(&stop))
+        .receive(Some(&zencodec::how_far::StopOnly::borrowed(&stop)))
         .unwrap_err()
     else {
         panic!("missing failure")
@@ -403,9 +460,9 @@ fn native_failure_in_every_work_method_is_terminal_with_original_cause() {
         let mut decoder = PolicyDecoder::new(native, PolicySet::new());
         let mut packet = Packet::from_vec(vec![1]).unwrap();
         let error = match method {
-            0 => decoder.configure(&config(), &NoPulse),
-            1 => decoder.send(&mut packet, &NoPulse).map(|_| ()),
-            2 => decoder.receive(&NoPulse).map(|_| ()),
+            0 => decoder.configure(&config(), Some(&NoPulse)),
+            1 => decoder.send(&mut packet, Some(&NoPulse)).map(|_| ()),
+            2 => decoder.receive(Some(&NoPulse)).map(|_| ()),
             3 => decoder.end_input(),
             _ => decoder.reset(),
         }
@@ -426,7 +483,7 @@ fn native_publication_cannot_claim_transcode_metadata_or_workspace_contracts() {
     ] {
         let budget = StorageBudget::new(16, 1);
         let mut decoder = PolicyDecoder::new(Queued::new([frame(&budget, 0)]), preset);
-        assert!(decoder.receive(&NoPulse).is_err());
+        assert!(decoder.receive(Some(&NoPulse)).is_err());
         assert_eq!(budget.reserved_bytes(), 0);
     }
 }
@@ -483,7 +540,7 @@ fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_e
             &offers,
             &mut preset,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         );
         match expected {
             Some(expected) => {
@@ -542,7 +599,7 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
                 .prefer_lossless(prefer)
                 .with_workspace_limit(limit),
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(selected, expected);
@@ -557,7 +614,7 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
         &[preserves_samples, encoder_only],
         &mut PolicySet::new().prefer_lossless(true),
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(selected, 1);
