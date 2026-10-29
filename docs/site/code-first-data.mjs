@@ -185,8 +185,8 @@ const lessons = {
   ],
   'app-start': [
     ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation. with_send_encoder registers jobs that may move between threads for the later async path; with_encoder also exists for thread-affine jobs. Send does not mean writing to a destination.'],
-    ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format; the result retains pixel interpretation and the operation report.'],
-    ['Save a derivative', 'Now the gallery needs a PNG file. TranscodeRequest belongs to zencodecs, which composes the codecs and conversion; unsupported preservation can refuse.'],
+    ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format and uses the set’s default control; the result retains pixel interpretation and the operation report.'],
+    ['Save a derivative', 'Now the gallery needs a PNG file. TranscodeRequest belongs to zencodecs, which composes the codecs and conversion. The default policy selects a permitted route; missing optional facts alone do not require refusal. Required preservation still applies.'],
     ['Write the completed PNG file', 'Keep the PNG request and its mandatory policy from the preceding recipes. Encode successfully before opening the destination, then check the same operation Pulse and write the completed bytes synchronously. The successful operation report remains available. A stopped or refused encode must not create or truncate the destination; an I/O failure after writing starts can leave partial bytes.'],
   ],
   'app-render': [
@@ -199,7 +199,7 @@ const lessons = {
   ],
   'app-transcode': [
     ['Publish a web derivative', 'The output now needs named sRGB and descriptive-metadata removal. These are explicit requirements; alpha or depth loss must not be silently substituted.'],
-    ['Add a tenant decision', 'Only this tenant requires native workspace evidence. The callback chooses among admitted routes or returns a located application error; unknown is not zero.'],
+    ['Add a tenant decision', 'Only this tenant requires native workspace evidence. The callback chooses among admitted routes or returns a located application error; unknown is not zero. A later fact can require another decision before its affected effects; an earlier choice cannot discharge an unsatisfied requirement.'],
   ],
   'app-io': [
     ['Read a file positionally', 'The source is on disk instead of in a byte slice. Keep the same transcode request and supply FileReadAt.'],
@@ -220,18 +220,18 @@ const lessons = {
     ['Select a JXL layer deliberately', 'The application now edits layers. Preserve layer placement and distinguish a layer raster from a composited presentation.'],
   ],
   'app-limits': [
-    ['Bound and cancel an operation', 'An upload is untrusted or the user closes the viewer. Configure resource limits and a Pulse, and retain the typed cause when work refuses or stops.'],
-    ['Keep one cancellation source across the codecs', 'Extend the registered gallery with the pixel limit and the application’s SharedPulse. CodecSet supplies that same control to each checked operation, preserving cancellation, progress and phase planning. Keep the application handle that signals cancellation. Adapt a legacy Stop with StopOnly at the application boundary when needed.'],
+    ['Bound and cancel an operation', 'An upload is untrusted or the user closes the viewer. Add resource limits and attach a SharedPulse to the set or job when the application needs cancellation or reporting. Borrowed per-call arguments accept None for no extra control; retained job controls and required limits still apply.'],
+    ['Keep one cancellation source across the codecs', 'Extend the registered gallery with the pixel limit and the application’s SharedPulse. CodecSet supplies that control to each checked operation. Keep the application handle that signals cancellation. When a borrowed control is needed, pass Some(pulse) to retain reporting, phase planning and sharing as well as cancellation. Use StopOnly at the boundary for an existing legacy Stop.'],
   ],
   'app-animation': [['Keep exact animation timing', 'An animation enters a video pipeline. The conformance test preserves rational timing through both adapters rather than rounding it at the boundary.']],
   'app-layout': [['Require both layout and color', 'A native image has auxiliary channels and a particular color interpretation. Prepare one output plan and execute it on the held source; layout conversion alone is insufficient.']],
   'adapter-input': [
-    ['Drive bytes already in memory', 'The application has a complete slice. The codec requests input through the same sans-I/O dialogue used by other sources.'],
-    ['Supply only requested ranges', 'The input now lives on disk or behind ranged reads. The driver fulfills InputRequest without teaching the codec about files or HTTP.'],
+    ['Drive bytes already in memory', 'The application has a complete slice. The codec requests input through the same sans-I/O dialogue used by other sources. The example passes None for its optional borrowed Pulse, preserving any control retained by the decoder’s job.'],
+    ['Supply only requested ranges', 'The input now lives on disk or behind ranged reads. The driver fulfills InputRequest without teaching the codec about files or HTTP. Forward the original Option unchanged; Some(pulse) carries the complete control, including reporting and sharing.'],
     ['Coalesce nearby ranges', 'Remote requests have latency. Batch useful reads while retaining their offsets and EOF semantics.'],
   ],
   'adapter-seek': [['Reuse a seek-based parser', 'An existing parser expects Read + Seek. The adapter maps that interface onto positional acquisition while keeping source identity and errors visible.']],
-  'adapter-control': [['Hold the decoder at its decision boundary', 'Interpretation becomes available before affected rows may escape. Retain the suspended native JPEG decoder while the destination is prepared.']],
+  'adapter-control': [['Hold the decoder at its decision boundary', 'Interpretation becomes available before affected rows may escape. Retain the suspended native JPEG decoder while the destination is prepared. A callback can select a permitted adaptation as facts arrive. Continue discovery only while affected output remains withheld within the admitted storage plan; otherwise refuse.']],
   'adapter-output': [['Choose when the destination may wait', 'A slow writer may retain a large encoder. Offer finish-first or qualified live output, keep the actual source and encoder, and preserve partial-write facts.']],
   'adapter-planning': [
     ['Find the cost of planning by startup', 'Beginning every candidate can allocate uncompressed codec state before the caller chooses. The native counterexample measures that cost.'],
@@ -261,11 +261,11 @@ const lessons = {
   ],
   'codec-decode': [
     ['Register a decoder', 'A decoder may recognize several formats: formats() returns the list. Expose their detection and actual supported behavior once on DecoderConfig.'],
-    ['Prepare one decode', 'Bind source lifetime, Pulse, limits and output negotiation on DecodeJob.'],
+    ['Prepare one decode', 'Bind source lifetime, limits and output negotiation on DecodeJob. Attach an owned SharedPulse when needed. None on a later borrowed per-call argument keeps that retained control active.'],
     ['Return interpreted pixels', 'Decode owns the reconstructed result. Keep its descriptor, metadata and pixel storage consistent.'],
   ],
   'codec-sansio': [
-    ['Ask the driver for bytes', 'IncrementalDecode consumes supplied bytes and names the next InputRequest. The protocol fixture makes consumption and row ownership explicit.'],
+    ['Ask the driver for bytes', 'IncrementalDecode consumes supplied bytes and names the next InputRequest. Its borrowed Pulse is optional. Preserve None through forwarding, check the retained job control, and keep the full Pulse when Some is supplied. The protocol fixture makes consumption and row ownership explicit.'],
     ['Bridge a whole-file codec explicitly', 'A codec that needs all bytes can use a whole-file bridge. This preserves the dialogue but does not make reconstruction incremental.'],
   ],
   'codec-coroutine': [['Write straight-line incremental decoding', 'A codec author can await requested bytes without choosing a runtime. The coroutine adapter exposes the same suspended state to the driver.']],
@@ -274,8 +274,8 @@ const lessons = {
     ['Prove configuration-dependent behavior', 'The native JPEG test compares pixels across row and one-shot paths while varying output timing. A protocol fixture alone cannot establish this.'],
   ],
   'codec-video': [
-    ['Decode through send and receive', 'A decoder can retain packets or delay pictures. The conformance codec makes backpressure, drain and ownership visible.'],
-    ['Encode through send and receive', 'An encoder can delay output independently of input frames. Expose actual fidelity and preserve state-machine errors.'],
+    ['Decode through send and receive', 'A decoder can retain packets or delay pictures. Optional borrowed controls do not change backpressure, drain or ownership. None adds no per-call control and never disables retained cancellation or policy admission.'],
+    ['Encode through send and receive', 'An encoder can delay output independently of input frames. Expose actual fidelity and preserve state-machine errors. Forward the supplied Option unchanged through session, pump and erasure boundaries.'],
   ],
   'codec-testkit': [['Check promises against behavior', 'Run both supported and unsupported directions, then compare exact pixels across feeding paths. A capability flag alone is not evidence.']],
   'codec-collection': [['Expose native TIFF structure', 'Map pages and child images through Collection while retaining native range access. This remains an explicitly labeled adapter experiment.']],
