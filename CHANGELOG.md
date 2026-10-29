@@ -27,11 +27,11 @@
   Owned job controls remain `SharedPulse`; see `docs/optional-pulse.md`
   (core `a9f166b5`, I/O `bf90a0ce`, media `d96bd3ce`).
 
-- Source candidate: planned row drivers execute shared replay pulls with actual
+- Planned row drivers execute shared replay pulls with actual
   retained raster borrows, private RAM snapshots, positional digests or a separate
   raw disk store. Planned callbacks/records use the joint route. Core unknown-job
-  evidence construction and shared-driver qualification pass; complete native
-  qualification remains pending;
+  evidence construction, shared-driver controls and the native public-driver
+  matrix pass; full feature/platform and resource-cost qualification remain separate;
   see `docs/row-replay-driver.md`.
 
 - Add joint `Question::EncodeRoute` admission over a borrowed retained plan,
@@ -39,12 +39,14 @@
   staging restrictions join existing mandatory requirements; diagnostics use
   widened masks. Exact replay needs no snapshot when the retained native plan
   proves one pass. `EncodeEvidence` carries metadata/profile facts once per job;
-  invalid plans retain their original typed cause. Shared-driver qualification passes; the native full gate remains separate.
+  invalid plans retain their original typed cause. Shared-driver and native retained-job/public-driver qualification pass;
+  see `benchmarks/replay_driver_2026-10-28.md` and the optional-Pulse receipt.
 
 - Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared
   `EncodeRows`, `RowDemand`, `RowFillError` and `PullProgress`. The experimental
   IMI adapter implements the shared typed protocol. Joint production policy,
-  retained native preparation and native erased parity remain separate gates.
+  retained native preparation and native erased parity pass their focused gates;
+  no native streaming-memory or throughput guarantee is implied.
 
 - Add `PolicySet::check_workspace` for adapter admission before native
   preparation, using the same typed requirement diagnostics as joint selection.

@@ -24,7 +24,8 @@ continues to retain compressed output; this is not a streaming memory guarantee.
 The provided erasure method passes core ownership controls and the native public
 replay-driver matrix with strict Clippy on `a39616ba`. The separate native final integration gate and strict library Clippy now pass
 on the optional-control graph at `6ab547aa`; its Undefined-slot native/shared
-controls preserve the existing slot bytes and row-padding invariance. See [the receipts](../benchmarks/replay_driver_2026-10-28.md).
+controls preserve the existing slot bytes and row-padding invariance. See [the optional-control receipt](../benchmarks/optional_pulse_2026-10-29.json) and
+[the public-driver receipt](../benchmarks/replay_driver_2026-10-28.md).
 
 ## Required before merging this batch
 
@@ -45,7 +46,10 @@ controls preserve the existing slot bytes and row-padding invariance. See [the r
    investigate failures promptly. Publication still requires all release gates
    green. The first Windows run found a
    fixture's HOME assumption; the USERPROFILE correction passes on `d7b5a159`.
-   The subsequent configured-job/reference update has fresh CI in progress.
+   The complete CI, fuzz and documentation workflows pass on `b45cadb2`,
+   including the required Windows ARM64, macOS ARM64 and i686 jobs. Later
+   guide/harness-pin changes preserve those library sources and pass their
+   local native/browser gates on `9b606366`.
 5. Review the exact public API diff, deprecated replacements, README, changelog
    and supported-mode matrix. Record remaining unmeasured performance/memory/
    compile-time costs explicitly; validation-wrapper RSS is not an encoder bound.
@@ -56,13 +60,30 @@ failure is hidden with an ignore, feature exclusion or weaker assertion.
 
 ## Separate application integration gate
 
-zenpipe/zencodecs full-profile qualification still needs the prepared HEIC/RAW
-Pulse migrations, the coordinated dependency graph, and resolution of the AVIF
-orientation expectations without changing its established displayed-pixel
-behavior. Its optional-control publication adapter subset passes on `a0b34b33`, and the
-core JPEG policy/preflight harness passes with consumer pin `e5cd3f9a`. This does
-not prove the full format profile. Do not mark that application release ready from zencodec CI.
-Any finding requiring a core contract change returns to this candidate review.
+zenpipe/zencodecs `f0322466` integrates the qualified HEIC/RAW Pulse adapters.
+All five portable roots pass source/family checks; the complete configured API
+feature profile compiles and passes strict library Clippy. API generation and
+freshness checks pass. The core guide's new consumer pin passes 48 native
+JPEG/conversion scenarios, strict Clippy, 24 source tests and the full browser
+suite on `9b606366`; see [the receipt](../benchmarks/guide_integration_2026-10-29.json).
+
+Two AVIF encode-orientation carrier assertions remain unresolved: the tests
+require stored tags while native still encoding bakes pixels. Neither assertion
+was weakened. The independent consumer bug dropping the decode OrientationHint
+is fixed with exact-pixel controls. Complete application/platform runtime and
+Apple DNG extraction coverage remain separate. Do not mark that application
+release ready from core CI. Any finding requiring a core contract change
+returns to candidate review.
+
+## Remaining measurements
+
+The older [companion compile study](../benchmarks/compile_adapters_2026-10-27.md)
+is exploratory: all samples recorded background CPU load, six recorded heavy
+processes, and supported features differ between baselines. It is not a clean
+comparison of this final candidate. Final-candidate compile time, native replay
+throughput, total workspace and whole-operation memory costs remain unmeasured;
+validation-wrapper receipts do not establish those bounds. Paired pixel changes
+and their migration costs remain documented in the precision contracts.
 
 ## Publication
 
