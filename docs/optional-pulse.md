@@ -49,5 +49,25 @@ source snapshots and preserves the earlier fixture and orchestration failures.
 This establishes the shared protocol, not every native codec's implementation.
 The eight-crate generated API catalog and Rustdoc reference also build cleanly.
 The guide browser and native adapters still require qualification against these
-optional signatures. Earlier green platform CI covers the required-reference
-contract, not this migration.
+optional signatures. Core CI on `feb09f9f` passes for the optional signatures. Its documentation
+workflow fails in native integration: older container adapters and wrappers still
+use required references. Those gates remain required; native qualification is
+not inferred from the shared workspace checks.
+
+
+## Related stack landing (2026-10-29)
+
+The following reviewed stacks were merged and their heads verified as ancestors
+of the remote main branches. These receipts cover their existing contract, not
+subsequent optional-Pulse edits:
+
+| Repository | Landed change | Merge commit |
+| --- | --- | --- |
+| zengif | [Retained Pulse and animation controls](https://github.com/imazen/zengif/pull/32) | `8756aa80` |
+| zenwebp | [Native and shared Pulse controls](https://github.com/imazen/zenwebp/pull/105) | `59f8d7a8` |
+| rav1d-safe | [Picture allocation accounting and packet context](https://github.com/imazen/rav1d-safe/pull/537) | `25c1e89e` |
+| zenavif | [Packet context and picture admission](https://github.com/imazen/zenavif/pull/74) | `13cc0394` |
+
+Picture accounting covers requested native picture planes, not total process or
+operation workspace. The remaining native optional-control source changes must
+be paired with one core/pixel dependency graph and tested before landing.

@@ -69,7 +69,7 @@ mod inspected {
     };
     use std::io::Write;
     use zencodec::{
-        MetadataPolicy, NoPulse,
+        MetadataPolicy,
         decode::BoxedError,
         metadata_rewrite::{Action, RewriteRequest},
     };
@@ -94,9 +94,7 @@ mod inspected {
                     Privacy::OrientationOnlyV1,
                     TranscodeRoute::Rewrite,
                 )
-                // This private prototype helper still takes a resolved Pulse.
-                // Public borrowed-control arguments accept None for no extra control.
-                .resolve(&mut engine, Context::default(), resolver, &NoPulse)?;
+                .resolve(&mut engine, Context::default(), resolver, None)?;
             }
         }
         // END: jpeg_icc_admission
