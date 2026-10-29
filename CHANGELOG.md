@@ -742,6 +742,10 @@ removes that whole class).
 
 #### Added
 
+- `CollectSink::into_buffer` moves finished pixel storage without another raster
+  allocation or copy. Before sink finish it returns `None`; callers must still
+  check driver success and retain completion metadata separately.
+
 - `row_encode::encode_dyn_job` and `encode_dyn_job_to_destination` accept retained
   registry jobs directly. They share typed-job admission, declared color startup,
   source validation, staging and seek-back patch execution, preserving native

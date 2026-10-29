@@ -352,6 +352,7 @@ pub fn zencodec_io::CollectSink::bytes(&self) -> &[u8]
 pub fn zencodec_io::CollectSink::descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec_io::CollectSink::finished(&self) -> bool
 pub fn zencodec_io::CollectSink::height(&self) -> u32
+pub fn zencodec_io::CollectSink::into_buffer(self) -> core::option::Option<zenpixels::buffer::PixelBuffer>
 pub fn zencodec_io::CollectSink::new() -> Self
 pub fn zencodec_io::CollectSink::rows_written(&self) -> u64
 pub fn zencodec_io::CollectSink::to_buffer(&self) -> core::option::Option<zenpixels::buffer::PixelBuffer>

@@ -9,7 +9,7 @@ use_metadata(decoded.metadata());
 ```
 
 An adapter may need to move pixel storage separately while retaining everything
-else. `into_buffer()` deliberately discards the rest. The review proposal adds:
+else. `into_buffer()` deliberately discards the rest. The ownership API provides:
 
 ```rust
 let (pixels, details) = decoded.into_parts();
@@ -97,7 +97,8 @@ that needs the complete owned result uses this sequence:
 ```rust,ignore
 // After the driver has returned Event::Done successfully:
 let details = decoder.take_details().ok_or(MyError::DetailsUnavailable)?;
-// Keep details with the matching collected pixel storage.
+// Move the finished storage; do not copy the collected raster.
+let pixels = sink.into_buffer().ok_or(MyError::PixelsUnavailable)?;
 let result = DecodeOutput::from_parts(pixels, details);
 ```
 
@@ -140,3 +141,20 @@ The shared harness passes seven admission/ownership tests and strict Clippy
 Wrapper RSS measures build/test processes, not codec working memory. Encoded
 input, native progressive storage and metadata allocations retain their existing
 scope; this is not an early one-shot allocation-admission fix.
+
+## Collecting without another raster
+
+`CollectSink::into_buffer(self) -> Option<PixelBuffer>` moves the finished raster.
+The collector owns its aligned PixelBuffer from begin, while preserving fallible
+Vec reservation and the original allocation error cause. Existing `to_buffer`
+continues to provide copying snapshots. Neither method proves decoder success;
+use the driver result before extracting the finished image.
+
+Pointer-identity controls cover U8, U16, F32 and the real JPEG controlled route
+through final DecodeOutput reconstruction. Eight IO unit tests, 17 driver tests,
+seven native admission/ownership tests, strict Clippy and no-default-features
+checks pass (rc0, 15s, peak RSS 0.59 GiB). Existing capacity-refusal assertions
+are unchanged. The owner uses the existing zenpixels API: zero zenpixels API
+changes. Alignment slack is less than one sample alignment; native coefficients,
+metadata, full encoded input and sink budgeting retain their existing scope.
+No throughput or process-memory reduction is inferred from pointer identity.

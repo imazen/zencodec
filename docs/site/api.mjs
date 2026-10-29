@@ -143,6 +143,7 @@ export const api = {
   asyncSource: {path:'zencodec_io::tokio_io::AsyncSource',file:'zencodec-io/src/tokio_io.rs',scope:'pub trait AsyncSource: Send',methods:['read_at','read_ranges','len_hint','len']},
   compute: {path:'zencodec_io::tokio_io::Compute',file:'zencodec-io/src/tokio_io.rs',scope:'pub trait Compute:',methods:['spawn','runs_inline']},
   sink: {path:'zencodec::decode::DecodeRowSink',file:'src/sink.rs',scope:'pub trait DecodeRowSink',methods:['begin','provide_next_buffer','finish']},
+  collector: {path:'zencodec_io::CollectSink',file:'zencodec-io/src/sinks.rs',scope:'impl CollectSink {',methods:['new','as_pixel_slice','into_buffer','to_buffer']},
   encoderSink: {path:'zencodec_io::EncoderSink<E>',file:'zencodec-io/src/encoder_sink.rs',scope:'impl<E: Encoder> EncoderSink<E>',methods:['new','finish']},
   wholeFile: {path:'zencodec::helpers::WholeFileIncremental<J>',file:'src/helpers/whole_file.rs',scope:'impl<J> WholeFileIncremental<J>',methods:['new']},
   incremental: {path:'zencodec::decode::IncrementalDecode',file:'src/traits/incremental.rs',scope:'pub trait IncrementalDecode',methods:['step','requested','info','take_details','access_pattern']},
