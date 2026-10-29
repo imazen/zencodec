@@ -23,7 +23,7 @@ use zencodec::{
 };
 use zenpixels::{PixelDescriptor, PixelSlice};
 
-static STOP: &zencodec::how_far::Inert = &zencodec::NoPulse;
+static STOP: Option<&dyn zencodec::Pulse> = Some(&zencodec::NoPulse);
 
 fn transcode(offers: &[zencodec::operation::TranscodeOffer], direct: bool) -> Resolved {
     let at = boundary(InterpretationState::Final);

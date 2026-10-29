@@ -22,10 +22,10 @@ use zencodec_io::row_encode::{self, Options, Raster};
 use zencodec_testkit::{ReferenceDecoderConfig, ReferenceEncoderConfig};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
-/// The current core takes a `Pulse`; base 6b0caf34 took an `enough::Stop`
+/// The current core takes an optional `Pulse`; base 6b0caf34 took an `enough::Stop`
 /// (feature `baseline-6b0caf34`, which reproduces results_2026-10-27.tsv).
 #[cfg(not(feature = "baseline-6b0caf34"))]
-static STOP: &zencodec::how_far::Inert = &zencodec::NoPulse;
+static STOP: Option<&dyn zencodec::Pulse> = Some(&zencodec::NoPulse);
 #[cfg(feature = "baseline-6b0caf34")]
 static STOP: &enough::Unstoppable = &enough::Unstoppable;
 

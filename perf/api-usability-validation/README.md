@@ -22,6 +22,11 @@ For an in-place build, copy `dependencies.lock` to `Cargo.lock`, then run
 default. `baseline-6b0caf34` and `proposed` select historical test fixtures that
 require that older core; they are not current-core feature combinations.
 
+The current tests and probe use an optional Pulse `STOP` constant. Their call
+bodies remain identical to the historical fixtures where the replay script
+requires it; only the constant's type differs. The historical Stop fixtures stay
+unchanged. This signature update has source checks only, with no replay run.
+
 The dated TSV files retain the original observations. The
 [review](../../docs/api-usability-review-2026-10-27.md) distinguishes the old
 callback bypass from current admission behavior and remaining costs. The
