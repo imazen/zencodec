@@ -287,3 +287,13 @@ strict Clippy. Receipt: rc0, 1s, peak RSS 0.31GiB, minimum available 14631MiB;
 `~/tmp/zencodec-tokio-guide/request-drop-fixed.log`. Initial Clippy diagnostics
 remain in `request-drop.log`. This establishes lifecycle behavior, not a measured
 request-to-native cancellation latency bound.
+
+`request_drop_reaches_driver_worker_without_cancelling_parent` now runs the
+actual `decode_async` driver with a paused synthetic codec step. It composes
+`how_far::WithStop` with the caller's Pulse (or NoPulse when none was supplied),
+shares that composition into the driver, and requires a successful cancellation
+checkpoint receipt separately from decoder destruction. Caller progress remains
+observable, and the caller's cancellation state stays untouched. This needs no
+change to low-level `None` semantics: the hosting request wrapper deliberately
+supplies `Some(combined)` for its own operation. This is driver integration,
+not yet a native JPEG/HTTP disconnect qualification.
