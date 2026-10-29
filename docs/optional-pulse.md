@@ -86,7 +86,9 @@ This is separate from the earlier required-Pulse stack receipts above.
 The portable JPEG and WebP graphs also pass the selected native runtime and
 strict Clippy controls. [WebP PR 119](https://github.com/imazen/zenwebp/pull/119)
 is merged as `d5893295`, including separately audited fuzz/recompress locks.
-JPEG remains in [draft PR 250](https://github.com/imazen/zenjpeg/pull/250).
+[JPEG PR 250](https://github.com/imazen/zenjpeg/pull/250) is merged as
+`26cbe9b8`; [bitmap PR 35](https://github.com/imazen/zenbitmaps/pull/35) is
+merged as `595949e0`.
 Bitmap runtime controls pass; the inventory helper repair now passes strict
 Clippy with and without inventory.
 These are focused contract checks, not full-codec or cross-platform certification.
@@ -95,8 +97,8 @@ These are focused contract checks, not full-codec or cross-platform certificatio
 | --- | --- | --- |
 | PNG `4b75d4d5` (landed with receipt and fuzz lock as `7b6d1436`) | Incremental decode, controlled adoption, metadata rewrite, declared row planning and shared contracts; fuzz bins compile | Post-merge CI passed; no release publication |
 | WebP `6cba688f` | Optional calls preserve retained cancellation; supplied progress and stop polling; incremental sample parity; strict Clippy | Fuzz bins and recompress library also compile on the audited portable graphs; broader feature/platform coverage remains |
-| JPEG `265a0447` | Native optional helpers, controlled decode, metadata rewrite and row planning; strict Clippy | API snapshot generated and verified; fuzz lock resolution and broader feature coverage remain; one inherited ignored case remains ignored |
-| Bitmaps `54f98180` | Retained stop polling, QOI and bitmap incremental controls | Feature-gate repair `769e6547` passes both strict library configurations; fuzz lock resolution remains |
+| JPEG `265a0447` | Native optional helpers, controlled decode, metadata rewrite and row planning; strict Clippy | API snapshot generated and verified; paired fuzz graph and all fuzz bins pass; broader feature/platform coverage remains; one inherited ignored case remains ignored |
+| Bitmaps `54f98180` | Retained stop polling, QOI and bitmap incremental controls | Feature-gate repair `769e6547` passes both strict library configurations; paired fuzz graph and all fuzz bins pass |
 | IVF/WebM `9c118829` | 27 controls passed in an isolated dependency override, including timeout before effects | Portable graph and strict Clippy; not a portable landing receipt |
 
 The initial bitmap/WebP/JPEG builds failed because native-only `zenpng 0.1.4`
@@ -121,3 +123,12 @@ updates are required. The WebP fuzz/recompress audits and compile checks,
 bitmap lint configurations, and JPEG API generation/check passed. The generated
 JPEG API diff contains exactly the two optional helper arguments. Existing
 ambiguous rustdoc links still warn; this is not a warning-free rustdoc claim.
+
+
+The targeted JPEG/bitmap fuzz follow-up passed after resolving the paired pixel
+packages. Bitmap's lock changed only core, pixels and converter. JPEG additionally
+needed converter's lz4_flex 0.14.0 requirement; its complete transition matched
+the earlier reviewed root dependency change. The initial audit failure remains
+recorded, followed by the explicit review and passing JPEG compile. JPEG's
+inventory fuzzer retains an existing deprecated-policy warning. These are
+compile checks, not fuzz campaigns or full feature/platform certification.

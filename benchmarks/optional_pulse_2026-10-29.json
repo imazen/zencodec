@@ -93,5 +93,27 @@
     "remaining": "JPEG and bitmap fuzz locks retain 0.2.16; targeted updates required before compilation. Existing JPEG rustdoc ambiguous-link warnings retained.",
     "webp_merge": "d5893295cc7562002017980b44753bf3237a89f3",
     "webp_merged_head": "0a3d7fbd2f1de755cdb8e5ca67b68f4d52906635"
+  },
+  "fuzz_followup": {
+    "sources": {
+      "zenbitmaps": "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c",
+      "zenjpeg": "e0bb92b4d0751526b64269ca6dcf25240e91d8bc"
+    },
+    "initial_wrapper": "rc1 10s peak-RSS0.25GiB min-avail14626MiB peak-load0.62",
+    "bitmap": "paired resolution, portable audit, all fuzz bins PASS",
+    "jpeg_initial": "audit refused lz4_flex upgrade; no compile before review",
+    "jpeg_review": "complete 0.13.1 -> 0.14.0 entries identical to previously reviewed native bitmap-root transition; required by converter 0.2.17",
+    "jpeg_compile": "all fuzz bins PASS; inherited deprecated inventory policy call still warns",
+    "jpeg_wrapper": "rc0 7s peak-RSS0.58GiB min-avail14766MiB peak-load0.50",
+    "landed": {
+      "zenjpeg": {
+        "head": "487c0b96430b3bf0c13b9f7ce2944726b2197dca",
+        "merge": "26cbe9b8c73c975762363c314ebbf7e888caa2db"
+      },
+      "zenbitmaps": {
+        "head": "428971aacddc1e20013d6e9be04817b284f31d25",
+        "merge": "595949e02e76ae85eff433f5fbe9d2e7b11751e4"
+      }
+    }
   }
 }
