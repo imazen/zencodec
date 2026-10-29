@@ -222,7 +222,7 @@ pub mod encode {
     pub use crate::negotiate::best_encode_format;
     pub use crate::output::{AnimationOutputTiming, EncodeOutput, OutputTiming};
     pub use crate::output_buffer::OutputBuffer;
-    pub use crate::policy::EncodePolicy;
+    pub use crate::policy::{EncodeOrientation, EncodePolicy};
 }
 
 /// Decode traits, types, and configuration.

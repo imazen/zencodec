@@ -512,3 +512,21 @@ mod tests {
         assert_eq!(EncodePolicy::default(), EncodePolicy::none());
     }
 }
+
+/// Required representation of the orientation carried by job metadata.
+///
+/// Omitting this request preserves the codec's existing compatibility default.
+/// This choice changes spatial representation, not compression fidelity: a
+/// lossy encoder may still change samples. It supplies no memory bound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EncodeOrientation {
+    /// Keep the supplied stored geometry and sample order; carry its intrinsic
+    /// orientation in the output. Refuse if the format/configuration cannot
+    /// represent it. Never silently bake a required pass-through request.
+    PreserveStored,
+    /// Apply the intrinsic orientation to samples and emit identity orientation.
+    /// Reconcile every emitted orientation carrier to prevent double rotation.
+    /// Resulting stored dimensions swap for quarter-turn/transposed orientations.
+    Bake,
+}

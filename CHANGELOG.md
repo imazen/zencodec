@@ -4,6 +4,9 @@
 
 ### Added
 
+- Checked stored-versus-baked encode orientation requirements, with default
+  refusal and typed, erased and registered-job forwarding (review API).
+
 - Review proposal: `decode::DecodeDetails` and `DecodeOutput::{into_parts,
   from_parts}` move pixels and all owned result details independently without
   cloning. The optional `IncrementalDecode::take_details` hook transports them

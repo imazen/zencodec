@@ -3095,3 +3095,11 @@ supplies metadata/profile obligations for every route; there is no per-offer
 metadata consistency check or consistency error type. Workspace/range remain
 route-dependent. Source-pass and all other mandatory checks still apply to plans
 proving a single native pass.
+
+### Explicit encode orientation
+
+`encode::EncodeOrientation::{PreserveStored, Bake}` is applied through
+`EncodeJob::try_set_orientation_mode` (or its consuming builder), the matching
+erased setter, or `operation::EncodeRequest::with_orientation_mode`. Defaults
+refuse until a codec implements the requirement; omitting it preserves existing
+behavior. See [the contract and native limits](encode-orientation.md).

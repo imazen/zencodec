@@ -1587,3 +1587,9 @@ terminal-details-check:
 decode-admission-profile output revision:
     cargo build --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --bin decode_admission
     python3 perf/jpeg-policy-validation/profile-decode-admission.py "${CARGO_TARGET_DIR:-perf/jpeg-policy-validation/target}/debug/decode_admission" "{{output}}" --source-revision "{{revision}}"
+
+# Checked orientation requirements must refuse before unsupported native startup.
+encode-orientation-check:
+    cargo test --locked -p zencodec --lib unsupported_orientation_refuses
+    cargo check --locked -p zencodec --example orientation
+    cargo clippy --locked -p zencodec --lib --example orientation -- -D warnings

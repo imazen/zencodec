@@ -802,6 +802,9 @@ pub type zencodec::decode::DynIncrementalDecoder = (dyn zencodec::decode::Increm
 pub type zencodec::decode::Request = zencodec::decode::InputRequest
 pub type zencodec::decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
 pub mod zencodec::encode
+#[non_exhaustive] pub enum zencodec::encode::EncodeOrientation
+pub zencodec::encode::EncodeOrientation::Bake
+pub zencodec::encode::EncodeOrientation::PreserveStored
 #[non_exhaustive] pub enum zencodec::encode::EncodePlanError
 pub zencodec::encode::EncodePlanError::Changed
 pub zencodec::encode::EncodePlanError::DestinationAccess
@@ -1101,6 +1104,7 @@ pub fn zencodec::encode::DynEncodeJob::set_metadata_policy(&mut self, meta: zenc
 pub fn zencodec::encode::DynEncodeJob::set_policy(&mut self, policy: zencodec::encode::EncodePolicy)
 pub fn zencodec::encode::DynEncodeJob::set_pulse(&mut self, pulse: how_far::pulse::SharedPulse)
 pub fn zencodec::encode::DynEncodeJob::set_stop(&mut self, pulse: almost_enough::stop_token::StopToken)
+pub fn zencodec::encode::DynEncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::encode::DynEncoder: core::marker::Send
@@ -1151,8 +1155,10 @@ pub fn zencodec::encode::EncodeJob::extensions(&self) -> core::option::Option<&d
 pub fn zencodec::encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn zencodec::encode::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: zencodec::encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
 pub fn zencodec::encode::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
+pub fn zencodec::encode::EncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
+pub fn zencodec::encode::EncodeJob::try_with_orientation_mode(self, mode: zencodec::encode::EncodeOrientation) -> core::result::Result<Self, zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_with_policy(self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_with_resolution(self, resolution: zencodec::Resolution) -> core::result::Result<Self, zencodec::ResolutionError>
 pub fn zencodec::encode::EncodeJob::with_canvas_size(self, _width: u32, _height: u32) -> Self
@@ -2252,6 +2258,7 @@ pub fn zencodec::operation::EncodeRequest::preferring_fidelity(self, targets: im
 pub fn zencodec::operation::EncodeRequest::prepare(&self, codecs: &zencodec::CodecSet) -> core::result::Result<alloc::vec::Vec<zencodec::operation::PreparedEncode>, whereat::at::At<zencodec::operation::OperationError>>
 pub fn zencodec::operation::EncodeRequest::prepare_send(&self, codecs: &zencodec::CodecSet) -> core::result::Result<alloc::vec::Vec<zencodec::operation::PreparedSendEncode>, whereat::at::At<zencodec::operation::OperationError>>
 pub fn zencodec::operation::EncodeRequest::with_fidelity(self, fidelity: zencodec::encode::Fidelity) -> Self
+pub const fn zencodec::operation::EncodeRequest::with_orientation_mode(self, mode: zencodec::encode::EncodeOrientation) -> Self
 pub const fn zencodec::operation::EncodeRequest::with_policy(self, policy: zencodec::encode::EncodePolicy) -> Self
 pub const fn zencodec::operation::EncodeRequest::with_policy_defaults(self, defaults: zencodec::encode::EncodePolicy) -> Self
 pub const fn zencodec::operation::EncodeRequest::with_policy_set(self, preset: zencodec::operation::PolicySet) -> Self
@@ -2662,6 +2669,7 @@ pub fn zencodec::prelude::DynEncodeJob::set_metadata_policy(&mut self, meta: zen
 pub fn zencodec::prelude::DynEncodeJob::set_policy(&mut self, policy: zencodec::encode::EncodePolicy)
 pub fn zencodec::prelude::DynEncodeJob::set_pulse(&mut self, pulse: how_far::pulse::SharedPulse)
 pub fn zencodec::prelude::DynEncodeJob::set_stop(&mut self, pulse: almost_enough::stop_token::StopToken)
+pub fn zencodec::prelude::DynEncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::prelude::DynEncoder: core::marker::Send
@@ -2715,8 +2723,10 @@ pub fn zencodec::prelude::EncodeJob::extensions(&self) -> core::option::Option<&
 pub fn zencodec::prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn zencodec::prelude::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: zencodec::encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
 pub fn zencodec::prelude::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
+pub fn zencodec::prelude::EncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
+pub fn zencodec::prelude::EncodeJob::try_with_orientation_mode(self, mode: zencodec::encode::EncodeOrientation) -> core::result::Result<Self, zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_with_policy(self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_with_resolution(self, resolution: zencodec::Resolution) -> core::result::Result<Self, zencodec::ResolutionError>
 pub fn zencodec::prelude::EncodeJob::with_canvas_size(self, _width: u32, _height: u32) -> Self
@@ -3350,6 +3360,7 @@ pub zencodec::UnsupportedOperation::AnimationEncode
 pub zencodec::UnsupportedOperation::AnimationTiming
 pub zencodec::UnsupportedOperation::DecodeInto
 pub zencodec::UnsupportedOperation::DecodePolicy
+pub zencodec::UnsupportedOperation::EncodeOrientation
 pub zencodec::UnsupportedOperation::EncodePlanning
 pub zencodec::UnsupportedOperation::EncodePolicy
 pub zencodec::UnsupportedOperation::GainMapEncode

@@ -378,6 +378,30 @@ pub trait EncodeJob: Sized {
         Ok(self)
     }
 
+    /// Require a spatial representation, or reject without changing this job.
+    ///
+    /// Intrinsic orientation comes from the job's metadata; this does not set
+    /// it a second time. Later metadata changes must honor the selected mode,
+    /// or fail before output. Acceptance is not a streaming or memory promise:
+    /// the effective plan must still describe acquisition before source reads.
+    /// The default refuses even identity input because it cannot guarantee the
+    /// behavior after later metadata changes. Type-erased jobs forward here.
+    fn try_set_orientation_mode(
+        &mut self,
+        _mode: crate::encode::EncodeOrientation,
+    ) -> Result<(), crate::UnsupportedOperation> {
+        Err(crate::UnsupportedOperation::EncodeOrientation)
+    }
+
+    /// Builder form of [`Self::try_set_orientation_mode`].
+    fn try_with_orientation_mode(
+        mut self,
+        mode: crate::encode::EncodeOrientation,
+    ) -> Result<Self, crate::UnsupportedOperation> {
+        self.try_set_orientation_mode(mode)?;
+        Ok(self)
+    }
+
     /// Require exact physical density, or an equivalent unknown-unit aspect
     /// ratio. Unsupported/rounded substitutions refuse and leave this job intact.
     /// A later conflicting configuration must refuse before publishing output.
