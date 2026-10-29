@@ -187,7 +187,7 @@ fn empty_staged_finish_cannot_discharge_unproven_bound_requirements() {
             required,
             |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) },
         );
-        let operation = StagedEncode::new(
+        let result = StagedEncode::new(
             encoder(),
             HeaderOnlyMux(vec![], None),
             Forward(&mut bytes),
@@ -195,8 +195,7 @@ fn empty_staged_finish_cannot_discharge_unproven_bound_requirements() {
             StorageBudget::new(1024, 16),
             Some(&NoPulse),
         )
-        .unwrap();
-        let result = operation.finish(Some(&NoPulse));
+        .and_then(|operation| operation.finish(Some(&NoPulse)));
         assert!(
             bytes.is_empty(),
             "unadmitted header published under {required:?}: {bytes:?}; result={result:?}"
@@ -290,6 +289,101 @@ fn changing_the_legacy_policy_after_input_cannot_publish_or_accept_more_input() 
                 zencodec_media::staged::Refusal::PolicyChangedAfterInput
             })
         );
+        assert!(bytes.is_empty());
+    }
+}
+
+struct ObservedMux<'a> {
+    begins: &'a Cell<usize>,
+    inner: HeaderOnlyMux,
+}
+impl Muxer for ObservedMux<'_> {
+    type Error = Infallible;
+    fn begin(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Infallible>> {
+        self.begins.set(self.begins.get() + 1);
+        self.inner.begin(tracks, hint)
+    }
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Infallible>> {
+        self.begin(tracks, hint)
+    }
+    fn write_packet(
+        &mut self,
+        packet: Packet,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Infallible>> {
+        self.inner.write_packet(packet, pulse)
+    }
+    fn pending_output(&self) -> &[u8] {
+        self.inner.pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.inner.consume_output(n)
+    }
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        self.inner.take_output(into)
+    }
+    fn finish(
+        self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<Infallible>> {
+        self.inner.finish(pulse)
+    }
+}
+
+#[test]
+fn staged_workspace_admission_precedes_mux_preparation() {
+    use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
+    for limit in [None, Some(0), Some(u64::MAX)] {
+        let begins = Cell::new(0);
+        let decisions = Cell::new(0);
+        let mut bytes = Vec::new();
+        let mut required = PolicySet::new();
+        if let Some(limit) = limit {
+            required = required.with_workspace_limit(limit);
+        }
+        let policy = BoundPolicy::new(
+            required,
+            |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                decisions.set(decisions.get() + 1);
+                Ok(Decision::UsePreset)
+            },
+        );
+        let result = StagedEncode::new(
+            encoder(),
+            ObservedMux {
+                begins: &begins,
+                inner: HeaderOnlyMux(vec![], None),
+            },
+            Forward(&mut bytes),
+            policy,
+            StorageBudget::new(1024, 16),
+            None,
+        );
+        if limit.is_some() {
+            let Err(error) = result else {
+                panic!("unknown workspace reached mux preparation")
+            };
+            assert_eq!(error.error().stage, zencodec_media::staged::Stage::Policy);
+            assert_eq!(error.error().emitted, 0);
+            let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
+            assert_eq!(
+                unmet.iter().collect::<Vec<_>>(),
+                vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+            assert_eq!(begins.get(), 0);
+        } else {
+            drop(result.unwrap());
+            assert_eq!(begins.get(), 1);
+        }
+        assert_eq!(decisions.get(), 0);
         assert!(bytes.is_empty());
     }
 }

@@ -183,6 +183,9 @@ pub struct StagedEncode<E, M, D, R> {
 impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R> {
     /// Retain the encoder and prepare exact-timing output from its actual config.
     /// This single-video-track operation requires configuration before input.
+    /// Unknown explicit workspace bounds refuse before reading encoder config or
+    /// preparing the muxer. Supplied encoder/mux/store construction has already
+    /// happened and is outside this admission boundary.
     pub fn new(
         encoder: E,
         mux: M,
@@ -211,8 +214,16 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, At<Failure>> {
         let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        let mut stage = Stage::Prepare;
         let prepare = || -> Result<_, Cause> {
             check(local_pulse)?;
+            stage = Stage::Policy;
+            if let Some(required) = resolver.requirements() {
+                // No native/mux preparation bound is available. A later frame
+                // decision cannot authorize the allocations about to happen.
+                required.check_workspace(None)?;
+            }
+            stage = Stage::Prepare;
             let config = encoder
                 .output_config()
                 .ok_or_else(|| invalid(Refusal::ConfigurationUnavailable))?
@@ -238,7 +249,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         };
         let state = prepare().map_err(|cause| {
             At::wrap(Failure {
-                stage: Stage::Prepare,
+                stage,
                 emitted: 0,
                 report: Box::default(),
                 cause,

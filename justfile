@@ -1522,3 +1522,9 @@ media-workspace-admission-check:
 media-native-workspace-check:
     cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml native_factory_workspace_admission_precedes_rav1d_construction
     cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml native_error_keeps_rav1d_whereat_trace_through_policy_and_erasure
+
+media-staged-admission-check artifacts:
+    just media-workspace-admission-check
+    cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_workspace_refusal
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
+    cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume

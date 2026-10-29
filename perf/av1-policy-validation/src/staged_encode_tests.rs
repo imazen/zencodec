@@ -692,3 +692,35 @@ fn staged_native_schedule_requirements_use_the_owned_operation_guarantee() {
         }
     }
 }
+
+#[test]
+fn staged_native_workspace_refusal_releases_preconstructed_encoder_without_output() {
+    for cap in [0, u64::MAX] {
+        let live = Rc::new(Cell::new(false));
+        let calls = Rc::new(Cell::new(0));
+        let budget = StorageBudget::new(1 << 20, 64);
+        let mut bytes = Vec::new();
+        let result = StagedEncode::new(
+            encoder(&live),
+            ExactMp4(zenmp4::Mp4Muxer::new()),
+            Forward(Writer {
+                bytes: &mut bytes,
+                live: live.clone(),
+                calls: calls.clone(),
+                fail: false,
+            }),
+            PolicySet::new().with_workspace_limit(cap),
+            budget.clone(),
+            None,
+        );
+        let Err(error) = result else {
+            panic!("unknown native workspace admitted")
+        };
+        assert_eq!(error.error().stage, EncodeStage::Policy);
+        assert!(zencodec::find_cause::<zencodec::operation::UnmetRequirements>(&error).is_some());
+        assert!(!live.get());
+        assert_eq!(calls.get(), 0);
+        assert_eq!(budget.reserved_bytes(), 0);
+        assert!(bytes.is_empty());
+    }
+}

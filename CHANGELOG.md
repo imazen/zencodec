@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- Staged video workspace admission now precedes encoder configuration reads,
+  track building and mux preparation. Unknown explicit bounds refuse early;
+  default output and exact decoded samples remain unchanged.
+
 - Refuse unknown strict workspace bounds before row-job planning, applying both
   bound and legacy requirements and preserving typed admission diagnostics.
 

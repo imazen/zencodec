@@ -700,3 +700,10 @@ The new PolicyDecoder::try_new initially checked only before its factory. A
 constructor that signalled timeout could return an admitted decoder. The added
 post-success poll drops that unpublished owner; native constructor errors stay
 primary. Regression and scope: docs/video-workspace-admission.md.
+
+## Fixed: staged workspace requirements after mux preparation
+
+StagedEncode::with_staging initially prepared its mux before checking required
+workspace at frame/finish policy. The new gate precedes configuration reads,
+track creation and mux preparation. Supplied object construction remains outside
+that boundary; explicit unknown bounds refuse. See docs/video-workspace-admission.md.

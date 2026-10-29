@@ -84,3 +84,27 @@ and catalog regeneration pass onb9cc4431: rc0,13s,peak RSS0.29GiB,minimum
 available11115MiB,peak load0.33. The initial fixture lifetime compile failure
 and negative-control failure are retained under
 `/home/lilith/tmp/zencodec-video-cancel-20261029/`; no old assertions changed.
+
+## Staged encoding preparation
+
+StagedEncode now checks bound workspace requirements before reading/cloning
+the encoder configuration, building tracks or preparing the muxer. Its generic
+route has no qualified native/mux bound, so an explicit cap—including u64::MAX—
+refuses with Workspace/Unknown at Stage::Policy. Default policies still prepare
+and run normally. This does not cover construction of encoder, mux or staging
+objects supplied by the caller; they already exist when this constructor runs.
+Late frame decisions cannot retroactively authorize preparation allocations.
+
+The corrected no-mux-call witness fails against2fbf58ca, then passes with
+the early gate. On7ca0e816, the full media testkit and strict Clippy pass;
+actual AV1/MP4 strict refusal releases the preconstructed encoder with no writes.
+The unchanged default staged pipeline passes independent FFmpeg/libdav1d pixel
+comparison and writer-failure controls; existing conversion-drift, unwind, epoch,
+fidelity, cancellation and budget refusals also pass. Catalogs regenerate.
+Receipt: rc0,17s,peak RSS0.40GiB,minimum available11192MiB,peak load0.44.
+Command: `just media-staged-admission-check <fresh-artifacts-directory>`.
+The retained oracle output is `/mnt/v/output/zencodec/staged-admission-20261029/`;
+logs/source exports are `/home/lilith/tmp/zencodec-staged-admission-20261029/`.
+The initial test-wrapper missing take_output compile failure is retained.
+The original empty-operation requirements matrix keeps every refusal/no-output
+assertion and now accepts refusal during construction as well as finish.
