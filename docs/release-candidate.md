@@ -330,8 +330,8 @@ Four explicit regression controls, all 51 existing codec unit tests and strict
 Clippy pass on ARM64, including libwebp lossless readback. The shared testkit
 permits configuration-specific row refusal, so passing that helper alone did
 not establish that the advertised route worked. This adapter still buffers a
-full raw raster and emits at finish. Consumer repinning, the other candidates
-in issue 164, and checked plan/color admission are not covered by this result.
+full raw raster and emits at finish. Checked plan/color admission is not covered
+by this result; consumer integration is recorded below.
 [Native receipt](https://github.com/imazen/zenwebp/blob/014b0e699a7694546f1008768da62086f1d54fc8/benchmarks/declared_rows_2026-10-29.md).
 
 The remaining row-entry candidates from issue 164 now have native repairs:
@@ -342,5 +342,19 @@ preserve the row-boundary Pulse reason and reject one-shot use after admission.
 and [JXL receipt](https://github.com/imazen/zenjxl/blob/a3a93aaf068c589675aa5c63090ac9d07f24d07c/benchmarks/declared_rows_2026-10-29.md)
 record failing-first controls, preserved assertions and strict Clippy. They
 qualify the existing buffered row protocol, not checked planning, workspace
-bounds or low-memory streaming. Consumer pins and zencodecs' streamed-bytes
-regressions remain the issue's integration gate.
+bounds or low-memory streaming.
+
+Zenpipe main `2908ce17` integrates all three repairs across six consumer graphs;
+the final locks change only those three source revisions. The five unchanged
+streamed-bytes tests pass for JPEG/PNG/WebP/JXL/PNM/Farbfeld/TGA, including
+one-shot byte identity, output draining, row protocol and budgets. Native CI is
+green for the three repaired codecs. Issue 164 is closed for its reproduced
+admission failure; the full all-format dispatch gate remains separate.
+
+The consumer also stopped converting native declaration/row errors to strings.
+A failing-first JPEG control lost its typed timeout cause; JPEG/PNG declaration
+and completion now preserve `Stopped(TimedOut)`. Existing Pulse tests, row tests
+and strict Clippy pass. Buffered encoders may observe cancellation only during
+finalization; this adds no latency or memory bound. Exact scope, failed fixture
+attempts and resource receipts are in the
+[consumer qualification](https://github.com/imazen/zenpipe/blob/2908ce178f86196da1b72e557ac5194d1fcfa2b5/benchmarks/row_consumers_2026-10-29.md).
