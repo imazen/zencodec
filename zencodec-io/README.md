@@ -128,7 +128,13 @@ raster fallibly before changing sink state. Capacity/allocation refusal is a
 `SinkError`; the native reservation error remains downcastable. This prevents
 the former capacity-overflow panic for extreme decoder-supplied dimensions.
 It is not a memory budget: callers still need explicit input/output limits.
-`to_buffer` copies the collected image and can temporarily retain two rasters.
+After a successful driver return, `into_buffer()` moves the finished raster
+without another allocation or pixel copy. It returns `None` before sink finish.
+Retain `decoder.take_details()` separately when metadata or native extras matter;
+combine them with `DecodeOutput::from_parts`. Always check the driver's result
+first: sink finish alone does not prove subsequent decoder validation succeeded.
+`to_buffer()` remains a copying snapshot for callers that keep using the sink;
+it can temporarily retain two rasters.
 
 `just collect-allocation-check` covers capacity refusal, geometry overflow,
 retry after refusal, ordinary driver tests, strict Clippy and the no-default-

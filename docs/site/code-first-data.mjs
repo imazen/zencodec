@@ -8,7 +8,7 @@ export const codeFlows = [
   ]},
   {id:'app-completion',role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Owned result → rows → final metadata',note:'Keep the whole result when possible. When consuming rows, take details only after the driver succeeds. None means unavailable; it is not proof of empty metadata. These executable native JPEG controls retain descriptive metadata and codec extras; privacy completeness and whole-operation memory bounds remain separate.',steps:[
     {scope:'fn native_owned_result_split_preserves_pixels_metadata_and_all_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['decodedOutput'],state:'Move pixels and details without cloning their owners'},
-    {scope:'fn native_controlled_completion_retains_descriptive_metadata_and_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['incremental'],state:'Real JPEG controlled producer, registry, row sink and one-time completion'},
+    {scope:'fn native_controlled_completion_retains_descriptive_metadata_and_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['incremental','collector'],state:'Real JPEG controlled producer, registry, row sink and one-time completion'},
   ]},
   {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
     {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
