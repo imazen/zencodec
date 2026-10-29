@@ -163,8 +163,9 @@ These changes and the resolved root lock are pushed to AVIF PR75 as `d8454a6f`;
 its downstream/fuzz graphs, full features and platform matrix remain separate.
 
 IMI at `6ab547aa` passes 13 retained-job controls, 26 encode/row/one-shot controls
-and strict library Clippy on one paired graph. Its new lock and owning receipt
-still need landing; earlier lab/no-std/WASM results retain their earlier scope.
+and strict library Clippy on one paired graph. Its tested lock and owning receipt
+are pushed in IMI PR85 as `daa9c13d`; earlier lab/no-std/WASM results retain their
+earlier scope.
 
 The guide CI failure on `3739a49a` occurred at an immediate URL assertion after
 Enter activated the skip link. `7a26c718` waits for the exact fragment and keeps

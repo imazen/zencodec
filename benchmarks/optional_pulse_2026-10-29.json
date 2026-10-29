@@ -146,7 +146,7 @@
     "avif": "21 media_session + 3 sansio PASS; strict Clippy PASS",
     "serializer": "initial100/101 with resource-budget fixture failure; corrected101/101 and strict Clippy PASS; assertions/dimensions/oracles retained",
     "imi_source": "6ab547aa3a5c8a6cb0d4702c340182fcef839d47",
-    "imi": "retained13 + codec_encode9 + codec_rows16 + pulse_one_shot1 PASS; strict library Clippy PASS; owning lock/receipt landing pending",
+    "imi": "retained13 + codec_encode9 + codec_rows16 + pulse_one_shot1 PASS; strict library Clippy PASS; tested lock/receipt pushed as daa9c13d157ffd96fb252626ab075eef75c80a59",
     "wrappers": {
       "avif02-wrapper.log": "run-heavy: done rc=1 140s | peak-RSS 1.18GiB | min-avail 13699MiB | peak-load 1.93",
       "avif02-remaining-wrapper.log": "run-heavy: done rc=101 43s | peak-RSS 0.86GiB | min-avail 14353MiB | peak-load 1.40",
