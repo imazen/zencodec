@@ -1,8 +1,5 @@
 // Every code body is extracted from a compiled source file, never transcribed.
 export const codeFlows = [
-  {id:'app-orientation',role:'consumer',title:'Choose stored orientation explicitly',note:'Omit the request for codec defaults. PreserveStored requires stored geometry and ordering; it is not lossless compression or a memory bound. Default implementations refuse. AVIF one-shot qualification is separate from row/replay planning.',steps:[
-    {example:'preserve_stored_orientation',file:'examples/orientation.rs',api:['encodeOrientation'],state:'Compiled generic caller; paired AVIF native controls qualify still encoding'},
-  ]},
   {id:'app-start',role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Register → decode → transcode',steps:[
     {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
     {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
