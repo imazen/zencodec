@@ -58,3 +58,51 @@ fn required_output_keeps_final_check_when_native_falls_back() {
             if *got == requested && *actual != requested
     ));
 }
+
+#[test]
+fn required_native_layouts_preserve_samples_and_metadata_across_scan_modes() {
+    for progressive in [false, true] {
+        let base = fixtures::base(progressive);
+        let mut bytes = base[..2].to_vec();
+        bytes.extend(fixtures::descriptive());
+        bytes.extend_from_slice(&base[2..]);
+        for requested in [
+            PixelDescriptor::RGB8_SRGB,
+            PixelDescriptor::RGBA8_SRGB,
+            PixelDescriptor::BGRA8_SRGB,
+            PixelDescriptor::RGBX8_SRGB,
+            PixelDescriptor::BGRX8_SRGB,
+            PixelDescriptor::RGBF32_LINEAR,
+            PixelDescriptor::RGBAF32_LINEAR,
+        ] {
+            let config = JpegDecoderConfig::new();
+            let expected = config
+                .clone()
+                .job()
+                .decoder(Cow::Borrowed(&bytes), &[requested])
+                .unwrap()
+                .decode()
+                .unwrap();
+            assert_eq!(
+                expected.pixels().descriptor(),
+                requested,
+                "native output differs: progressive={progressive}, requested={requested:?}"
+            );
+            let codecs = CodecSet::new().with_decoder(config);
+            let actual = DecodeRequest::new()
+                .with_output(requested)
+                .decode(&codecs, &bytes)
+                .unwrap();
+            assert_eq!(actual.pixels().descriptor(), requested);
+            assert_eq!(actual.metadata(), expected.metadata());
+            assert_eq!(actual.info().orientation, expected.info().orientation);
+            assert_eq!(
+                (actual.width(), actual.height()),
+                (expected.width(), expected.height())
+            );
+            for row in 0..actual.height() {
+                assert_eq!(actual.pixels().row(row), expected.pixels().row(row));
+            }
+        }
+    }
+}

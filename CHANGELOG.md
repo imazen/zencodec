@@ -17,6 +17,11 @@
 
 ### Fixed
 
+- The native JPEG admission harness pins the RGBA float negotiation fix and
+  verifies seven required layouts in baseline/progressive scans. Required
+  descriptors still retain their final check; early allocation admission remains
+  open (`docs/decode-descriptor-admission.md`).
+
 - Native spatial qualification now uses the current JXL stack containing the
   intrinsic SizeHeader fix. All 147 TIFF/JXL spatial controls and strict Clippy
   pass without changing assertions (`benchmarks/paired_pixel_native_2026-10-29.md`).

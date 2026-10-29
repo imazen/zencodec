@@ -44,3 +44,28 @@ The run-heavy receipt is rc=0, 12 seconds, peak RSS 0.70 GiB. This measures the
 validation process, not decoder allocation. No early-allocation or HDR gain-map
 qualification is claimed. The controls guard valid negotiation and final
 validation while the early-admission contract is developed.
+
+## Advertised float-layout mismatch found during admission work
+
+The native JPEG 0.9 adapter advertised RGBAF32 but returned RGBF32 for that
+preference. Required-output validation correctly refused it; accepting the
+capability table or a preference-selection helper as proof would not repair the
+actual output. Native main e49c76f0 now emits opaque alpha with unchanged RGB
+bits and metadata. The native regression covers baseline/progressive input and
+preference ordering. The shared harness checks seven required layouts across
+both scan modes, retaining exact samples, dimensions, orientation and metadata.
+This repairs one concrete negotiation mismatch, not early allocation admission.
+
+Controlled final interpretation cannot be adopted without a descriptor:
+BoundaryAction::permits rejects missing evidence, and the fused sink also checks
+it against output. The optional comparison in CheckedDecoder is not a missing-
+evidence bypass; do not add a redundant caller query for that case.
+
+The final published native pin passes all three admission tests and strict
+all-target harness Clippy (rc0, 13s, peak RSS 0.70GiB). The seven-layout
+matrix contains 14 native/checked comparisons. The standalone native
+controlled-decode target passes 17 tests including exact RGBA float sample/alpha
+checks; native library/test Clippy also passes (rc0, 8s, peak RSS 0.59GiB).
+The harness lock changes only the JPEG source revision. Full logs are retained
+in `~/tmp/zenpixels-release-reconcile-20261029/jpeg-rgba-final.log` and
+`jpeg-rgba-native4.log`. No decoder allocation measurement is claimed.
