@@ -246,6 +246,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed container final-position cancellation (2026-10-29): output could flush
+  after its final seek signalled a stop. The driver now checks before flush;
+  testkit controls retain confirmed append counts and native seek error priority.
+  See `just media-publication-check` and `docs/tokio-execution.md`.
+
 - Fixed async publication cancellation (2026-10-29): a writer could signal
   cancellation after accepting the final batch and the driver would still
   finalize, publish the tail and return success. Shared-Pulse checks now cover

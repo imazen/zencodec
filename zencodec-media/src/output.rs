@@ -398,6 +398,9 @@ impl<M: Muxer, D: Destination> Output<M, D> {
                 .position(total)
                 .map_err(|e| self.failure(Stage::Patch, Box::new(e)))?;
         }
+        // Restoring the final seek position may itself signal cancellation.
+        // Do not turn that completed effect into permission to flush.
+        stopped(local_pulse).map_err(|cause| self.failure(Stage::Finish, cause))?;
         self.destination
             .flush()
             .map_err(|e| self.failure(Stage::Finish, Box::new(e)))?;

@@ -31,6 +31,9 @@
 
 ### Fixed
 
+- Seek-back container output checks cancellation after restoring its final
+  position and before flush, preserving prior effects and original seek errors.
+
 - Async transcode checks cancellation across publication and queued-finalization
   boundaries. A stopped writer no longer causes subsequent finish/tail/flush
   effects or a successful return; already-written bytes remain irrevocable and

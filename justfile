@@ -1649,3 +1649,7 @@ registry-allocation-probe:
 tokio-guide-check:
     cargo test -p zencodec-io --features tokio --test drivers --test work_quota --locked
     cargo clippy -p zencodec-io --features tokio --test drivers --test work_quota --locked -- -D warnings
+
+media-publication-check:
+    cargo test -p zencodec-media -p zencodec-media-testkit --all-features --locked
+    cargo clippy -p zencodec-media -p zencodec-media-testkit --all-features --all-targets --locked -- -D warnings

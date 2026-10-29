@@ -895,3 +895,103 @@ fn deprecated_finish_helper_uses_the_same_transactional_validation() {
     apply_finish(&mut output, MuxFinish::new(b"tail".to_vec(), vec![])).unwrap();
     assert_eq!(&output, b"keeptail");
 }
+
+#[test]
+fn final_seek_cancellation_prevents_flush_and_preserves_effects() {
+    use std::io::{self, Cursor, Seek, SeekFrom, Write};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use zencodec_media::output::{Output, SeekBack, Stage};
+    struct Stop(Arc<AtomicBool>);
+    impl enough::Stop for Stop {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(enough::StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    struct Writer {
+        data: Cursor<Vec<u8>>,
+        stopped: Arc<AtomicBool>,
+        cancel: bool,
+        fail_seek: bool,
+        flushes: usize,
+    }
+    impl Write for Writer {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.data.write(data)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            Ok(())
+        }
+    }
+    impl Seek for Writer {
+        fn seek(&mut self, target: SeekFrom) -> io::Result<u64> {
+            if let SeekFrom::Start(pos) = target
+                && pos > 0
+                && pos == self.data.get_ref().len() as u64
+            {
+                if self.cancel {
+                    self.stopped.store(true, Ordering::SeqCst);
+                }
+                if self.fail_seek {
+                    return Err(io::Error::other("final position failed"));
+                }
+            }
+            self.data.seek(target)
+        }
+    }
+    for (cancel, fail_seek) in [(false, false), (true, false), (true, true)] {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let pulse = zencodec::how_far::StopOnly::new(Stop(stopped.clone()));
+        let mut writer = Writer {
+            data: Cursor::new(vec![]),
+            stopped,
+            cancel,
+            fail_seek,
+            flushes: 0,
+        };
+        let track = TrackInfo::video(0, config().codec, tb(), VideoTrackInfo::new(W, H))
+            .build()
+            .unwrap();
+        let output = Output::with_container_timing(
+            ToyMuxer::new(true),
+            SeekBack::new(&mut writer).unwrap(),
+            &[track],
+            Some(&pulse),
+        )
+        .unwrap();
+        let emitted = output.stats().emitted;
+        let result = output.finish(Some(&pulse));
+        if cancel {
+            let error = result.unwrap_err();
+            assert_eq!(error.emitted, emitted);
+            if fail_seek {
+                assert!(matches!(error.stage, Stage::Patch));
+                assert_eq!(
+                    zencodec::find_cause::<io::Error>(&error)
+                        .unwrap()
+                        .to_string(),
+                    "final position failed"
+                );
+            } else {
+                assert!(matches!(error.stage, Stage::Finish));
+                assert!(matches!(
+                    zencodec::find_cause::<SessionError<zencodec_media::session::ErasedError>>(
+                        &error
+                    ),
+                    Some(SessionError::Cancelled(enough::StopReason::TimedOut))
+                ));
+            }
+        } else {
+            assert_eq!(result.unwrap().emitted, emitted);
+        }
+        assert_eq!(writer.data.get_ref().len() as u64, emitted);
+        assert_eq!(writer.flushes, usize::from(!cancel));
+    }
+}

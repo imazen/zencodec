@@ -90,3 +90,20 @@ Logs: `~/tmp/zencodec-tokio-guide/cancel-before-final-fixture.log`,
 `cancel-qualified.log`, and `cancel-io-all.log`. The full I/O test wrapper reports
 rc0, 4s, peak RSS 0.27GiB and minimum available 14584MiB; this is not a runtime
 performance comparison.
+
+## Container seek-back completion
+
+Synchronous media output shares the same rule: cancellation after restoring the
+final output position must prevent a subsequent flush. The testkit regression
+first observed one flush where zero was required. The repair checks the shared
+Pulse between final position restoration and flush. Confirmed append counts stay
+available; a real seek failure retains its I/O cause and Patch stage even when
+that seek also signals cancellation. `just media-publication-check` covers the
+media library and testkit. This fixture validates container effect ordering,
+not native codec performance or an atomic rollback guarantee.
+
+The media library and testkit pass all 84 tests/doctests and strict all-target
+Clippy with all features. The failing-first and fixed receipts are retained at
+`~/tmp/zencodec-tokio-guide/media-cancel-before2.log` and `media-publication.log`.
+The latter wrapper reports rc0, 4s, peak RSS 0.28GiB and minimum available
+14407MiB; no native performance claim follows from these controls.
