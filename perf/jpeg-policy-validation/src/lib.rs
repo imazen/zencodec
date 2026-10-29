@@ -51,3 +51,6 @@ mod native_preflight;
 
 #[cfg(test)]
 mod decode_admission;
+
+#[cfg(test)]
+mod request_cancellation;

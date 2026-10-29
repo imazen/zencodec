@@ -146,6 +146,7 @@ checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
 name = "jpeg-policy-validation"
 version = "0.0.0"
 dependencies = [
+ "tokio",
  "kamadak-exif",
  "zencodec",
  "zencodec-coroutine",

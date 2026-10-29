@@ -1653,3 +1653,8 @@ tokio-guide-check:
 media-publication-check:
     cargo test -p zencodec-media -p zencodec-media-testkit --all-features --locked
     cargo clippy -p zencodec-media -p zencodec-media-testkit --all-features --all-targets --locked -- -D warnings
+
+# Tokio abort -> operation-local Pulse -> real native JPEG checkpoints.
+native-request-cancellation-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked request_cancellation:: -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

@@ -297,3 +297,25 @@ observable, and the caller's cancellation state stays untouched. This needs no
 change to low-level `None` semantics: the hosting request wrapper deliberately
 supplies `Some(combined)` for its own operation. This is driver integration,
 not yet a native JPEG/HTTP disconnect qualification.
+
+## Native JPEG request-abort control
+
+`just native-request-cancellation-check` compiles the same request wrapper from
+`docs/examples/request_cancellation.rs` against the pinned native JPEG decoder.
+A successful decode counts actual checkpoints for each baseline/progressive
+fixture. Six runs pause at the early, middle and last checkpoints, abort the
+request, then release the pause. Each requires a separate native `Cancelled`
+receipt and holds its admission permit until the worker exits. No elapsed-time
+threshold substitutes for the native error assertion. The fixtures exercise
+native decode cancellation, not HTTP disconnect detection, streaming response
+body ownership, or cancellation latency under scheduler load.
+
+Tokio is a direct development dependency of this private harness; its existing
+locked version is reused. No dependency package identity or codec pin changed.
+The request wrapper remains example code, with no new exported zencodec API.
+
+Qualification receipt (2026-10-29): native checkpoint control, 41 driver tests,
+3 quota tests, and strict native/driver Clippy pass; rc0, 8s, peak RSS 0.59GiB,
+minimum available 14035MiB. Full log:
+`~/tmp/zencodec-tokio-guide/native-request-qualified.log`.
+This is test-run resource usage, not a native memory bound or speed measurement.
