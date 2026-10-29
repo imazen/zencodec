@@ -5,6 +5,7 @@
 
 #![cfg(feature = "std")]
 
+use how_far::Report as _;
 use std::io::Cursor;
 
 use zencodec::decode::{
@@ -458,7 +459,7 @@ impl IncrementalDecode for Trickle {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _stop: &dyn zencodec::Pulse,
+        _stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Never>> {
         if self.done {
             return Ok(Progress::new(
@@ -574,7 +575,7 @@ impl IncrementalDecode for Bad {
         &mut self,
         input: Input<'_>,
         _sink: &mut dyn DecodeRowSink,
-        _stop: &dyn zencodec::Pulse,
+        _stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Never>> {
         self.req = match self.how {
             Misbehave::EmptyRequest => Vec::new(),
@@ -775,6 +776,8 @@ mod pulse_support {
     struct Inner {
         cancelled: AtomicBool,
         advanced: AtomicU64,
+        splits: AtomicU64,
+        shares: AtomicU64,
         total: Mutex<Option<Total>>,
     }
 
@@ -791,6 +794,12 @@ mod pulse_support {
         }
         pub fn total(&self) -> Option<Total> {
             *self.0.total.lock().unwrap()
+        }
+        pub fn splits(&self) -> u64 {
+            self.0.splits.load(Ordering::SeqCst)
+        }
+        pub fn shares(&self) -> u64 {
+            self.0.shares.load(Ordering::SeqCst)
         }
         pub fn shared(&self) -> SharedPulse {
             SharedPulse::new(self.clone())
@@ -819,6 +828,7 @@ mod pulse_support {
             _execution: Execution,
             _parts: &[PhaseSpec<'_>],
         ) -> Result<Vec<Child<'_>>, PlanError> {
+            self.0.splits.fetch_add(1, Ordering::SeqCst);
             Err(PlanError::Unsupported)
         }
         fn set_total(&self, total: Total) -> Result<(), PlanError> {
@@ -826,11 +836,271 @@ mod pulse_support {
             Ok(())
         }
         fn share(&self) -> Result<SharedPulse, PlanError> {
+            self.0.shares.fetch_add(1, Ordering::SeqCst);
             Ok(self.shared())
         }
     }
 }
 use pulse_support::RecordingPulse;
+
+/// A job-owned control is distinct from the optional driver control. This
+/// adapter double refuses any replacement of `None` with a synthetic no-op.
+struct RetainedControl<D> {
+    decoder: D,
+    pulse: how_far::SharedPulse,
+}
+impl<D: IncrementalDecode> IncrementalDecode for RetainedControl<D> {
+    type Error = D::Error;
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Progress, StepError<Self::Error>> {
+        assert!(
+            pulse.is_none(),
+            "driver must preserve absent per-call control"
+        );
+        enough::Stop::check(&self.pulse).map_err(StepError::Cancelled)?;
+        self.decoder.step(input, sink, pulse)
+    }
+    fn requested(&self) -> &[InputRequest] {
+        self.decoder.requested()
+    }
+    fn info(&self) -> Option<&ImageInfo> {
+        self.decoder.info()
+    }
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.decoder.output_descriptor()
+    }
+    fn access_pattern(&self) -> AccessPattern {
+        self.decoder.access_pattern()
+    }
+}
+impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode
+    for RetainedControl<D>
+{
+    fn step_controlled(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<zencodec::decode::ControlledProgress, StepError<Self::Error>> {
+        assert!(pulse.is_none());
+        enough::Stop::check(&self.pulse).map_err(StepError::Cancelled)?;
+        self.decoder.step_controlled(input, sink, pulse)
+    }
+    fn resume(
+        &mut self,
+        boundary: zencodec::decode::BoundaryId,
+        action: zencodec::decode::BoundaryAction,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), StepError<Self::Error>> {
+        assert!(pulse.is_none());
+        enough::Stop::check(&self.pulse).map_err(StepError::Cancelled)?;
+        self.decoder.resume(boundary, action, pulse)
+    }
+}
+
+#[test]
+fn no_per_call_control_during_resume_keeps_a_retained_stop_terminal() {
+    use zencodec::decode::{BoundaryAction, InterpretationFacts, InterpretationState};
+    use zencodec_io::{ByteStepper, ControlledEvent, ControlledStepper, SliceCursor, Yield};
+    let pulse = RecordingPulse::default();
+    let native =
+        CoroutineDecoder::controlled(32, AccessPattern::RandomAccess, |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
+            ctx.set_output_descriptor(RGBA);
+            ctx.interpretation(InterpretationFacts::new(
+                2,
+                1,
+                Some(RGBA),
+                InterpretationState::Final,
+            ))
+            .await?;
+            ctx.write_rows(
+                BatchMeta::final_rows(0),
+                &PixelSlice::new(&[9; 8], 2, 1, 8, RGBA).unwrap(),
+            )
+            .await?;
+            Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 1, RGBA))
+        });
+    let retained = RetainedControl {
+        decoder: native,
+        pulse: pulse.shared(),
+    };
+    let mut sink = CollectSink::new();
+    let mut stage = ControlledStepper::new(retained, &mut sink);
+    let mut cursor = SliceCursor::new(8);
+    let boundary = loop {
+        match cursor.next(&[], &mut stage, None).unwrap() {
+            Yield::Output(ControlledEvent::Suspended(boundary)) => break boundary,
+            Yield::Output(ControlledEvent::Decode(_)) => {}
+            other => panic!("expected mandatory suspension: {other:?}"),
+        }
+    };
+    assert!(stage.sink().descriptor().is_none());
+    pulse.cancel();
+    assert!(matches!(
+        stage.resume(boundary.id(), BoundaryAction::AdoptInterpretation, None),
+        Err(StepError::Cancelled(enough::StopReason::Cancelled))
+    ));
+    assert!(matches!(
+        stage.step(Input::empty(), None),
+        Err(StepError::Finished)
+    ));
+    assert!(stage.sink().descriptor().is_none());
+    assert_eq!(stage.sink().rows_written(), 0);
+}
+
+#[test]
+fn none_preserves_absence_and_retained_cancellation_in_every_sync_image_driver() {
+    let file = sequential_file(6);
+    for driver in 0..3 {
+        for cancelled in [false, true] {
+            let pulse = RecordingPulse::default();
+            let mut decoder = RetainedControl {
+                decoder: sequential_decoder(),
+                pulse: pulse.shared(),
+            };
+            if cancelled {
+                pulse.cancel();
+            }
+            let mut sink = CollectSink::new();
+            let result = match driver {
+                0 => drive_from_slice(&mut decoder, &file, &mut sink, None, 5)
+                    .map(|(info, _)| info)
+                    .map_err(|e| match e {
+                        DriveError::Step(e) => e,
+                        other => panic!("unexpected source/protocol failure: {other:?}"),
+                    }),
+                1 => drive_from_read_at(
+                    &mut decoder,
+                    &mut Opaque(SliceReadAt::new(&file)),
+                    &mut sink,
+                    None,
+                    DriveOptions::new(0, 5),
+                )
+                .map(|(info, _)| info)
+                .map_err(|e| match e {
+                    DriveError::Step(e) => e,
+                    other => panic!("unexpected source/protocol failure: {other:?}"),
+                }),
+                _ => pump_read_to_sink(Cursor::new(&file), &mut decoder, &mut sink, None, 5, 128)
+                    .map_err(|e| match e {
+                        PumpError::Step(e) => e,
+                        other => panic!("unexpected source/protocol failure: {other:?}"),
+                    }),
+            };
+            if cancelled {
+                assert!(matches!(
+                    result,
+                    Err(StepError::Cancelled(enough::StopReason::Cancelled))
+                ));
+                assert!(sink.descriptor().is_none());
+                assert_eq!(sink.rows_written(), 0);
+                assert!(!sink.finished());
+            } else {
+                let info = result.unwrap();
+                assert_eq!((info.width, info.height), (2, 6));
+                assert_eq!(sink.bytes(), &file[8..]);
+                assert!(sink.finished());
+            }
+        }
+    }
+}
+
+struct ReportingStage;
+impl zencodec_io::ByteStepper for ReportingStage {
+    type Output = how_far::SharedPulse;
+    type Error = enough::StopReason;
+    fn step(
+        &mut self,
+        _: Input<'_>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<zencodec_io::Stepped<Self::Output>, Self::Error> {
+        let pulse = pulse.expect("cursor preserves the supplied full Pulse");
+        pulse.check()?;
+        assert!(matches!(
+            pulse.split(
+                how_far::Execution::Sequence,
+                &[how_far::PhaseSpec::new(
+                    "decode",
+                    1,
+                    how_far::Total::Unknown
+                )],
+            ),
+            Err(how_far::PlanError::Unsupported)
+        ));
+        pulse.set_total(how_far::Total::Exact(9)).unwrap();
+        pulse.advance(4);
+        let shared = pulse.share().unwrap();
+        Ok(zencodec_io::Stepped {
+            consumed: 0,
+            step: zencodec_io::Step::Finished(shared),
+        })
+    }
+    fn requested(&self) -> &[InputRequest] {
+        &[]
+    }
+}
+
+#[test]
+fn every_sync_cursor_preserves_some_reporting_and_typed_cancellation() {
+    use zencodec_io::{DriveFailure, PumpFailure, ReadAtCursor, ReadCursor, SliceCursor};
+    for driver in 0..3 {
+        for cancelled in [false, true] {
+            let pulse = RecordingPulse::default();
+            if cancelled {
+                pulse.cancel();
+            }
+            let mut stage = ReportingStage;
+            let result = match driver {
+                0 => SliceCursor::new(8)
+                    .next(&[], &mut stage, Some(&pulse))
+                    .map_err(|e| match e {
+                        DriveFailure::Step(e) => e,
+                        other => panic!("{other:?}"),
+                    }),
+                1 => ReadAtCursor::new(DriveOptions::default())
+                    .next(&mut Opaque(SliceReadAt::new(&[])), &mut stage, Some(&pulse))
+                    .map_err(|e| match e {
+                        DriveFailure::Step(e) => e,
+                        other => panic!("{other:?}"),
+                    }),
+                _ => ReadCursor::new(8, 128)
+                    .next(&mut Cursor::new(&[]), &mut stage, Some(&pulse))
+                    .map_err(|e| match e {
+                        PumpFailure::Step(e) => e,
+                        other => panic!("{other:?}"),
+                    }),
+            };
+            if cancelled {
+                assert!(matches!(result, Err(enough::StopReason::Cancelled)));
+                assert_eq!(
+                    (pulse.splits(), pulse.shares(), pulse.advanced()),
+                    (0, 0, 0)
+                );
+                assert_eq!(pulse.total(), None);
+            } else {
+                let output = result.unwrap();
+                assert!(output.is_finished());
+                let shared = output.into_inner();
+                shared.advance(5);
+                assert_eq!(
+                    (pulse.splits(), pulse.shares(), pulse.advanced()),
+                    (1, 1, 9)
+                );
+                assert_eq!(pulse.total(), Some(how_far::Total::Exact(9)));
+                pulse.cancel();
+                assert_eq!(
+                    enough::Stop::check(&shared),
+                    Err(enough::StopReason::Cancelled)
+                );
+            }
+        }
+    }
+}
 
 #[cfg(feature = "tokio")]
 mod tokio_drivers {
@@ -844,6 +1114,86 @@ mod tokio_drivers {
         AsyncDriveError, AsyncReadSource, AsyncSource, BytesSource, ChannelRowSink, Compute,
         Inline, StripEvent, decode_async, pull_decode_on_thread, transcode_async,
     };
+
+    #[tokio::test]
+    async fn no_driver_pulse_preserves_absence_and_retained_async_cancellation() {
+        let file = sequential_file(6);
+        for cancelled in [false, true] {
+            let pulse = RecordingPulse::default();
+            let decoder = RetainedControl {
+                decoder: sequential_decoder(),
+                pulse: pulse.shared(),
+            };
+            if cancelled {
+                pulse.cancel();
+            }
+            let mut source = BytesSource(file.clone().into());
+            let result = decode_async(
+                decoder,
+                CollectSink::new(),
+                &mut source,
+                Inline,
+                DriveOptions::new(0, 5),
+                None,
+            )
+            .await;
+            if cancelled {
+                assert!(matches!(
+                    result,
+                    Err(AsyncDriveError::Step(StepError::Cancelled(
+                        enough::StopReason::Cancelled
+                    )))
+                ));
+            } else {
+                let (info, sink) = result.unwrap();
+                assert_eq!((info.width, info.height), (2, 6));
+                assert_eq!(sink.bytes(), &file[8..]);
+                assert!(sink.finished());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn async_cursor_preserves_some_reporting_and_typed_cancellation() {
+        use zencodec_io::{DriveFailure, tokio_io::AsyncCursor};
+        for cancelled in [false, true] {
+            let pulse = RecordingPulse::default();
+            if cancelled {
+                pulse.cancel();
+            }
+            let mut source = BytesSource(Vec::new().into());
+            let mut cursor = AsyncCursor::new(DriveOptions::default());
+            let result = cursor
+                .next(&mut source, &mut ReportingStage, Some(&pulse))
+                .await;
+            if cancelled {
+                assert!(matches!(
+                    result,
+                    Err(DriveFailure::Step(enough::StopReason::Cancelled))
+                ));
+                assert_eq!(
+                    (pulse.splits(), pulse.shares(), pulse.advanced()),
+                    (0, 0, 0)
+                );
+                assert_eq!(pulse.total(), None);
+            } else {
+                let output = result.unwrap();
+                assert!(output.is_finished());
+                let shared = output.into_inner();
+                shared.advance(5);
+                assert_eq!(
+                    (pulse.splits(), pulse.shares(), pulse.advanced()),
+                    (1, 1, 9)
+                );
+                assert_eq!(pulse.total(), Some(how_far::Total::Exact(9)));
+                pulse.cancel();
+                assert_eq!(
+                    enough::Stop::check(&shared),
+                    Err(enough::StopReason::Cancelled)
+                );
+            }
+        }
+    }
 
     /// An object store stand-in: every range is its own task, so a round
     /// with two ranges is two requests in flight.
@@ -1652,7 +2002,7 @@ impl IncrementalDecode for Greedy {
         &mut self,
         input: Input<'_>,
         _sink: &mut dyn DecodeRowSink,
-        _stop: &dyn zencodec::Pulse,
+        _stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Never>> {
         self.step += 1;
         match self.step {

@@ -54,7 +54,7 @@ impl ByteStepper for Wants {
     fn step(
         &mut self,
         input: Input<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<Self::Output>, Self::Error> {
         Ok(Stepped {
             consumed: 0,
@@ -77,7 +77,7 @@ fn oversized_contiguous_requests_and_overflow_do_not_read() {
         let mut source = Source::default();
         let mut cursor = ReadAtCursor::new(options(16, 8, 8));
         let e = cursor
-            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
+            .next(&mut source, &mut Wants(vec![request]), Some(&NoPulse))
             .unwrap_err();
         assert!(matches!(
             e,
@@ -95,7 +95,7 @@ fn oversized_contiguous_requests_and_overflow_do_not_read() {
     ] {
         let mut source = Source::default();
         let e = ReadAtCursor::new(DriveOptions::default())
-            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
+            .next(&mut source, &mut Wants(vec![request]), Some(&NoPulse))
             .unwrap_err();
         assert!(matches!(
             e,
@@ -119,7 +119,7 @@ fn affordable_alternative_and_prefetch_obey_every_cap() {
                 let mut source = Source::default();
                 let mut cursor = ReadAtCursor::new(options(cap, descriptors, concurrent));
                 let (offset, bytes) = cursor
-                    .next(&mut source, &mut Wants(requests), &NoPulse)
+                    .next(&mut source, &mut Wants(requests), Some(&NoPulse))
                     .unwrap()
                     .into_inner();
                 assert_eq!(offset, 32);
@@ -143,7 +143,7 @@ fn sequential_prefetch_and_forward_reuse_stay_inside_capacity() {
             .next(
                 &mut source,
                 &mut Wants(vec![InputRequest::at_least(offset, len)]),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap()
             .into_inner();
@@ -173,7 +173,7 @@ fn retained_ranges_and_new_sequential_window_share_the_allowance() {
                 InputRequest::range(32, 8),
                 InputRequest::range(64, 8),
             ]),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     assert_eq!(cursor.retained_input_capacity(), 24);
@@ -183,7 +183,7 @@ fn retained_ranges_and_new_sequential_window_share_the_allowance() {
         InputRequest::at_least(120, 16),
     ] {
         let (offset, bytes) = cursor
-            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
+            .next(&mut source, &mut Wants(vec![request]), Some(&NoPulse))
             .unwrap()
             .into_inner();
         assert_eq!(bytes, bytes_at(offset, bytes.len()));
@@ -200,7 +200,7 @@ fn borrowed_slices_need_no_owned_payload_or_io_allowance() {
         .next(
             &mut source,
             &mut Wants(vec![InputRequest::range(32, 64)]),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap()
         .into_inner();
@@ -216,7 +216,7 @@ fn sequential_prefetch_cannot_wrap_the_address_space() {
         .next(
             &mut source,
             &mut Wants(vec![InputRequest::at_least(u64::MAX - 8, 8)]),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap()
         .into_inner();
@@ -235,7 +235,7 @@ fn zero_read_and_descriptor_allowances_refuse_without_io() {
             .next(
                 &mut source,
                 &mut Wants(vec![InputRequest::range(32, 8)]),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap_err();
         assert!(if range_error {
@@ -281,12 +281,12 @@ fn failed_sync_batches_never_publish_unfilled_bytes() {
     let mut cursor = ReadAtCursor::new(options(16, 2, 2));
     let mut stage = Wants(vec![InputRequest::range(32, 8), InputRequest::range(80, 8)]);
     assert!(matches!(
-        cursor.next(&mut source, &mut stage, &NoPulse),
+        cursor.next(&mut source, &mut stage, Some(&NoPulse)),
         Err(DriveFailure::Source(_))
     ));
     assert_eq!(cursor.retained_input_capacity(), 0);
     let (offset, bytes) = cursor
-        .next(&mut source, &mut stage, &NoPulse)
+        .next(&mut source, &mut stage, Some(&NoPulse))
         .unwrap()
         .into_inner();
     assert_eq!(source.started, 2);
@@ -304,7 +304,7 @@ fn sequential_read_cursor_limits_prefetch_and_skipping_too() {
             .next(
                 &mut source,
                 &mut Wants(vec![InputRequest::at_least(offset, 7)]),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap()
             .into_inner();
@@ -350,7 +350,7 @@ mod asynchronous {
             fn step(
                 &mut self,
                 _: Input<'_>,
-                _: &dyn zencodec::Pulse,
+                _: Option<&dyn zencodec::Pulse>,
             ) -> Result<Stepped<()>, Infallible> {
                 Ok(Stepped {
                     consumed: 0,
@@ -365,11 +365,11 @@ mod asynchronous {
         let mut stage = Ready;
         for _ in 0..3 {
             cursor
-                .next(&mut source, &mut stage, &NoPulse)
+                .next(&mut source, &mut stage, Some(&NoPulse))
                 .await
                 .unwrap();
         }
-        let future = cursor.next(&mut source, &mut stage, &NoPulse);
+        let future = cursor.next(&mut source, &mut stage, Some(&NoPulse));
         let mut future = core::pin::pin!(future);
         poll_fn(|cx| {
             assert!(future.as_mut().poll(cx).is_pending());
@@ -416,7 +416,7 @@ mod asynchronous {
         let mut cursor = AsyncCursor::new(options(16, 2, 2));
         let mut stage = Wants(vec![InputRequest::range(32, 8), InputRequest::range(80, 8)]);
         {
-            let future = cursor.next(&mut source, &mut stage, &NoPulse);
+            let future = cursor.next(&mut source, &mut stage, Some(&NoPulse));
             let mut future = core::pin::pin!(future);
             poll_fn(|cx| {
                 assert!(future.as_mut().poll(cx).is_pending());
@@ -427,7 +427,7 @@ mod asynchronous {
         assert_eq!(source.started, 1);
         assert_eq!(cursor.retained_input_capacity(), 0);
         let (offset, bytes) = cursor
-            .next(&mut source, &mut stage, &NoPulse)
+            .next(&mut source, &mut stage, Some(&NoPulse))
             .await
             .unwrap()
             .into_inner();
@@ -452,7 +452,7 @@ mod asynchronous {
                     vec![InputRequest::range(256, 8)],
                 ] {
                     let (offset, bytes) = cursor
-                        .next(&mut source, &mut Wants(requests), &NoPulse)
+                        .next(&mut source, &mut Wants(requests), Some(&NoPulse))
                         .await
                         .unwrap()
                         .into_inner();
@@ -467,7 +467,7 @@ mod asynchronous {
             .next(
                 &mut source,
                 &mut Wants(vec![InputRequest::range(32, 17)]),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .await
             .unwrap_err();
