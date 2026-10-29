@@ -62,6 +62,8 @@ pub enum UnsupportedOperation {
     SeekableDecode,
     /// Preflight or startup with a complete encode declaration.
     EncodePlanning,
+    /// Required stored-versus-baked orientation representation.
+    EncodeOrientation,
 }
 
 impl UnsupportedOperation {
@@ -84,6 +86,7 @@ impl UnsupportedOperation {
             Self::IncrementalDecode => "incremental_decode",
             Self::SeekableDecode => "seekable_decode",
             Self::EncodePlanning => "encode_planning",
+            Self::EncodeOrientation => "encode_orientation",
         }
     }
 }
@@ -381,6 +384,7 @@ impl EncodeCapabilities {
             UnsupportedOperation::DecodeInto
             | UnsupportedOperation::DecodePolicy
             | UnsupportedOperation::EncodePolicy
+            | UnsupportedOperation::EncodeOrientation
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
@@ -845,6 +849,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::AnimationTiming
             | UnsupportedOperation::DecodePolicy
             | UnsupportedOperation::EncodePolicy
+            | UnsupportedOperation::EncodeOrientation
             | UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
             | UnsupportedOperation::AnimationEncode

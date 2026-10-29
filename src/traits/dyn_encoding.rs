@@ -498,6 +498,15 @@ pub trait DynEncodeJob {
         Ok(())
     }
 
+    /// Require stored or baked orientation. Refusal leaves the job unchanged;
+    /// generated shims use the concrete job's checked setter.
+    fn try_set_orientation_mode(
+        &mut self,
+        _mode: crate::encode::EncodeOrientation,
+    ) -> Result<(), BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::EncodeOrientation))
+    }
+
     /// Require exact physical density or unknown-unit aspect. Refusal leaves
     /// the job unchanged. Generated shims call the concrete checked setter.
     fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
@@ -637,6 +646,17 @@ where
             return Err("EncodeJobShim: job already consumed (double take)".into());
         };
         job.try_set_policy(policy)
+            .map_err(|error| Box::new(error) as BoxedError)
+    }
+
+    fn try_set_orientation_mode(
+        &mut self,
+        mode: crate::encode::EncodeOrientation,
+    ) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_mut() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_orientation_mode(mode)
             .map_err(|error| Box::new(error) as BoxedError)
     }
 

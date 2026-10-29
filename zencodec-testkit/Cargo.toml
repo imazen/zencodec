@@ -16,7 +16,7 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 # `std` so the reference codec and usage examples can reach
 # `ComputeEnvironment::host()`; testkit-only, never affects a no_std consumer.
 zencodec = { path = "..", version = ">=0.2.0, <0.4.0", features = ["std"] }
-zenpixels = { version = ">=0.2.10, <0.4.0", features = ["icc"] }
+zenpixels = { version = ">=0.2.17, <0.4.0", features = ["icc"] }
 # Drives incremental decoders in the conformance checks (slice driver, collect sink).
 zencodec-io = { path = "../zencodec-io", version = "0.1.0", features = ["std"] }
 enough = "0.4.4"
@@ -32,4 +32,4 @@ rayon = "1.10.0"
 # For tests/usage.rs — the "caller also has zenpixels-convert" examples that
 # adapt a foreign pixel format into an encoder's supported set, and convert a
 # decoded buffer into a caller-chosen format.
-zenpixels-convert = ">=0.2.16, <0.4.0"
+zenpixels-convert = ">=0.2.17, <0.4.0"

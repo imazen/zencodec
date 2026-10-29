@@ -190,6 +190,51 @@ impl ColorCarriers {
     }
 }
 
+/// Spatial effects of this retained job, separate from compression fidelity.
+///
+/// Applying `applied` to the supplied raster, then interpreting its output
+/// orientation, must preserve the input's displayed orientation. Dimensions
+/// describe visible stored samples, not codec block padding or a video aperture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OrientationPlan {
+    /// Intrinsic orientation of the supplied samples, from effective metadata.
+    pub input: crate::Orientation,
+    /// Spatial transform the encoder applies to the samples themselves.
+    pub applied: crate::Orientation,
+    /// Intrinsic orientation carried by the encoded output.
+    pub output: crate::Orientation,
+}
+impl OrientationPlan {
+    /// Keep sample order and carry the intrinsic orientation.
+    pub const fn preserved(input: crate::Orientation) -> Self {
+        Self {
+            input,
+            applied: crate::Orientation::Identity,
+            output: input,
+        }
+    }
+    /// Transform samples to their displayed orientation and carry identity.
+    pub const fn baked(input: crate::Orientation) -> Self {
+        Self {
+            input,
+            applied: input,
+            output: crate::Orientation::Identity,
+        }
+    }
+    /// Visible stored geometry after the reported spatial transform.
+    pub const fn stored_dimensions(self, width: u32, height: u32) -> (u32, u32) {
+        self.applied.output_dimensions(width, height)
+    }
+    /// Refuse contradictory transforms; this does not inspect native output.
+    pub fn validate(self) -> Result<(), EncodePlanError> {
+        if self.applied.then(self.output) != self.input {
+            return Err(EncodePlanError::Orientation);
+        }
+        Ok(())
+    }
+}
+
 /// Facts from the retained effective job, before native pixel/workspace startup.
 ///
 /// Planning may validate and materialize bounded metadata. It must not read
@@ -206,6 +251,8 @@ pub struct EncodePlan {
     pub output_phase: OutputPhase,
     /// Exact output color carriers, or unreported evidence.
     pub carriers: Option<ColorCarriers>,
+    /// Qualified spatial effects; None is unknown, never implicit preservation.
+    pub orientation: Option<OrientationPlan>,
 }
 
 impl EncodePlan {
@@ -216,6 +263,7 @@ impl EncodePlan {
             timing,
             output_phase: OutputPhase::FinalPass,
             carriers: None,
+            orientation: None,
         }
     }
 
@@ -226,6 +274,7 @@ impl EncodePlan {
             timing: OutputTiming::AT_FINISH,
             output_phase: OutputPhase::FinalPass,
             carriers: None,
+            orientation: None,
         }
     }
 
@@ -241,6 +290,7 @@ impl EncodePlan {
             timing,
             output_phase,
             carriers: None,
+            orientation: None,
         }
     }
 
@@ -250,9 +300,18 @@ impl EncodePlan {
         self
     }
 
+    /// Bind spatial effects from the same retained job. No memory bound follows.
+    pub const fn with_orientation(mut self, orientation: OrientationPlan) -> Self {
+        self.orientation = Some(orientation);
+        self
+    }
+
     /// Check geometry, output lag and patch access before native startup.
     /// Codec-specific validation remains the planning implementation's duty.
     pub fn validate(&self, declaration: &EncodeDeclaration<'_>) -> Result<(), EncodePlanError> {
+        if let Some(orientation) = self.orientation {
+            orientation.validate()?;
+        }
         declaration
             .validate_exact_depth()
             .map_err(|_| EncodePlanError::ExactDepth)?;
@@ -304,11 +363,14 @@ pub enum EncodePlanError {
     /// Exact-depth assertion contradicts the descriptor or uses an unsupported layout.
     /// [`EncodeDeclaration::validate_exact_depth`] retains the detailed verifier error.
     ExactDepth,
+    /// Applied and carried orientations contradict the input interpretation.
+    Orientation,
 }
 
 impl fmt::Display for EncodePlanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Orientation => "encode spatial effects change the displayed orientation",
             Self::Dimensions => "encode declaration has zero dimensions",
             Self::PassRange => "encode source-pass range is invalid",
             Self::OutputLag => "encode output lag holds the entire image",
@@ -406,5 +468,81 @@ mod tests {
             EncodePlan::whole_raster().carriers,
             Some(ColorCarriers::default())
         );
+    }
+}
+
+#[cfg(test)]
+mod orientation_tests {
+    use super::*;
+    use crate::Orientation;
+    const ALL: [Orientation; 8] = [
+        Orientation::Identity,
+        Orientation::FlipH,
+        Orientation::Rotate180,
+        Orientation::FlipV,
+        Orientation::Transpose,
+        Orientation::Rotate90,
+        Orientation::Transverse,
+        Orientation::Rotate270,
+    ];
+
+    #[test]
+    fn orientation_plan_matches_coordinate_composition() {
+        for input in ALL {
+            for applied in ALL {
+                for output in ALL {
+                    let plan = OrientationPlan {
+                        input,
+                        applied,
+                        output,
+                    };
+                    let (w, h) = plan.stored_dimensions(3, 2);
+                    let mut same = output.output_dimensions(w, h) == input.output_dimensions(3, 2);
+                    for y in 0..2 {
+                        for x in 0..3 {
+                            let (sx, sy) = applied.forward_map(x, y, 3, 2);
+                            same &=
+                                output.forward_map(sx, sy, w, h) == input.forward_map(x, y, 3, 2);
+                        }
+                    }
+                    assert_eq!(plan.validate().is_ok(), same, "{plan:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spatial_evidence_is_unknown_by_default_and_stable_through_startup() {
+        let declaration = EncodeDeclaration::new(3, 2, PixelDescriptor::RGB8_SRGB);
+        let empty = EncodePlan::whole_raster();
+        assert_eq!(empty.orientation, None);
+        for input in ALL {
+            let preserve = empty
+                .clone()
+                .with_orientation(OrientationPlan::preserved(input));
+            let bake = empty
+                .clone()
+                .with_orientation(OrientationPlan::baked(input));
+            assert_eq!(
+                preserve.orientation.unwrap().stored_dimensions(3, 2),
+                (3, 2)
+            );
+            assert_eq!(
+                bake.orientation.unwrap().stored_dimensions(3, 2),
+                input.output_dimensions(3, 2)
+            );
+            preserve.validate(&declaration).unwrap();
+            bake.validate(&declaration).unwrap();
+            assert_eq!(
+                preserve.validate_started(&empty),
+                Err(EncodePlanError::Changed)
+            );
+            if input != Orientation::Identity {
+                assert_eq!(
+                    preserve.validate_started(&bake),
+                    Err(EncodePlanError::Changed)
+                );
+            }
+        }
     }
 }

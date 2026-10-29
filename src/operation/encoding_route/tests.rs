@@ -973,3 +973,30 @@ fn no_pulse_keeps_default_success_and_mandatory_admission_distinct() {
         failures(&error).contains(&(PolicyRequirement::Metadata, RequirementEvidence::Unknown))
     );
 }
+
+#[test]
+fn contradictory_orientation_refuses_before_callback() {
+    let mut orientation = crate::encode::OrientationPlan::preserved(crate::Orientation::Rotate90);
+    orientation.output = crate::Orientation::Identity;
+    let plan = EncodePlan::whole_raster().with_orientation(orientation);
+    let mut called = false;
+    let mut resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+        called = true;
+        Ok(Decision::UsePreset)
+    };
+    let error = resolve_encode_route(
+        &declaration(),
+        &plan,
+        job_evidence(),
+        &[offer(InputAcquisition::BorrowedRaster)],
+        &mut resolver,
+        PolicySet::new(),
+        None,
+    )
+    .unwrap_err();
+    assert!(!called);
+    assert_eq!(
+        crate::find_cause::<EncodePlanError>(&error),
+        Some(&EncodePlanError::Orientation)
+    );
+}

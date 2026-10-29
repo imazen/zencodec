@@ -10,6 +10,9 @@ export const codeFlows = [
     {scope:'fn native_owned_result_split_preserves_pixels_metadata_and_all_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['decodedOutput'],state:'Move pixels and details without cloning their owners'},
     {scope:'fn native_controlled_completion_retains_descriptive_metadata_and_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['incremental','collector'],state:'Real JPEG controlled producer, registry, row sink and one-time completion'},
   ]},
+  {id:'app-orientation',role:'consumer',title:'Choose stored orientation explicitly',note:'Omit the request for codec defaults. PreserveStored requires stored geometry and ordering; it is not lossless compression or a memory bound. Default implementations refuse. AVIF one-shot qualification is separate from row/replay planning.',steps:[
+    {example:'preserve_stored_orientation',file:'examples/orientation.rs',api:['encodeOrientation'],state:'Compiled generic caller; paired AVIF native controls qualify still encoding'},
+  ]},
   {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
     {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
     {example:'positioned',file:'docs/examples/journeys.rs',api:['positionedDriver']},
@@ -165,6 +168,7 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'app-orientation': [['Keep stored orientation when a pipeline requires it', 'The gallery now needs to preserve source geometry instead of rotating an entire raster. Ask the configured job to preserve stored orientation, then attach the same authoritative metadata and encode. Unsupported codecs refuse through the normal Result path; callers do not coordinate capability flags. This one-shot example establishes representation only. A low-memory row route additionally needs a qualified acquisition plan and workspace evidence.']],
   'app-completion': [
     ['Separate pixels only when processing needs them', 'The application first decodes an owned image. into_parts moves the raster and all result details without cloning them. Keep both owners: dropping codec extras can discard information needed by a later transcode.'],
     ['Recover final details after consuming rows', 'The application now processes rows through a sink. Drive the real JPEG decoder to successful completion, then take_details once. The test compares native metadata and every row. None means that details are unavailable; it never certifies that the file contains no private data.'],

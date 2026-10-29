@@ -4,6 +4,13 @@
 
 ### Added
 
+- Retained `EncodePlan::orientation` and callback spatial facts distinguish
+  sample transforms from output orientation; contradictory compositions refuse
+  before route selection. Unknown remains explicit.
+
+- Checked stored-versus-baked encode orientation requirements, with default
+  refusal and typed, erased and registered-job forwarding (review API).
+
 - Review proposal: `decode::DecodeDetails` and `DecodeOutput::{into_parts,
   from_parts}` move pixels and all owned result details independently without
   cloning. The optional `IncrementalDecode::take_details` hook transports them
@@ -23,6 +30,10 @@
   `benchmarks/replay_driver_2026-10-28.md`.
 
 ### Fixed
+
+- Shared media, coroutine, metadata and testkit pixel requirements now match
+  the core minimum, preventing registry 0.2.16 from crossing the paired pixel
+  boundary in downstream graphs with older development dependencies.
 
 - The native JPEG admission harness pins the RGBA float negotiation fix and
   verifies seven required layouts in baseline/progressive scans. Required

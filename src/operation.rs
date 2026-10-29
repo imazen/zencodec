@@ -392,6 +392,7 @@ pub struct EncodeRequest {
     policy_defaults: EncodePolicy,
     preset: PolicySet,
     resolution: Option<crate::Resolution>,
+    orientation_mode: Option<crate::encode::EncodeOrientation>,
 }
 
 #[derive(Clone, Debug)]
@@ -411,6 +412,7 @@ impl EncodeRequest {
             policy_defaults: EncodePolicy::none(),
             preset: PolicySet::new(),
             resolution: None,
+            orientation_mode: None,
         }
     }
 
@@ -443,6 +445,15 @@ impl EncodeRequest {
     /// Validation occurs during preparation, before the callback or pixel encoding.
     pub const fn with_resolution(mut self, resolution: crate::Resolution) -> Self {
         self.resolution = Some(resolution);
+        self
+    }
+
+    /// Require stored or baked orientation through the configured job.
+    /// Preparation refuses unsupported codecs before invoking the resolver or
+    /// encoding pixels. Metadata still supplies the intrinsic orientation.
+    /// This is not a memory bound or an implicit conversion between formats.
+    pub const fn with_orientation_mode(mut self, mode: crate::encode::EncodeOrientation) -> Self {
+        self.orientation_mode = Some(mode);
         self
     }
 
@@ -491,6 +502,9 @@ impl EncodeRequest {
                 offer.fidelity,
                 self.effective_policy(codecs),
             )?;
+            if let Some(mode) = self.orientation_mode {
+                job.try_set_orientation_mode(mode)?;
+            }
             if let Some(resolution) = offer.resolution {
                 job.try_set_resolution(resolution)?;
             }
@@ -512,6 +526,9 @@ impl EncodeRequest {
                 offer.fidelity,
                 self.effective_policy(codecs),
             )?;
+            if let Some(mode) = self.orientation_mode {
+                job.try_set_orientation_mode(mode)?;
+            }
             if let Some(resolution) = offer.resolution {
                 job.try_set_resolution(resolution)?;
             }

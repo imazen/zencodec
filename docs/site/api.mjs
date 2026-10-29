@@ -1,5 +1,6 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  encodeOrientation: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_orientation_mode','try_with_orientation_mode']},
   encodeDeclaration: {path:'zencodec::encode::EncodeDeclaration',file:'src/encode_plan.rs',scope:"pub struct EncodeDeclaration<'a>",methods:[],item:true},
   encodePlan: {path:'zencodec::encode::EncodePlan',file:'src/encode_plan.rs',scope:'pub struct EncodePlan {',methods:[],item:true},
   encodePreflight: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['plan_encode']},
@@ -22,7 +23,7 @@ export const api = {
   stridedPlane: {path:'zencodec::frame::PlaneView',file:'src/frame_storage.rs',scope:"impl<'a> PlaneView<'a>",methods:['encoding','stride_bytes','as_strided_samples','row','code']},
   floatColorPlan: {path:'candidate::plan_float_export (private native color-stage prototype)',file:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',scope:'mod planning {',methods:['plan_float_export'],associated:false},
   operationDecode: {path:'zencodec::operation::DecodeRequest',file:'src/operation.rs',scope:'impl DecodeRequest {',methods:['new','with_output','preferring_output','with_policy','decode','start_controlled']},
-  operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_resolution','with_policy','with_policy_set','encode','encode_with']},
+  operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_resolution','with_orientation_mode','with_policy','with_policy_set','encode','encode_with']},
   requiredResolution: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_resolution','try_with_resolution'],associated:false},
   resolutionValues: {path:'zencodec::Resolution',file:'src/resolution.rs',scope:'impl Resolution {',methods:['validate','is_equivalent_to','try_integer_density']},
   operationPreparation: {path:'zencodec::operation::EncodeRequest (adapter)',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['with_policy_defaults','prepare','prepare_send']},

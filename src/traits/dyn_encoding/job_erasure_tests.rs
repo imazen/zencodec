@@ -102,3 +102,37 @@ fn dropping_erased_job_releases_owner_without_native_startup() {
     assert_eq!(starts.load(Ordering::SeqCst), 0);
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn unsupported_orientation_refuses_without_starting_or_losing_the_job() {
+    use crate::encode::EncodeOrientation;
+    let (mut job, drops, starts) = job();
+    for mode in [EncodeOrientation::PreserveStored, EncodeOrientation::Bake] {
+        assert_eq!(
+            job.try_set_orientation_mode(mode),
+            Err(UnsupportedOperation::EncodeOrientation)
+        );
+    }
+    let address = job.owned.as_ref() as *const Owned;
+    let mut erased = job.into_dyn_job();
+    for mode in [EncodeOrientation::PreserveStored, EncodeOrientation::Bake] {
+        let error = erased.try_set_orientation_mode(mode).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::EncodeOrientation)
+        );
+    }
+    assert_eq!(
+        erased
+            .extensions()
+            .unwrap()
+            .downcast_ref::<Owned>()
+            .unwrap() as *const Owned,
+        address
+    );
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(erased.into_encoder().unwrap());
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}

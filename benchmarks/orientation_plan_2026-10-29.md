@@ -1,0 +1,55 @@
+# Retained orientation plan qualification
+
+Source: core fe7187fde3fb2d6b86cf04d0c3caa8546b45df3c;
+native AVIF acd8d180891fa2c06e2b4c632838789bf9f3596b.
+Isolated exports; core and native family path patches in the consumer harness.
+
+Commands: cargo test --locked -p zencodec --lib; cargo check --locked -p
+zencodec --example orientation; cargo test --locked -p zencodec --doc;
+cargo clippy --locked -p zencodec --lib --example orientation -- -D warnings;
+consumer cargo test -p zencodecs --no-default-features --features
+std,avif-decode,avif-encode --test native_orientation; matching locked Clippy.
+
+677 core tests; 26 passing doctests, 37 existing ignored; four native tests;
+strict core and consumer Clippy passed. Native added matrix checks all eight
+orientations in preserve/bake modes, plan/start equality, exact encoded-byte
+parity with ordinary encoding, decoded stored dimensions and output orientation.
+Core composition test checks coordinate mappings; contradictory facts refuse
+before callback invocation.
+
+Serialized run-heavy 3G/jobs2 timeout900: rc0, 8s, peak RSS 0.37GiB,
+minimum available 11479MiB. This is validation cost, not a performance benchmark.
+Initial native error-category constructor and test closure ownership failures
+were retained; corrected without weakening assertions.
+
+Missing: adversarial post-declaration changes, native declaration refusals,
+other codecs, independent reader parity, native workspace bounds, broader
+color/depth planning, portable lock resolution and updated generated reference.
+
+Follow-up native 0a9eba30 (same library) adds changed width/height/descriptor,
+unsupported color/U16 declaration, retry-after-refusal and repeated-start controls.
+All six native tests and the unchanged core/doctest/Clippy gates pass: rc0,
+13s, peak RSS 0.45GiB, minimum available 11451MiB. These controls supersede
+the missing adversarial-declaration item above; exact-depth assertions and
+late PixelSlice color attachment still need direct controls.
+
+Generated reference and guide: b9d7b88a36a7be9c8635d2ae907da26a680685df.
+All eight crate references, source checks and complete browser suites pass.
+Command: just docs-reference && just docs-site-browser-check 3547, isolated export.
+Serialized run-heavy 3G/jobs2 timeout900: rc0, 46s, peak RSS 0.33GiB,
+minimum available 10986MiB. OrientationPlan reference returned HTTP 200 after
+switching the preview to this qualified export.
+
+Portable consumer exposed a pixel graph split: zencodec-media admitted registry
+zenpixels 0.2.16 while core required >=0.2.17 and selected paired 0.3.1. Five
+animation adapter signatures/calls failed compilation. Shared metadata,
+coroutine, media and testkit floors now match core's >=0.2.17 floor. The old
+registry copy may remain in unrelated dev dependencies; it cannot satisfy these
+shared edges. No ceiling or behavioral assertion was relaxed.
+
+Isolated native root with these family path patches: eight native tests and
+strict library/test Clippy pass, including typed resource-limit categories,
+original limit payloads, exact-depth refusal and late ColorContext refusal.
+Native candidate c43a2064, core floor candidate f111cc9d. Wrapper rc0/38s,
+peak RSS 0.45GiB, minimum available 11287MiB. Actual git-pinned portable graph
+validation follows separately; this result establishes the source repair.
