@@ -68,6 +68,7 @@ impl MultiPassEncoder for Script {
     fn begin_passes(&mut self, _: &Description, _: OutputAccess) -> Result<PassPlan, MockError> {
         Ok(PassPlan {
             passes: self.declared,
+            output: multipass_validation::PassOutput::AnyPass,
             timing: self.timing,
         })
     }
@@ -88,13 +89,8 @@ impl MultiPassEncoder for Script {
             PixelDescriptor::RGB8_SRGB,
         )
         .unwrap();
-        rows.fill(RowRequest {
-            pass: self.pass,
-            label: self.pass as u8,
-            first: self.next,
-            rows: view,
-        })
-        .map_err(|_| MockError)?;
+        rows.fill(RowRequest::new(self.pass, self.next, view).with_label(self.pass as u8))
+            .map_err(|_| MockError)?;
         if self.emit.contains(&self.pass) {
             self.pending.extend_from_slice(&[self.pass as u8; 2]);
         }

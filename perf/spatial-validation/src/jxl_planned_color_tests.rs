@@ -614,11 +614,9 @@ fn native_output_owner_required_descriptor_preserves_premultiplication() {
     );
     assert_eq!(metadata.icc, plan.metadata().icc);
     assert_eq!(metadata.cicp, plan.metadata().cicp);
-    #[allow(deprecated)]
-    {
-        assert!(metadata.hdr.is_none());
-        assert!(plan.metadata().hdr.is_none());
-    }
+    // The paired pixel API removed the obsolete HDR field entirely; there is
+    // no separate HDR carrier to populate. ICC/CICP and all pixel/storage
+    // invariants above and below remain checked.
     assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), charged);
     drop(retained);
     assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), charged);

@@ -70,7 +70,7 @@ dependencies = [
 [[package]]
 name = "imij"
 version = "0.0.1"
-source = "git+https://github.com/imazen/zqi?rev=0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5#0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5"
+source = "git+https://github.com/imazen/zqi?rev=e3b14aa24270681cb2c890dd32018ad574a44c48#e3b14aa24270681cb2c890dd32018ad574a44c48"
 dependencies = [
  "archmage",
  "how-far",
@@ -218,8 +218,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -227,5 +227,5 @@ dependencies = [
 
 [[patch.unused]]
 name = "zenpixels-convert"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"

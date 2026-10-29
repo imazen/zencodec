@@ -314,9 +314,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.17.1"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
  "foldhash",
 ]
@@ -370,7 +370,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=0255e5a9f61b7270cb3ed3f7b85fec2283deec55#0255e5a9f61b7270cb3ed3f7b85fec2283deec55"
+source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -387,17 +387,17 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=0255e5a9f61b7270cb3ed3f7b85fec2283deec55#0255e5a9f61b7270cb3ed3f7b85fec2283deec55"
+source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 2.0.119",
 ]
 
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=0255e5a9f61b7270cb3ed3f7b85fec2283deec55#0255e5a9f61b7270cb3ed3f7b85fec2283deec55"
+source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
 dependencies = [
  "archmage",
  "libm",
@@ -1061,8 +1061,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
  "bytemuck",
  "rgb",
@@ -1071,8 +1071,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
  "archmage",
  "bytemuck",

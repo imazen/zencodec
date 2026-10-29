@@ -17,6 +17,9 @@
 
 ### Fixed
 
+- Paired pixel release pins and standalone harness locks are aligned with the
+  merged 0.3.1 candidate; IMI/JXL dependency edges admit one pixel family.
+
 - Source color-context construction no longer references the retired ambiguous
   pixel constructor, preserving authority and fallback behavior with both the
   current 0.2 pixel pin and the paired 0.3 release candidate.

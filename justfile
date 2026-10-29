@@ -1549,3 +1549,12 @@ row-borrow-check artifacts:
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib row_driver -- --test-threads=1
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib precision:: -- --test-threads=1
+
+# Compile every standalone graph participating in the paired pixel rollout.
+# Run io-validation-setup first; copy each dependencies.lock to Cargo.lock.
+paired-harness-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for manifest in fuzz/Cargo.toml zencodec-render/Cargo.toml perf/api-usability-validation/Cargo.toml perf/av1-policy-validation/Cargo.toml perf/io-validation/Cargo.toml perf/jpeg-policy-validation/Cargo.toml perf/multipass-validation/Cargo.toml perf/multipass-validation/native/Cargo.toml perf/native-contract-validation/Cargo.toml perf/native-contract-validation/spatial-native/Cargo.toml perf/native-contract-validation/video-native/Cargo.toml perf/policy-check/Cargo.toml perf/spatial-validation/Cargo.toml; do
+        cargo check --manifest-path "$manifest" --all-targets --locked
+    done

@@ -13,15 +13,16 @@ zencodec-io = { path = "../../../zencodec-io", features = ["std"] }
 zencodec-media = { path = "../../../zencodec-media", features = ["std"] }
 zenpixels = ">=0.2.16, <0.4.0"
 # The native encoder revision perf/av1-policy-validation qualifies.
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "b25f7604fbb71ead6517ec27fa52646770e3606a", features = ["media-encode", "_dev"] }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c", features = ["media-encode", "_dev"] }
 # The decoder the AV1 harness pins beside it, for its native metadata accessors.
 rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec6561204ff310250bf2bc1b2c6faa42c3b5", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 
 [patch.crates-io]
+zenmeta = { path = "../../../zenmeta" }
 zencodec = { path = "../../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "10a79c3a888dd589884fd032846eec70bc31eb13" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../../.." }

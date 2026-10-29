@@ -240,3 +240,22 @@ a fixture constructor available on its older pixel pin. The actual pinned
 source graph now passes its 45 adapter controls, strict lib Clippy and all fuzz
 target compilation. This repairs the initial CI failures without changing
 pixel assertions or codec runtime logic.
+
+## Paired pin rollout
+
+The workspace and thirteen standalone harness manifests now select the merged
+pixel revision `f23ac753`. Locked graphs have one copy of each pixel package.
+IMI `e3b14aa2` widens its registry requirements; JXL encoder `3c1be817` already
+has the required converter range. Its companion macros/SIMD crates move together
+and its explicit hashbrown requirement changes from 0.17.1 to 0.16.1. The older
+video witness now uses the AVIF/parse and UltraHDR revisions already qualified
+by the AV1 harness, with the registry zenmeta edge explicitly patched.
+
+All thirteen standalone graphs pass all-target compilation. Core workspace
+all-feature tests and strict all-target Clippy pass on the actual git pixel pin.
+IMI's 25 native controls and JXL's ten planned-color controls pass; see the
+[native qualification record](../benchmarks/paired_pixel_native_2026-10-29.md).
+This does not claim that every historical scenario witness is a passing modern
+regression: the old multipass gap witnesses retain their original assertions;
+only construction was adapted to the current protocol. Their compilation is
+covered by `just paired-harness-check`, not their historical runtime outcomes.

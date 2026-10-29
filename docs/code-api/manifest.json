@@ -5,7 +5,7 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "458dd3d6ad2ee60a740b8b41be11430eff845c31c6f3a372946e353db1b3dd20",
+      "fingerprint": "4c89fcb251758c7e5ed68b5a8617ad7d33031843d96ac175ce24bb339d02c650",
       "surface_sha256": "58eb70f42f137c3c0e55a175e37aa4b87958d1f14ac96d22a289bc97add5fa0a",
       "details_sha256": "b6551560abd3295fad1d359858d654834eff6a81d85c56e49a409ee409fac087"
     },
@@ -61,7 +61,7 @@
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
-      "fingerprint": "4bdc9ddd29e08d07e999c80707988522c0b1dff729acff5c94a663ee315bd1b8",
+      "fingerprint": "6403b77819a38c107737af9e1ae072d29ae56fdf56e99406b0b409f9e07e252c",
       "surface_sha256": "e8cf095bf46b03712b0d77f9c1f613691c48590b22013e0d7fbb182acd92fd73",
       "details_sha256": "c30f8aff44d2b449ae013092d04908bf320d9a8396baaf4313820fb398bd8f64"
     }

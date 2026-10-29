@@ -976,7 +976,7 @@ dependencies = [
 [[package]]
 name = "ultrahdr-core"
 version = "0.6.0"
-source = "git+https://github.com/imazen/ultrahdr?rev=10a79c3a888dd589884fd032846eec70bc31eb13#10a79c3a888dd589884fd032846eec70bc31eb13"
+source = "git+https://github.com/imazen/ultrahdr?rev=7e9d296c9e037e626234c9f0e8673d48278f83f0#7e9d296c9e037e626234c9f0e8673d48278f83f0"
 dependencies = [
  "bytemuck",
  "enough",
@@ -1119,7 +1119,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
+source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1148,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
+source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1203,8 +1203,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1214,8 +1214,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
  "archmage",
  "bytemuck",
