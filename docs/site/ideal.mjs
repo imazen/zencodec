@@ -49,7 +49,7 @@ ${step('5','Apply a situational tenant rule.','Some tenants require qualified na
 ${codePanel('ideal-native-video','checked_video','docs/examples/checked_video.rs')}
 <p>The preview renderer accepts declared sRGB transfer. A later frame may carry another interpretation, so an application callback checks the held frame instead of trusting the latest configuration or an earlier capability query. This executable example refuses a later PQ frame and retains the typed application error.</p>
 ${codePanel('ideal-video-rule','checked_video_rule','docs/examples/checked_video.rs')}
-${signatures('ideal-frame-policy',['framePolicy','operationResolver'])}
+${signatures('ideal-frame-policy',['framePolicyAdmission','framePolicy','operationResolver'])}
 <p class="ideal-note">This gate preserves native samples and facts. It does not render them or prove container privacy. Native allocation has already occurred. Preparing a complete planar conversion/encoding route remains separate work.</p>
 <details class="ideal-signatures"><summary>Put a native picture allowance before reconstruction</summary><p>A publication callback is too late to prevent the picture allocation. Configure the native decoder first. The allowance follows reference pictures and caller-held frames, including after decoder reset or drop. Native refusal returns its original traced cause without calling publication policy.</p>
 ${codePanel('ideal-video-storage','checked_video_storage','docs/examples/checked_video.rs')}

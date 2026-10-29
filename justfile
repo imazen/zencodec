@@ -1513,3 +1513,12 @@ optional-native-audit-check:
 compile-cleanup-check:
     python3 perf/test_compile_cleanup.py
     python3 -m py_compile perf/compile-time.py perf/compile-adapters-report.py
+
+# Refuse unknown required workspace before any wrapped native video operation.
+media-workspace-admission-check:
+    cargo test --locked -p zencodec-media-testkit --features zencodec-media/std
+    cargo clippy --locked -p zencodec-media -p zencodec-media-testkit --features zencodec-media/std --all-targets -- -D warnings
+
+media-native-workspace-check:
+    cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml native_factory_workspace_admission_precedes_rav1d_construction
+    cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml native_error_keeps_rav1d_whereat_trace_through_policy_and_erasure

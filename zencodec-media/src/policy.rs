@@ -3,8 +3,11 @@
 //! Each `receive` holds the actual decoded frame while the callback inspects
 //! its immutable interpretation and presentation timing. Only successful policy
 //! resolution can return it to a caller or downstream converter. Native decode
-//! has already allocated/reconstructed the frame: this is not a pre-allocation
-//! budget or a complete-container metadata privacy boundary.
+//! has already allocated/reconstructed the frame. Explicit workspace requirements
+//! refuse before any wrapped native operation because this adapter has no qualified
+//! workspace bound. Construction of the supplied decoder happened before wrapping;
+//! this is not an admission boundary for that construction or complete-container
+//! metadata privacy.
 use crate::{
     frame::Frame,
     packet::Packet,
@@ -92,7 +95,8 @@ pub struct PolicyDecoder<D, R> {
 }
 impl<D, R> PolicyDecoder<D, R> {
     /// Wrap a native decoder and a built-in policy, application object or closure.
-    /// Construction performs no decoding or policy decision.
+    /// Construction performs no decoding or policy decision. Native construction
+    /// already happened; use [`Self::try_new`] to admit it before the factory runs.
     pub fn new(decoder: D, resolver: R) -> Self {
         Self {
             decoder: Some(decoder),
@@ -119,8 +123,41 @@ impl<D, R> PolicyDecoder<D, R> {
     }
 }
 impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
+    /// Check mandatory workspace requirements before constructing the native decoder.
+    ///
+    /// The factory is called once on admission, and never on refusal/cancellation.
+    /// This generic adapter has no qualified workspace bound, so any explicit
+    /// workspace limit refuses even if large. Default policies permit construction.
+    /// The factory must include native preparation; constructing a decoder first
+    /// and moving it into this closure cannot put those earlier effects under admission.
+    /// Frame interpretation and metadata decisions still happen at publication.
+    pub fn try_new<E: StdError + Send + Sync + 'static>(
+        factory: impl FnOnce() -> Result<D, E>,
+        resolver: R,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Self, Error> {
+        let report = OperationReport::default();
+        pulse
+            .unwrap_or(&zencodec::NoPulse)
+            .check()
+            .map_err(|reason| {
+                Error::new(
+                    Stage::Policy,
+                    &report,
+                    SessionError::<core::convert::Infallible>::Cancelled(reason),
+                )
+            })?;
+        if let Some(required) = resolver.requirements() {
+            required
+                .check_workspace(None)
+                .map_err(|cause| Error::new(Stage::Policy, &report, cause))?;
+        }
+        let decoder = factory().map_err(|cause| Error::new(Stage::Decode, &report, cause))?;
+        Ok(Self::new(decoder, resolver))
+    }
     fn run<T>(
         &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
         f: impl FnOnce(
             &mut D,
             &mut R,
@@ -131,6 +168,17 @@ impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
         // Taking ownership before any application/backend call makes unwinding
         // terminal too. The native backend drops with its queues on failure.
         let mut decoder = self.decoder.take().ok_or(SessionError::Finished)?;
+        pulse.unwrap_or(&zencodec::NoPulse).check()?;
+        // A frame's eventual publication cannot discharge earlier native workspace.
+        // Keep both legacy and bound requirements, without inventing route evidence.
+        for required in [Some(self.preset), self.resolver.requirements()]
+            .into_iter()
+            .flatten()
+        {
+            required.check_workspace(None).map_err(|cause| {
+                SessionError::Codec(Error::new(Stage::Policy, &self.report, cause))
+            })?;
+        }
         let output = f(
             &mut decoder,
             &mut self.resolver,
@@ -154,9 +202,7 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         config: &CodecConfig,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Error>> {
-        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        self.run(|decoder, _, _, report| {
-            local_pulse.check()?;
+        self.run(pulse, |decoder, _, _, report| {
             decoder
                 .configure(config, pulse)
                 .map_err(|e| native(e, report))
@@ -167,9 +213,7 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         packet: &mut Packet,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<Error>> {
-        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        self.run(|decoder, _, _, report| {
-            local_pulse.check()?;
+        self.run(pulse, |decoder, _, _, report| {
             decoder.send(packet, pulse).map_err(|e| native(e, report))
         })
     }
@@ -177,9 +221,7 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         &mut self,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Frame>, SessionError<Error>> {
-        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        self.run(|decoder, resolver, preset, report| {
-            local_pulse.check()?;
+        self.run(pulse, |decoder, resolver, preset, report| {
             let output = decoder.receive(pulse).map_err(|e| native(e, report))?;
             if let Receive::Ready(frame) = &output {
                 match resolve_frame(
@@ -204,10 +246,14 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         })
     }
     fn end_input(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(|decoder, _, _, report| decoder.end_input().map_err(|e| native(e, report)))
+        self.run(None, |decoder, _, _, report| {
+            decoder.end_input().map_err(|e| native(e, report))
+        })
     }
     fn reset(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(|decoder, _, _, report| decoder.reset().map_err(|e| native(e, report)))
+        self.run(None, |decoder, _, _, report| {
+            decoder.reset().map_err(|e| native(e, report))
+        })
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {
         self.decoder.as_ref().and_then(VideoDecoder::stream_info)

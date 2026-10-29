@@ -520,3 +520,49 @@ fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
         assert!(observed.pictures.lock().unwrap().is_empty());
     }
 }
+
+#[test]
+fn native_factory_workspace_admission_precedes_rav1d_construction() {
+    use std::sync::atomic::AtomicUsize;
+    for strict in [false, true] {
+        let calls = AtomicUsize::new(0);
+        let result = PolicyDecoder::try_new(
+            || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Av1VideoDecoder::with_settings(rav1d_safe::Settings::default())
+            },
+            if strict {
+                PolicySet::new().with_workspace_limit(u64::MAX)
+            } else {
+                PolicySet::new()
+            },
+            None,
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), usize::from(!strict));
+        if strict {
+            let Err(error) = result else {
+                panic!("unknown native workspace admitted")
+            };
+            assert_eq!(error.stage(), Stage::Policy);
+            assert!(
+                error
+                    .source()
+                    .unwrap()
+                    .is::<zencodec::operation::UnmetRequirements>()
+            );
+        } else {
+            let mut decoder = result.unwrap();
+            decoder
+                .configure(&CodecConfig::new(CodecId::Av1, TB), None)
+                .unwrap();
+            let error = decoder
+                .send(&mut Packet::from_vec(vec![0xff]).unwrap(), None)
+                .unwrap_err();
+            assert_eq!(
+                cause::<At<rav1d_safe::Error>>(&error).error(),
+                &rav1d_safe::Error::InvalidData
+            );
+            assert!(decoder.is_failed());
+        }
+    }
+}

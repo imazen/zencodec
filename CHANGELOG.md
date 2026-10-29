@@ -4,6 +4,11 @@
 
 ### Added
 
+- `PolicyDecoder::try_new(factory, policy, pulse)` admits native video creation
+  before invoking the factory. Unknown explicit workspace bounds refuse; default
+  policy remains permissive. Existing decoder wrappers now check both bound and
+  legacy workspace requirements before every native operation.
+
 - `EncodeJob::into_dyn_job` moves an owned Send job into shared dispatch before
   native startup, preserving codec-specific settings and retained preparation
   without a configuration clone. Core ownership controls and the native public

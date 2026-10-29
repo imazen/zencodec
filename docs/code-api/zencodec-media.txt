@@ -355,6 +355,8 @@ pub const fn zencodec_media::policy::PolicyDecoder<D, R>::is_failed(&self) -> bo
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::new(decoder: D, resolver: R) -> Self
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
+impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::policy::PolicyDecoder<D, R>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::try_new<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static>(factory: impl core::ops::function::FnOnce() -> core::result::Result<D, E>, resolver: R, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::policy::Error>
 impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
 pub type zencodec_media::policy::PolicyDecoder<D, R>::Error = zencodec_media::policy::Error
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
