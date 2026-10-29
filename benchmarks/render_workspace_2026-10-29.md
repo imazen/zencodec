@@ -70,3 +70,12 @@ export and unchanged lock: rc0, 77s, peak-RSS 0.40GiB, min-avail 14136MiB,
 peak-load 1.44. Full log: `~/tmp/render-workspace-20261029/public.log` on
 zen-arm-big and r7900x. The existing `render-workspace-check` now includes them.
 Core CI for the production fix `7972cea7` passed (run 40956517731).
+
+Docs CI 40956507606 completed 146/147 native spatial tests successfully. The
+remaining test expected the former publication-time `Decline::UnsupportedQuestion`
+for its workspace case; early admission instead retains `UnmetRequirements`.
+The test now requires exactly Workspace/Unknown, zero decision records and a
+retained collection. Its opaque-profile case retains all original assertions.
+This is a diagnostic/deadline expectation update, not acceptance of native
+output. Native requalification of the amended test awaits the next CI run;
+the consumer-level checks above independently exercise the same early path.

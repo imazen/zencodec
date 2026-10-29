@@ -161,26 +161,37 @@ fn checked_collection_request_and_policy_failures_remain_request_local() {
 #[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn checked_collection_configured_preset_refuses_unproven_obligations() {
     let data = fixture("named_frame_test.jxl");
-    for preset in [
-        PolicySet::new().with_workspace_limit(1),
-        PolicySet::new().allow_opaque_profiles(false),
+    for (workspace, preset) in [
+        (true, PolicySet::new().with_workspace_limit(1)),
+        (false, PolicySet::new().allow_opaque_profiles(false)),
     ] {
         let resolver =
             |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) };
-        let mut collection =
-            open(&data, SharedPulse::default(), resolver).with_policy_set(preset);
+        let mut collection = open(&data, SharedPulse::default(), resolver).with_policy_set(preset);
         let error = collection
             .first_image(&ImageRequest::default())
             .unwrap_err();
         assert_eq!(error.error().stage, Stage::Policy);
-        assert_eq!(
-            zencodec::find_cause::<Decline>(&error),
-            Some(&Decline::UnsupportedQuestion)
-        );
-        let record = error.error().report.decisions().last().unwrap();
-        assert!(!record.used_preset);
-        assert_eq!(record.admitted, 0);
-        assert!(!record.unmet_requirements.is_empty());
+        if workspace {
+            use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
+            let unmet = zencodec::find_cause::<UnmetRequirements>(&error)
+                .expect("workspace admission precedes native discovery and publication");
+            assert_eq!(
+                unmet.iter().collect::<Vec<_>>(),
+                vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+            assert_eq!(error.error().report.decisions().count(), 0);
+            assert!(!collection.is_finished());
+        } else {
+            assert_eq!(
+                zencodec::find_cause::<Decline>(&error),
+                Some(&Decline::UnsupportedQuestion)
+            );
+            let record = error.error().report.decisions().last().unwrap();
+            assert!(!record.used_preset);
+            assert_eq!(record.admitted, 0);
+            assert!(!record.unmet_requirements.is_empty());
+        }
     }
 }
 
@@ -313,9 +324,11 @@ fn checked_collection_native_stop_latches_every_observed_poll_and_keeps_exact_re
                 at,
                 reason,
             };
-            let opened = Checked::open(SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())), PolicySet::new(), |token| {
-                JxlItems::open_with_stop(&data, Composition::Composited, 64, token)
-            });
+            let opened = Checked::open(
+                SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())),
+                PolicySet::new(),
+                |token| JxlItems::open_with_stop(&data, Composition::Composited, 64, token),
+            );
             let error = match opened {
                 Ok(mut collection) => {
                     let error = collection
