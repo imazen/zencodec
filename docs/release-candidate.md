@@ -333,3 +333,14 @@ not establish that the advertised route worked. This adapter still buffers a
 full raw raster and emits at finish. Consumer repinning, the other candidates
 in issue 164, and checked plan/color admission are not covered by this result.
 [Native receipt](https://github.com/imazen/zenwebp/blob/014b0e699a7694546f1008768da62086f1d54fc8/benchmarks/declared_rows_2026-10-29.md).
+
+The remaining row-entry candidates from issue 164 now have native repairs:
+TGA `9d71b356` retains its declaration instead of silently accepting mismatched
+rows; JXL `a3a93aaf` implements the previously inherited refusing begin. Both
+preserve the row-boundary Pulse reason and reject one-shot use after admission.
+[The TGA receipt](https://github.com/imazen/zenbitmaps/blob/9d71b356f290f6438b810cc53d99f29301f6d247/docs/tga-row-contract.md)
+and [JXL receipt](https://github.com/imazen/zenjxl/blob/a3a93aaf068c589675aa5c63090ac9d07f24d07c/benchmarks/declared_rows_2026-10-29.md)
+record failing-first controls, preserved assertions and strict Clippy. They
+qualify the existing buffered row protocol, not checked planning, workspace
+bounds or low-memory streaming. Consumer pins and zencodecs' streamed-bytes
+regressions remain the issue's integration gate.
