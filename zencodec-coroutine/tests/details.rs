@@ -273,3 +273,92 @@ fn terminal_details_cannot_change_adopted_interpretation() {
     assert!(decoder.take_details().is_none());
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn sink_stop_prevents_completion_and_releases_details() {
+    use std::sync::atomic::AtomicBool;
+    use zencodec::enough::{Stop, StopReason};
+    struct Once(Arc<AtomicBool>, StopReason);
+    impl Stop for Once {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.swap(false, Ordering::SeqCst) {
+                Err(self.1)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    struct StoppingSink {
+        signal: Arc<AtomicBool>,
+        at_begin: bool,
+        fail: bool,
+        finishes: usize,
+    }
+    impl DecodeRowSink for StoppingSink {
+        fn provide_next_buffer(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            panic!("completion-only producer has no row callback");
+        }
+        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+            if self.at_begin {
+                self.signal.store(true, Ordering::SeqCst);
+                if self.fail {
+                    return Err("begin failure".into());
+                }
+            }
+            Ok(())
+        }
+        fn finish(&mut self) -> Result<(), SinkError> {
+            self.finishes += 1;
+            self.signal.store(true, Ordering::SeqCst);
+            if self.fail {
+                return Err("finish failure".into());
+            }
+            Ok(())
+        }
+    }
+    for reason in [StopReason::Cancelled, StopReason::TimedOut] {
+        for at_begin in [true, false] {
+            for fail in [false, true] {
+                let drops = Arc::new(AtomicUsize::new(0));
+                let owner = drops.clone();
+                let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
+                    ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
+                    ctx.set_output_descriptor(DESC);
+                    ctx.set_details(details(owner));
+                    Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
+                });
+                let signal = Arc::new(AtomicBool::new(false));
+                let pulse = zencodec::how_far::StopOnly::new(Once(signal.clone(), reason));
+                let mut sink = StoppingSink {
+                    signal,
+                    at_begin,
+                    fail,
+                    finishes: 0,
+                };
+                let result = decoder.step(Input::empty(), &mut sink, Some(&pulse));
+                if fail {
+                    assert!(matches!(result, Err(StepError::Sink(_))), "{result:?}");
+                } else {
+                    assert!(
+                        matches!(result, Err(StepError::Cancelled(r)) if r == reason),
+                        "{result:?}"
+                    );
+                }
+                assert_eq!(sink.finishes, usize::from(!at_begin));
+                assert!(decoder.take_details().is_none());
+                assert_eq!(drops.load(Ordering::SeqCst), 1);
+                assert!(matches!(
+                    decoder.step(Input::empty(), &mut sink, None),
+                    Err(StepError::Finished)
+                ));
+                assert_eq!(sink.finishes, usize::from(!at_begin));
+            }
+        }
+    }
+}
