@@ -161,5 +161,25 @@
     "guide": "24 source tests and complete browser suite PASS",
     "change": "wait for exact skip-link fragment before unchanged destination assertion",
     "wrapper": "run-heavy: done rc=0 46s | peak-RSS 0.32GiB | min-avail 14258MiB | peak-load 1.18"
+  },
+  "jpeg_consumer_followthrough": {
+    "source": "47db53ed",
+    "consumer": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+    "graph": "PASS: exactly six intended source transitions, versions/dependency lists identical; actual metadata passes CI framework validator; all four shared crates from isolated export",
+    "graph_verifier_controls": "PASS",
+    "native": "48 passed; independent djpeg readback retained; strict all-target Clippy PASS",
+    "preflight": "5 passed; feature-enabled strict all-target Clippy PASS",
+    "receipts": [
+      "run-heavy: done rc=1 24s | peak-RSS 0.71GiB | min-avail 14432MiB | peak-load 0.79",
+      "run-heavy: done rc=0 2s | peak-RSS 0.32GiB | min-avail 15172MiB | peak-load 0.40"
+    ],
+    "failures_retained": "Native tests and Clippy passed; disk-floor guard stopped before preflight. An initial cleanup attempt preserved an unfamiliar compiler text diagnostic and refused a temporary metadata directory; first preflight launch also refused its disk floor. Confirmed inactive Cargo outputs were then deleted without archiving binaries. Same frozen source/lock passed remaining preflight gate.",
+    "limitations": "Focused Linux contract/oracle qualification; no throughput, total-memory or compile-time comparison claim. Wider HEIC/RAW, API and browser application profile remains separate."
+  },
+  "zenpipe_consumer_followthrough": {
+    "review": "https://github.com/imazen/zenpipe/pull/108",
+    "source": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+    "status": "draft; focused pipeline/native/checked-publication qualification passed; full profile still pending",
+    "receipt": "https://github.com/imazen/zenpipe/blob/e5cd3f9a8b849fc46ba7505fe73797ab0707bcab/benchmarks/optional_pipeline_pulse_2026-10-29.md"
   }
 }

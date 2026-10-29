@@ -22,14 +22,16 @@ qualification](optional-pulse.md).
 Keep explicit refusals for unproven required evidence. Native AT_FINISH
 continues to retain compressed output; this is not a streaming memory guarantee.
 The provided erasure method passes core ownership controls and the native public
-replay-driver matrix with strict Clippy on `a39616ba`. The separate native final
-integration gate passes its runtime controls but still needs its fixture-only
-Clippy correction qualified. See [the receipts](../benchmarks/replay_driver_2026-10-28.md).
+replay-driver matrix with strict Clippy on `a39616ba`. The separate native final integration gate and strict library Clippy now pass
+on the optional-control graph at `6ab547aa`; its Undefined-slot native/shared
+controls preserve the existing slot bytes and row-padding invariance. See [the receipts](../benchmarks/replay_driver_2026-10-28.md).
 
 ## Required before merging this batch
 
-1. Complete the native retained-job integration/Clippy gate on the corrected
-   Undefined-slot fixture. Preserve the established opaque-slot contract.
+1. **Passed on `6ab547aa`, receipts pushed as IMI `daa9c13d`:** native retained-job,
+   encode/row/one-shot controls and strict library Clippy, including the corrected
+   Undefined-slot native/shared controls. Broader feature/platform qualification
+   retains its own scope; preserve the established opaque-slot contract.
 2. **Passed on `a39616ba`:** corrected native/public-driver matrix, direct
    configured-job erasure, core ownership tests and strict Clippy. The graph audit
    confirms one core/pixel family. Previous failures and all no-effect, exact-byte,
@@ -57,8 +59,9 @@ failure is hidden with an ignore, feature exclusion or weaker assertion.
 zenpipe/zencodecs full-profile qualification still needs the prepared HEIC/RAW
 Pulse migrations, the coordinated dependency graph, and resolution of the AVIF
 orientation expectations without changing its established displayed-pixel
-behavior. Its publication adapter subset passed; that does not prove the full
-format profile. Do not mark that application release ready from zencodec CI.
+behavior. Its optional-control publication adapter subset passes on `a0b34b33`, and the
+core JPEG policy/preflight harness passes with consumer pin `e5cd3f9a`. This does
+not prove the full format profile. Do not mark that application release ready from zencodec CI.
 Any finding requiring a core contract change returns to this candidate review.
 
 ## Publication

@@ -51,10 +51,10 @@ The eight-crate generated API catalog and Rustdoc reference also build cleanly.
 The guide source checks (24/24) and browser checks pass on `7a26c718`,
 including responsive roles, signatures, full-example copying and inline
 expansion. Native qualification is partial, as detailed below. Core CI on
-`feb09f9f` passes for the optional signatures. Its documentation
-workflow fails in native integration: older container adapters and wrappers still
-use required references. Those gates remain required; native qualification is
-not inferred from the shared workspace checks.
+`feb09f9f` passes for the optional signatures. Earlier documentation workflows failed when native adapters and wrappers still
+used required references. The container and JPEG consumer gates now pass locally
+on aligned source graphs, as recorded below. All gates remain required; native
+qualification is not inferred from the shared workspace checks.
 
 
 ## Related stack landing (2026-10-29)
@@ -170,5 +170,27 @@ earlier scope.
 The guide CI failure on `3739a49a` occurred at an immediate URL assertion after
 Enter activated the skip link. `7a26c718` waits for the exact fragment and keeps
 the focus/destination assertions. Matching eight-crate Rustdoc, 24 source checks
-and the complete browser suite pass. This does not remove the remaining JPEG
-harness failure from its old zenpipe pin.
+and the complete browser suite pass. The subsequent JPEG consumer repin below resolves the old-wrapper compilation
+failure without excluding its native controls.
+
+
+## Optional pipeline and checked application qualification
+
+[Zenpipe PR108](https://github.com/imazen/zenpipe/pull/108) now carries optional
+Pulse entry points for execution, materialization, cached sessions, animation,
+lossless JPEG and filters. Required-Stop predecessors are deprecated adapters.
+Native animation forwards the exact original Option into frame decode, encode and
+finish. Session suffixes remain lazy and do not retain a borrowed per-call Pulse.
+
+Its [focused receipt](https://github.com/imazen/zenpipe/blob/e5cd3f9a8b849fc46ba7505fe73797ab0707bcab/benchmarks/optional_pipeline_pulse_2026-10-29.md)
+records pipeline/cache controls, native GIF/JPEG, filters, checked publication and
+metadata scrub. Full HEIC/RAW, other portable locks, standalone metadata services,
+generated API/browser and platform qualification remain separate.
+
+The core JPEG harness pins that consumer at `e5cd3f9a`, JPEG `e0bb92b4`, PNG
+`7b6d1436`, paired DEFLATE and UltraHDR. Incremental resolution changes only six
+intended package sources, with no package-version or dependency-list changes.
+Actual metadata passes the exported-framework identity validator. All 48 native
+policy tests and five preflight scenarios pass with strict Clippy, preserving
+independent `djpeg` readback and existing assertions. A disk-floor refusal before
+preflight remains in the receipt; only the remaining gate was resumed.
