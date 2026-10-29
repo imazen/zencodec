@@ -43,9 +43,11 @@ def main():
     text = '\n'.join(lines) + '\n'
     for section in ('patch.crates-io', 'patch."https://github.com/imazen/zencodec"'):
         header = '[' + section + ']'
-        if header not in text:
+        match = re.search(r'^' + re.escape(header) + r'\s*$', text, re.M)
+        if match is None:
             text += '\n' + header + '\n'
-        start = text.index(header) + len(header)
+            match = re.search(r'^' + re.escape(header) + r'\s*$', text, re.M)
+        start = match.end()
         end = text.find('\n[', start)
         if end < 0:
             end = len(text)
@@ -58,6 +60,8 @@ def main():
                 if name not in present:
                     additions += name + ' = { git = "https://github.com/imazen/zenpixels", rev = "' + PIXELS + '" }\n'
         text = text[:end] + '\n' + additions + text[end:]
+    import tomllib
+    tomllib.loads(text)  # Reject malformed bridges before any Cargo process.
     manifest.write_text(text)
     lock = a.destination / 'Cargo.lock'
     if lock.exists():
