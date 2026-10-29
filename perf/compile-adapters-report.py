@@ -28,7 +28,10 @@ for invocation in packet["invocations"]:
     assert invocation["status"] == "completed" and invocation["correctness"] == [True]
     directory = Path(invocation["output"])
     build = json.loads((directory / "build.json").read_text())
-    pages = list((directory / "target/cargo-timings").glob("cargo-timing-*.html"))
+    timings = directory / "cargo-timings"
+    if not timings.exists():
+        timings = directory / "target/cargo-timings"  # Historical retained evidence.
+    pages = list(timings.glob("cargo-timing-*.html"))
     assert len(pages) == 1
     match = re.search(r"const UNIT_DATA = (\[.*?\]);", pages[0].read_text(), re.S)
     units = json.loads(match[1])
@@ -58,7 +61,7 @@ receipt = {"schema": 1, "source_main": plan["baseline"]["revision"],
         "cpu_load_flags": sum(any(o["cpu_load"] > .05 for o in i["observations"]) for i in packet["invocations"]),
         "heavy_process_flags": sum(any(o["heavy_process_count"] > 0 for o in i["observations"]) for i in packet["invocations"]),
         "placement": packet["placement"]["status"]},
-    "scope": "core/io/media re-export consumer; no codecs, render/CMS, tests or application monomorphization; empty target, warm OS cache, prefetched dependencies, two jobs, no incremental/compiler wrapper; std enables std on each package that exposes it: main media has no std feature, review media includes its new std drivers",
+    "scope": "core/io/media re-export consumer; no codecs, render/CMS, tests or application monomorphization; empty target, warm OS cache, prefetched dependencies, two jobs, no incremental/compiler wrapper; std enables std on each package that exposes it; exact per-arm feature selections are retained in manifests",
     "resource_wrapper": lines[0], "log": str(args.log),
     "manifests": {f"{name}/{feature}": (root / name / feature / "Cargo.toml").read_text()
                   for name in ["main", "ideal"] for feature in ["default", "std"]},

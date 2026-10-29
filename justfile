@@ -1508,3 +1508,8 @@ transcode-composition-check:
 # Source-only guard for portable codec family graphs; no Cargo invocation.
 optional-native-audit-check:
     python3 perf/optional-native/test-audit.py
+
+# Build-product cleanup preserves timing evidence and waits for verified exit.
+compile-cleanup-check:
+    python3 perf/test_compile_cleanup.py
+    python3 -m py_compile perf/compile-time.py perf/compile-adapters-report.py

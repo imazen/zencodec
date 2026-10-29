@@ -57,3 +57,12 @@ Reproduce with `just compile-adapters-prepare ROOT MAIN_SHA REVIEW_SHA`,
 serially under run-heavy. The runner is frozen into each new ROOT before building;
 source archives, lockfiles, Cargo timing pages, A/A observations and failures
 remain available. The report reads existing evidence and does not rebuild.
+
+## Runner retention correction (2026-10-29)
+
+New runs preserve compiler logs, resource records and Cargo timing pages outside
+`target/`, then remove their own completed build products. The report reader
+accepts the new timing path and the historical path. A timeout does not authorize
+cleanup: its process tree must be inspected by the supervisor first. Three
+controls cover success, compiler failure and timeout retention. Earlier frozen
+runners and measurement receipts are unchanged. No new timing result is implied.

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import tarfile
@@ -145,8 +146,25 @@ def build(project, config_path, output):
                "--manifest-path", str(project / "Cargo.toml")]
     if config["profile"] == "release":
         command.append("--release")
-    with (output / "cargo.log").open("w") as log:
-        run(command, stdout=log, stderr=subprocess.STDOUT)
+    exited = False
+    try:
+        with (output / "cargo.log").open("w") as log:
+            run(command, stdout=log, stderr=subprocess.STDOUT)
+        exited = True
+    except subprocess.CalledProcessError:
+        exited = True
+        raise
+    finally:
+        # Only clean after verified command exit. Timeout needs supervisor tree
+        # inspection first; it must not trigger deletion under a live compiler.
+        # Preserve evidence,
+        # never archive regenerable executables or compiler caches.
+        timings = target / "cargo-timings"
+        if exited and timings.exists():
+            shutil.copytree(timings, output / "cargo-timings")
+        if exited and target.exists():
+            shutil.rmtree(target)
+
     wall, rss = (output / "resources.txt").read_text().split()
     (output / "build.json").write_text(json.dumps({"command": command, "wall_seconds": float(wall),
         "maximum_resident_kib": int(rss), "manifest": str(project / "Cargo.toml"),
