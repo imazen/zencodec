@@ -31,6 +31,11 @@
 
 ### Fixed
 
+- Async transcode checks cancellation across publication and queued-finalization
+  boundaries. A stopped writer no longer causes subsequent finish/tail/flush
+  effects or a successful return; already-written bytes remain irrevocable and
+  actual native errors retain their typed cause.
+
 - `transcode_async` runs encoder finalization through its configured compute
   executor, so buffered finish work does not unexpectedly run on the async
   polling task when batches are offloaded. Inline behavior is unchanged.

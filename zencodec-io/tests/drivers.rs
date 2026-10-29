@@ -1104,6 +1104,7 @@ fn every_sync_cursor_preserves_some_reporting_and_typed_cancellation() {
 
 #[cfg(feature = "tokio")]
 mod tokio_drivers {
+    include!("drivers/async_finalization.rs");
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

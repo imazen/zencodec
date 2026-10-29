@@ -246,6 +246,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed async publication cancellation (2026-10-29): a writer could signal
+  cancellation after accepting the final batch and the driver would still
+  finalize, publish the tail and return success. Shared-Pulse checks now cover
+  publication, queued finalization execution, tail and flush boundaries. Seven
+  effect controls preserve already-written prefixes and original native causes.
+  These checks do not interrupt a stalled writer or preempt a native call.
+  See `docs/tokio-execution.md` and `just tokio-guide-check`.
+
 - Controlled decode workspace deadline (2026-10-29): PolicyDecoder previously
   polled native discovery before rejecting an unqualified workspace requirement.
   Admission now precedes the first native step and retains a typed named cause.

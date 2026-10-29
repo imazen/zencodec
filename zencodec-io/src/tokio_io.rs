@@ -304,6 +304,14 @@ pub enum AsyncDriveError<E> {
     Disconnected,
 }
 
+// Boundary polling does not interrupt an AsyncWrite future that never wakes.
+fn check_shared_pulse<E>(pulse: Option<&SharedPulse>) -> Result<(), AsyncDriveError<E>> {
+    if let Some(pulse) = pulse {
+        pulse.check().map_err(AsyncDriveError::Cancelled)?;
+    }
+    Ok(())
+}
+
 /// Lift a codec-free error into any codec error type.
 fn widen<F>(e: AsyncDriveError<core::convert::Infallible>) -> AsyncDriveError<F> {
     {
@@ -726,8 +734,9 @@ where
 }
 
 /// Decode from an async source straight into a streaming encoder, writing
-/// encoded bytes to `out` after every batch. This does not establish an
-/// end-to-end memory bound: codec-owned raw/intermediate state and caller-owned
+/// encoded bytes to `out` when a batch needs input or finishes. A work-quota
+/// yield alone does not drain output. This does not establish an end-to-end
+/// memory bound: codec-owned raw/intermediate state and caller-owned
 /// input can remain live while the output is stalled. The current driver also
 /// drains pending output before finalizing the encoder. Select an operation
 /// strategy based on the actual configuration's retention and release behavior.
@@ -738,6 +747,12 @@ where
 /// arrive, and one that answers
 /// [`AT_FINISH`](zencodec::encode::OutputTiming::AT_FINISH) writes
 /// everything at the end. Returns the number of bytes written.
+///
+/// Cancellation is checked before publishing each successful batch, before
+/// finalization executes on the compute executor, after finalization, and after
+/// the final write and flush. Already-written bytes cannot be retracted. These
+/// checks do not wake a stalled writer; use an application timeout or drop the
+/// future for that, and signal the shared Pulse for dispatched native work.
 // Written out rather than `async fn` so the `Send` bound is proven here,
 // for every type parameter: with `async fn`, rustc's higher-ranked
 // lifetime check rejects `tokio::spawn` of the caller's future.
@@ -787,6 +802,9 @@ where
                 mut window,
                 outcome,
             } = batch;
+            if outcome.is_ok() {
+                check_shared_pulse(pulse.as_ref())?;
+            }
             let pending = sink.pending_output().len();
             if pending > 0 && matches!(outcome, Ok(BatchEnd::Need | BatchEnd::Done(_))) {
                 out.write_all(sink.pending_output())
@@ -795,19 +813,30 @@ where
                 sink.consume_output(pending);
                 written += pending as u64;
             }
+            if outcome.is_ok() {
+                check_shared_pulse(pulse.as_ref())?;
+            }
             match outcome {
                 Ok(BatchEnd::Yield) => crate::work_quota::yield_once().await,
                 Ok(BatchEnd::Done(_)) => {
                     // Finalization can perform most of a buffered encoder's CPU
                     // work. Keep it on the same executor as row processing.
-                    let rest = run_on(&compute, move || sink.finish())
-                        .await
-                        .map_err(widen)?
-                        .map_err(|e| AsyncDriveError::Step(StepError::Sink(Box::new(e))))?;
+                    let finish_pulse = pulse.clone();
+                    let rest = run_on(&compute, move || {
+                        check_shared_pulse::<core::convert::Infallible>(finish_pulse.as_ref())?;
+                        sink.finish()
+                            .map_err(|e| AsyncDriveError::Step(StepError::Sink(Box::new(e))))
+                    })
+                    .await
+                    .map_err(widen)?
+                    .map_err(widen)?;
+                    check_shared_pulse(pulse.as_ref())?;
                     out.write_all(rest.data())
                         .await
                         .map_err(AsyncDriveError::Write)?;
+                    check_shared_pulse(pulse.as_ref())?;
                     out.flush().await.map_err(AsyncDriveError::Write)?;
+                    check_shared_pulse(pulse.as_ref())?;
                     return Ok(written + rest.data().len() as u64);
                 }
                 Ok(BatchEnd::Need) => {

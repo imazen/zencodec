@@ -64,3 +64,29 @@ The finalization repair passes 35 driver tests, the same 3 quota tests and stric
 Clippy: rc0, 2s, peak RSS 0.29GiB, minimum available 14484MiB. Failing-first and
 fixed logs are `~/tmp/zencodec-tokio-guide/finish-before.log` and `finish-after.log`.
 The thread-placement regression is synthetic; no native codec speedup is claimed.
+
+## Cancellation during publication
+
+The finalization-boundary regression first observed `Prefix: Ok(10)` after the
+writer signalled cancellation: the driver finalized, wrote the tail and returned
+success. The driver now checks Pulse before successful-batch publication, after
+that write, inside the queued finalizer before native execution, after finalizing,
+after the tail write and after flush. Checks do not undo earlier output.
+
+The executable [effect controls](../zencodec-io/tests/drivers/async_finalization.rs)
+cover ordinary success, cancellation in the prefix writer, before queued finish,
+inside finish, in the tail writer and during flush. A seventh case makes finish
+both signal cancellation and return a native error; the original typed cause is
+preserved. Earlier bytes are asserted exactly, along with finish and flush counts.
+This is an effect-ordering guarantee, not prompt cancellation inside a native call
+or an I/O future that does not wake. Use an application timeout/drop for a stalled
+transport and signal the shared Pulse for dispatched native work.
+
+Validation of this repair: the full zencodec-io all-features test command passes
+151 tests/doctests, with one pre-existing ignored doctest. The selected driver
+and quota targets also pass strict Clippy. The final fixture fails before the
+fix at `Prefix: Ok(10)` and passes after it without changing assertions.
+Logs: `~/tmp/zencodec-tokio-guide/cancel-before-final-fixture.log`,
+`cancel-qualified.log`, and `cancel-io-all.log`. The full I/O test wrapper reports
+rc0, 4s, peak RSS 0.27GiB and minimum available 14584MiB; this is not a runtime
+performance comparison.
