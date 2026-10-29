@@ -167,3 +167,13 @@ native-harness Clippy on test source `90186109`: wrapper `rc=0 9s`, peak RSS
 also passed and is retained in `before.log`; the stronger assertions were added
 before landing. No production changes, new public API, native allocation bound,
 CMYK qualification or HDR reconstruction qualification are claimed here.
+
+## Retained one-shot preparation candidate
+
+The [review experiment](../perf/retained-decode-validation/README.md) adds an
+optional preparation method on the actual configured decoder. Required-output
+operations can refuse a proven mismatch before raster reconstruction, while
+unknown facts preserve the existing decode-and-validate path. Actual output is
+always checked. Native JPEG layout/late-ICC witnesses and matched heap profiles
+are recorded there, including the successful-path allocation cost. This is not
+a whole-operation memory bound or blanket native adoption.

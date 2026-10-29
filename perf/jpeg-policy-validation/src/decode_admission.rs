@@ -380,3 +380,56 @@ fn required_profile_tagged_layout_is_negotiated_without_losing_channels() {
         }
     }
 }
+
+#[cfg(feature = "retained-output")]
+#[test]
+fn prepared_native_output_matches_execution_and_unknown_routes_remain_usable() {
+    for progressive in [false, true] {
+        for placement in [
+            fixtures::Placement::Header,
+            fixtures::Placement::BeforeEoi,
+            fixtures::Placement::SplitIcc,
+        ] {
+            let bytes = fixtures::fixture(progressive, placement);
+            for requested in [
+                PixelDescriptor::RGB8_SRGB,
+                PixelDescriptor::RGBA8_SRGB,
+                PixelDescriptor::BGRA8_SRGB,
+                PixelDescriptor::RGBX8_SRGB,
+                PixelDescriptor::BGRX8_SRGB,
+                PixelDescriptor::RGBF32_LINEAR,
+                PixelDescriptor::RGBAF32_LINEAR,
+            ] {
+                let mut decoder = JpegDecoderConfig::new()
+                    .job()
+                    .decoder(Cow::Borrowed(&bytes), &[requested])
+                    .unwrap();
+                let prepared = decoder
+                    .prepare_output()
+                    .unwrap()
+                    .expect("qualified ordinary route");
+                assert_eq!(decoder.prepare_output().unwrap(), Some(prepared));
+                let decoded = decoder.decode().unwrap();
+                assert_eq!(decoded.pixels().descriptor(), prepared);
+                let direct = JpegDecoderConfig::new()
+                    .job()
+                    .decoder(Cow::Borrowed(&bytes), &[requested])
+                    .unwrap()
+                    .decode()
+                    .unwrap();
+                assert_eq!(decoded.metadata(), direct.metadata());
+                for row in 0..decoded.height() {
+                    assert_eq!(decoded.pixels().row(row), direct.pixels().row(row));
+                }
+            }
+            let mut cropped = JpegDecoderConfig::new()
+                .job()
+                .with_crop_hint(0, 0, 1, 1)
+                .decoder(Cow::Borrowed(&bytes), &[])
+                .unwrap();
+            assert_eq!(cropped.prepare_output().unwrap(), None);
+            let output = cropped.decode().unwrap();
+            assert!(output.width() > 0 && output.height() > 0);
+        }
+    }
+}

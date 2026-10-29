@@ -1654,3 +1654,11 @@ tokio-guide-check:
 decode-output-admission-check:
     cargo test -p zencodec --all-features --locked --lib operation::decoding::admission_tests
     cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings
+
+# Review native output preparation; source export and patch identities are retained.
+retained-decode-prepare core_revision jpeg_repository output:
+    python3 perf/retained-decode-validation/prepare.py "{{justfile_directory()}}" "{{core_revision}}" "{{jpeg_repository}}" "{{output}}"
+
+retained-decode-native-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --lib
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --all-targets -- -D warnings
