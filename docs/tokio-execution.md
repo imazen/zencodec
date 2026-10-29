@@ -342,6 +342,22 @@ qualify a Rayon pool, HTTP disconnect plumbing or every codec. Preserve one span
 per worker when extending the pattern: another worker's checks must not hide a
 silent worker. The test retains all original native-stop and admission assertions.
 
+### Stalled async destination
+
+The guarded-request pattern also releases a transcode stalled at its prefix
+write, tail write or flush. The driver test uses an AsyncWrite that returns
+Pending without waking itself; no timer or polling loop makes it ready. Aborting
+and awaiting the request drops the held encoder, signals operation-local Pulse,
+and leaves exactly the accepted output prefix. A prefix stall never finalizes
+the encoder; tail/flush stalls preserve the already-performed finalization.
+
+Run `just tokio-guide-check`. This qualifies future-drop cleanup with a test
+encoder, separately from the real JPEG worker control above. An arbitrary Pulse
+changing state alone still cannot wake a stalled writer. A hosting application's
+notified cancellation or timeout must drop/abort the request, while its guard
+signals native work. Do not resume a partially written response as though the
+buffer were untouched. Evidence: [stalled writer controls](../benchmarks/stalled_writer_2026-10-29.md).
+
 ## Driver-owned cancellation between native steps
 
 The async batch driver checks the supplied Pulse itself before each native
