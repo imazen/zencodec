@@ -55,7 +55,7 @@ impl PassSource for Borrowed<'_> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, stop)
     }
@@ -72,7 +72,7 @@ impl<S: Source> PassSource for Sequential<S> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, stop)
     }
@@ -114,8 +114,9 @@ impl PassSource for FileRows {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let active = validate_rows(&self.desc, first, &rows)? as u64;
         if self.stride < active {
             return Err(io::ErrorKind::InvalidInput.into());
@@ -129,14 +130,14 @@ impl PassSource for FileRows {
                 .ok_or(io::ErrorKind::InvalidInput)?;
         }
         for y in 0..rows.rows() {
-            check(pulse)?;
+            check(local_pulse)?;
             let at = u64::from(first + y)
                 .checked_mul(self.stride)
                 .and_then(|o| o.checked_add(self.origin))
                 .ok_or(io::ErrorKind::InvalidInput)?;
             self.file.read_exact_at(rows.row_mut(y), at)?;
         }
-        check(pulse)?;
+        check(local_pulse)?;
         Ok(())
     }
 }
@@ -171,8 +172,9 @@ impl<R: Read> PassSource for ReaderRows<R> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let active = validate_rows(&self.desc, first, &rows)?;
         let padding = self
             .stride
@@ -184,7 +186,7 @@ impl<R: Read> PassSource for ReaderRows<R> {
                 "forward source cannot seek",
             ));
         }
-        check(pulse)?;
+        check(local_pulse)?;
         // File pitch can be much larger than active samples. Retain at most one
         // bounded padding chunk, allocated before reading any part of a row.
         let chunk = padding.min(4096);
@@ -195,19 +197,19 @@ impl<R: Read> PassSource for ReaderRows<R> {
             self.skip.resize(chunk, 0);
         }
         for y in 0..rows.rows() {
-            check(pulse)?;
+            check(local_pulse)?;
             let row = rows.row_mut(y);
             self.reader.read_exact(row)?;
             let mut remaining = padding;
             while remaining != 0 {
-                check(pulse)?;
+                check(local_pulse)?;
                 let len = remaining.min(self.skip.len());
                 self.reader.read_exact(&mut self.skip[..len])?;
                 remaining -= len;
             }
             self.next += 1;
         }
-        check(pulse)?;
+        check(local_pulse)?;
         Ok(())
     }
 }

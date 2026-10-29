@@ -7,6 +7,12 @@ driver and adversarial fixtures. The driver is not yet a production adapter. The
 native adapter came from Opus review revision `0ec4726`; independent review
 replaced its detached replay token with a driver-retained raster input.
 
+Borrowed controls in `PassSource`, `MultiPassEncoder` and `encode_passes` use
+`Option<&dyn zencodec::Pulse>`. `None` stays absent through source and native
+forwarders; it leaves retained job controls and policy/resource checks active.
+Only local checks and reporting resolve the no-op control. This signature update
+is source-only; the dated native receipts below do not qualify it or its pins.
+
 ```rust,ignore
 // Freeze and retain actual pixels, including stride and color context.
 let input = multipass_validation::Input::raster(pixels);

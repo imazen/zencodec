@@ -31,7 +31,7 @@ impl PassSource for Changing {
         &mut self,
         _: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         rows.row_mut(0).fill(self.calls);
         self.calls += 1;
@@ -54,7 +54,7 @@ impl MultiPassEncoder for Twice {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<PassProgress> {
         if self.pass == 2 {
             return Ok(PassProgress::Done);
@@ -104,7 +104,7 @@ fn detached_borrow_proof_cannot_authorize_a_changing_source() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     );
     assert!(
         result.is_err(),
@@ -135,7 +135,7 @@ fn driver_retained_raster_is_exact_without_digest_or_raw_staging() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(&*samples.borrow(), &[7, 7]);
@@ -177,7 +177,7 @@ fn staging_a_retained_raster_is_still_a_policy_decision() {
             require_exact_replay: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     );
     assert!(asked, "staging cost must not bypass situational policy");
     assert!(result.is_err());

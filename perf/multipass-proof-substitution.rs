@@ -1,12 +1,12 @@
 //! Independent regression for the multipass prototype at 0ec4726.
 //! Copy into that prototype's tests/ directory; it must refuse a detached proof.
-use enough::{Stop, };
-use zencodec::how_far::NoPulse;
+use enough::Stop;
 use multipass_validation::{
     MultiPassEncoder, Options, PassCount, PassPlan, PassProgress, PassRows, PassSource, Preset,
     Replay, ReplayPolicy, RowRequest, encode_passes, sources::Borrowed,
 };
 use std::{cell::RefCell, io, rc::Rc};
+use zencodec::how_far::NoPulse;
 use zencodec::{
     encode::{EncodeOutput, OutputTiming},
     operation::PolicySet,
@@ -28,7 +28,12 @@ impl PassSource for Changing {
     fn replay(&self) -> Replay {
         self.proof
     }
-    fn read_rows(&mut self, _: u32, mut rows: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> io::Result<()> {
+    fn read_rows(
+        &mut self,
+        _: u32,
+        mut rows: PixelSliceMut<'_>,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> io::Result<()> {
         rows.row_mut(0).fill(self.calls);
         self.calls += 1;
         Ok(())
@@ -46,7 +51,11 @@ impl MultiPassEncoder for Twice {
             timing: OutputTiming::AT_FINISH,
         })
     }
-    fn pull_rows(&mut self, rows: &mut dyn PassRows, _: &dyn zencodec::Pulse) -> io::Result<PassProgress> {
+    fn pull_rows(
+        &mut self,
+        rows: &mut dyn PassRows,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> io::Result<PassProgress> {
         if self.pass == 2 {
             return Ok(PassProgress::Done);
         }
@@ -96,7 +105,7 @@ fn detached_borrow_proof_cannot_authorize_a_changing_source() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     );
     assert!(
         result.is_err(),

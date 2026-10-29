@@ -125,7 +125,7 @@ impl MultiPassEncoder for Scripted {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, MockError> {
         let step = *self.steps.get(self.at).unwrap_or(&Step::FilledEmpty);
         self.at += 1;
@@ -191,7 +191,7 @@ impl<F: FnMut(u32, u32) -> u8> PassSource for Callback<F> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         let call = self.calls.get();
         self.calls.set(call + 1);
@@ -228,7 +228,7 @@ fn run<E: MultiPassEncoder, S: PassSource>(
         PolicySet::new(),
         Preset,
         opts,
-        &NoPulse,
+        Some(&NoPulse),
     );
     (r, out)
 }
@@ -257,7 +257,7 @@ impl<S: PassSource> PassSource for Claimed<S> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, pulse)
     }
@@ -557,7 +557,7 @@ fn exact_replay_requirement_excludes_digest_evidence() {
             require_exact_replay: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(seen.len(), 1);
@@ -623,7 +623,7 @@ fn offers_disclose_evidence_per_route() {
             Ok(ReplayDecision::UsePreset)
         },
         options().with_stage_file(file, u64::MAX),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     std::fs::remove_file(path).unwrap();
@@ -758,7 +758,7 @@ fn shared_plan_projection_refusal_drops_committed_encoder_without_effects() {
         PolicySet::new(),
         Preset,
         Options::new(StorageBudget::new(1024, 4), 1024),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap_err();
     assert_eq!(failure.error().stage, Stage::Prepare);
