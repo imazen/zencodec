@@ -107,3 +107,24 @@ Final exhaustive-checkpoint run: rc=0, 8s, peak RSS 0.34 GiB, min available
 validation wrapper measurements, not codec benchmarks. Logs `controlled.log`
 and `all-checkpoints.log` and `all-checkpoints-artifacts` are retained beside
 prior receipts. Verified no Cargo/rustc/rustdoc process remained after exit.
+
+## Tokio request-abort diagnostics
+
+Base `8e4c26bd`, unchanged source graph. The existing six native JPEG
+baseline/progressive early/middle/last request-abort cases now use DiagnosticPulse
+inside the blocking worker. Request-drop records cancellation before signalling;
+native outcome/input cleanup and permit release precede the completion timestamp.
+Each retained trace requires cancellation <= observation <= return, zero active
+or dropped spans/incidents, and no StopOutcomeMismatch/UnobservedCancellation.
+Existing native reason and occupied/released admission assertions remain intact.
+This is deterministic ordering evidence, not external cancellation latency or a
+Rayon/multi-worker qualification. No production signature or behavior changed.
+
+Final test and strict test Clippy pass: run-heavy rc0, 8s, peak RSS 0.34 GiB,
+min available 14342 MiB, peak load 0.32; ARM64, 3 GiB/two jobs, timeout900.
+`request3.log` and six traces in its process-specific request-artifacts folder
+retain the result. The earlier compile failure (unit result instead of the
+wrapper's required Result) remains in request.log; request2.log passes before
+explicitly moving input cleanup ahead of permit release. All artifacts are
+retained alongside prior runs. Verified Cargo/rustc/rustdoc exited. The wrapper
+resource measurements do not quantify native memory or performance.

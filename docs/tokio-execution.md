@@ -320,6 +320,28 @@ minimum available 14035MiB. Full log:
 `~/tmp/zencodec-tokio-guide/native-request-qualified.log`.
 This is test-run resource usage, not a native memory bound or speed measurement.
 
+### Diagnose request abort separately from native cleanup
+
+The native request-abort control now wraps the real blocking decoder in
+`DiagnosticPulse` with an explicit worker span. Its request-drop callback records
+`Profiler::cancellation_requested()` before signalling the operation-local stop.
+The worker records `operation_returned()` only after native result/input cleanup,
+phase completion and admission-permit release. The independent receipt survives
+the aborted request task. Six early/middle/last baseline/progressive cases require
+ordered request, observation and cleanup timestamps, complete traces and neither
+`StopOutcomeMismatch` nor `UnobservedCancellation`.
+
+```sh
+just native-request-cancellation-check "$HOME/tmp/native-request-traces"
+```
+
+Retained traces diagnose missing observation separately from slow cleanup. The
+rendezvous intentionally pauses the worker, so these timings are **not** a codec
+cancellation-latency benchmark. This is one native blocking worker; it does not
+qualify a Rayon pool, HTTP disconnect plumbing or every codec. Preserve one span
+per worker when extending the pattern: another worker's checks must not hide a
+silent worker. The test retains all original native-stop and admission assertions.
+
 ## Driver-owned cancellation between native steps
 
 The async batch driver checks the supplied Pulse itself before each native

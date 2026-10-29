@@ -1655,8 +1655,8 @@ media-publication-check:
     cargo clippy -p zencodec-media -p zencodec-media-testkit --all-features --all-targets --locked -- -D warnings
 
 # Tokio abort -> operation-local Pulse -> real native JPEG checkpoints.
-native-request-cancellation-check:
-    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked request_cancellation:: -- --nocapture
+native-request-cancellation-check artifacts="$HOME/tmp/zencodec-native-request":
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked request_cancellation:: -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 # Numeric metadata contracts on both portable and explicit-std paths.
