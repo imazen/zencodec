@@ -1,0 +1,71 @@
+--- a/zencodecs/tests/checked_transcode.rs
++++ b/zencodecs/tests/checked_transcode.rs
+@@ -780,3 +780,68 @@
+     assert!(request(StorageBudget::new(512 * 1024, 16))
+         .with_metadata(MetadataTransfer::PreserveReported).transcode(&codecs, &source).is_err());
+ }
++
++#[test]
++#[allow(deprecated)]
++fn late_exif_rendering_orientation_is_preserved_or_refused() {
++    use zencodec::operation::{BoundPolicy, PolicySet};
++    let raw: Vec<u8> = (0..WIDTH as usize * HEIGHT as usize * 3)
++        .map(|i| ((i.wrapping_mul(73) ^ (i >> 3)) & 255) as u8).collect();
++    let mut exif = zencodec::exif::Exif::new(zencodec::exif::TextEncoding::Ascii);
++    exif.set_artist(SECRET);
++    exif.set_orientation(zencodec::Orientation::Rotate90);
++    let input = zenpng::PngEncoderConfig::new().job()
++        .with_metadata_policy(Metadata::none().with_exif(exif.to_bytes())
++            .with_xmp(format!("<unparseable-private>{SECRET}").into_bytes()), MetadataPolicy::PreserveExact)
++        .encoder().unwrap()
++        .encode(PixelSlice::new(&raw, WIDTH, HEIGHT, WIDTH as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap())
++        .unwrap();
++    assert_eq!(codecs().decode_job(ImageFormat::Png).unwrap().probe_full(input.data()).unwrap().orientation,
++        zencodec::Orientation::Rotate90, "header fixture carries a rendering instruction");
++    let mut clean = input.data()[..8].to_vec();
++    let mut late = Vec::new();
++    let mut end = Vec::new();
++    let mut offset = 8;
++    let mut removed = 0;
++    while offset < input.data().len() {
++        let len = u32::from_be_bytes(input.data()[offset..offset+4].try_into().unwrap()) as usize;
++        let chunk = &input.data()[offset..offset+12+len];
++        match &chunk[4..8] {
++            b"eXIf" | b"iTXt" => {late.extend_from_slice(chunk); removed += 1;}
++            b"IEND" => end.extend_from_slice(chunk),
++            _ => clean.extend_from_slice(chunk),
++        }
++        offset += 12 + len;
++    }
++    assert_eq!(removed, 2, "fixture must contain both source carriers");
++    let mut source = clean.clone();
++    source.extend(late);
++    source.extend_from_slice(&end);
++    clean.extend(end);
++    let codecs = codecs();
++    for direct in [false, true] {
++        let mut policy = BoundPolicy::new(
++            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
++            |q: Question<'_>| -> Result<Decision, At<Infallible>> {
++                if direct {
++                    let Question::Transcode { choices, .. } = q else { return Ok(Decision::UsePreset); };
++                    Ok(Decision::choose(choices.first().unwrap()))
++                } else { Ok(Decision::UsePreset) }
++            });
++        let budget = StorageBudget::new(512 * 1024, 16);
++        let result = request(budget.clone()).transcode_with(&codecs, &source, &mut policy);
++        let Ok(output) = result else { continue; }; // Explicit refusal is an allowed result.
++        assert_eq!(codecs.decode_job(ImageFormat::Png).unwrap().probe_full(output.data()).unwrap().orientation,
++            zencodec::Orientation::Rotate90, "successful discard must not lose rendering orientation");
++        let mut oracle = png::Decoder::new(Cursor::new(output.data()));
++        oracle.set_transformations(png::Transformations::EXPAND);
++        let mut oracle = oracle.read_info().unwrap();
++        let mut pixels = vec![0; oracle.output_buffer_size().unwrap()];
++        let info = oracle.next_frame(&mut pixels).unwrap();
++        assert_eq!(&pixels[..info.buffer_size()], raw.as_slice());
++        drop(output);
++        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++    }
++    assert!(request(StorageBudget::new(512 * 1024, 16))
++        .with_metadata(MetadataTransfer::PreserveReported).transcode(&codecs, &source).is_err());
++}

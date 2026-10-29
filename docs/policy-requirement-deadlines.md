@@ -130,3 +130,19 @@ error and leaves exactly that output prefix. These counts are observed at the
 test destination; this witness does not add a production failure-report API.
 The expanded native suite and strict lint passed:
 `rc=0 3s | peak-RSS 0.53GiB | min-avail 9276MiB | peak-load 0.29`.
+
+## Late discarded descriptions: native candidate
+
+The [application experiment](../perf/late-metadata-validation/README.md) finds a
+safe-success candidate narrower than general deferred obligations: when the
+retained route already discards descriptive metadata, late EXIF/XMP byte changes
+need not invalidate it. Actual PNG output is identical to the clean-input route,
+including independent pixel readback; late rendering orientation must survive
+or cause refusal. Other interpretation changes and metadata preservation remain
+strict. No additional callback is needed to reapprove an effect the retained
+route cannot perform.
+
+The 29-test native candidate and strict Clippy pass, but an unchanged legacy test
+requires blanket rejection. Production remains unchanged pending approval of that
+specific contract change. This does not authorize unknown opaque profile retention
+or discharge arbitrary requirements at unrelated boundaries.

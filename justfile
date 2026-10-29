@@ -1627,3 +1627,7 @@ compile-runner-check:
 # Image/video factories share optional controls and pre/post-construction checks.
 controlled-factory-pulse-check: controlled-workspace-check
     cargo test -p zencodec-media-testkit --test frame_policy --locked
+
+# Review-only experiment; does not change application behavior or old assertions.
+late-metadata-prepare repository revision output:
+    python3 perf/late-metadata-validation/prepare.py "{{repository}}" "{{revision}}" "{{output}}"

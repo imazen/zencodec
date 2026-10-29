@@ -1,0 +1,111 @@
+--- a/zencodecs/src/checked_transcode/evidence.rs
++++ b/zencodecs/src/checked_transcode/evidence.rs
+@@ -3,6 +3,7 @@
+ use zencodec::inventory::{Disposition, PartTag};
+ 
+ pub(super) struct Epoch {
++    treatment: MetadataTransfer,
+     width: u32,
+     height: u32,
+     format: ImageFormat,
+@@ -12,8 +13,9 @@
+     embedded: zencodec::decode::EmbeddedMetadata,
+ }
+ impl Epoch {
+-    fn capture(info: &ImageInfo) -> Self {
++    fn capture(info: &ImageInfo, treatment: MetadataTransfer) -> Self {
+         Self {
++            treatment,
+             width: info.width,
+             height: info.height,
+             format: info.format,
+@@ -32,7 +34,8 @@
+             || self.color != info.source_color
+             || self.orientation != info.orientation
+             || self.resolution != info.resolution
+-            || self.embedded != info.embedded_metadata
++            || (self.treatment == MetadataTransfer::PreserveReported
++                && self.embedded != info.embedded_metadata)
+         {
+             return Err(Refusal::LateMetadata.into());
+         }
+@@ -50,7 +53,7 @@
+     info: &ImageInfo,
+     treatment: MetadataTransfer,
+ ) -> Result<Epoch, Cause> {
+-    let epoch = Epoch::capture(info);
++    let epoch = Epoch::capture(info, treatment);
+     let Some(input) = input else {
+         // No implicit replay, retained input allocation or source pass. Streaming
+         // discard relies on the controlled decoder's final color/orientation
+@@ -83,7 +86,10 @@
+             .range()
+             .start;
+         if inventory.parts().iter().any(|part| {
+-            part.range().start > cutoff && matches!(part.disposition(), Disposition::Metadata(_))
++            part.range().start > cutoff
++                && matches!(part.disposition(), Disposition::Metadata(_))
++                && !(treatment == MetadataTransfer::DiscardDescriptive
++                    && matches!(part.tag(), PartTag::FourCc(tag) if tag == b"eXIf" || tag == b"iTXt"))
+         }) {
+             return Err(Refusal::MetadataCompleteness.into());
+         }
+@@ -405,3 +411,58 @@
+         assert_eq!(input.complete(), Some(&b"ab"[..]));
+     }
+ }
++
++#[cfg(test)]
++mod late_description_controls {
++    use super::*;
++    #[test]
++    fn only_discarded_descriptions_may_change() {
++        let original = ImageInfo::new(1, 1, ImageFormat::Png);
++        for change in [
++            (|i: &mut ImageInfo| i.width = 2) as fn(&mut ImageInfo),
++            |i| i.height = 2,
++            |i| i.format = ImageFormat::Jpeg,
++            |i| i.source_color.icc_profile = Some(std::sync::Arc::from(&b"late ICC"[..])),
++            |i| i.orientation = zencodec::Orientation::Rotate90,
++            |i| {
++                i.resolution = Some(zencodec::Resolution {
++                    x: 72.0,
++                    y: 72.0,
++                    unit: zencodec::ResolutionUnit::Inch,
++                })
++            },
++        ] {
++            let mut changed = original.clone();
++            change(&mut changed);
++            for treatment in [
++                MetadataTransfer::DiscardDescriptive,
++                MetadataTransfer::PreserveReported,
++            ] {
++                assert!(
++                    Epoch::capture(&original, treatment)
++                        .check_fields(&changed)
++                        .is_err()
++                );
++            }
++        }
++        for change in [
++            (|i: &mut ImageInfo| {
++                i.embedded_metadata.exif = Some(std::sync::Arc::from(&b"late EXIF"[..]))
++            }) as fn(&mut ImageInfo),
++            |i| i.embedded_metadata.xmp = Some(std::sync::Arc::from(&b"late opaque XML"[..])),
++        ] {
++            let mut changed = original.clone();
++            change(&mut changed);
++            assert!(
++                Epoch::capture(&original, MetadataTransfer::DiscardDescriptive)
++                    .check_fields(&changed)
++                    .is_ok()
++            );
++            assert!(
++                Epoch::capture(&original, MetadataTransfer::PreserveReported)
++                    .check_fields(&changed)
++                    .is_err()
++            );
++        }
++    }
++}
