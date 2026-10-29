@@ -21,7 +21,7 @@
       "name": "zencodec-coroutine",
       "directory": "zencodec-coroutine",
       "features": "all",
-      "fingerprint": "bac893c13d909ac2e01b39c0b95237edefd65b08756be77134ed0c5fac396283",
+      "fingerprint": "25b4ddfbea39f2a4a888c6367d4be048dfdd1ebc5b231a944624f6e216a2c7b3",
       "surface_sha256": "5c5f6deb80a8cddeeacefb6e52b98dd31984b07a2cc9d0fdd1e656d0a1da5def",
       "details_sha256": "362e146f555e086e199d316cf33f102848bcfe2e2039f650df48a0569ede0847"
     },
@@ -29,7 +29,7 @@
       "name": "zencodec-media",
       "directory": "zencodec-media",
       "features": "all",
-      "fingerprint": "1bb9aecbb003a398b4d5180a1c724f48cd393f97c739549f44e579c88ab324ce",
+      "fingerprint": "51f0e01142d3aadd62ce9b3ebfcd27c65464b59df8c6a67aec62e8e5b70808f1",
       "surface_sha256": "d5965d201f60f33442d1e44c4778172867404a7273868b058c206504de347fc4",
       "details_sha256": "e92f9d2a912b5a1e389a0179493decc348e55d0ba9050a7d81805aa09981e0a6"
     },
@@ -37,7 +37,7 @@
       "name": "zencodec-testkit",
       "directory": "zencodec-testkit",
       "features": "all",
-      "fingerprint": "00e600b79cb76a9e74aaac0b741c493c7d9dd017bb341f4bd9a7b821ce48033e",
+      "fingerprint": "e15862dc269fb74cbda96b57aaccda011576b424502a75913b93e65fbe9c5a0f",
       "surface_sha256": "d5d38d9a26d83d88b9641c9c890cb58b279cf20f30f6bbc922aedd224ef9ee8e",
       "details_sha256": "843f9c474590dc6b86a91362964c6b064675b2ea74ef5acba063327e756900a9"
     },
@@ -45,7 +45,7 @@
       "name": "zencodec-media-testkit",
       "directory": "zencodec-media-testkit",
       "features": "all",
-      "fingerprint": "51a1184107f26033f5500f79317248d37e0ba261ee4ef05cf66aaa4bd6c7f682",
+      "fingerprint": "0d09d366e56f87b8c24c4b73691e40c7cfaf6fa30aeb9f67558919bb564877f1",
       "surface_sha256": "ca215f9f717bef4ac207a9b564f078b1b11585341709b4900721e1cd07c2d5b2",
       "details_sha256": "e6421b02a033f1a5964ca445c679456cd91b0ddcda12db5d57122d6773dcd311"
     },
@@ -53,7 +53,7 @@
       "name": "zenmeta",
       "directory": "zenmeta",
       "features": "all",
-      "fingerprint": "dea0c7960e81c2db4da97888b493408d5410785dd8163e6b78412bbf751078b8",
+      "fingerprint": "1c0afbca659d0c359391355e01455c7baaf910b4a4e00c471f4ce51c39920bb7",
       "surface_sha256": "82a2ec3c646e349305e23e6ee0325cf0fdd9751c150bd22d74222a5e53ede41d",
       "details_sha256": "629a2a51300ac46e0d60c51979e717002873f23654f3759624ccbfd2fb8d47ae"
     },

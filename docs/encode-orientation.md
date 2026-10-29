@@ -79,3 +79,10 @@ modes, with plan/start equality, stored geometry, output orientation and byte
 parity against ordinary native encoding. Its initial preflight is whole-raster
 RGB8/RGBA8 sRGB only; explicit ColorContext and exact-depth declarations refuse.
 This qualification does not establish a streaming or bounded-memory route.
+
+The native follow-up also qualifies refused exact-depth declarations, attached
+color contexts that appear after startup, and resource-limit categories with
+the original typed limit cause. Four native manifest roots resolve with the
+shared core revision and retain all media features. Shared crate pixel floors
+must match core: an older registry pixel version selected by a development
+dependency otherwise makes the animation adapter types incompatible.
