@@ -1,6 +1,6 @@
 {
   "date": "2026-10-29",
-  "scope": "Optional borrowed Pulse in the shared workspace and standalone renderer; no native codec or performance claim",
+  "scope": "Optional borrowed Pulse in the shared workspace, standalone renderer, guide and selected native controls; no performance claim",
   "runtime_source": "670b3d804af566d9d3cfce49d1c4e6b00405b7bd",
   "remaining_gates_source": "2a1087cba99de3c1f11c84add4b13e377f582ccb",
   "gates": {
@@ -27,10 +27,9 @@
     "core08 retry aggregate failure: runtime passed, one stale required-Pulse doctest failed; fixed in core09"
   ],
   "not_qualified": [
-    "native codecs/adapters against optional signatures",
-    "new Windows/macOS/i686 CI",
-    "latency, memory and throughput performance",
-    "new site/browser"
+    "all native codecs/adapters against optional signatures",
+    "complete native Windows/macOS/i686 coverage",
+    "latency, memory and throughput performance"
   ],
   "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained.",
   "site_optional": {
@@ -39,5 +38,35 @@
     "source_checks": "24/24 pass",
     "browser": "pass; original responsive/source-copy assertions retained",
     "wrapper": "rc0 46s peak-RSS0.30GiB min-avail14242MiB peak-load0.74"
+  },
+  "native_portable": {
+    "core": "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6",
+    "pixels": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+    "wrapper": "run-heavy: done rc=1 373s | peak-RSS 0.81GiB | min-avail 13902MiB | peak-load 2.45",
+    "zenbitmaps": {
+      "source": "54f98180d183fbeed6110642ee65c7274e13dba0",
+      "runtime": "26 passed across pulse_controls, qoi_sansio, sansio_bitmaps",
+      "clippy": "FAIL: inventory-only HeaderTrace/header_trace compiled without inventory",
+      "repair": "769e65471445f7560076826012b0dc403738a5c1; unrun"
+    },
+    "zenwebp": {
+      "source": "6cba688ff2898dfcb3350845372756dacdf431f6",
+      "runtime": "20 passed across pulse_calls, pulse_polls, sansio",
+      "clippy": "PASS for library and same targets"
+    },
+    "zenjpeg": {
+      "source": "265a04479b752a70a86391a39da627adbf2553c0",
+      "runtime": "50 passed, 1 inherited ignored across native_hardening, controlled_decode, metadata_rewrite, row_planning",
+      "clippy": "PASS for library and same targets"
+    },
+    "graph": "Incrementally resolved committed locks outside workspace patches. Initial audit FAIL retained; explicit source review explains required PNG, zenflate, rustix, archmage family, lz4_flex and identical-source metric revision changes. No remaining unreviewed deltas in checked roots.",
+    "limitations": "Selected Linux native controls only. Nested consumer graphs and full feature/platform coverage remain open."
+  },
+  "png_portable": {
+    "source": "4b75d4d5495debd2b19dd211cf3500ef1763a0c3",
+    "landed_head": "7b6d1436db5d771fc43226c146847fc76305afde",
+    "merge": "a5f2a58834d41cbace94368ca19eeb374f6b9873",
+    "gates": "root resolution/graph, native tests, strict Clippy, no-default, fuzz bins PASS",
+    "wrapper": "rc0 44s peak-RSS0.58GiB min-avail14538MiB peak-load1.47"
   }
 }

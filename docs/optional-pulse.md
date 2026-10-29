@@ -50,7 +50,8 @@ This establishes the shared protocol, not every native codec's implementation.
 The eight-crate generated API catalog and Rustdoc reference also build cleanly.
 The guide source checks (24/24) and browser checks pass on `f4b9fdc1`,
 including responsive roles, signatures, full-example copying and inline
-expansion. Native adapters still require qualification against these signatures. Core CI on `feb09f9f` passes for the optional signatures. Its documentation
+expansion. Native qualification is partial, as detailed below. Core CI on
+`feb09f9f` passes for the optional signatures. Its documentation
 workflow fails in native integration: older container adapters and wrappers still
 use required references. Those gates remain required; native qualification is
 not inferred from the shared workspace checks.
@@ -70,14 +71,42 @@ subsequent optional-Pulse edits:
 | zenavif | [Packet context and picture admission](https://github.com/imazen/zenavif/pull/74) | `13cc0394` |
 
 Picture accounting covers requested native picture planes, not total process or
-operation workspace. The remaining native optional-control source changes must
-be paired with one core/pixel dependency graph and tested before landing.
+operation workspace. The remaining native optional-control changes must be paired with one
+core/pixel dependency graph and tested before landing.
 
 
-Native follow-up found a test-graph blocker: the bitmap, WebP and JPEG test roots
-still resolve native-only `zenpng 0.1.4`, which pulls in `zencodec 0.1.26`. Its
-fixed `DecodeOutput == 360` assertion does not admit the paired pixel buffer's
-new representation. All three builds stop before native tests. Keep that
-failure visible and align the PNG test dependencies; do not remove the tests or
-loosen the old assertion to disguise the split. The isolated IVF/WebM controls
-pass (27 tests, including explicit optional timeout-before-effects controls).
+## Native optional-control qualification
+
+[PNG PR 48](https://github.com/imazen/zenpng/pull/48) is merged as `a5f2a588`,
+including optional controls and the joint encoding-route callback. Its portable
+root and fuzz graphs, native integration, metadata rewrite, row planning,
+shared contracts, strict Clippy and no-default build passed before merge.
+This is separate from the earlier required-Pulse stack receipts above.
+
+The portable JPEG and WebP graphs also pass the selected native runtime and
+strict Clippy controls. Their optional changes have not yet landed. Bitmap
+runtime controls pass, but strict Clippy exposed an inventory-only helper gated
+on the broader codec feature; its source repair still needs qualification.
+These are focused contract checks, not full-codec or cross-platform certification.
+
+| Codec / source | Checked behavior | Remaining qualification |
+| --- | --- | --- |
+| PNG `4b75d4d5` (landed with receipt and fuzz lock as `7b6d1436`) | Incremental decode, controlled adoption, metadata rewrite, declared row planning and shared contracts; fuzz bins compile | Remaining platform CI |
+| WebP `6cba688f` | Optional calls preserve retained cancellation; supplied progress and stop polling; incremental sample parity; strict Clippy | Nested fuzz/recompress graphs and broader feature coverage |
+| JPEG `265a0447` | Native optional helpers, controlled decode, metadata rewrite and row planning; strict Clippy | Fuzz graph, API snapshot and broader feature coverage; one inherited ignored case remains ignored |
+| Bitmaps `54f98180` | Retained stop polling, QOI and bitmap incremental controls | Feature-gate repair `769e6547` is unrun; fuzz graph |
+| IVF/WebM `9c118829` | 27 controls passed in an isolated dependency override, including timeout before effects | Portable graph and strict Clippy; not a portable landing receipt |
+
+The initial bitmap/WebP/JPEG builds failed because native-only `zenpng 0.1.4`
+pulled in `zencodec 0.1.26`, whose fixed layout assertion rejects the paired pixel
+representation. Aligning the PNG test dependency with the new shared graph
+removed that split without changing the old assertion. JPEG additionally uses
+an existing metric revision with identical consumed crate source and a widened
+PNG requirement. The reviewed lock changes retain exactly one shared core,
+pixel, converter and Pulse package in each checked root.
+
+The combined three-codec wrapper still reports failure because bitmap Clippy
+failed. Successful JPEG/WebP steps do not erase that failure. The
+[receipt](../benchmarks/optional_pulse_2026-10-29.json) records both results.
+AVIF, IMI, the remaining container integrations and the complete zenpipe graph
+still need qualification against the optional signatures.
