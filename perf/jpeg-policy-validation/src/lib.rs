@@ -54,3 +54,6 @@ mod decode_admission;
 
 #[cfg(test)]
 mod request_cancellation;
+
+#[cfg(test)]
+mod pulse_diagnostics;

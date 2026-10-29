@@ -162,3 +162,12 @@ It reuses `profile-preparation.py` allocation-event replay and heaptrack_print
 cross-checks. No wall-clock speed comparison is inferred. See
 [the admission audit](../../docs/decode-descriptor-admission.md) and committed
 measurement identities. Raw output directories are new and never overwritten.
+
+## Pulse diagnostics
+
+`just native-pulse-diagnostics-check ARTIFACT_DIRECTORY` qualifies the shared
+incremental helper and native direct-decode interruption for baseline/progressive
+fixtures. It retains how-far-really traces in the supplied directory. See
+[the receipt](../../benchmarks/native_pulse_diagnostics_2026-10-29.md) for scope:
+these fixtures have native cancellation checkpoints but only a completion-time
+progress report. Intermediate progress remains tracked separately.

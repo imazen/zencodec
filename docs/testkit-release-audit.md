@@ -71,3 +71,21 @@ external replacement stop source too; otherwise it may bypass the observer.
 
 Qualification and retained failing-first evidence:
 [pre-cancellation receipt](../benchmarks/testkit_precancellation_2026-10-29.md).
+
+## Native JPEG follow-through
+
+`just native-pulse-diagnostics-check` runs the strengthened incremental helper
+on baseline and progressive native JPEG fixtures, plus direct native decode with
+DiagnosticPulse. Both modes preserve one-shot Cancelled and TimedOut at early,
+middle and final observed checkpoints. This exercises native code, not only the
+shared Fused wrapper. The fixture is 97x65; it is not full JPEG configuration or
+all-checkpoint coverage.
+
+The successful traces contain 15 cancellation checks for baseline and 57 for
+progressive, but only one progress report of 65 units in each mode. Intermediate
+reporting therefore remains a concrete UX gap, tracked in
+[zenjpeg issue 251](https://github.com/imazen/zenjpeg/issues/251). Positive report
+counts alone do not establish useful progress granularity. No latency bound or
+optimal polling frequency is inferred from these instrumented runs.
+
+See [native diagnostic evidence](../benchmarks/native_pulse_diagnostics_2026-10-29.md).

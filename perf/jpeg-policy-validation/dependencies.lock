@@ -81,6 +81,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "critical-section"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+
+[[package]]
 name = "enough"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -137,6 +143,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "how-far-along"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "341fd592ab88e539e66604194e7bdeabd057bb13ab7227ef1f6c929617d70da9"
+dependencies = [
+ "critical-section",
+ "enough",
+ "how-far",
+]
+
+[[package]]
+name = "how-far-really"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b9972a73c90b26b7682b067a5b4a34f679ea79f5845a20c1f11df03432a6aa1"
+dependencies = [
+ "how-far",
+ "how-far-along",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -146,11 +173,14 @@ checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
 name = "jpeg-policy-validation"
 version = "0.0.0"
 dependencies = [
- "tokio",
+ "how-far-along",
+ "how-far-really",
  "kamadak-exif",
+ "tokio",
  "zencodec",
  "zencodec-coroutine",
  "zencodec-io",
+ "zencodec-testkit",
  "zencodecs",
  "zenjpeg",
  "zenmeta",
@@ -486,6 +516,17 @@ dependencies = [
  "how-far",
  "tokio",
  "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "zencodec-testkit"
+version = "0.2.0"
+dependencies = [
+ "enough",
+ "whereat",
+ "zencodec",
+ "zencodec-io",
  "zenpixels",
 ]
 

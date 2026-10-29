@@ -47,6 +47,9 @@ zencodec-coroutine = { path = "../../zencodec-coroutine" }
 zenmeta = { path = "../../zenmeta" }
 
 [dev-dependencies]
+zencodec-testkit = { path = "../../zencodec-testkit", version = "0.2.0" }
+how-far-along = { version = "0.1.0", default-features = false, features = ["std"] }
+how-far-really = "0.1.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 kamadak-exif = "0.6.1"
 
