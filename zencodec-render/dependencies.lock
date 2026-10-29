@@ -208,6 +208,7 @@ dependencies = [
  "almost-enough",
  "enough",
  "how-far",
+ "libm",
  "spin",
  "whereat",
  "zenpixels",
