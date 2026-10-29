@@ -15,7 +15,7 @@ This checkout prepares the unpublished 0.2 API. The examples below use that
 API, including Pulse. Use the repository's pinned example workspaces while the
 paired codec and zenpixels releases are being qualified; their root manifests
 keep one copy of the shared types. For the published API, see
-[the 0.1.27 documentation](https://docs.rs/zencodec/0.1.27/zencodec/).
+[the 0.1.26 documentation](https://docs.rs/zencodec/0.1.26/zencodec/).
 
 [Current generated reference](https://imazen.github.io/zencodec/reference.html)
 and [code-first examples](https://imazen.github.io/zencodec/code.html) show the

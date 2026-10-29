@@ -28,7 +28,12 @@ for invocation in packet["invocations"]:
     assert invocation["status"] == "completed" and invocation["correctness"] == [True]
     directory = Path(invocation["output"])
     build = json.loads((directory / "build.json").read_text())
-    pages = list((directory / "target/cargo-timings").glob("cargo-timing-*.html"))
+    # Current runners retain timing evidence outside the disposable target.
+    # Historical attempts kept it inside target; both layouts remain readable.
+    timings = directory / "cargo-timings"
+    if not timings.exists():
+        timings = directory / "target/cargo-timings"
+    pages = list(timings.glob("cargo-timing-*.html"))
     assert len(pages) == 1
     match = re.search(r"const UNIT_DATA = (\[.*?\]);", pages[0].read_text(), re.S)
     units = [u for u in json.loads(match[1]) if u["name"] == "zencodec"]

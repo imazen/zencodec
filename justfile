@@ -1619,3 +1619,7 @@ controlled-workspace-check:
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
     cargo test -p zencodec-io --all-features --locked
     cargo clippy -p zencodec-io --all-targets --all-features --locked -- -D warnings
+
+# Compile-report evidence survives removal of completed Cargo targets.
+compile-runner-check:
+    python3 -m unittest discover -s perf -p test_compile_cleanup.py

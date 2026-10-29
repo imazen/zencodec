@@ -56,6 +56,42 @@ class Cleanup(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.root_patches(root)
 
+    def test_report_reads_preserved_timing_evidence(self):
+        import gzip
+        with tempfile.TemporaryDirectory(dir=Path.home() / "tmp") as scratch:
+            root = Path(scratch)
+            (root / "attempt").mkdir()
+            observations = []
+            for case in range(3):
+                for arm in range(4):
+                    for repeat in range(5):
+                        output = root / f"build-{case}-{arm}-{repeat}"
+                        (output / "cargo-timings").mkdir(parents=True)
+                        (output / "cargo-timings/cargo-timing-test.html").write_text(
+                            'const UNIT_DATA = [{"name":"zencodec","duration":1.0}];')
+                        (output / "build.json").write_text(json.dumps({
+                            "wall_seconds": 2.0, "maximum_resident_kib": 1000}))
+                        observations.append({"status": "completed", "correctness": [True],
+                            "output": str(output), "case": case, "arm": arm,
+                            "observations": [{"cpu_load": 0, "heavy_process_count": 0}]})
+            plan = {"baseline": {"id": "published"}, "candidates": [
+                {"id": "main", "revision": "before"}, {"id": "ideal", "revision": "after"}],
+                "cases": [{"id": str(i)} for i in range(3)]}
+            packet = {"complete": True, "decision": {"exit_code": 0}, "mode": "iterate",
+                "invocations": observations, "plan": plan, "placement": {"status": "verified"}}
+            with gzip.open(root / "attempt/packet.json.gz", "wt") as output:
+                json.dump(packet, output)
+            for name in ["plan.json", "runner-measured.py", "toolchain.txt"]:
+                (root / name).write_text("synthetic test fixture")
+            (root / "progress.json").write_text("{}")
+            log = root / "run.log"
+            log.write_text("run-heavy: done rc=0 synthetic-test\n")
+            report = root / "receipt.json"
+            result = subprocess.run(["python3", str(Path(__file__).with_name("compile-time-report.py")),
+                str(root), str(log), str(report)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(json.loads(report.read_text())["measurements"]), 12)
+
     def test_success(self): self.exercise()
     def test_failure(self): self.exercise(subprocess.CalledProcessError(101, "cargo"))
     def test_timeout_retains_target_until_supervised_exit(self): self.exercise(subprocess.TimeoutExpired("cargo", 120))
