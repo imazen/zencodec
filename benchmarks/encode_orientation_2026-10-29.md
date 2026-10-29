@@ -29,3 +29,9 @@ No unrelated native algorithm or existing test expectation changed.
 Native per-frame baking, independent reader conformance, retained orientation
 plan evidence, memory bounds, and other codec implementations are not qualified
 by these controls. Zero zenpixels API changes were required.
+
+Guide/reference revision 71becbc5 passed all 24 source tests and the existing
+full browser suite (including independent inline expansion and 390/768/1440px
+layouts). Wrapper rc0, 45s, peak-RSS 0.34GiB, min-avail 11057MiB.
+Earlier site failures caught a missing graduated explanation and a duplicated
+flow ID introduced during the documentation update; no assertion was changed.

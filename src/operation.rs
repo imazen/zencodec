@@ -347,7 +347,8 @@ impl PreparedEncode {
 
     /// Transfer the exact prepared job to an adapter. Metadata/carrier
     /// validation and any further configuration are that adapter's obligation.
-    /// Replacing its checked policy or fidelity invalidates the original offer.
+    /// Replacing its checked policy, fidelity or orientation mode invalidates
+    /// the original offer.
     pub fn into_job(self) -> Box<dyn crate::encode::DynEncodeJob> {
         self.job
     }
