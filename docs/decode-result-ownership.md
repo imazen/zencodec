@@ -69,3 +69,11 @@ An empty details object is not proof that opaque metadata is absent. Privacy and
 retention requirements still need native evidence; no fallback may construct empty
 details and claim complete discovery. Strict early-output admission remains open.
 See [the admission audit](decode-descriptor-admission.md).
+
+## Guide qualification
+
+PR CI caught an omitted signature-catalog regeneration. The corrected eight-crate
+catalog passes generation (rc0, 6s, peak RSS 0.26 GiB). Site/source controls and
+the full browser suite pass on the candidate: all role tabs, inline context,
+copy/search, signatures, keyboard navigation and 390/768/1440-pixel layouts
+(rc0, 41s, peak RSS 0.33 GiB). No browser assertion changed.

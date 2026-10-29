@@ -386,6 +386,14 @@ impl core::default::Default for zencodec::decode::DecodeCapabilities
 pub fn zencodec::decode::DecodeCapabilities::default() -> Self
 impl core::fmt::Debug for zencodec::decode::DecodeCapabilities
 pub fn zencodec::decode::DecodeCapabilities::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::decode::DecodeDetails
+pub zencodec::decode::DecodeDetails::extensions: zencodec::Extensions
+pub zencodec::decode::DecodeDetails::info: zencodec::ImageInfo
+pub zencodec::decode::DecodeDetails::source_encoding: core::option::Option<alloc::boxed::Box<dyn zencodec::SourceEncodingDetails>>
+impl zencodec::decode::DecodeDetails
+pub fn zencodec::decode::DecodeDetails::new(info: zencodec::ImageInfo) -> Self
+impl core::fmt::Debug for zencodec::decode::DecodeDetails
+pub fn zencodec::decode::DecodeDetails::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::decode::DecodeOutput
 impl zencodec::decode::DecodeOutput
 pub fn zencodec::decode::DecodeOutput::descriptor(&self) -> zenpixels::descriptor::PixelDescriptor
@@ -393,10 +401,12 @@ pub fn zencodec::decode::DecodeOutput::extensions(&self) -> &zencodec::Extension
 pub fn zencodec::decode::DecodeOutput::extensions_mut(&mut self) -> &mut zencodec::Extensions
 pub fn zencodec::decode::DecodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
 pub fn zencodec::decode::DecodeOutput::format(&self) -> zencodec::ImageFormat
+pub fn zencodec::decode::DecodeOutput::from_parts(pixels: zenpixels::buffer::PixelBuffer, details: zencodec::decode::DecodeDetails) -> Self
 pub fn zencodec::decode::DecodeOutput::has_alpha(&self) -> bool
 pub fn zencodec::decode::DecodeOutput::height(&self) -> u32
 pub fn zencodec::decode::DecodeOutput::info(&self) -> &zencodec::ImageInfo
 pub fn zencodec::decode::DecodeOutput::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn zencodec::decode::DecodeOutput::into_parts(self) -> (zenpixels::buffer::PixelBuffer, zencodec::decode::DecodeDetails)
 pub fn zencodec::decode::DecodeOutput::metadata(&self) -> zencodec::Metadata
 pub fn zencodec::decode::DecodeOutput::new(pixels: zenpixels::buffer::PixelBuffer, info: zencodec::ImageInfo) -> Self
 pub fn zencodec::decode::DecodeOutput::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
