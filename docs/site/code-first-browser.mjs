@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { codeFlows } from './code-first-data.mjs';
 import { example, declarations } from './source.mjs';
-import { implementation } from './code-first.mjs';
+import { implementation, inlineContext } from './code-first.mjs';
 
 export async function checkCodeFirst(browser,url,output) {
   const page=await browser.newPage({viewport:{width:1440,height:1100},permissions:['clipboard-read','clipboard-write']});
@@ -47,14 +47,30 @@ export async function checkCodeFirst(browser,url,output) {
         const parts=step.example?example(source,step.example):implementation(source,step.scope);
         const panel=page.locator(`#${flow.id}-${i}`);
         assert.equal((await panel.locator('[data-example-part]').allTextContents()).join(''),parts.full);
+        for(const key of ['above','below']) {
+          const context=panel.locator(`[data-direction=${key}]`);
+          if(inlineContext(parts[key],!!step.example)) {
+            assert.equal(await context.evaluate(el=>el.tagName),'DIV');
+            if(parts[key].trim()) assert.equal(await context.locator('code').isVisible(),true,`${flow.id}/${i}/${key}`);
+          } else assert.equal(await context.evaluate(el=>el.tagName),'DETAILS');
+        }
       }
     }
     await page.goto(new URL('code.html#app-start',url).href);
     const panel=page.locator('#app-start-0');
-    await panel.locator('[data-direction=above] summary').click();
-    assert.equal(await panel.locator('[data-direction=above]').getAttribute('open'),'');
-    assert.equal(await panel.locator('[data-direction=below]').getAttribute('open'),null);
-    await panel.locator('[data-direction=below] summary').click();
+    // Short continuation stays visible. Exercise independent folding using a
+    // complete source-file scope with substantial definitions on both sides.
+    assert.equal(await panel.locator('[data-direction=below]').evaluate(el=>el.tagName),'DIV');
+    const expandable=codeFlows.flatMap(flow=>flow.steps.map((step,i)=>({flow,step,i}))).find(({step})=>step.scope==='async fn decode_async_fetches_ranges_concurrently_and_decodes_off_runtime()');
+    assert.ok(expandable);
+    await page.goto(new URL(`code.html#${expandable.flow.id}`,url).href);
+    const expanded=page.locator(`#${expandable.flow.id}-${expandable.i}`);
+    await expanded.locator('[data-direction=above] summary').click();
+    assert.equal(await expanded.locator('[data-direction=above]').getAttribute('open'),'');
+    assert.equal(await expanded.locator('[data-direction=below]').getAttribute('open'),null);
+    await expanded.locator('[data-direction=below] summary').click();
+    assert.equal(await expanded.locator('[data-direction=below]').getAttribute('open'),'');
+    await page.goto(new URL('code.html#app-start',url).href);
     await panel.locator('[data-copy-full]').click();
     await page.waitForFunction(()=>document.querySelector('#app-start-0 [data-copy-full]').textContent==='Copied');
     const registry=await readFile(new URL('../examples/checked_operations.rs',import.meta.url),'utf8');

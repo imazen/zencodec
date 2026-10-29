@@ -108,3 +108,4 @@
 .cf-project { margin: .5rem 0 1rem; font-size: .85rem; }
 .cf-project details { margin-top: .4rem; }
 .cf-project pre { overflow-x: auto; }
+.code-first .code-context-inline pre{max-height:none}

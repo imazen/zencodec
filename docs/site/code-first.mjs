@@ -20,6 +20,14 @@ export function implementation(source, scope) {
   if(depth)throw Error(`Unclosed implementation: ${scope}`);
   return {above:source.slice(0,start),focus:source.slice(start,end),below:source.slice(end),full:source,line:source.slice(0,start).split('\n').length};
 }
+// Comments and blank lines do not turn a return expression into a long example.
+export function inlineContext(text, isExample = false) {
+  const code = maskRust(text);
+  if (code.split('\n').filter(line => line.trim()).length <= 2) return true;
+  // Named example scopes are small functions, not whole fixture files. Keep
+  // their initialization visible: a reader cannot infer a builder's contents.
+  return isExample && /\blet\s+(?:mut\s+)?[\s\S]*?=/.test(code);
+}
 async function rustFiles(dir) {
   const entries=await readdir(dir,{withFileTypes:true});
   const result=[];
@@ -110,7 +118,11 @@ export async function codeFirstPage({sha,apiPanels,docs,dest}) {
     const source=sources.get(step.file),parts=step.example?example(source,step.example):implementation(source,step.scope);
     const imports=exampleImports(parts.above);
     const origins=imports?`<div class="code-imports"><small>Imports used by this source</small><pre><code>${highlight(imports)}</code></pre></div>`:'';
-    const context=(key,label)=>`<details class="code-context" data-direction="${key}"><summary>${label}<span>${parts[key].split('\n').length} lines</span></summary><pre><code data-example-part="${key}">${highlight(parts[key])}</code></pre></details>`;
+    const context=(key,label)=>{
+      const code=`<pre><code data-example-part="${key}">${highlight(parts[key])}</code></pre>`;
+      if(inlineContext(parts[key],!!step.example)) return `<div class="code-context code-context-inline" data-direction="${key}">${code}</div>`;
+      return `<details class="code-context" data-direction="${key}"><summary>${label}<span>${parts[key].split('\n').length} lines</span></summary>${code}</details>`;
+    };
     return `<div class="code-panel" id="${id}" data-example-source="${esc(step.file)}" data-example="${esc(step.example||'')}" data-scope="${esc(step.scope||'')}"><div class="code-toolbar"><span>${esc(step.state||'Implemented · review API')}</span><div class="code-actions"><a href="https://github.com/imazen/zencodec/blob/${sha}/${step.file}#L${parts.line}">Source ↗</a><button data-copy-full="${id}">Copy ${step.example?'full example':'source file'}</button></div></div>${origins}${context('above',step.example?'Show setup above ↑':'Show preceding definitions ↑')}<pre class="code-focus"><code data-example-part="focus">${highlight(parts.focus)}</code></pre>${context('below',step.example?'Show continuation below ↓':'Show following definitions ↓')}<span class="copy-status sr-only" role="status"></span></div><details class="cf-contract"><summary>Signatures & related contracts</summary>${step.api?.length?apiPanels(id,step.api):''}${await externalPanels(step.external)}</details>`;
   }
   const rendered=new Map();

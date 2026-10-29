@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { implementation, catalogItems, sourceFingerprint, exampleImports } from './code-first.mjs';
+import { implementation, catalogItems, sourceFingerprint, exampleImports, inlineContext } from './code-first.mjs';
 import { codeFlows } from './code-first-data.mjs';
 import { example } from './source.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
@@ -84,4 +84,11 @@ test('Tokio journeys cover caller, adapter and codec responsibilities',()=>{
     assert.equal(flow.steps.length,3);
     for(const step of flow.steps)assert.ok(step.title && step.why);
   }
+});
+
+test('short tails and example initialization stay visible without accordion controls',()=>{
+  assert.equal(inlineContext('// explanation\nOk(image)\n}\n'),true);
+  assert.equal(inlineContext('let policy = PolicySet::new()\n  .with_metadata(retention)\n  .with_workspace_limit(limit);',true),true);
+  assert.equal(inlineContext('use a::A;\nuse b::B;\nuse c::C;',true),false);
+  assert.equal(inlineContext('fn unrelated() {\n let x = 1;\n}\n',false),false);
 });

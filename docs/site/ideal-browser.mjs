@@ -1,3 +1,4 @@
+import { checkContext } from './context-browser.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { example } from './source.mjs';
@@ -127,17 +128,7 @@ export async function checkIdeal(browser,url,output) {
       await panel.evaluate(el=>{for(let p=el.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});
       const parts=example(sources[exampleSource],await panel.getAttribute('data-example'));
       assert.equal((await panel.locator('[data-example-part]').allTextContents()).join(''),parts.full);
-      const above=panel.locator('[data-direction="above"]');
-      const below=panel.locator('[data-direction="below"]');
-      assert.ok(!await above.evaluate(el=>el.open));
-      assert.ok(!await below.evaluate(el=>el.open));
-      await above.locator('summary').focus();await page.keyboard.press('Enter');
-      assert.ok(await above.locator('pre').isVisible());
-      assert.ok(!await below.evaluate(el=>el.open),'independent below context');
-      await below.locator('summary').click();
-      assert.ok(await below.locator('pre').isVisible());
-      await above.locator('summary').click();
-      assert.ok(await below.evaluate(el=>el.open),'closing above preserves below');
+      await checkContext(page,panel);
       await panel.locator('[data-copy-full]').click();
       await page.waitForFunction(id=>document.querySelector(`#${id} [data-copy-full]`).textContent==='Copied',await panel.getAttribute('id'));
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),parts.full);

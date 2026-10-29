@@ -9,7 +9,7 @@ import { highlight } from './site/highlight.mjs';
 import { migrationPage } from './site/migration.mjs';
 import { idealPage } from './site/ideal.mjs';
 import { gapsPage } from './site/gaps.mjs';
-import { codeFirstPage } from './site/code-first.mjs';
+import { codeFirstPage, inlineContext } from './site/code-first.mjs';
 const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
@@ -45,7 +45,11 @@ function codePanel(id, name, file = 'docs/examples/journeys.rs') {
   const proposed = layout || color || selection || file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
   const parts = example(layout ? layoutSource : color ? colorSource : storage ? storageSource : selection ? selectionSource : positional ? positionalSource : video ? videoSource : checked ? checkedSource : pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
   const tests = layout || color ? file : storage ? 'perf/spatial-validation/src/jxl_tests.rs' : selection || positional ? 'perf/spatial-validation/src/tests.rs' : video ? 'perf/av1-policy-validation/src/tests.rs' : checked ? 'perf/jpeg-policy-validation/src/checked_examples.rs' : pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
-  const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
+  const context = (direction, label) => {
+    const code=`<pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre>`;
+    if(inlineContext(parts[direction],true))return `<div class="code-context code-context-inline" data-direction="${direction}">${code}</div>`;
+    return `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary>${code}</details>`;
+  };
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
     <div class="code-toolbar"><span>${checked ? 'Implemented · review PRs' : proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', 'Imports &amp; setup')}

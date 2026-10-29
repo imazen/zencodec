@@ -1,3 +1,4 @@
+import { checkContext } from './context-browser.mjs';
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -67,20 +68,11 @@ try {
   await page.waitForSelector('#entry-registry:visible');
   const registry=page.locator('#entry-registry-example');
   const above=registry.locator('[data-direction="above"]'),below=registry.locator('[data-direction="below"]');
-  assert.ok(!await above.evaluate(el=>el.open));assert.ok(!await below.evaluate(el=>el.open));
-  await above.locator('summary').focus();await page.keyboard.press('Enter');
-  assert.ok(await above.locator('pre').isVisible());
+  await checkContext(page,registry);
   assert.ok((await above.textContent()).includes('pub fn gallery_codecs() -> CodecSet'));
-  assert.ok(!await below.evaluate(el=>el.open));
-  await below.locator('summary').click();
-  assert.ok(await below.locator('pre').isVisible());
   assert.ok((await below.textContent()).includes('Ok(image)'));
   assert.ok(await registry.locator('.code-focus').isVisible());
   if(output) await page.locator('#entry-registry').screenshot({path:`${output}/registry-expanded.png`});
-  await above.locator('summary').click();
-  assert.ok(!await above.evaluate(el=>el.open));assert.ok(await below.evaluate(el=>el.open));
-  await below.locator('summary').click();
-  assert.ok(!await below.evaluate(el=>el.open));
   await page.goto(`${url}#policy`);
   assert.ok((await page.locator('#policy .api-panel[data-api="policyResolver"][open]').textContent()).includes('At<Self::Error>'));
   for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom'],['jpeg_rewrite','policy-jpeg'],['jpeg_icc_refusal','policy-jpeg-checked'],['jpeg_icc_admission','policy-jpeg-icc']]) {
@@ -136,7 +128,7 @@ try {
     assert.ok(bounds.scroll<=bounds.w,`body overflows at ${width}: ${JSON.stringify(bounds)}`);
     if(output) await page.screenshot({path:`${output}/mobile-${width}.png`,fullPage:true});
     await page.goto(`${url}#entry-registry`);await page.waitForSelector('#entry-registry:visible');
-    for(const context of await page.locator('#entry-registry .code-context').all()) {
+    for(const context of await page.locator('#entry-registry details.code-context').all()) {
       if(!await context.evaluate(el=>el.open)) await context.locator('summary').click();
     }
     const expanded=await page.evaluate(()=>({w:innerWidth,scroll:document.documentElement.scrollWidth}));
@@ -145,7 +137,7 @@ try {
     if(output) await page.locator('#entry-registry').screenshot({path:`${output}/registry-expanded-${width}.png`});
     await page.goto(`${url}#policy`);
     if(!await page.locator('.policy-deep-dive').evaluate(el=>el.open)) await page.locator('.policy-deep-dive>summary').click();
-    for(const context of await page.locator('#policy-jpeg-icc-example .code-context').all()) {
+    for(const context of await page.locator('#policy-jpeg-icc-example details.code-context').all()) {
       if(!await context.evaluate(el=>el.open)) await context.locator('summary').click();
     }
     const policyBounds=await page.evaluate(()=>({w:innerWidth,scroll:document.documentElement.scrollWidth}));

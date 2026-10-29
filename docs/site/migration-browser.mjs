@@ -1,3 +1,4 @@
+import { checkContext } from './context-browser.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {example} from './source.mjs';
@@ -34,13 +35,7 @@ export async function checkMigration(browser,url,output) {
       const name=await panel.getAttribute('data-example');
       const parts=example(source,name);
       assert.equal((await panel.locator('[data-example-part]').allTextContents()).join(''),parts.full);
-      const above=panel.locator('[data-direction="above"]');
-      const below=panel.locator('[data-direction="below"]');
-      assert.ok(!await above.evaluate(el=>el.open));
-      assert.ok(!await below.evaluate(el=>el.open));
-      await above.locator('summary').click();
-      assert.ok(!await below.evaluate(el=>el.open),'above/below expansion must stay independent');
-      await below.locator('summary').click();
+      await checkContext(page,panel);
       await panel.locator('[data-copy-full]').click();
       await page.waitForFunction(id=>document.querySelector(`#${id} [data-copy-full]`).textContent==='Copied',await panel.getAttribute('id'));
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),parts.full);
