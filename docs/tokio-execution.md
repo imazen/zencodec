@@ -123,3 +123,141 @@ The driver/quota suite and strict Clippy pass after the fix. Logs:
 `sink-cancel-after.log` (rc0, 2s, peak RSS 0.31GiB, minimum available 14478MiB).
 The sleep backoff caps requested sleep at 2ms; it is not a wall-clock cancellation
 latency guarantee. OS scheduling and arbitrary Pulse implementations can delay it.
+
+## Choose the execution owner before choosing async syntax
+
+| Execution | Suitable work | Failure mode to avoid |
+|---|---|---|
+| `Inline` | Short, bounded synchronous steps | One expensive step blocks all other work on that runtime thread; a work quota cannot preempt it |
+| Tokio `spawn_blocking` | Finite blocking operations | Dropping/aborting the request does not stop a running closure; bound admission before dispatch |
+| Dedicated Rayon pool | CPU work, including codecs that cooperate with that pool | A worker blocked on socket/row delivery occupies pool capacity; a fixed thread count alone does not bound queued jobs or retained images |
+| Dedicated manual thread | Long-lived blocking parser or thread-affine native state | Unbounded thread creation, blocking joins on runtime threads, and worker lifetime outliving request accounting |
+
+Tokio documents the distinction between blocking tasks and persistent workers,
+and that running blocking tasks cannot be aborted:
+[spawn_blocking](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
+Rayon provides explicit pool size and panic handlers through
+[ThreadPoolBuilder](https://docs.rs/rayon/latest/rayon/struct.ThreadPoolBuilder.html).
+Its [spawn](https://docs.rs/rayon/latest/rayon/fn.spawn.html) has no execution-order
+guarantee. Do not depend on adjacent codec batches staying on the same thread.
+
+The executable [worker ownership controls](../zencodec-io/tests/drivers/worker_lifetime.rs)
+show the actual code for two boundaries:
+
+1. Acquire an owned permit **before** dispatch. Move it into the worker with the
+   input and cancellation handle. Keep it until worker-local state is dropped.
+   Aborting the request task must not make that permit available.
+2. Construct `Rc` or thread-affine native state inside a dedicated worker. Return
+   only a `Send` result. Join off the runtime polling thread. This demonstrates
+   the ownership mechanism, not compatibility of a particular native handle.
+
+A production supervisor must retain worker completion/panic receipts even if the
+HTTP request disappears. `Compute::spawn` currently returns no receipt, rejection
+or join handle. It can schedule a batch, but it is not an admission controller or
+shutdown supervisor. Keep those responsibilities in the hosting adapter for now;
+a new core executor abstraction needs a demonstrated consumer before adoption.
+
+## Deadlock, spin and cancellation review
+
+| Situation | Current behavior or required discipline | Remaining qualification |
+|---|---|---|
+| Full strip channel | Producer blocks; receiver must run concurrently; shared Pulse permits cancellation polling | Native retained-state bytes while blocked |
+| Pull parser awaiting HTTP | Occupies a worker while async fulfiller runs | Starvation with several parsers and a saturated pool |
+| Pulse-enabled channel wait | 64 initial spin attempts, then sleep backoff up to 2ms per requested sleep | CPU/cache cost and cancellation latency distribution under load |
+| No Pulse channel wait | Uses channel blocking operation | Dropping the peer must wake shutdown paths |
+| Work-quota yield | Limits synchronous steps per batch | One step can still take arbitrarily long; yielding is not a latency bound |
+| Request abort while worker runs | Worker remains alive; retain its admission and signal shared Pulse | Hung native calls need explicit shutdown policy; no forced cancellation promise |
+| Writer timeout/partial write | Prefix may already be externally visible | Terminate that response; do not replay the whole buffer on the same stream |
+| Panic in dispatched work | Result channel can disconnect; executor panic policy is external | Preserve operation ID and original panic at supervisor boundary |
+| Blocking nested pool call | Parent can occupy a worker while waiting for children | Test actual codec pool nesting; do not assume Rayon and native private pools share budgets |
+
+Do not replace polling with a tight `try_recv` loop. A wake-driven cancellation
+bridge would require a cancellation notification contract; arbitrary `Pulse`
+currently supplies polling, so merely wrapping it in `Notify` cannot invent a
+wake when its state changes. Polling's cost must be measured before selecting a
+replacement or tuning the spin/backoff constants.
+
+`select!` polls branches on the same task; blocking one branch blocks the others.
+Recreating cancelled `write_all` or `read_exact` futures can lose partial progress.
+Keep operation state and offsets outside retry loops, or abandon the transport.
+Do not repeatedly cancel/recreate semaphore acquisition when queue position
+matters. See Tokio's [select cancellation safety](https://docs.rs/tokio/latest/tokio/macro.select.html)
+and [semaphore fairness](https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html).
+A large weighted request can also block smaller requests behind it; admission
+policy must explicitly choose whether that fairness is desirable.
+
+## HTTP proxy qualification: two distinct lifetimes
+
+These are implementation/qualification requirements, **not a claim that a real
+HTTP native-codec proxy has passed**. The existing guide uses extracted driver
+controls and native in-memory source adapters. They do not cover HTTP framing,
+connection reuse, disconnects or deployment pool sizing.
+
+**Buffered codec route:** bound input/spool acquisition, inspect configuration,
+admit CPU and workspace, execute on a bounded worker, finish into separately
+budgeted encoded storage, drop raw/intermediate state, then stream the completed
+object to the client. CPU admission ends when computation actually ends; encoded
+storage admission lasts through network delivery. If metadata evidence is late,
+resolve it before irreversible headers/output, or retain output until it can be
+resolved. An HTTP 200 already sent cannot become a later policy refusal response.
+
+**Sequential route:** select a demonstrated sequential codec/configuration and
+pass-through orientation, retain bounded source/strip/output buffers, and run
+input fulfillment and output consumption concurrently. Deliberate output
+backpressure may pause encoding only while its retained state remains acceptable.
+A slow origin and slow client must not deadlock each other. A route that needs
+rotation, replay, global analysis or late privacy admission may require spooling
+or a different route. Preserve the option to succeed through that alternative.
+
+HTTP controls must include: chunked/short bodies, explicit EOF and truncation,
+slow reader/writer, cancellation at each boundary, writer failure after headers,
+Range/206 validation, ignored ranges, version/ETag change, retry ownership,
+connection reuse, and bounded queues under overload. Reuse the existing positional
+HTTP source/version checks; they are not evidence that all these proxy paths pass.
+Pixel and metadata outputs must match an ordinary native reference route before
+using the proxy for performance measurements.
+
+## Adaptive concurrency is an experiment, not a memory guarantee
+
+Keep four accounting lifetimes distinct: input/spool storage, active CPU work,
+raw/intermediate state, and completed compressed output. A request-count limit
+cannot substitute for these. An empirical memory estimate is not a proven bound;
+strict policies still need evidence or refusal. Unknown costs should select an
+explicit conservative/spool route, not silently count as zero.
+
+Candidate controller: classify by actual codec/configuration, dimensions, sample
+layout and pass plan; choose a measured starting concurrency; revise only future
+admissions as observations arrive. Retain existing permits when lowering a target.
+Re-estimate when new facts change the class **before** allocating the new state.
+Do not wait for extra permits while every job holds partial reservations: that
+can deadlock. Use atomic admission of the required resource vector, or a defined
+release/requeue/spool transition. Never acquire the same exhausted CPU budget
+again inside an already-admitted nested codec task.
+
+Measure a fixed-concurrency baseline before evaluating an adaptive controller:
+
+- Separate queue delay, compute service time and network drain time; slow clients
+  must not be misdiagnosed as CPU saturation. Record cancellations and rejected
+  requests too; successful-only latency conceals overload.
+- Cross request concurrency with actual codec thread count and batch size, using
+  identical frozen inputs and output parity controls. Include small/large and
+  baseline/progressive workloads, mixed arrivals and slow-client phases.
+- Use zenbench for repeated timing with interference checks; retain invalid runs.
+  Use `perf stat`/sampling for cycles, instructions, cache misses and context
+  switches, and heap profiling for retained/peak bytes. Run profiling separately
+  from clean timing. Cache misses alone do not prove cache-churn causality.
+- Compare the controller against the best fixed limit and an unchanged default
+  on held-out workload sequences. Record throughput, tail latency, memory,
+  wasted work after disconnect, fairness and recovery/oscillation. Choose an
+  acceptance envelope before looking at the results.
+
+Latency-based controllers such as [Netflix concurrency-limits](https://github.com/Netflix/concurrency-limits)
+are useful prior art, not a ready-made codec memory model. No adaptive controller,
+cache-churn reduction or optimal pool size is qualified here yet.
+
+Worker ownership qualification on 2026-10-29: all 39 driver tests and 3 quota
+tests pass, with strict Clippy. Receipt: rc0, 1s, peak RSS 0.32GiB, minimum
+available 14635MiB; `~/tmp/zencodec-tokio-guide/worker-lifetime-fixed.log`.
+The initial compile failure is retained in `worker-lifetime.log`. These controls
+use explicit release channels rather than timing-based assertions; the five-second
+timeouts are hang guards, not cancellation latency measurements.

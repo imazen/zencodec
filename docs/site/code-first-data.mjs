@@ -16,6 +16,10 @@ export const codeFlows = [
     {scope:'async fn strips_stream_back_to_the_async_side_with_backpressure()',file:'zencodec-io/tests/drivers.rs',api:['channelRows'],state:'Run producer and consumer concurrently; awaiting the producer first can deadlock'},
     {scope:'async fn pull_native_decoder_blocks_on_the_async_source()',file:'zencodec-io/tests/drivers.rs',api:['pullAsync'],state:'Existing sync parser on a worker, async range fulfillment on the runtime'},
   ]},
+  {id:'adapter-worker-owner',role:'adapter',title:'Request abort → worker ownership → thread-affine codec',evidence:'docs/tokio-execution.md',project:{manifest:'zencodec-io/Cargo.toml',helpers:'zencodec-io/tests/drivers.rs',command:'just tokio-guide-check'},note:'Admission belongs to the actual worker until it exits. Cancelling an HTTP request does not stop blocking computation. These executable scheduling controls use no native codec and make no memory or HTTP performance claim.',steps:[
+    {scope:'async fn aborted_request_keeps_admission_until_blocking_worker_exits()',file:'zencodec-io/tests/drivers/worker_lifetime.rs',api:['compute'],state:'The aborted request cannot release the running worker’s permit'},
+    {scope:'async fn manual_worker_retains_affine_state_and_releases_admission_on_join()',file:'zencodec-io/tests/drivers/worker_lifetime.rs',api:['compute'],state:'Construct non-Send state on its owning thread; return only Send results; join off-runtime'},
+  ]},
   {id:'adapter-container-cancel',role:'adapter',title:'Container patches → restore position → cancellation',evidence:'docs/tokio-execution.md',project:{manifest:'zencodec-media-testkit/Cargo.toml',helpers:'zencodec-media-testkit/tests/contracts.rs',command:'just media-publication-check'},note:'The media container writer uses the same forward/seek-back destination wrappers as raster output. Seeking and patching can have effects before an error. This control preserves confirmed append counts and the original seek error; cancellation prevents the next flush, not earlier writes.',steps:[
     {scope:'fn final_seek_cancellation_prevents_flush_and_preserves_effects()',file:'zencodec-media-testkit/tests/contracts.rs',api:['muxOutput','muxFinish'],state:'Toy container and actual SeekBack wrapper: normal completion, cancellation, original I/O error'},
   ]},
@@ -189,6 +193,10 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'adapter-worker-owner': [
+    ['Keep capacity charged after the client leaves', 'Move the owned semaphore permit into the blocking closure. Signal shared Pulse and cancel the request separately. The test keeps the native-call stand-in blocked, aborts its request, and proves no second permit becomes available until the worker exits. A real server additionally retains a supervisor receipt for failures after disconnect.'],
+    ['Add a dedicated owner when the codec cannot move', 'Construct non-Send state inside a named thread instead of forcing a Send bound onto every encoder. Keep the permit with that state and return only a Send result. Joining may block, so the test joins on a blocking worker. Long-lived production owners should reuse their thread and bound their command queue.'],
+  ],
   'adapter-container-cancel': [['Do not flush after the final seek signals a stop', 'A container finishes its header patches and restores the destination position. A callback-backed writer can signal cancellation during that seek. Check the control before flushing, preserve already-confirmed bytes, and keep an actual seek failure as the original cause. The test uses explicit container-default timing; it does not claim exact timing for the toy muxer.']],
   'adapter-publication-cancel': [['Stop between irreversible effects', 'The writer can trigger cancellation after accepting bytes, or cancellation can arrive while finalization waits in the compute queue. Inspect the complete control: successful writes remain visible, later finish/tail/flush effects stop, and an actual native finish error retains its typed cause. None adds no per-call control; it does not disable controls already held by native jobs.']],
   'app-tokio': [
