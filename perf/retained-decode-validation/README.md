@@ -59,3 +59,31 @@ configurations or prove other codecs can prepare without decoding.
 This remains a review API and a native patch experiment. Native adoption, API
 review, full workspace/target checks are required
 before landing. Do not publish a release from this experiment.
+
+## Runtime confirmation attempt
+
+The opt-in `retained-output-bench` feature adds a paired native-call benchmark:
+
+```sh
+cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked -- --mode=confirm --workload-id=retained-jpeg-noise-patches-v1 --rounds=30 --processes=5 --margin=1 --cpu-policy=performance
+```
+
+It compares the same configured decoder with/without preparation on 97x65 and
+1024x768 deterministic noise/patch inputs, each baseline and progressive.
+Exact samples, metadata and descriptors are checked before timing. Timing includes
+job/decoder creation, preparation when enabled, decoding and output destruction;
+input generation and file I/O are outside it. This measures native preparation,
+not all overhead of an application DecodeRequest.
+
+The first five-process confirmation was **invalid**, rc2. All processes completed,
+but processes 0 and 4 recorded respectively 1 and 74 rounds with
+`HeavyProcesses(1)` observations. No offending PID was retained, so later process
+inspection cannot attribute that interference. The three clean processes do not
+rescue the failed confirmation. All raw results and checksums are retained in the
+[receipt](../../benchmarks/retained_decode_runtime_2026-10-29.json); runtime cost
+remains unqualified. No gate was disabled and no favorable rerun substituted.
+
+The optional zenbench 0.1.11 dependency adds 78 lock package records; it removes
+or replaces no existing package identity. Benchmark compilation requires the
+explicit feature. The native-patch preparation audit still permits only the
+JPEG/YUV source substitution relative to this updated committed lock.

@@ -1662,3 +1662,12 @@ retained-decode-prepare core_revision jpeg_repository output:
 retained-decode-native-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --lib
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --all-targets -- -D warnings
+
+retained-decode-bench-build:
+    cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked --no-run
+
+retained-decode-bench-clippy:
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --locked --all-targets -- -D warnings
+
+retained-decode-bench:
+    cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked -- --mode=confirm --workload-id=retained-jpeg-noise-patches-v1 --rounds=30 --processes=5 --margin=1 --cpu-policy=performance
