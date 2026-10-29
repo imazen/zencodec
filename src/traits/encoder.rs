@@ -198,6 +198,8 @@ pub trait Encoder: Sized {
     /// one-shot encoding. The existing `pending_output` / `consume_output` and
     /// `finish_output` methods retain their output ownership contracts.
     ///
+    /// `None` adds no per-call control; the encoder must still honor retained
+    /// job cancellation, including when `Some(NoPulse)` is supplied.
     /// Check Pulse around native work; byte timing does not bound retained
     /// memory. A fill failure is terminal. Drivers retain its original cause
     /// and refuse further publication even if native code swallows the marker.

@@ -464,7 +464,7 @@ pub fn check_metadata_rewrite<'a>(
     }
     static PULSE: std::sync::LazyLock<zencodec::how_far::StopOnly<'static>> =
         std::sync::LazyLock::new(|| zencodec::how_far::StopOnly::new(Cancelled));
-    let cancelled = request.with_pulse(&*PULSE);
+    let cancelled = request.with_pulse(Some(&*PULSE));
     if !matches!(
         rewrite(&cancelled),
         Err(RewriteError::Cancelled) | Err(RewriteError::Stopped(enough::StopReason::Cancelled))
@@ -957,7 +957,11 @@ where
         }
         // Done repeats and takes nothing.
         let again = inc
-            .step(Input::new(0, data), &mut sink, &zencodec::how_far::NoPulse)
+            .step(
+                Input::new(0, data),
+                &mut sink,
+                Some(&zencodec::how_far::NoPulse),
+            )
             .map_err(|e| fail(CHECK, format!("step after Done: {e}")))?;
         if !again.event.is_done() || again.consumed != 0 {
             return Err(fail(CHECK, format!("step after Done returned {again:?}")));
@@ -969,7 +973,7 @@ where
         let mut inc = new_dec()?;
         let mut sink = zencodec_io::CollectSink::new();
         let p = inc
-            .step(Input::empty(), &mut sink, &zencodec::how_far::NoPulse)
+            .step(Input::empty(), &mut sink, Some(&zencodec::how_far::NoPulse))
             .map_err(|e| fail(CHECK, format!("first step: {e}")))?;
         if p.event == Event::Need {
             let wanted: Vec<zencodec::decode::InputRequest> = inc.requested().to_vec();
@@ -980,7 +984,7 @@ where
                 .step(
                     Input::new(bogus, tail),
                     &mut sink,
-                    &zencodec::how_far::NoPulse,
+                    Some(&zencodec::how_far::NoPulse),
                 )
                 .map_err(|e| fail(CHECK, format!("unrequested input at {bogus} failed: {e}")))?;
             if p.consumed != 0 || p.event != Event::Need {
@@ -1005,7 +1009,7 @@ where
             match inc.step(
                 input,
                 &mut sink,
-                &zencodec::how_far::StopOnly::borrowed(&stop),
+                Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
             ) {
                 Ok(p) => {
                     if p.event.is_done() {
@@ -1035,7 +1039,7 @@ where
             }
         }
         if saw_cancel {
-            match inc.step(input, &mut sink, &zencodec::how_far::NoPulse) {
+            match inc.step(input, &mut sink, Some(&zencodec::how_far::NoPulse)) {
                 Err(StepError::Finished) => {}
                 other => {
                     return Err(fail(

@@ -223,6 +223,7 @@ impl From<Progress> for ControlledProgress {
 /// and facts; it never calls an application resolver from codec internals.
 pub trait ControlledIncrementalDecode: IncrementalDecode {
     /// Advance or return a mandatory suspension.
+    /// `None` adds no per-call control; retained job controls still apply.
     fn step_controlled(
         &mut self,
         input: Input<'_>,
@@ -230,7 +231,8 @@ pub trait ControlledIncrementalDecode: IncrementalDecode {
         pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>>;
     /// Resume exactly one outstanding boundary. A stale, invalid or cancelled
-    /// reply is terminal. This performs no sink work.
+    /// reply is terminal. This performs no sink work. `None` preserves the
+    /// retained control and does not bypass cancellation at the boundary.
     fn resume(
         &mut self,
         boundary: BoundaryId,

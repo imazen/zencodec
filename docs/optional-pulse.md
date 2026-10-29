@@ -38,9 +38,15 @@ and do not retry a native operation after it has produced effects.
 
 ## Qualification
 
-Source migration in progress. Core controls cover `None` through erasure and a
-fused decoder, retained cancellation, full reporting/sharing/planning with `Some`,
-and default policy success versus mandatory refusal on the same unknown facts.
-Companion and native implementations need the same signature migration. These
-new controls are not qualified until the serialized tests run; earlier green CI
-covers the prior required-reference contract.
+The shared workspace runtime controls pass, including retained cancellation,
+progress/sharing/planning, default success on unknown optional evidence, and the
+existing callback that continues provisional discovery before accepting final
+interpretation. Workspace doctests and strict Clippy pass. Standalone renderer
+controls, no-default checks and the core/coroutine WASM build also pass.
+
+[Qualification receipt](../benchmarks/optional_pulse_2026-10-29.json) records the
+source snapshots and preserves the earlier fixture and orchestration failures.
+This establishes the shared protocol, not every native codec's implementation.
+Native adapters and the generated site still require qualification against these
+optional signatures. Earlier green platform CI covers the required-reference
+contract, not this migration.

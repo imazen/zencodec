@@ -10,14 +10,14 @@ trait ControlledIncrementalDecode: IncrementalDecode {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>>;
 
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<(), StepError<Self::Error>>;
 }
 ```

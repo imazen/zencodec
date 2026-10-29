@@ -21,6 +21,12 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Borrowed operation controls use `Option<&dyn Pulse>` across core, I/O,
+  coroutine, media, rendering and metadata services. `None` adds no per-call
+  control and never disables retained job controls or mandatory admission.
+  Owned job controls remain `SharedPulse`; see `docs/optional-pulse.md`
+  (core `a9f166b5`, I/O `bf90a0ce`, media `d96bd3ce`).
+
 - Source candidate: planned row drivers execute shared replay pulls with actual
   retained raster borrows, private RAM snapshots, positional digests or a separate
   raw disk store. Planned callbacks/records use the joint route. Core unknown-job

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-29",
+  "scope": "Optional borrowed Pulse in the shared workspace and standalone renderer; no native codec or performance claim",
+  "runtime_source": "670b3d804af566d9d3cfce49d1c4e6b00405b7bd",
+  "remaining_gates_source": "2a1087cba99de3c1f11c84add4b13e377f582ccb",
+  "gates": {
+    "all_feature_all_target_check": "PASS (core05)",
+    "workspace_runtime": "PASS (core08 retry, including new None/Some controls)",
+    "workspace_doctests": "PASS (core09)",
+    "workspace_strict_clippy": "PASS (core09)",
+    "renderer_no_default_clippy_tests_doctest": "PASS (core09)",
+    "workspace_no_default": "PASS (core09)",
+    "core_coroutine_wasm32_unknown_unknown": "PASS (core09)"
+  },
+  "receipts": [
+    "run-heavy: done rc=101 21s | peak-RSS 0.47GiB | min-avail 14613MiB | peak-load 1.44",
+    "run-heavy: done rc=0 20s | peak-RSS 0.39GiB | min-avail 14652MiB | peak-load 1.32"
+  ],
+  "retained_failures": [
+    "core01/core02/core03/core04: incomplete source migration diagnostics",
+    "core05: new fixture expected wrapped share() call; SharedPulse clones existing owner instead",
+    "core06: new successful media fixture lacked required presentation timestamp",
+    "core07: fixture used external non-exhaustive FrameTiming literal; corrected via public fields",
+    "core08 first attempt: cargo test rejects --keep-going; resumed with --no-fail-fast",
+    "core08 retry aggregate failure: runtime passed, one stale required-Pulse doctest failed; fixed in core09"
+  ],
+  "not_qualified": [
+    "native codecs/adapters against optional signatures",
+    "new site/browser/source catalog",
+    "new Windows/macOS/i686 CI",
+    "latency, memory and throughput performance"
+  ],
+  "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained."
+}

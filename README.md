@@ -144,7 +144,9 @@ Attach `ResourceLimits` and a `SharedPulse` to the **job** with
 `.with_limits(limits).with_pulse(pulse)`. The job retains its operation controls;
 the shared codec configuration stays unchanged. Pulse carries cancellation,
 progress and phase planning. Calls that only borrow the control accept
-`&dyn Pulse`; jobs that retain it use `SharedPulse`. The old `with_stop` method
+`Option<&dyn Pulse>`: pass `None` unless you want additional per-call control.
+`None` never disables a job’s retained cancellation or mandatory limits. Jobs
+that retain controls use `SharedPulse`. The old `with_stop` method
 is a deprecated cancellation-only adapter.
 
 ### Constructing `ResourceLimits`

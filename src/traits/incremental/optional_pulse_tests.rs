@@ -91,7 +91,7 @@ impl DecodeRowSink for NoRows {
         _: u32,
         _: u32,
         _: zenpixels::PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::SinkError> {
+    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::decode::SinkError> {
         panic!("this protocol-only probe never publishes rows")
     }
 }
@@ -112,7 +112,9 @@ fn none_survives_fused_erasure_and_uses_retained_reporting() {
     assert_eq!(observed.units.load(Ordering::SeqCst), 2);
     assert_eq!(observed.totals.load(Ordering::SeqCst), 1);
     assert_eq!(observed.splits.load(Ordering::SeqCst), 1);
-    assert_eq!(observed.shares.load(Ordering::SeqCst), 1);
+    // SharedPulse shares its existing owner directly; it need not ask the
+    // wrapped Meter to construct another owner. The two units prove sharing.
+    assert_eq!(observed.shares.load(Ordering::SeqCst), 0);
 }
 
 #[test]

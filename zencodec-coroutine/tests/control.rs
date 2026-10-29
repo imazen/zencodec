@@ -57,7 +57,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
         let mut stage = ControlledStepper::new(native, &mut sink);
         let mut cursor = SliceCursor::new(1);
         let Yield::Output(ControlledEvent::Suspended(boundary)) =
-            cursor.next(&[], &mut stage, &NoPulse).unwrap()
+            cursor.next(&[], &mut stage, Some(&NoPulse)).unwrap()
         else {
             panic!("expected final boundary")
         };
@@ -65,7 +65,11 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
         if failure == 0 {
             let stale = DecodeBoundary::new(boundary.facts()).unwrap();
             assert!(matches!(
-                stage.resume(stale.id(), BoundaryAction::AdoptInterpretation, &NoPulse),
+                stage.resume(
+                    stale.id(),
+                    BoundaryAction::AdoptInterpretation,
+                    Some(&NoPulse)
+                ),
                 Err(StepError::Control(ControlError::InvalidReply))
             ));
         } else if failure == 1 {
@@ -73,7 +77,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
                 stage.resume(
                     boundary.id(),
                     BoundaryAction::AdoptInterpretation,
-                    &zencodec::how_far::StopOnly::borrowed(&Stop(false))
+                    Some(&zencodec::how_far::StopOnly::borrowed(&Stop(false)))
                 ),
                 Err(StepError::Cancelled(enough::StopReason::Cancelled))
             ));
@@ -83,7 +87,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
                     stage.resume(
                         boundary.id(),
                         BoundaryAction::AdoptInterpretation,
-                        &zencodec::how_far::StopOnly::borrowed(&Stop(true)),
+                        Some(&zencodec::how_far::StopOnly::borrowed(&Stop(true))),
                     )
                 }))
                 .is_err()
@@ -93,7 +97,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
         assert!(stage.info().is_none());
         assert!(stage.requested().is_empty());
         assert!(matches!(
-            stage.step(Input::new(0, &[]), &NoPulse),
+            stage.step(Input::new(0, &[]), Some(&NoPulse)),
             Err(StepError::Finished)
         ));
         drop(stage);
@@ -115,9 +119,9 @@ fn cursors_hold_real_boundaries_while_the_adapter_prepares_other_stages() {
         let mut boundaries = 0;
         loop {
             let output = if positioned {
-                read.next(&mut source, &mut stage, &NoPulse).unwrap()
+                read.next(&mut source, &mut stage, Some(&NoPulse)).unwrap()
             } else {
-                slice.next(&input, &mut stage, &NoPulse).unwrap()
+                slice.next(&input, &mut stage, Some(&NoPulse)).unwrap()
             };
             match output {
                 Yield::Output(ControlledEvent::Suspended(boundary)) => {
@@ -133,9 +137,9 @@ fn cursors_hold_real_boundaries_while_the_adapter_prepares_other_stages() {
                         slice.stats()
                     };
                     let repeated = if positioned {
-                        read.next(&mut source, &mut stage, &NoPulse).unwrap()
+                        read.next(&mut source, &mut stage, Some(&NoPulse)).unwrap()
                     } else {
-                        slice.next(&input, &mut stage, &NoPulse).unwrap()
+                        slice.next(&input, &mut stage, Some(&NoPulse)).unwrap()
                     };
                     assert!(matches!(repeated,
                         Yield::Output(ControlledEvent::Suspended(again)) if again == boundary));
@@ -158,7 +162,7 @@ fn cursors_hold_real_boundaries_while_the_adapter_prepares_other_stages() {
                         BoundaryAction::AdoptInterpretation
                     };
                     boundaries += 1;
-                    stage.resume(boundary.id(), action, &NoPulse).unwrap();
+                    stage.resume(boundary.id(), action, Some(&NoPulse)).unwrap();
                     assert_eq!(
                         work.load(Ordering::SeqCst),
                         0,
@@ -430,7 +434,7 @@ fn same_policy_drives_late_facts_over_slices_and_random_access() {
 
 fn suspend(dec: &mut DynControlledDecoder, sink: &mut Sink) -> DecodeBoundary {
     let p = dec
-        .step_controlled(Input::new(0, &[0]), sink, &NoPulse)
+        .step_controlled(Input::new(0, &[0]), sink, Some(&NoPulse))
         .unwrap();
     assert!(matches!(
         p,
@@ -439,8 +443,9 @@ fn suspend(dec: &mut DynControlledDecoder, sink: &mut Sink) -> DecodeBoundary {
             ..
         })
     ));
-    let ControlledProgress::Suspended { boundary, consumed } =
-        dec.step_controlled(Input::empty(), sink, &NoPulse).unwrap()
+    let ControlledProgress::Suspended { boundary, consumed } = dec
+        .step_controlled(Input::empty(), sink, Some(&NoPulse))
+        .unwrap()
     else {
         panic!("not suspended")
     };
@@ -456,7 +461,7 @@ fn suspension_requires_its_exact_reply_and_does_not_consume_more_input() {
     let first = suspend(&mut *dec, &mut sink);
     for _ in 0..4 {
         let p = dec
-            .step_controlled(Input::new(100, &[255; 16]), &mut sink, &NoPulse)
+            .step_controlled(Input::new(100, &[255; 16]), &mut sink, Some(&NoPulse))
             .unwrap();
         assert!(
             matches!(p, ControlledProgress::Suspended { consumed: 0, boundary } if boundary == first)
@@ -468,11 +473,11 @@ fn suspension_requires_its_exact_reply_and_does_not_consume_more_input() {
     );
     let other = DecodeBoundary::new(first.facts()).unwrap();
     assert!(matches!(
-        dec.resume(other.id(), BoundaryAction::ContinueReading, &NoPulse),
+        dec.resume(other.id(), BoundaryAction::ContinueReading, Some(&NoPulse)),
         Err(StepError::Control(ControlError::InvalidReply))
     ));
     assert!(matches!(
-        dec.step_controlled(Input::empty(), &mut sink, &NoPulse),
+        dec.step_controlled(Input::empty(), &mut sink, Some(&NoPulse)),
         Err(StepError::Finished)
     ));
 }
@@ -494,14 +499,14 @@ fn cancellation_and_replayed_replies_cannot_resume_a_later_boundary() {
             dec.resume(
                 first.id(),
                 BoundaryAction::ContinueReading,
-                &zencodec::how_far::StopOnly::borrowed(&Stopped),
+                Some(&zencodec::how_far::StopOnly::borrowed(&Stopped)),
             )
             .map(|_| ())
         } else {
             dec.step_controlled(
                 Input::empty(),
                 &mut sink,
-                &zencodec::how_far::StopOnly::borrowed(&Stopped),
+                Some(&zencodec::how_far::StopOnly::borrowed(&Stopped)),
             )
             .map(|_| ())
         };
@@ -510,7 +515,7 @@ fn cancellation_and_replayed_replies_cannot_resume_a_later_boundary() {
             Err(StepError::Cancelled(enough::StopReason::Cancelled))
         ));
         assert!(matches!(
-            dec.step_controlled(Input::empty(), &mut sink, &NoPulse),
+            dec.step_controlled(Input::empty(), &mut sink, Some(&NoPulse)),
             Err(StepError::Finished)
         ));
         assert_eq!(sink.began, 0);
@@ -518,10 +523,10 @@ fn cancellation_and_replayed_replies_cannot_resume_a_later_boundary() {
     let mut dec = decoder(Arc::new(AtomicUsize::new(0)), false, false);
     let mut sink = Sink::default();
     let first = suspend(&mut *dec, &mut sink);
-    dec.resume(first.id(), BoundaryAction::ContinueReading, &NoPulse)
+    dec.resume(first.id(), BoundaryAction::ContinueReading, Some(&NoPulse))
         .unwrap();
     let next = dec
-        .step_controlled(Input::new(25, &[7]), &mut sink, &NoPulse)
+        .step_controlled(Input::new(25, &[7]), &mut sink, Some(&NoPulse))
         .unwrap();
     let ControlledProgress::Suspended {
         boundary,
@@ -532,7 +537,11 @@ fn cancellation_and_replayed_replies_cannot_resume_a_later_boundary() {
     };
     assert_ne!(first.id(), boundary.id());
     assert!(matches!(
-        dec.resume(first.id(), BoundaryAction::AdoptInterpretation, &NoPulse),
+        dec.resume(
+            first.id(),
+            BoundaryAction::AdoptInterpretation,
+            Some(&NoPulse)
+        ),
         Err(StepError::Control(ControlError::InvalidReply))
     ));
     assert_eq!(sink.began, 0);
@@ -589,7 +598,7 @@ fn legacy_drivers_and_early_output_refuse_before_sink_effects() {
         assert!(zencodec::find_cause::<ControlError>(&error).is_some());
         assert_eq!((sink.began, sink.rows, sink.ended), (0, 0, 0));
         assert!(matches!(
-            dec.step(Input::empty(), &mut sink, &NoPulse),
+            dec.step(Input::empty(), &mut sink, Some(&NoPulse)),
             Err(StepError::Finished)
         ));
     }
@@ -628,7 +637,7 @@ fn traced_refusal_failure_and_unwind_leave_native_work_unstarted() {
         DecisionCode::CallbackFailed
     );
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, &NoPulse),
+        dec.step(Input::empty(), &mut sink, Some(&NoPulse)),
         Err(StepError::Finished)
     ));
     let mut dec = PolicyDecoder::new(
@@ -657,7 +666,7 @@ fn traced_refusal_failure_and_unwind_leave_native_work_unstarted() {
         .is_err()
     );
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, &NoPulse),
+        dec.step(Input::empty(), &mut sink, Some(&NoPulse)),
         Err(StepError::Finished)
     ));
     assert_eq!(work.load(Ordering::SeqCst), 0);

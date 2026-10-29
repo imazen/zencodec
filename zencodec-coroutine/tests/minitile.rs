@@ -188,20 +188,24 @@ fn sequential_decode_from_one_byte_windows() {
 fn sequential_reads_ask_for_the_rest_of_the_read() {
     let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
-    let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let p = dec.step(Input::empty(), &mut sink, Some(stop())).unwrap();
     assert_eq!(p.event, Event::Need);
     assert_eq!(dec.requested(), &[InputRequest::at_least(0, 4)]);
-    let p = dec.step(Input::new(0, b"SE"), &mut sink, stop()).unwrap();
+    let p = dec
+        .step(Input::new(0, b"SE"), &mut sink, Some(stop()))
+        .unwrap();
     assert_eq!((p.consumed, p.event), (2, Event::Need));
     assert_eq!(
         dec.requested(),
         &[InputRequest::at_least(2, 2)],
         "still short: one contiguous request for the rest of the read"
     );
-    let p = dec.step(Input::new(2, b"Q1"), &mut sink, stop()).unwrap();
+    let p = dec
+        .step(Input::new(2, b"Q1"), &mut sink, Some(stop()))
+        .unwrap();
     assert_eq!(p.consumed, 2);
     assert_eq!(p.event, Event::Metadata(MetadataUpdate::HeaderReady));
-    let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let p = dec.step(Input::empty(), &mut sink, Some(stop())).unwrap();
     assert_eq!(p.event, Event::Need);
     assert_eq!(dec.requested(), &[InputRequest::at_least(4, 8)]);
 }
@@ -217,17 +221,19 @@ fn error_is_terminal_and_never_panics() {
     });
     let mut sink = CollectSink::new();
     assert_eq!(
-        dec.step(Input::empty(), &mut sink, stop()).unwrap().event,
+        dec.step(Input::empty(), &mut sink, Some(stop()))
+            .unwrap()
+            .event,
         Event::Need
     );
     let e = dec
-        .step(Input::new(0, &[1, 2, 3, 4]), &mut sink, stop())
+        .step(Input::new(0, &[1, 2, 3, 4]), &mut sink, Some(stop()))
         .unwrap_err();
     assert!(e.to_string().contains("boom"));
     assert!(matches!(e, StepError::Codec(_)));
     for _ in 0..3 {
         assert!(matches!(
-            dec.step(Input::new(4, &[9]), &mut sink, stop()),
+            dec.step(Input::new(4, &[9]), &mut sink, Some(stop())),
             Err(StepError::Finished)
         ));
     }
@@ -238,14 +244,16 @@ fn error_is_terminal_and_never_panics() {
 fn truncated_input_is_an_eof_error_not_a_hang() {
     let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
-    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
-    let p = dec.step(Input::new(0, b"SEQ1"), &mut sink, stop()).unwrap();
+    let _ = dec.step(Input::empty(), &mut sink, Some(stop())).unwrap();
+    let p = dec
+        .step(Input::new(0, b"SEQ1"), &mut sink, Some(stop()))
+        .unwrap();
     assert_eq!(p.consumed, 4);
-    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let _ = dec.step(Input::empty(), &mut sink, Some(stop())).unwrap();
     match dec.step(
         Input::new(4, &[1, 2, 3]).with_total_len(7),
         &mut sink,
-        stop(),
+        Some(stop()),
     ) {
         Err(StepError::Codec(CoroutineError::Source(SourceError::UnexpectedEof {
             offset,
@@ -327,16 +335,20 @@ fn input_cap_bounds_memory() {
     let twelve: Vec<u8> = (1..=12).collect();
     let mut dec = make(8);
     let mut sink = CollectSink::new();
-    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let _ = dec.step(Input::empty(), &mut sink, Some(stop())).unwrap();
     let p = dec
-        .step(Input::new(0, &twelve).with_total_len(12), &mut sink, stop())
+        .step(
+            Input::new(0, &twelve).with_total_len(12),
+            &mut sink,
+            Some(stop()),
+        )
         .unwrap();
     assert_eq!(p.consumed, 12);
     assert!(matches!(p.event, Event::Rows { rows: 1, .. }), "{p:?}");
     assert_eq!(sink.bytes(), &twelve[4..]);
     assert_eq!(dec.retained_input(), 0);
     assert!(
-        dec.step(Input::empty(), &mut sink, stop())
+        dec.step(Input::empty(), &mut sink, Some(stop()))
             .unwrap()
             .event
             .is_done()
@@ -428,7 +440,7 @@ fn one_strip_per_step_and_begin_before_rows() {
     loop {
         let input = Input::new(input_at as u64, &file[input_at..input_at + input_len])
             .with_total_len(file.len() as u64);
-        let p = dec.step(input, &mut sink, stop()).unwrap();
+        let p = dec.step(input, &mut sink, Some(stop())).unwrap();
         input_at += p.consumed;
         input_len -= p.consumed;
         match p.event {
@@ -467,7 +479,7 @@ fn cancellation_keeps_the_stop_reason_and_is_terminal() {
         dec.step(
             Input::empty(),
             &mut sink,
-            &zencodec::how_far::StopOnly::borrowed(&stopper)
+            Some(&zencodec::how_far::StopOnly::borrowed(&stopper))
         )
         .unwrap()
         .event,
@@ -477,13 +489,13 @@ fn cancellation_keeps_the_stop_reason_and_is_terminal() {
     match dec.step(
         Input::empty(),
         &mut sink,
-        &zencodec::how_far::StopOnly::borrowed(&stopper),
+        Some(&zencodec::how_far::StopOnly::borrowed(&stopper)),
     ) {
         Err(StepError::Cancelled(StopReason::Cancelled)) => {}
         other => panic!("expected Cancelled, got {other:?}"),
     }
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, stop()),
+        dec.step(Input::empty(), &mut sink, Some(stop())),
         Err(StepError::Finished)
     ));
 }
@@ -625,7 +637,7 @@ fn stalled_coroutine_is_an_error() {
     });
     let mut sink = CollectSink::new();
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, stop()),
+        dec.step(Input::empty(), &mut sink, Some(stop())),
         Err(StepError::Codec(CoroutineError::Stalled))
     ));
 }

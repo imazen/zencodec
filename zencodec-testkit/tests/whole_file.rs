@@ -69,7 +69,7 @@ fn header_is_reported_before_the_body_arrives() {
     let mut saw_header = false;
     for _ in 0..8 {
         let p = dec
-            .step(Input::new(0, prefix), &mut sink, &unstoppable)
+            .step(Input::new(0, prefix), &mut sink, Some(&unstoppable))
             .unwrap();
         if p.event == Event::Metadata(MetadataUpdate::HeaderReady) {
             saw_header = true;
@@ -115,7 +115,7 @@ fn cancellation_is_terminal() {
         .step(
             Input::empty(),
             &mut sink,
-            &zencodec::how_far::StopOnly::borrowed(&stopper),
+            Some(&zencodec::how_far::StopOnly::borrowed(&stopper)),
         )
         .unwrap();
     stopper.0.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -123,12 +123,12 @@ fn cancellation_is_terminal() {
         dec.step(
             Input::new(0, &data).with_total_len(data.len() as u64),
             &mut sink,
-            &zencodec::how_far::StopOnly::borrowed(&stopper)
+            Some(&zencodec::how_far::StopOnly::borrowed(&stopper))
         ),
         Err(StepError::Cancelled(_))
     ));
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, &zencodec::NoPulse),
+        dec.step(Input::empty(), &mut sink, Some(&zencodec::NoPulse)),
         Err(StepError::Finished)
     ));
 }

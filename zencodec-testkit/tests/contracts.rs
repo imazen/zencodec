@@ -237,7 +237,7 @@ fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
                 0 => r.clone().with_byte_limits(usize::MAX, r.max_output()),
                 1 => r.clone().with_byte_limits(r.max_input(), usize::MAX),
                 2 => r.clone().with_carrier_limit(usize::MAX),
-                _ => r.clone().with_pulse(&zencodec::how_far::NoPulse),
+                _ => r.clone().with_pulse(Some(&zencodec::how_far::NoPulse)),
             };
             rewrite_identity(&changed)
         };

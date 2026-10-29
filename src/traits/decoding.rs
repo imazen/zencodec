@@ -519,7 +519,7 @@ pub trait DecodeJob<'a>: Sized {
     ///     let mut at = 0usize;
     ///     loop {
     ///         let input = Input::new(at as u64, &data[at..]).with_total_len(total);
-    ///         let p = dec.step(input, sink, &zencodec::NoPulse)?;
+    ///         let p = dec.step(input, sink, None)?;
     ///         at += p.consumed;
     ///         match p.event {
     ///             // Satisfy any one request; the length is always known here.

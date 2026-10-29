@@ -14,7 +14,7 @@ impl IncrementalDecode for ChangedCompletion {
         &mut self,
         _: Input<'_>,
         _: &mut dyn DecodeRowSink,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Self::Error>> {
         Err(StepError::Control(ControlError::UnhandledBoundary))
     }
@@ -30,7 +30,7 @@ impl ControlledIncrementalDecode for ChangedCompletion {
         &mut self,
         _: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
         if !self.adopted {
             return Ok(ControlledProgress::Suspended {
@@ -52,7 +52,7 @@ impl ControlledIncrementalDecode for ChangedCompletion {
         &mut self,
         id: BoundaryId,
         action: BoundaryAction,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), StepError<Self::Error>> {
         assert_eq!(id, self.boundary.id());
         assert_eq!(action, BoundaryAction::AdoptInterpretation);
@@ -81,8 +81,10 @@ fn policy_decoder_rejects_done_facts_that_contradict_adopted_output() {
         };
         let mut decoder = PolicyDecoder::new(decoder, PolicySet::new());
         let mut sink = CollectSink::new();
-        decoder.step(Input::empty(), &mut sink, &NoPulse).unwrap();
-        let result = decoder.step(Input::empty(), &mut sink, &NoPulse);
+        decoder
+            .step(Input::empty(), &mut sink, Some(&NoPulse))
+            .unwrap();
+        let result = decoder.step(Input::empty(), &mut sink, Some(&NoPulse));
         assert!(
             matches!(
                 result,
@@ -91,7 +93,7 @@ fn policy_decoder_rejects_done_facts_that_contradict_adopted_output() {
             "successful completion must match the already adopted facts: {result:?}"
         );
         assert!(matches!(
-            decoder.step(Input::empty(), &mut sink, &NoPulse),
+            decoder.step(Input::empty(), &mut sink, Some(&NoPulse)),
             Err(StepError::Finished)
         ));
     }

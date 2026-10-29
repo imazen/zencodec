@@ -98,7 +98,14 @@ fn pump_one<E: VideoEncoder + ?Sized>(
     pulse: Option<&dyn zencodec::Pulse>,
 ) -> Vec<u8> {
     let mut bytes = Vec::new();
-    send_frame_until_accepted(encoder, &frame(), pulse, |packet| {
+    let source = frame();
+    let mut timing = source.timing();
+    timing.pts = Some(zencodec::time::Timestamp::new(
+        0,
+        TimeBase::new(1, 1).unwrap(),
+    ));
+    let timed = source.represent(timing, source.presentation());
+    send_frame_until_accepted(encoder, &timed, pulse, |packet| {
         bytes.extend_from_slice(packet.bytes());
         Ok::<(), core::convert::Infallible>(())
     })
