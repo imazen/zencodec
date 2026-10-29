@@ -203,8 +203,11 @@ impl zencodec::decode::IncrementalDecode for OwnedResultRows {
     ) -> Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>> {
         use zencodec::decode::{Event, Progress, StepError};
         let output = self.output.take().ok_or(StepError::Finished)?;
-        let info =
-            zencodec::decode::OutputInfo::full_decode(output.width(), output.height(), output.descriptor());
+        let info = zencodec::decode::OutputInfo::full_decode(
+            output.width(),
+            output.height(),
+            output.descriptor(),
+        );
         let (pixels, details) = output.into_parts();
         sink.begin(info.width, info.height, info.native_format)
             .map_err(StepError::Sink)?;
@@ -262,5 +265,58 @@ fn native_owned_details_survive_terminal_erasure_and_row_delivery() {
             assert_eq!(sink.as_pixel_slice().unwrap().row(y as u32), row);
         }
         assert!(decoder.take_details().is_none());
+    }
+}
+
+#[test]
+fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
+    use zencodec::decode::IncrementalDecode;
+    use zencodec::operation::PolicySet;
+    use zencodec::storage::StorageBudget;
+    use zencodec_io::{CollectSink, PolicyDecoder, drive_from_slice};
+    for progressive in [false, true] {
+        let base = fixtures::base(progressive);
+        let mut bytes = base[..2].to_vec();
+        bytes.extend(fixtures::descriptive());
+        bytes.extend_from_slice(&base[2..]);
+        let config = JpegDecoderConfig::new();
+        let direct = config
+            .clone()
+            .job()
+            .decoder(Cow::Borrowed(&bytes), &[PixelDescriptor::RGBA8_SRGB])
+            .unwrap()
+            .decode()
+            .unwrap();
+        let codecs = CodecSet::new().with_decoder(config);
+        let native = DecodeRequest::new()
+            .with_output(PixelDescriptor::RGBA8_SRGB)
+            .start_controlled(&codecs, StorageBudget::new(1 << 20, 4))
+            .unwrap();
+        let mut session = PolicyDecoder::new(native, PolicySet::new());
+        let mut sink = CollectSink::new();
+        assert!(session.take_details().is_none());
+        drive_from_slice(&mut session, &bytes, &mut sink, None, 7).unwrap();
+        let details = session.take_details().expect("real native completion");
+        assert!(session.take_details().is_none());
+        assert_eq!(details.info.metadata(), direct.metadata());
+        assert_eq!(details.info.orientation, direct.info().orientation);
+        assert!(details.source_encoding.is_some());
+        let actual = details
+            .extensions
+            .get::<zenjpeg::decoder::DecodedExtras>()
+            .unwrap();
+        let expected = direct.extras::<zenjpeg::decoder::DecodedExtras>().unwrap();
+        assert_eq!(actual.segments().len(), expected.segments().len());
+        for (a, b) in actual.segments().iter().zip(expected.segments()) {
+            assert_eq!(
+                (a.marker, a.segment_type, &a.data),
+                (b.marker, b.segment_type, &b.data)
+            );
+        }
+        let pixels = sink.as_pixel_slice().unwrap();
+        assert_eq!(pixels.descriptor(), direct.pixels().descriptor());
+        for y in 0..direct.height() {
+            assert_eq!(pixels.row(y), direct.pixels().row(y));
+        }
     }
 }
