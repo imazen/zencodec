@@ -4,6 +4,10 @@
 
 ### Added
 
+- Retained `EncodePlan::orientation` and callback spatial facts distinguish
+  sample transforms from output orientation; contradictory compositions refuse
+  before route selection. Unknown remains explicit.
+
 - Checked stored-versus-baked encode orientation requirements, with default
   refusal and typed, erased and registered-job forwarding (review API).
 

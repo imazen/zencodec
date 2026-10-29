@@ -49,8 +49,33 @@ geometry. Existing default-baking pixel/EXIF/XMP assertions remain unchanged.
 This is same-codec parity, not independent-reader qualification.
 
 This setter is not proof of a low-memory route. AVIF still encoding is a whole
-raster operation, and its shared planning hook remains unsupported. A row or
-replay driver must continue to refuse without a valid acquisition plan. Spatial
-representation evidence in retained plans, native workspace bounds, additional
-codecs and animation baking remain required follow-through; do not infer them
-from successful one-shot encoding. No zenpixels API change is needed here.
+raster operation. Its candidate planning hook reports whole-raster acquisition;
+a row/replay-only driver must refuse that input protocol. Native workspace
+bounds, additional codecs and animation baking remain required follow-through.
+No zenpixels API change is needed here.
+
+## Retained spatial effects
+
+`EncodePlan::orientation: Option<OrientationPlan>` records the effective input
+orientation, the transform applied to samples, and the orientation carried by
+the output. `None` means unknown, not identity. Callbacks receive the same fact
+in `EncodeRouteFacts::orientation`.
+
+```rust,ignore
+let plan = job.plan_encode(&declaration)?;
+if let Some(spatial) = plan.orientation {
+    let stored = spatial.stored_dimensions(declaration.width, declaration.height);
+    // Compare stored geometry and spatial.applied with application requirements.
+}
+```
+
+Validation requires that applying the sample transform and then the output
+orientation preserves the original displayed orientation. Startup must return
+identical retained facts. These facts do not certify resampling fidelity, color,
+metadata completeness or native workspace bounds.
+
+The native AVIF candidate has been tested for all eight orientations in both
+modes, with plan/start equality, stored geometry, output orientation and byte
+parity against ordinary native encoding. Its initial preflight is whole-raster
+RGB8/RGBA8 sRGB only; explicit ColorContext and exact-depth declarations refuse.
+This qualification does not establish a streaming or bounded-memory route.

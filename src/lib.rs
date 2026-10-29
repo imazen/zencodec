@@ -213,7 +213,7 @@ pub mod encode {
     pub use crate::capabilities::EncodeCapabilities;
     pub use crate::encode_plan::{
         ColorCarriers, EncodeDeclaration, EncodePlan, EncodePlanError, InputRequirement,
-        OutputPhase, SourcePasses,
+        OrientationPlan, OutputPhase, SourcePasses,
     };
     pub use crate::encode_pull::{EncodeRows, PullProgress, RowDemand, RowFillError};
     pub use crate::fidelity::{

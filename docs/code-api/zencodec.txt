@@ -811,6 +811,7 @@ pub zencodec::encode::EncodePlanError::DestinationAccess
 pub zencodec::encode::EncodePlanError::Dimensions
 pub zencodec::encode::EncodePlanError::ExactDepth
 pub zencodec::encode::EncodePlanError::InputProtocol
+pub zencodec::encode::EncodePlanError::Orientation
 pub zencodec::encode::EncodePlanError::OutputLag
 pub zencodec::encode::EncodePlanError::PassRange
 impl core::error::Error for zencodec::encode::EncodePlanError
@@ -976,6 +977,7 @@ pub fn zencodec::encode::EncodeOutput::fmt(&self, f: &mut core::fmt::Formatter<'
 #[non_exhaustive] pub struct zencodec::encode::EncodePlan
 pub zencodec::encode::EncodePlan::carriers: core::option::Option<zencodec::encode::ColorCarriers>
 pub zencodec::encode::EncodePlan::input: zencodec::encode::InputRequirement
+pub zencodec::encode::EncodePlan::orientation: core::option::Option<zencodec::encode::OrientationPlan>
 pub zencodec::encode::EncodePlan::output_phase: zencodec::encode::OutputPhase
 pub zencodec::encode::EncodePlan::timing: zencodec::encode::OutputTiming
 impl zencodec::encode::EncodePlan
@@ -985,6 +987,7 @@ pub fn zencodec::encode::EncodePlan::validate(&self, declaration: &zencodec::enc
 pub fn zencodec::encode::EncodePlan::validate_started(&self, observed: &Self) -> core::result::Result<(), zencodec::encode::EncodePlanError>
 pub const fn zencodec::encode::EncodePlan::whole_raster() -> Self
 pub fn zencodec::encode::EncodePlan::with_carriers(self, carriers: zencodec::encode::ColorCarriers) -> Self
+pub const fn zencodec::encode::EncodePlan::with_orientation(self, orientation: zencodec::encode::OrientationPlan) -> Self
 #[non_exhaustive] pub struct zencodec::encode::EncodePolicy
 pub zencodec::encode::EncodePolicy::color: core::option::Option<zencodec::ColorEmitPolicy>
 pub zencodec::encode::EncodePolicy::embed_exif: core::option::Option<bool>
@@ -1009,6 +1012,15 @@ pub const fn zencodec::encode::EncodePolicy::with_strict(self, v: bool) -> Self
 pub zencodec::encode::FidelityRejection::index: usize
 pub zencodec::encode::FidelityRejection::reason: zencodec::encode::FidelityTargetError
 pub zencodec::encode::FidelityRejection::target: zencodec::encode::Fidelity
+#[non_exhaustive] pub struct zencodec::encode::OrientationPlan
+pub zencodec::encode::OrientationPlan::applied: zenpixels::orientation::Orientation
+pub zencodec::encode::OrientationPlan::input: zenpixels::orientation::Orientation
+pub zencodec::encode::OrientationPlan::output: zenpixels::orientation::Orientation
+impl zencodec::encode::OrientationPlan
+pub const fn zencodec::encode::OrientationPlan::baked(input: zenpixels::orientation::Orientation) -> Self
+pub const fn zencodec::encode::OrientationPlan::preserved(input: zenpixels::orientation::Orientation) -> Self
+pub const fn zencodec::encode::OrientationPlan::stored_dimensions(self, width: u32, height: u32) -> (u32, u32)
+pub fn zencodec::encode::OrientationPlan::validate(self) -> core::result::Result<(), zencodec::encode::EncodePlanError>
 pub struct zencodec::encode::OutputBuffer
 impl zencodec::encode::OutputBuffer
 pub fn zencodec::encode::OutputBuffer::consume(&mut self, n: usize)
@@ -2266,6 +2278,7 @@ pub const fn zencodec::operation::EncodeRequest::with_resolution(self, resolutio
 #[non_exhaustive] pub struct zencodec::operation::EncodeRouteFacts
 pub zencodec::operation::EncodeRouteFacts::evidence: zencodec::operation::EncodeEvidence
 pub zencodec::operation::EncodeRouteFacts::input: zencodec::encode::InputRequirement
+pub zencodec::operation::EncodeRouteFacts::orientation: core::option::Option<zencodec::encode::OrientationPlan>
 pub zencodec::operation::EncodeRouteFacts::output_phase: zencodec::encode::OutputPhase
 pub zencodec::operation::EncodeRouteFacts::pixels: zencodec::operation::EncodeFacts
 pub zencodec::operation::EncodeRouteFacts::timing: zencodec::encode::OutputTiming

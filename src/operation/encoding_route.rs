@@ -108,6 +108,8 @@ pub struct EncodeRouteFacts {
     pub timing: OutputTiming,
     /// Which native pass can emit output; never a retained-memory bound.
     pub output_phase: OutputPhase,
+    /// Spatial effects reported by this retained job, or unknown.
+    pub orientation: Option<crate::encode::OrientationPlan>,
 }
 impl EncodeRouteFacts {
     /// Copy only bounded facts; do not clone materialized color carriers.
@@ -126,6 +128,7 @@ impl EncodeRouteFacts {
             input: plan.input,
             timing: plan.timing,
             output_phase: plan.output_phase,
+            orientation: plan.orientation,
         }
     }
 }
