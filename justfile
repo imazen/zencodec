@@ -1745,3 +1745,8 @@ compile-observer-prepare root:
 compile-observer-run zenbench root:
     "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --dry-run > "{{root}}/dry-run.json"
     "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --output "{{root}}/attempt"
+
+# A native success must not hide cancellation raised during the call.
+fused-cancellation-check:
+    cargo test -p zencodec-testkit --test fused_post_call_cancellation --locked
+    cargo clippy -p zencodec-testkit --test fused_post_call_cancellation --locked -- -D warnings

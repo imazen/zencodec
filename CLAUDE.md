@@ -820,3 +820,12 @@ all 15 owned short-lived-child invocations invalid. Its live-descendant accounti
 cannot establish cleanliness for this Cargo-like workload. Preserve those flags;
 do not rerun the old Iterate plan and call it confirmation. The control, portable
 plans and exact counts live in benchmarks/compile_observer_2026-10-29.md.
+
+## Fused native-return cancellation (2026-10-29)
+
+Fused accepted successful native steps/resumes that signalled cancellation during
+execution. Post-success checks now preserve the first observed stop, terminal
+failure and unavailable completion details; native errors remain primary. Three
+failing-first controls, both stop reasons, native-error controls, full workspace
+all-feature tests/doctests and strict Clippy pass. Existing sink effects remain
+irrevocable. See benchmarks/fused_cancellation_2026-10-29.md.

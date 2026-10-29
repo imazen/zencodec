@@ -395,3 +395,17 @@ signature. A source-check attempt against the old generated site failed two
 stale-output checks; rebuild the site before running its source tests.
 The rebuilt site then passed all 26 source/catalog tests (rc0, 15s, peak RSS
 0.33GiB). Browser tests were not rerun for this driver-only change.
+
+## Cancellation at native decoder return
+
+`Fused` polls the supplied `Option<&dyn Pulse>` before native steps/resumes
+and after successful native returns. A stop raised during a native call prevents
+accepting its completion or adopted interpretation. Subsequent calls refuse even
+with `None`, and completion details remain unavailable. Native errors keep their
+original cause; cached successful completion stays successful.
+
+This boundary cannot preempt native work or undo earlier sink writes. Native
+code must still poll inside expensive operations. `just fused-cancellation-check`
+uses one-shot cancellation and timeout signals so repeated polling cannot mask
+the first interruption. For progress quality and native polling coverage, use
+the how-far diagnostic traces in `just native-pulse-diagnostics-check ARTIFACTS`.

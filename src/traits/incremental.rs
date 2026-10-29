@@ -599,8 +599,10 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 
 /// Enforces the termination rules for any decoder: steps after `Done`
 /// return `Done` again, steps after an error return
-/// [`StepError::Finished`], and `pulse` is checked before every step, a
-/// tripped pulse being terminal.
+/// [`StepError::Finished`]. Before native steps/resumes and after successful
+/// native returns, `pulse` is checked; a tripped pulse is terminal. Native
+/// errors retain priority. Cached completion remains successful. These checks
+/// do not interrupt a native call or undo sink effects already performed.
 ///
 /// Wrap a hand-written decoder in `Fused` and its own state machine need
 /// not track any of this.
@@ -680,6 +682,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         self.state = FusedState::Failed;
         match self.inner.step(input, sink, pulse) {
             Ok(p) => {
+                pulse.unwrap_or(&crate::NoPulse).check()?;
                 if let Event::Done(info) = &p.event {
                     self.state = FusedState::Done(info.clone());
                 } else {
@@ -757,6 +760,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             return Err(StepError::Sink(error));
         }
         let progress = result?;
+        pulse.unwrap_or(&crate::NoPulse).check()?;
         if self.interpretation.is_none()
             && matches!(
                 &progress,
@@ -810,6 +814,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             return Err(StepError::Control(ControlError::InvalidReply));
         }
         self.inner.resume(id, action, pulse)?;
+        pulse.unwrap_or(&crate::NoPulse).check()?;
         if action == BoundaryAction::AdoptInterpretation {
             self.interpretation = Some(boundary.facts());
         }

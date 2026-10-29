@@ -38,6 +38,10 @@
 
 ### Fixed
 
+- `Fused` observes cancellation after successful native steps and resumes,
+  retaining native error priority and terminal failure even if later calls omit
+  Pulse. Already-delivered sink effects are not rolled back.
+
 - Checked collection and rendering workspace requirements now refuse unknown
   bounds before factory, discovery, decoding or color preparation effects. Both
   bound and legacy requirements retain named typed causes; unconstrained paths
