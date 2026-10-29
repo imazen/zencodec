@@ -282,6 +282,7 @@ pub fn zencodec_io::InputError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> 
 #[non_exhaustive] pub enum zencodec_io::PolicyDecodeError<E>
 pub zencodec_io::PolicyDecodeError::Native(E)
 pub zencodec_io::PolicyDecodeError::Policy(whereat::at::At<zencodec::operation::policy::PolicyFailure>)
+pub zencodec_io::PolicyDecodeError::Requirements(whereat::at::At<zencodec::operation::policy::requirements::UnmetRequirements>)
 impl<E: core::error::Error + 'static> core::error::Error for zencodec_io::PolicyDecodeError<E>
 pub fn zencodec_io::PolicyDecodeError<E>::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl<E: core::fmt::Display> core::fmt::Display for zencodec_io::PolicyDecodeError<E>

@@ -246,6 +246,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Controlled decode workspace deadline (2026-10-29): PolicyDecoder previously
+  polled native discovery before rejecting an unqualified workspace requirement.
+  Admission now precedes the first native step and retains a typed named cause.
+  Decoder construction still precedes the wrapper and needs factory admission
+  for a preparation-inclusive bound. Native failing-first control and receipts:
+  `benchmarks/controlled_workspace_2026-10-29.md`.
+
 - Guide browser CI on `3739a49a` failed an immediate URL assertion after the
   focused skip link received Enter. The check now waits for the exact
   `#journeys` fragment before retaining the original destination assertion.

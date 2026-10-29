@@ -1611,3 +1611,10 @@ controlled-sink-errors-check:
     cargo test --locked -p zencodec-io --all-features
     cargo clippy --locked -p zencodec -p zencodec-io --all-features --all-targets -- -D warnings
     just jpeg-decode-admission-check
+
+# Required workspace must refuse before native metadata discovery.
+controlled-workspace-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked control:: -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+    cargo test -p zencodec-io --all-features --locked
+    cargo clippy -p zencodec-io --all-targets --all-features --locked -- -D warnings

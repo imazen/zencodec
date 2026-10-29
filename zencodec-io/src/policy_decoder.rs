@@ -7,7 +7,7 @@ use zencodec::decode::{
     IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
 };
 use zencodec::operation::{
-    OperationPolicy, OperationReport, PolicyFailure, PolicySet, resolve_boundary,
+    OperationPolicy, OperationReport, PolicyFailure, PolicySet, UnmetRequirements, resolve_boundary,
 };
 use zencodec::source::AccessPattern;
 use zencodec::{At, ImageInfo};
@@ -19,6 +19,8 @@ use zenpixels::PixelDescriptor;
 pub enum PolicyDecodeError<E> {
     /// The native decoder's original error.
     Native(E),
+    /// Required workspace is unqualified before native polling.
+    Requirements(At<UnmetRequirements>),
     /// Callback refusal/failure, invalid choice, or cancellation at a decision.
     Policy(At<PolicyFailure>),
 }
@@ -26,6 +28,7 @@ impl<E: fmt::Display> fmt::Display for PolicyDecodeError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Native(e) => e.fmt(f),
+            Self::Requirements(e) => e.fmt(f),
             Self::Policy(e) => e.fmt(f),
         }
     }
@@ -34,6 +37,7 @@ impl<E: core::error::Error + 'static> core::error::Error for PolicyDecodeError<E
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(match self {
             Self::Native(e) => e,
+            Self::Requirements(e) => e,
             Self::Policy(e) => e,
         })
     }
@@ -46,6 +50,9 @@ impl<E: core::error::Error + 'static> core::error::Error for PolicyDecodeError<E
 /// `ContinueReading` leaves affected output blocked. This adapter does not
 /// certify native workspace or admit a codec's internal staging. Its bounded
 /// report contains facts and decisions, not metadata or application payloads.
+/// A workspace requirement refuses before the first native step because this
+/// adapter has no qualified native bound. Construction of the supplied decoder
+/// precedes this check and remains the caller/adapter's admission responsibility.
 pub struct PolicyDecoder<D, R> {
     decoder: Option<Fused<D>>,
     resolver: R,
@@ -95,6 +102,20 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         // error or unwind drops its retained storage even if the caller keeps
         // this adapter to inspect the report. Only a successful step restores it.
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
+        // Deferring metadata discovery must not defer a resource deadline. This
+        // adapter has no qualified native workspace evidence. Check both entry
+        // policies before even polling the native coroutine; a discovery step
+        // may already allocate. The taken owner drops on refusal or unwind.
+        for requirements in [Some(self.preset), self.resolver.requirements()]
+            .into_iter()
+            .flatten()
+        {
+            requirements.check_workspace(None).map_err(|error| {
+                StepError::Codec(PolicyDecodeError::Requirements(
+                    At::wrap(error).at_named("controlled decode workspace admission"),
+                ))
+            })?;
+        }
         let progress = match decoder
             .step_controlled(input, sink, pulse)
             .map_err(|e| e.map_codec(PolicyDecodeError::Native))?

@@ -237,6 +237,16 @@ fn native_final_boundary_cannot_bypass_unproven_preset_requirements() {
                 let result = drive_from_slice(&mut session, &bytes, &mut sink, None, 13);
                 assert!(result.is_err(), "unproven preset accepted: {preset:?}");
                 let error = result.unwrap_err();
+                if preset.check_workspace(None).is_err() {
+                    let unmet =
+                        zencodec::find_cause::<zencodec::operation::UnmetRequirements>(&error)
+                            .expect("workspace must refuse before native discovery");
+                    assert_eq!(unmet, &preset.check_workspace(None).unwrap_err());
+                    assert_eq!(session.report().decisions().count(), 0);
+                    assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+                    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+                    continue;
+                }
                 assert!(
                     zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error).is_some()
                 );
@@ -622,4 +632,47 @@ fn native_waiting_input_is_released_after_callback_unwind_and_native_failure() {
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
     assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
     assert_eq!(work.constructors.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+#[allow(deprecated)] // Both entry requirement locations must precede native polling.
+fn workspace_requirement_refuses_before_native_discovery() {
+    use zencodec::operation::{
+        BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
+    };
+    for legacy in [false, true] {
+        for limit in [0, u64::MAX] {
+            let budget = StorageBudget::new(64 * 1024, 4);
+            let work = Arc::new(Work::default());
+            let native = decoder(budget.clone(), work.clone());
+            let required = PolicySet::new().with_workspace_limit(limit);
+            let binding = BoundPolicy::new(
+                if legacy { PolicySet::new() } else { required },
+                |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    panic!("unqualified workspace must refuse before callback")
+                },
+            );
+            let mut session = PolicyDecoder::new(native, binding).with_policy_set(if legacy {
+                required
+            } else {
+                PolicySet::new()
+            });
+            let mut sink = Sink::default();
+            let error = session.step(Input::empty(), &mut sink, None).unwrap_err();
+            let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
+            assert_eq!(
+                unmet.iter().collect::<Vec<_>>(),
+                [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+            assert_eq!(session.report().decisions().count(), 0);
+            assert_eq!(work.constructors.load(Ordering::SeqCst), 0);
+            assert_eq!(work.batches.load(Ordering::SeqCst), 0);
+            assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+            assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+            assert!(matches!(
+                session.step(Input::empty(), &mut sink, None),
+                Err(StepError::Finished)
+            ));
+        }
+    }
 }
