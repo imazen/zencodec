@@ -146,3 +146,27 @@ The 29-test native candidate and strict Clippy pass, but an unchanged legacy tes
 requires blanket rejection. Production remains unchanged pending approval of that
 specific contract change. This does not authorize unknown opaque profile retention
 or discharge arbitrary requirements at unrelated boundaries.
+
+## Current-main admission audit (2026-10-29)
+
+At main `ab29b04c`, `operation::policy::choose` filters offers against both the
+bound requirements and legacy preset before constructing callback choices.
+Original offer indices and retained owners survive filtering; `UsePreset`
+ranks the same admitted set. A direct callback choice cannot bypass these
+requirements. Failed admission records named Unknown/Contradicted evidence.
+
+`just operation-policy-check` passes in an isolated export: 12 policy tests,
+6 request tests and 45 operation unit tests. These include the original-index
+63 control, all-excluded refusal before callback, required-vs-preferred output,
+stale/nested tickets, callback error causes, cancellation and owner cleanup.
+Wrapper rc0, 22s, peak RSS 0.46 GiB, minimum available 13805 MiB. The initial
+export lacked the ignored root Cargo.lock and refused under --locked; validation
+then used the inspected root lock (SHA256
+`8201e9dd6075c980b9825edbe4513205ae29981860a7a5aeca588f10ed8f46d1`).
+No dependency resolution or test threshold was relaxed.
+
+This closes the direct-selection bypass described in issue 173, not its wider
+scoped-obligation design. Unrelated questions still cannot certify absent
+metadata/workspace facts. Deferred success requires the retained execution
+owner and effect deadlines described above; callback filtering alone is not
+native metadata completeness or an operation-wide resource guarantee.
