@@ -289,7 +289,7 @@ fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
             .unwrap();
         let codecs = CodecSet::new().with_decoder(config);
         let mut factory_calls = 0;
-        let mut session = PolicyDecoder::try_from_factory(
+        let mut session = PolicyDecoder::try_new(
             || {
                 factory_calls += 1;
                 DecodeRequest::new()
@@ -297,6 +297,7 @@ fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
                     .start_controlled(&codecs, StorageBudget::new(1 << 20, 4))
             },
             PolicySet::new(),
+            None,
         )
         .unwrap();
         assert_eq!(factory_calls, 1);

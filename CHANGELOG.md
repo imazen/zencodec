@@ -757,6 +757,10 @@ removes that whole class).
 
 ### [Unreleased]
 
+- Align image factory admission with video's `try_new(factory, policy, pulse)`:
+  check cancellation before and after construction, drop cancelled native owners,
+  and preserve factory failures. Deprecate the no-pulse `try_from_factory` spelling.
+
 - Add `PolicyDecoder::try_from_factory` to check workspace requirements before
   native construction, preserve factory errors and retain the same operation
   policy through later decoding decisions.

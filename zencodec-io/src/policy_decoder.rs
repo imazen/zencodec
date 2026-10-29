@@ -103,12 +103,41 @@ impl<D, R: OperationPolicy> PolicyDecoder<D, R> {
     /// captured allocations) cannot be admitted by this method.
     ///
     /// ```ignore
-    /// let decoder = PolicyDecoder::try_from_factory(
+    /// let decoder = PolicyDecoder::try_new(
     ///     || request.start_controlled(&codecs, storage),
     ///     policy,
+    ///     pulse,
     /// )?;
     /// ```
+    ///
+    /// Cancellation is checked before and after construction. If cancellation
+    /// arrives during a successful factory call, the decoder is dropped before
+    /// return. Lengthy factories must poll the same pulse themselves; this check
+    /// cannot preempt synchronous work. `None` skips these per-call checks only.
+    pub fn try_new<E>(
+        factory: impl FnOnce() -> Result<D, E>,
+        policy: R,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Self, StepError<PolicyDecodeError<E>>> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        pulse.check()?;
+        let decoder = Self::from_admitted_factory(factory, policy).map_err(StepError::Codec)?;
+        pulse.check()?;
+        Ok(decoder)
+    }
+
+    /// Construct after workspace admission, without per-call cancellation.
+    #[deprecated(
+        note = "Use try_new(factory, policy, pulse); pass None when no per-call control is needed"
+    )]
     pub fn try_from_factory<E>(
+        factory: impl FnOnce() -> Result<D, E>,
+        policy: R,
+    ) -> Result<Self, PolicyDecodeError<E>> {
+        Self::from_admitted_factory(factory, policy)
+    }
+
+    fn from_admitted_factory<E>(
         factory: impl FnOnce() -> Result<D, E>,
         policy: R,
     ) -> Result<Self, PolicyDecodeError<E>> {
