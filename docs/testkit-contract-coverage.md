@@ -1,5 +1,10 @@
 # New contract coverage
 
+This matrix records the October 13 integration campaign, not current release
+completeness. For the current API and harness gaps, see the
+[October 29 testkit audit](testkit-release-audit.md). Historical adapter ownership
+and version observations below must not be used as current status.
+
 This is behavioral contract coverage, not a line-coverage percentage. The scope
 is the unreleased timing, checked policy, inventory and rewrite changes reviewed
 in [the published-API audit](zencodec-contract-audit-2026-10-13.md).
