@@ -105,3 +105,9 @@ patch selects `283655c5`; downstream roots must provide that patch until the
 paired pixel release is published. Benchmark consumers now carry the immutable
 source patch explicitly. A successful workspace build does not qualify an
 unpatched crates.io consumer graph.
+
+## PR175 compile observation
+
+[The 45-build comparison](../benchmarks/compile_candidate_2026-10-29.md) completed.
+Load flags prevent a confirmed performance claim; retained medians describe only
+the measured core/io/media consumer, not crates.io or full native applications.

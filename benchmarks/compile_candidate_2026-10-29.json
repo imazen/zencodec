@@ -1,0 +1,302 @@
+{
+  "schema": 1,
+  "source_main": "87eff5f162042aa46c50df3f8abd3745da0001b8",
+  "source_ideal": "aa30ebba1aef5eadfd0b1f82a8c308e1e9e3a8cd",
+  "artifact_directory": "/mnt/v/output/zencodec/release-compile-20261029/study2",
+  "measurements": [
+    {
+      "case": "dev-default",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.93,
+        "min": 2.92,
+        "max": 2.95
+      },
+      "cargo_peak_rss_kib": {
+        "median": 321516,
+        "min": 319528,
+        "max": 321792
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.32,
+        "min": 1.32,
+        "max": 1.33
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.17,
+        "min": 0.17,
+        "max": 0.17
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.17,
+        "min": 0.16,
+        "max": 0.17
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.96,
+        "min": 2.93,
+        "max": 2.99
+      },
+      "cargo_peak_rss_kib": {
+        "median": 323396,
+        "min": 322920,
+        "max": 323804
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.33,
+        "min": 1.32,
+        "max": 1.34
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.17,
+        "min": 0.17,
+        "max": 0.17
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.17,
+        "min": 0.16,
+        "max": 0.17
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.94,
+        "min": 2.92,
+        "max": 2.98
+      },
+      "cargo_peak_rss_kib": {
+        "median": 321804,
+        "min": 321116,
+        "max": 321948
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.32,
+        "min": 1.31,
+        "max": 1.35
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.17,
+        "min": 0.17,
+        "max": 0.18
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.17,
+        "min": 0.17,
+        "max": 0.17
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 3.05,
+        "min": 3.04,
+        "max": 3.06
+      },
+      "cargo_peak_rss_kib": {
+        "median": 317052,
+        "min": 315944,
+        "max": 317504
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.43,
+        "min": 1.41,
+        "max": 1.43
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.29,
+        "min": 0.28,
+        "max": 0.29
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.26,
+        "min": 0.25,
+        "max": 0.26
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 3.07,
+        "min": 3.05,
+        "max": 3.11
+      },
+      "cargo_peak_rss_kib": {
+        "median": 317884,
+        "min": 317676,
+        "max": 318724
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.45,
+        "min": 1.44,
+        "max": 1.45
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.33,
+        "min": 0.33,
+        "max": 0.34
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.26,
+        "min": 0.26,
+        "max": 0.26
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 3.05,
+        "min": 3.01,
+        "max": 3.05
+      },
+      "cargo_peak_rss_kib": {
+        "median": 316808,
+        "min": 316648,
+        "max": 317028
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.42,
+        "min": 1.4,
+        "max": 1.43
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.29,
+        "min": 0.28,
+        "max": 0.3
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.26,
+        "min": 0.25,
+        "max": 0.26
+      }
+    },
+    {
+      "case": "release-std",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 4.36,
+        "min": 4.35,
+        "max": 4.37
+      },
+      "cargo_peak_rss_kib": {
+        "median": 321820,
+        "min": 321364,
+        "max": 322356
+      },
+      "zencodec_unit_seconds": {
+        "median": 2.65,
+        "min": 2.64,
+        "max": 2.66
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.63,
+        "min": 0.62,
+        "max": 0.63
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.49,
+        "min": 0.49,
+        "max": 0.5
+      }
+    },
+    {
+      "case": "release-std",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 4.4,
+        "min": 4.39,
+        "max": 4.42
+      },
+      "cargo_peak_rss_kib": {
+        "median": 324956,
+        "min": 324692,
+        "max": 325008
+      },
+      "zencodec_unit_seconds": {
+        "median": 2.7,
+        "min": 2.69,
+        "max": 2.7
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.69,
+        "min": 0.68,
+        "max": 0.69
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.49,
+        "min": 0.49,
+        "max": 0.5
+      }
+    },
+    {
+      "case": "release-std",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 4.35,
+        "min": 4.33,
+        "max": 4.37
+      },
+      "cargo_peak_rss_kib": {
+        "median": 321660,
+        "min": 321244,
+        "max": 321972
+      },
+      "zencodec_unit_seconds": {
+        "median": 2.64,
+        "min": 2.63,
+        "max": 2.66
+      },
+      "zencodec-io_unit_seconds": {
+        "median": 0.63,
+        "min": 0.62,
+        "max": 0.63
+      },
+      "zencodec-media_unit_seconds": {
+        "median": 0.49,
+        "min": 0.49,
+        "max": 0.5
+      }
+    }
+  ],
+  "quality": {
+    "confirmed": false,
+    "mode": "iterate",
+    "invocations": 45,
+    "cpu_load_flags": 45,
+    "heavy_process_flags": 3,
+    "placement": "uniform_hardware"
+  },
+  "scope": "core/io/media re-export consumer; no codecs, render/CMS, tests or application monomorphization; empty target, warm OS cache, prefetched dependencies, two jobs, no incremental/compiler wrapper; std enables std on each package that exposes it; exact per-arm feature selections are retained in manifests",
+  "resource_wrapper": "run-heavy: done rc=0 178s | peak-RSS 0.31GiB | min-avail 14578MiB | peak-load 1.87",
+  "log": "/home/lilith/tmp/zencodec-optional-pulse-20261029/compile-final/measure.log",
+  "manifests": {
+    "main/default": "[package]\nname=\"adapter-consumer\"\nversion=\"0.0.0\"\nedition=\"2024\"\n[workspace]\n[dependencies]\nzencodec = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source\", default-features=false }\nzencodec-io = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source/zencodec-io\", default-features=false }\nzencodec-media = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source/zencodec-media\", default-features=false }\n\n[patch.crates-io]\nzenpixels = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\nzenpixels-convert = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\n",
+    "main/std": "[package]\nname=\"adapter-consumer\"\nversion=\"0.0.0\"\nedition=\"2024\"\n[workspace]\n[dependencies]\nzencodec = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source\", default-features=false, features=[\"std\"] }\nzencodec-io = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source/zencodec-io\", default-features=false, features=[\"std\"] }\nzencodec-media = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/main-source/zencodec-media\", default-features=false, features=[\"std\"] }\n\n[patch.crates-io]\nzenpixels = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\nzenpixels-convert = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\n",
+    "ideal/default": "[package]\nname=\"adapter-consumer\"\nversion=\"0.0.0\"\nedition=\"2024\"\n[workspace]\n[dependencies]\nzencodec = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source\", default-features=false }\nzencodec-io = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source/zencodec-io\", default-features=false }\nzencodec-media = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source/zencodec-media\", default-features=false }\n\n[patch.crates-io]\nzenpixels = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\nzenpixels-convert = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\n",
+    "ideal/std": "[package]\nname=\"adapter-consumer\"\nversion=\"0.0.0\"\nedition=\"2024\"\n[workspace]\n[dependencies]\nzencodec = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source\", default-features=false, features=[\"std\"] }\nzencodec-io = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source/zencodec-io\", default-features=false, features=[\"std\"] }\nzencodec-media = { path=\"/mnt/v/output/zencodec/release-compile-20261029/study2/ideal-source/zencodec-media\", default-features=false, features=[\"std\"] }\n\n[patch.crates-io]\nzenpixels = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\nzenpixels-convert = { git = \"https://github.com/imazen/zenpixels\", rev = \"283655c5424e0ad7ebc6d2acd94670fac1e29158\" }\n"
+  },
+  "hashes": {
+    "/mnt/v/output/zencodec/release-compile-20261029/study2/attempt/packet.json.gz": "a367b0f75cf966276fe9d4c3c2eebab277148e8d9c2b2e59e878fbbba3745f59",
+    "/mnt/v/output/zencodec/release-compile-20261029/study2/plan.json": "fa837ab5d2c38a7503902dab169d91e1b7d38b193325ee63e2ed7e728d2d98c8",
+    "/mnt/v/output/zencodec/release-compile-20261029/study2/runner-measured.py": "082915ab922f9f34981903271fdd3a24e99c1767beff0d4dfff67a78acd9ef85",
+    "/mnt/v/output/zencodec/release-compile-20261029/study2/toolchain.txt": "6bb2920e36aff7999433500d6e467333e589a309e221d6a2081533b66fc535c6",
+    "/home/lilith/tmp/zencodec-optional-pulse-20261029/compile-final/measure.log": "2e5b5bbc74fb8bda3065b31f2877991cdcf7bd1d8d6bf72ebb3a9dc6501eff0c"
+  }
+}
