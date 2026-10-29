@@ -370,7 +370,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
+source = "git+https://github.com/imazen/jxl-encoder?rev=554ad6966771bc2b6f79d6a6c569f55ce155644a#554ad6966771bc2b6f79d6a6c569f55ce155644a"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -387,7 +387,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
+source = "git+https://github.com/imazen/jxl-encoder?rev=554ad6966771bc2b6f79d6a6c569f55ce155644a#554ad6966771bc2b6f79d6a6c569f55ce155644a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -397,7 +397,7 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
+source = "git+https://github.com/imazen/jxl-encoder?rev=554ad6966771bc2b6f79d6a6c569f55ce155644a#554ad6966771bc2b6f79d6a6c569f55ce155644a"
 dependencies = [
  "archmage",
  "libm",
@@ -958,6 +958,7 @@ dependencies = [
  "almost-enough",
  "enough",
  "how-far",
+ "libm",
  "spin",
  "whereat",
  "zenpixels",
