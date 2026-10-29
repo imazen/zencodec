@@ -798,8 +798,11 @@ where
             match outcome {
                 Ok(BatchEnd::Yield) => crate::work_quota::yield_once().await,
                 Ok(BatchEnd::Done(_)) => {
-                    let rest = sink
-                        .finish()
+                    // Finalization can perform most of a buffered encoder's CPU
+                    // work. Keep it on the same executor as row processing.
+                    let rest = run_on(&compute, move || sink.finish())
+                        .await
+                        .map_err(widen)?
                         .map_err(|e| AsyncDriveError::Step(StepError::Sink(Box::new(e))))?;
                     out.write_all(rest.data())
                         .await

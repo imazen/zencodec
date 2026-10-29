@@ -1516,6 +1516,7 @@ mod tokio_drivers {
             let mut src = BytesSource(Vec::new().into());
             let mut out = Vec::new();
             let enc = RawEncoder {
+                require_worker_finish: false,
                 out: Vec::new(),
                 drained: 0,
                 peak_pending: Arc::default(),
@@ -1726,6 +1727,7 @@ mod tokio_drivers {
     /// and each row's bytes as it is pushed, and makes them available as
     /// pending output.
     struct RawEncoder {
+        require_worker_finish: bool,
         out: Vec<u8>,
         drained: usize,
         peak_pending: Arc<AtomicUsize>,
@@ -1772,11 +1774,41 @@ mod tokio_drivers {
             self.drained += n;
         }
         fn finish(self) -> Result<zencodec::encode::EncodeOutput, EncErr> {
+            if self.require_worker_finish {
+                assert_eq!(std::thread::current().name(), Some("zencodec-decode"));
+            }
             Ok(zencodec::encode::EncodeOutput::new(
                 self.out[self.drained..].to_vec(),
                 ImageFormat::Png,
             ))
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn transcode_finalizes_on_compute_and_preserves_bytes() {
+        let file = sequential_file(6);
+        let mut source = BytesSource(file.clone().into());
+        let encoder = RawEncoder {
+            require_worker_finish: true,
+            out: Vec::new(),
+            drained: 0,
+            peak_pending: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut out = Vec::new();
+        let written = transcode_async(
+            sequential_decoder(),
+            encoder,
+            &mut source,
+            &mut out,
+            named_threads(),
+            DriveOptions::new(0, 16),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(&out[..4], &[2, 6, 0, 0]);
+        assert_eq!(&out[4..], &file[8..]);
+        assert_eq!(written as usize, out.len());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1786,6 +1818,7 @@ mod tokio_drivers {
         let mut source = BytesSource(file.into());
         let peak = Arc::new(AtomicUsize::new(0));
         let encoder = RawEncoder {
+            require_worker_finish: false,
             out: Vec::new(),
             drained: 0,
             peak_pending: peak.clone(),

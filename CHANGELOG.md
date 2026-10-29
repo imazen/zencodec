@@ -31,6 +31,10 @@
 
 ### Fixed
 
+- `transcode_async` runs encoder finalization through its configured compute
+  executor, so buffered finish work does not unexpectedly run on the async
+  polling task when batches are offloaded. Inline behavior is unchanged.
+
 - Codec registry snapshots share registration lists without per-clone allocation;
   extending a snapshot copies lists on write and preserves independent defaults.
   Registry construction now allocates one shared owner. See the 2026-10-29

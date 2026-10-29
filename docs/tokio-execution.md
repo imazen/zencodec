@@ -23,11 +23,11 @@ on a dedicated worker, using a suitable message boundary instead.
 ## Current execution limits
 
 `transcode_async` sends batches through `Compute`, then awaits the destination
-with both codecs retained. Its final `EncoderSink::finish` currently runs on the
-polling task, outside `Compute`. Expensive native finalization can therefore
-block the runtime even when the batches are offloaded. A complete offloading
-contract must cover finalization as well as steps; the current implementation
-must not be described as offloading all codec work.
+with both codecs retained. Its final `EncoderSink::finish` also runs through `Compute`.
+The regression first failed on the polling thread, then passed on the named
+worker with exact encoded-byte and count checks after the fix. `Inline`
+intentionally executes both batches and finalization on the polling task.
+Offloading does not make an individual native call preemptible.
 
 Finishing before awaiting publication releases the encoder sooner but retains
 compressed output. A bounded output queue does not bound the codec's raw or
@@ -59,3 +59,8 @@ Command: `run-heavy --mem 3G --jobs 2 -- timeout 900s just tokio-guide-check`.
 Receipt: rc0, 6s, peak RSS 0.34GiB, minimum available 14491MiB. This is a test-run
 resource receipt, not a codec performance measurement. Full log:
 `~/tmp/zencodec-tokio-guide/rust.log`.
+
+The finalization repair passes 35 driver tests, the same 3 quota tests and strict
+Clippy: rc0, 2s, peak RSS 0.29GiB, minimum available 14484MiB. Failing-first and
+fixed logs are `~/tmp/zencodec-tokio-guide/finish-before.log` and `finish-after.log`.
+The thread-placement regression is synthetic; no native codec speedup is claimed.
