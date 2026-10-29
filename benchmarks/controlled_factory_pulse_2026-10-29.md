@@ -34,3 +34,8 @@ Raw receipts: /home/lilith/tmp/zenpixels-release-reconcile-20261029/
 decoder-factory-pulse/full.log (initial failure),
 decoder-factory-pulse-retry/retry.log and media.log (qualification).
 Wrapper resource figures measure validation, not native memory bounds.
+
+At source `5ed58f0ce1c147c881731daeb8922162abf78d87`, all eight Rustdoc crates,
+24 guide source tests and the complete browser suite pass. Serialized 3G/jobs2
+wrapper: rc0, 46s, peak RSS 0.33 GiB, minimum available 13280 MiB, peak load 0.96.
+Both canonical and deprecated factory signatures appear in the code-first guide.
