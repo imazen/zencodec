@@ -427,6 +427,18 @@ Disk writes happen while the encoder may retain raw buffers. Frame-route policy
 sees the actual store kind, accumulated payload bytes and payload allowance.
 This is explicit finite staging, not a qualification for live backpressure.
 
+Memory staging copies each payload and addition into independent admitted storage;
+disk staging writes those bytes and drops their original owners. A small packet
+view therefore does not keep its oversized upstream backing allocation alive
+through destination waits. This applies to both shared byte slices and charged
+storage views. Other upstream aliases remain the upstream owner's responsibility.
+`just media-staging-owner-check` verifies release before replay, exact payload and
+addition bytes, and charge retention until the replayed packet drops. These are
+ownership controls, not a whole-operation memory measurement.
+The 2026-10-29 isolated run at `2bb7cc57` passed all five staging tests and
+strict media Clippy: `rc=0 6s | peak-RSS 0.31GiB | min-avail 14104MiB`.
+The wrapper includes compilation and testing; it is not a codec-memory result.
+
 Separate limits cover disk bytes, indexed packets and additions per packet.
 Replay admits each packet's payloads into one shared charged owner, preserving
 metadata, timing and additions. Muxer retention keeps charges alive. First-packet

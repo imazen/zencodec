@@ -300,6 +300,78 @@ mod tests {
             .with_addition(PacketAddition::new(9, PacketPayload::Owned(vec![4, 5])))
     }
     #[test]
+    fn staging_releases_oversized_backing_owners_before_replay() {
+        use alloc::sync::Arc;
+        for disk in [false, true] {
+            for accounted in [false, true] {
+                // Five encoded bytes must not keep an unrelated backing slab
+                // alive while the final destination waits. Cover additions too.
+                let slab: Arc<[u8]> = vec![7; 4096].into();
+                let weak = Arc::downgrade(&slab);
+                let source_budget = StorageBudget::new(4096, 1);
+                let packet = if accounted {
+                    let mut owner = source_budget.bytes(4096).unwrap();
+                    owner.as_mut_slice().fill(7);
+                    let owner = owner.freeze();
+                    packet()
+                        .map_payloads(|payload| {
+                            Ok(PacketPayload::Accounted(owner.slice(0..payload.len())?))
+                        })
+                        .unwrap()
+                } else {
+                    Packet::from_shared(slab.clone(), 100, 3)
+                        .unwrap()
+                        .with_addition(PacketAddition::new(
+                            9,
+                            PacketPayload::Shared {
+                                bytes: slab.clone(),
+                                start: 200,
+                                len: 2,
+                            },
+                        ))
+                };
+                drop(slab);
+                if accounted {
+                    assert_eq!(source_budget.reserved_bytes(), 4096);
+                    assert_eq!(source_budget.reserved_objects(), 1);
+                } else {
+                    assert!(weak.upgrade().is_some());
+                }
+                let budget = StorageBudget::new(5, 2);
+                let (mut staging, path) = if disk {
+                    let (file, path) = file();
+                    (
+                        Staging::disk(file, DiskLimits::new(5, 1, 1), budget.clone()).unwrap(),
+                        Some(path),
+                    )
+                } else {
+                    (Staging::memory(budget.clone()), None)
+                };
+                staging.push(packet, &zencodec::NoPulse).unwrap();
+                assert!(
+                    weak.upgrade().is_none(),
+                    "disk={disk}, accounted={accounted}"
+                );
+                assert_eq!(source_budget.reserved_bytes(), 0);
+                assert_eq!(source_budget.reserved_objects(), 0);
+                assert_eq!(budget.reserved_bytes(), if disk { 0 } else { 5 });
+                staging.begin_replay(&zencodec::NoPulse).unwrap();
+                let output = staging.next(&zencodec::NoPulse).unwrap().unwrap();
+                drop(staging);
+                assert_eq!(output.bytes(), &[7; 3]);
+                assert_eq!(output.additions()[0].payload().as_bytes(), &[7; 2]);
+                assert_eq!(budget.reserved_bytes(), 5);
+                drop(output);
+                assert_eq!(budget.reserved_bytes(), 0);
+                assert_eq!(budget.reserved_objects(), 0);
+                if let Some(path) = path {
+                    std::fs::remove_file(path).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
     fn disk_preserves_packet_metadata_additions_prefix_and_replay_owners() {
         let (file, path) = file();
         let budget = StorageBudget::new(5, 1);

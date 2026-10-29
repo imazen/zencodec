@@ -1631,3 +1631,8 @@ controlled-factory-pulse-check: controlled-workspace-check
 # Review-only experiment; does not change application behavior or old assertions.
 late-metadata-prepare repository revision output:
     python3 perf/late-metadata-validation/prepare.py "{{repository}}" "{{revision}}" "{{output}}"
+
+# Encoded staging must not retain oversized upstream packet backing owners.
+media-staging-owner-check:
+    cargo test -p zencodec-media --all-features --locked --lib staging::tests
+    cargo clippy -p zencodec-media --all-features --all-targets --locked -- -D warnings
