@@ -1582,3 +1582,8 @@ terminal-details-check:
     cargo clippy -p zencodec -p zencodec-io --lib --all-features --locked -- -D warnings
     cargo check -p zencodec --no-default-features --locked
     just jpeg-decode-admission-check
+
+# Profile matched native descriptor refusal and raster ownership with heaptrack.
+decode-admission-profile output revision:
+    cargo build --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --bin decode_admission
+    python3 perf/jpeg-policy-validation/profile-decode-admission.py "${CARGO_TARGET_DIR:-perf/jpeg-policy-validation/target}/debug/decode_admission" "{{output}}" --source-revision "{{revision}}"
