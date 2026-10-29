@@ -600,3 +600,33 @@ fn estimate_decode_of_probes_then_estimates() {
         other => panic!("expected UnrecognizedFormat, got {other:?}"),
     }
 }
+
+#[test]
+fn registered_custom_formats_survive_exact_allowlists_and_decode_pixels() {
+    let set = CodecSet::new()
+        .with_decoder(ReferenceDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
+        .with_encoder(ReferenceEncoderConfig::new());
+    let custom = ImageFormat::Custom(&ZCR_FORMAT);
+    let candidates = |allowed: Option<&[ImageFormat]>| {
+        set.decodable_formats()
+            .filter(|format| allowed.is_none_or(|list| list.contains(format)))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(candidates(None), vec![ImageFormat::Pnm, custom]);
+    assert!(candidates(Some(&[])).is_empty());
+    assert_eq!(candidates(Some(&[custom])), vec![custom]);
+    assert_eq!(candidates(Some(&[ImageFormat::Jpeg])), vec![]);
+
+    let encoded = set
+        .encode(ImageFormat::Pnm, rgb_pixels(&PIXELS, W, H))
+        .unwrap();
+    let detected = set.detect(encoded.data()).unwrap();
+    assert!(candidates(Some(&[custom])).contains(&detected));
+    let decoded = set.decode_as(detected, encoded.data(), &[]).unwrap();
+    let pixels = decoded.pixels();
+    let actual: Vec<_> = (0..pixels.rows())
+        .flat_map(|y| pixels.row(y).iter().copied())
+        .collect();
+    assert_eq!(actual, PIXELS);
+}
