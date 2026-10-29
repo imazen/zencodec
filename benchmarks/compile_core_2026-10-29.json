@@ -1,0 +1,269 @@
+{
+  "schema": 1,
+  "source_main": "a20e4dd3318cf2703ed383a7619819a7c32d6b7f",
+  "source_ideal": "e9f2f31d051f3a859c51bd5e70581c2ee90fd457",
+  "baseline": "crates.io 0.1.26",
+  "artifact_directory": "/home/lilith/tmp/zencodec-compile-20261029",
+  "packet": "/home/lilith/tmp/zencodec-compile-20261029/attempt/packet.json.gz",
+  "measurements": [
+    {
+      "case": "dev-default",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.95,
+        "min": 1.93,
+        "max": 1.95
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.39,
+        "max": 0.41
+      },
+      "cargo_peak_rss_kib": {
+        "median": 247116,
+        "min": 246668,
+        "max": 247500
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.79,
+        "min": 2.77,
+        "max": 2.89
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.19,
+        "min": 1.18,
+        "max": 1.25
+      },
+      "cargo_peak_rss_kib": {
+        "median": 327968,
+        "min": 325788,
+        "max": 328108
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.26,
+        "min": 2.24,
+        "max": 2.61
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.69,
+        "min": 0.68,
+        "max": 0.76
+      },
+      "cargo_peak_rss_kib": {
+        "median": 249812,
+        "min": 248904,
+        "max": 250880
+      }
+    },
+    {
+      "case": "dev-default",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.93,
+        "min": 1.93,
+        "max": 1.95
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.39,
+        "min": 0.39,
+        "max": 0.4
+      },
+      "cargo_peak_rss_kib": {
+        "median": 246640,
+        "min": 244736,
+        "max": 248220
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.93,
+        "min": 1.92,
+        "max": 1.98
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.39,
+        "max": 0.41
+      },
+      "cargo_peak_rss_kib": {
+        "median": 247556,
+        "min": 245056,
+        "max": 248108
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.76,
+        "min": 2.74,
+        "max": 2.77
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.17,
+        "min": 1.16,
+        "max": 1.18
+      },
+      "cargo_peak_rss_kib": {
+        "median": 325628,
+        "min": 325112,
+        "max": 327156
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.24,
+        "min": 2.23,
+        "max": 2.29
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.69,
+        "min": 0.67,
+        "max": 0.69
+      },
+      "cargo_peak_rss_kib": {
+        "median": 250800,
+        "min": 250520,
+        "max": 252368
+      }
+    },
+    {
+      "case": "dev-std",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 1.95,
+        "min": 1.94,
+        "max": 1.95
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.4,
+        "min": 0.39,
+        "max": 0.41
+      },
+      "cargo_peak_rss_kib": {
+        "median": 246416,
+        "min": 246060,
+        "max": 246756
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "__aa",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.34,
+        "min": 2.31,
+        "max": 2.42
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.71,
+        "min": 0.7,
+        "max": 0.76
+      },
+      "cargo_peak_rss_kib": {
+        "median": 245160,
+        "min": 244756,
+        "max": 245320
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "ideal",
+      "n": 5,
+      "wall_seconds": {
+        "median": 3.83,
+        "min": 3.8,
+        "max": 4.05
+      },
+      "zencodec_unit_seconds": {
+        "median": 2.14,
+        "min": 2.12,
+        "max": 2.28
+      },
+      "cargo_peak_rss_kib": {
+        "median": 325732,
+        "min": 325100,
+        "max": 326304
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "main",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.88,
+        "min": 2.88,
+        "max": 2.89
+      },
+      "zencodec_unit_seconds": {
+        "median": 1.24,
+        "min": 1.24,
+        "max": 1.25
+      },
+      "cargo_peak_rss_kib": {
+        "median": 255284,
+        "min": 254700,
+        "max": 256256
+      }
+    },
+    {
+      "case": "release-default",
+      "arm": "published",
+      "n": 5,
+      "wall_seconds": {
+        "median": 2.34,
+        "min": 2.32,
+        "max": 2.42
+      },
+      "zencodec_unit_seconds": {
+        "median": 0.71,
+        "min": 0.7,
+        "max": 0.71
+      },
+      "cargo_peak_rss_kib": {
+        "median": 245124,
+        "min": 244552,
+        "max": 245224
+      }
+    }
+  ],
+  "quality": {
+    "mode": "iterate",
+    "confirmed": false,
+    "invocations": 60,
+    "cpu_load_flags": 60,
+    "heavy_process_flags": 10,
+    "placement": "uniform_hardware",
+    "correctness_checked": true
+  },
+  "scope": "minimal consumer re-export; empty target each invocation; dependencies prefetched; OS file cache warm; two cargo jobs; incremental and compiler wrappers disabled; Rust 1.99.1 on Ryzen 9 7900X; no codec implementations, tests, site generation or CMS",
+  "resource_wrapper": "run-heavy: done rc=0 181s | peak-RSS 0.31GiB | min-avail 13815MiB | peak-load 1.61",
+  "log": "/home/lilith/tmp/zencodec-compile-20261029/full.log",
+  "hashes": {
+    "/home/lilith/tmp/zencodec-compile-20261029/attempt/packet.json.gz": "71b9a68886ba56d96c8b05368115c0dce8b6d90ea42d6543e60b234a7015f294",
+    "/home/lilith/tmp/zencodec-compile-20261029/plan.json": "614ef0306bf401506ba215c45c43d859e81cee6f8356057c69905648fac77673",
+    "/home/lilith/tmp/zencodec-compile-20261029/runner-measured.py": "082915ab922f9f34981903271fdd3a24e99c1767beff0d4dfff67a78acd9ef85",
+    "/home/lilith/tmp/zencodec-compile-20261029/toolchain.txt": "6bb2920e36aff7999433500d6e467333e589a309e221d6a2081533b66fc535c6",
+    "/home/lilith/tmp/zencodec-compile-20261029/full.log": "89ca1f604d9790415b595d034fe1a428728b4bc46ae444fccc9dcab03dfaa94b"
+  }
+}

@@ -100,6 +100,13 @@ returns to candidate review.
 
 ## Remaining measurements
 
+The [2026-10-29 core study](../benchmarks/compile_core_2026-10-29.md) completed
+60 fresh-target builds with A/A controls at candidate `e9f2f31d`. Median dev/default
+consumer time was 1.93s published versus 2.79s candidate; release/default was
+2.34s versus 3.83s. All observations remain exploratory: every invocation recorded
+CPU-load flags and 10 recorded heavy-process observations. Dependency graphs and
+API scope differ; these are not isolated costs of a single abstraction.
+
 The older [companion compile study](../benchmarks/compile_adapters_2026-10-27.md)
 is exploratory: all samples recorded background CPU load, six recorded heavy
 processes, and supported features differ between baselines. It is not a clean
