@@ -319,3 +319,41 @@ Qualification receipt (2026-10-29): native checkpoint control, 41 driver tests,
 minimum available 14035MiB. Full log:
 `~/tmp/zencodec-tokio-guide/native-request-qualified.log`.
 This is test-run resource usage, not a native memory bound or speed measurement.
+
+## Driver-owned cancellation between native steps
+
+The async batch driver checks the supplied Pulse itself before each native
+`step`, including when a queued compute job starts after cancellation. It does
+not depend on that codec implementing its own between-step check. Native code
+still owns checkpoints within an expensive step: this is not preemption.
+
+After a successful batch, decode checks again before returning a completed
+image or requesting more input. A native/protocol failure remains primary when
+it coincides with cancellation. Transcode already guards successful batches
+before draining bytes. A final-step cancellation can follow sink effects that
+already occurred within that step; the check prevents success escaping, not
+rollback of those effects. Required pre-effect policy barriers remain separate.
+
+The deliberately non-cooperating decoder control covers queued cancellation,
+cancellation during the first and final steps, simultaneous native failure,
+and successful exact pixels. Existing native request-drop controls separately
+qualify JPEG's internal checkpoints. Added Pulse polling overhead has not been
+benchmarked; the host was occupied by another encoder experiment.
+
+Qualification (2026-10-29): the failing-first control ran three native steps
+instead of zero after queued cancellation. With the fix, all 42 driver tests
+and three work-quota tests pass on ARM64, along with all-feature/all-target
+zencodec-io strict Clippy. The final wrapper reported rc0, 13s, peak RSS
+0.29GiB, minimum available 14471MiB; these are validation resources, not codec
+performance measurements. The initial Clippy runs found an existing Boolean
+simplification in encoding-route compatibility; its equivalent expression was
+fixed without suppressing the lint. Logs, including failures, are retained at
+`~/tmp/zencodec-batch-cancel-20261029/`.
+
+The eight compiler catalogs were regenerated on ARM64 (rc0, 51s, peak RSS
+0.35GiB). Compiler spelling differs from the previous host for standard-library
+paths (`Arc`, I/O traits and `Infallible`); this fix changes no public Rust
+signature. A source-check attempt against the old generated site failed two
+stale-output checks; rebuild the site before running its source tests.
+The rebuilt site then passed all 26 source/catalog tests (rc0, 15s, peak RSS
+0.33GiB). Browser tests were not rerun for this driver-only change.

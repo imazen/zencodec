@@ -401,6 +401,11 @@ where
         if steps == quota.max_steps() {
             break Ok(BatchEnd::Yield);
         }
+        if let Some(pulse) = pulse_ref
+            && let Err(reason) = pulse.check()
+        {
+            break Err(BatchFail::Step(StepError::Cancelled(reason)));
+        }
         let input = window.input();
         let p = match decoder.step(input, &mut sink, pulse_ref) {
             Ok(p) => p,
@@ -715,6 +720,12 @@ where
                 mut window,
                 outcome,
             } = batch;
+            // A successful final step may itself signal cancellation. Do not
+            // return success or start another read after that boundary. Keep
+            // actual codec/protocol failures primary when both occur.
+            if outcome.is_ok() {
+                check_shared_pulse(pulse.as_ref())?;
+            }
             match outcome {
                 Ok(BatchEnd::Done(info)) => return Ok((info, sink)),
                 Ok(BatchEnd::Yield) => crate::work_quota::yield_once().await,

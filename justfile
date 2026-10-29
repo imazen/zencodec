@@ -1670,3 +1670,8 @@ io-source-errors-check:
     cargo test -p zencodec-io --features std --test std_source_errors --test read_at_reader --locked
     cargo test -p zencodec-io --features std --lib native_file_errors_retain_kind_and_os_code --locked
     cargo clippy -p zencodec-io --features std --test std_source_errors --test read_at_reader --locked -- -D warnings
+
+# Driver-owned cancellation even when a codec ignores the borrowed Pulse.
+async-batch-cancellation-check:
+    cargo test -p zencodec-io --features tokio --test drivers --test work_quota --locked
+    cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
