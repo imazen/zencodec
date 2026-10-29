@@ -1504,3 +1504,7 @@ policy-completion-check:
 transcode-composition-check:
     cargo test --locked -p zencodec operation::transcode::composition_tests
     cargo clippy --locked -p zencodec --all-features --all-targets -- -D warnings
+
+# Source-only guard for portable codec family graphs; no Cargo invocation.
+optional-native-audit-check:
+    python3 perf/optional-native/test-audit.py
