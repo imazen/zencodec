@@ -255,38 +255,60 @@ mod admission_tests {
     }
     #[test]
     fn cancellation_before_or_during_preparation_prevents_execution() {
-        struct Cancel(Arc<AtomicBool>);
+        struct Cancel(Arc<AtomicBool>, enough::StopReason);
         impl enough::Stop for Cancel {
             fn check(&self) -> Result<(), enough::StopReason> {
                 if self.0.load(Ordering::SeqCst) {
-                    Err(enough::StopReason::Cancelled)
+                    Err(self.1)
                 } else {
                     Ok(())
                 }
             }
         }
-        for cancelled in [false, true] {
-            let flag = Arc::new(AtomicBool::new(cancelled));
-            let preparations = Rc::new(Cell::new(0));
-            let executions = Rc::new(Cell::new(0));
-            let drops = Rc::new(Cell::new(0));
-            let native = Native {
-                prepared: None,
-                fail: false,
-                cancel: Some(flag.clone()),
-                preparations: preparations.clone(),
-                executions: executions.clone(),
-                drops: drops.clone(),
-            };
-            let pulse = crate::how_far::StopOnly::new(Cancel(flag));
-            let result = decode_owned(Box::new(native), Some(PixelDescriptor::RGB8_SRGB), &pulse);
-            assert!(matches!(
-                result,
-                Err(OperationError::Stopped(enough::StopReason::Cancelled))
-            ));
-            assert_eq!(preparations.get(), usize::from(!cancelled));
-            assert_eq!(executions.get(), 0);
-            assert_eq!(drops.get(), 1);
+        for reason in [enough::StopReason::Cancelled, enough::StopReason::TimedOut] {
+            for cancelled in [false, true] {
+                for prepared in [
+                    None,
+                    Some(PixelDescriptor::RGB8_SRGB),
+                    Some(PixelDescriptor::RGBA8_SRGB),
+                ] {
+                    for fail in [false, true] {
+                        let flag = Arc::new(AtomicBool::new(cancelled));
+                        let preparations = Rc::new(Cell::new(0));
+                        let executions = Rc::new(Cell::new(0));
+                        let drops = Rc::new(Cell::new(0));
+                        let native = Native {
+                            prepared,
+                            fail,
+                            cancel: Some(flag.clone()),
+                            preparations: preparations.clone(),
+                            executions: executions.clone(),
+                            drops: drops.clone(),
+                        };
+                        let pulse = crate::how_far::StopOnly::new(Cancel(flag, reason));
+                        let result = decode_owned(
+                            Box::new(native),
+                            Some(PixelDescriptor::RGB8_SRGB),
+                            &pulse,
+                        );
+                        if fail && !cancelled {
+                            // Native failure remains primary even when it also raises a stop.
+                            assert!(
+                                crate::find_cause::<core::fmt::Error>(result.as_ref().unwrap_err())
+                                    .is_some()
+                            );
+                        } else {
+                            assert!(
+                                matches!(result, Err(OperationError::Stopped(actual)) if actual == reason),
+                                "successful preparation must preserve {reason:?}, prepared={prepared:?}"
+                            );
+                        }
+                        assert_eq!(preparations.get(), usize::from(!cancelled));
+                        assert_eq!(executions.get(), 0);
+                        assert_eq!(drops.get(), 1);
+                    }
+                }
+            }
         }
     }
 }
