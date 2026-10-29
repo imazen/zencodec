@@ -88,24 +88,55 @@ Early allocation admission remains open. These mismatches demonstrate why a
 second prediction implementation cannot substitute for the actual configured
 decoder's output-selection boundary.
 
-## Streaming-result audit
+## Streaming-result ownership is now qualified for JPEG
 
-The current JPEG controlled route returns `OutputInfo` after row delivery.
-Its context retains updated `ImageInfo`, but it does not return the one-shot
-`DecodeOutput` extension map or owned source-encoding details. `CollectSink`
-returns pixel storage only, and `to_buffer` copies that storage. Reconstructing
-a complete one-shot result from these APIs would therefore silently discard
-owned extras and add a second full-raster allocation. These are separate from
-the descriptor adoption barrier, which already precedes native strip execution.
+The JPEG controlled producer now retains its actual metadata scan owner,
+including configured native extras and MPF secondary images, and supplies it
+through terminal `take_details`. The collector can move its finished PixelBuffer
+with `into_buffer`. Native and consumer controls preserve descriptive metadata,
+source details, extensions and every row. See [owned completion](decode-result-ownership.md).
+This closes the missing-owner and extra-raster-copy barriers for the qualified
+JPEG route. It does not establish metadata privacy completeness or qualify
+float, CMYK, transformed or gain-map reconstruction paths.
 
-A shared completion owner must move final metadata, source-encoding details and
-extensions alongside the collected pixels, distinguish unsupported/incomplete
-completion from an empty but complete result, and preserve terminal/error/drop
-ownership. Until those native paths are qualified, retain the one-shot route
-and its final descriptor validation. Do not invent an empty extras map as proof
-of completeness. Collector capacity refusal is now fallible, but this does not
-supply that missing completion contract or native workspace evidence.
+## Measured early refusal and collection costs
 
-The [owned result split proposal](decode-result-ownership.md) now has native
-JPEG address/metadata retention controls. It provides the ownership primitive;
-it does not yet add a streaming terminal result channel or early admission.
+`just decode-admission-profile OUTPUT REVISION` builds the committed native
+probe and profiles ten matched paths with heaptrack. Inputs are separately
+encoded 1024×768 RGB8 JPEGs; fixture generation is outside the profiles. The
+collector storage is 2,359,296 pixel bytes. Refusal asks for unsupported RGB16;
+its controlled sink panics on any begin/row/finish call, and the executable
+requires the same typed OutputDescriptor failure in both paths. Successful
+one-shot, copying and moving paths must have identical pixel checksums within
+each configuration. All ten cases and strict binary Clippy pass.
+
+| JPEG | Path | Peak live heap bytes | Allocation calls |
+|---|---|---:|---:|
+| baseline | one-shot-refuse | 2,820,075 | 76 |
+| baseline | controlled-refuse | 494,778 | 59 |
+| baseline | one-shot-ok | 2,820,071 | 73 |
+| baseline | controlled-copy | 5,002,448 | 99 |
+| baseline | controlled-own | 3,082,217 | 98 |
+| progressive | one-shot-refuse | 5,243,513 | 122 |
+| progressive | controlled-refuse | 474,414 | 59 |
+| progressive | one-shot-ok | 5,243,509 | 119 |
+| progressive | controlled-copy | 5,401,770 | 161 |
+| progressive | controlled-own | 5,401,769 | 160 |
+
+These are full-process heap peaks from allocation-event replay, cross-checked
+against heaptrack_print, not timestamp-sampled estimates or codec RAM bounds.
+No throughput comparison was run. The build/profile/Clippy wrapper reported
+rc0, 8s, peak RSS 0.59 GiB, minimum available 10,875 MiB. Exact source tree,
+binary and input identities are in
+[the measurement record](../benchmarks/decode_admission_2026-10-29.json).
+Raw captures and logs are retained under
+`~/tmp/zenpixels-release-reconcile-20261029/decode-admission-profiles`.
+
+The early boundary avoids native raster/coefficient work on this refusal.
+Ownership transfer eliminates one allocation, but does not reduce the dominant
+progressive native peak in this fixture. Controlled successful decoding still
+retains the encoded input and has a higher observed peak than one-shot decoding.
+Therefore switching every successful decode to this route is not justified.
+Keep the ordinary success path, expose the controlled route for pre-effect
+requirements, and qualify remaining native modes before promising equivalent
+fallback. Do not turn unknown workspace evidence into a numeric bound.

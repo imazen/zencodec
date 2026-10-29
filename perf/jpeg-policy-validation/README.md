@@ -151,3 +151,14 @@ after removing inactive Cargo output, the same frozen source/lock passed only th
 remaining preflight gate. Both receipts remain in
 [the optional-control record](../../benchmarks/optional_pulse_2026-10-29.json).
 No new full-native-feature, platform, memory-bound or performance claim.
+
+## Decode admission and collection heap profiles
+
+`just decode-admission-profile OUTPUT REVISION` (from the repository root,
+under run-heavy) profiles matching one-shot/controlled descriptor refusal and
+successful copying/moving collection. The executable verifies typed refusal,
+no sink effects before controlled refusal, and matched success checksums.
+It reuses `profile-preparation.py` allocation-event replay and heaptrack_print
+cross-checks. No wall-clock speed comparison is inferred. See
+[the admission audit](../../docs/decode-descriptor-admission.md) and committed
+measurement identities. Raw output directories are new and never overwritten.
