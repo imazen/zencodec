@@ -196,3 +196,29 @@ Raw confirmation, per-process evidence and diagnostic logs remain in
 `~/tmp/zencodec-retained-confirm-20261029b/`. Preparation runtime overhead and
 native adoption remain open review gates; the previously measured heap
 reduction must not be presented as a throughput result or a workspace bound.
+
+### Native reuse review (2026-10-29)
+
+Source review of PR 183 at `9efb2107` found no need for a second caller query or
+a public metadata-cache parameter. Keep preparation on the configured decoder:
+its preferences, input, policy and cancellation owner are already bound. Default
+`None` remains executable, and actual decoded output remains authoritative.
+The provided method does not force every codec to implement a cheap predictor.
+
+The JPEG patch currently discards the `read_full_info_preserving` result after
+deriving the descriptor. Execution separately calls `read_job_info`, then
+`cfg.decode`; final `ImageInfo` and extensions come from that decode result's
+extras. Consequently, caching only the prepared descriptor can avoid repeated
+preparation calls but cannot establish reuse of execution's metadata scan or
+eliminate the measured successful-path overhead. Replacing the full scan with
+the initial header would invalidate the late/split ICC controls.
+
+Any reuse experiment must preserve the native metadata owner, not synthesize
+replacement extras from a descriptor. Before changing the default execution
+path, require the existing seven-layout/three-ICC-placement/two-scan-mode matrix,
+unknown crop fallback, repeated preparation, exact output metadata and pixels,
+typed cancellation, and cleanup controls. Compare matched allocation traces as
+well as the frozen runtime confirmation. Do not infer lower peak memory from
+fewer scans, or remove an existing scan without proving its policy and metadata
+effects are retained. This is a source-review conclusion, not a measured
+optimization or native adoption.
