@@ -222,3 +222,38 @@ well as the frozen runtime confirmation. Do not infer lower peak memory from
 fewer scans, or remove an existing scan without proving its policy and metadata
 effects are retained. This is a source-review conclusion, not a measured
 optimization or native adoption.
+
+### ARM runtime confirmation: successful preparation has a small-image cost
+
+The unchanged five-process, 30-round, 1% margin protocol completed on ARM64
+Neoverse-N1. All five replicates report zero gate waits, unreliable=false and
+incomplete=false. Maintenance finished before timing. Rust source bytes match
+PR183 `9efb2107`; the frozen source graph changed only absolute local paths.
+The native source remains an experiment, not current native behavior.
+
+| Fixture | Preparation overhead | 95% family interval | Fixed-margin verdict |
+|---|---:|---:|---|
+| 97×65 baseline | +1.4887% | +0.8441% to +2.1376% | Inconclusive |
+| 97×65 progressive | +1.4696% | +1.0185% to +1.9227% | Regression |
+| 1024×768 baseline | +0.4353% | +0.0229% to +0.8493% | Equivalent within 1% |
+| 1024×768 progressive | +0.2652% | +0.0480% to +0.4829% | Equivalent within 1% |
+
+The aggregate exits 1 for regression, not 2 for invalid evidence. Retain that
+verdict: no relaxed margin or selected rerun. This virtual ARM host provides
+uniform enforced CPU placement, but frequency is unverified. These estimates
+do not transfer to x86, other configurations or an entire DecodeRequest.
+Samples, descriptors and metadata were compared before timing.
+
+The result strengthens the case for retaining/reusing native metadata preparation
+before adoption rather than imposing an unconditional second scan. Ordinary
+non-required decode does not call this proposed hook. It does not justify a
+second public prediction API or weaken the final actual-output check.
+
+[Machine-readable receipt](../benchmarks/retained_decode_arm_2026-10-29.json)
+retains exact intervals, binary/source identity and replicate admission. Wrapper:
+rc1, 26s, peak RSS 0.02 GiB, minimum available 14879 MiB, peak load 1.44;
+3 GiB/two jobs/timeout900. Build separately passed in 203s with peak RSS
+0.72 GiB. These RSS figures describe the validation wrappers, not decoder bounds.
+Raw data and both logs remain in `~/tmp/retained-arm-20261029`; the regenerable
+Cargo target was deleted after verified exit. Earlier invalid x86 runs remain
+retained and invalid.

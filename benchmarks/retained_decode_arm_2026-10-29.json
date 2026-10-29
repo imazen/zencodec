@@ -1,0 +1,183 @@
+{
+  "source_review": "9efb21077dc446ba2285eb7d71efca80324130e1",
+  "export_core_identity": "b45d86ede85c084491f60ddeb5aec46f6b72bead",
+  "rust_source_diff_against_review": [],
+  "native": "7c5a9501270210d6ef534c23221ff2660508b7cf",
+  "execution": {
+    "protocol": "zenbench-process-v1",
+    "plan": {
+      "mode": "confirm",
+      "processes": 5,
+      "rounds": 30,
+      "margin_pct": 1.0,
+      "confidence": 0.95,
+      "workload_id": "retained-jpeg-noise-patches-v1",
+      "scope": null,
+      "timeout": {
+        "secs": 300,
+        "nanos": 0
+      }
+    },
+    "binary_sha256": "4f97ff1c64cb84be3d31414b269b7e3959bce815fc1d0a0d7a651504d8cfbbc6",
+    "process_id": 1394361,
+    "independent_processes": true,
+    "timer_backend": "hardware_counter"
+  },
+  "process_comparisons": [
+    {
+      "group": "retained/97x65/progressive=false",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 1.4887476518254699,
+      "lower_pct": 0.8440511441601224,
+      "upper_pct": 2.137565707388588,
+      "verdict": "inconclusive",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/97x65/progressive=true",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 1.4695743816600986,
+      "lower_pct": 1.0184868642497122,
+      "upper_pct": 1.922676183333492,
+      "verdict": "regression",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/1024x768/progressive=false",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 0.43525527072544934,
+      "lower_pct": 0.022909807732360107,
+      "upper_pct": 0.8493006320836015,
+      "verdict": "equivalent",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/1024x768/progressive=true",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 0.2652053346262353,
+      "lower_pct": 0.04800486247695986,
+      "upper_pct": 0.4828773408672371,
+      "verdict": "equivalent",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    }
+  ],
+  "cpu_placement": {
+    "policy": "performance",
+    "topology": {
+      "kind": "homogeneous",
+      "classes": [
+        {
+          "name": "capacity1024",
+          "cpus": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "logical_cpu_count": 8,
+          "performance_rank": 1024
+        }
+      ],
+      "source": "linux_pmu_capacity_cpuid_cache",
+      "diagnostic": null
+    },
+    "status": "enforced_uniform",
+    "core_class": "capacity1024",
+    "effective_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "requested_cpus": null,
+    "thread_affinity_requested": null,
+    "thread_affinity_effective": null,
+    "enforcement": "cpuset"
+  },
+  "testbed": {
+    "cpu_model": "Neoverse-N1",
+    "arch": "aarch64",
+    "os": "linux",
+    "logical_cores": 8,
+    "physical_cores": 8
+  },
+  "replicate_admission": [
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    }
+  ],
+  "aggregate_exit": 1,
+  "aggregate_unreliable": false,
+  "aggregate_incomplete": false,
+  "raw_log_sha256": "a4f805211e104b0a782085df51a7bd913a0faa1aff8616540bf12099b8a0336f",
+  "raw_artifacts": "~/tmp/retained-arm-20261029",
+  "run_heavy": {
+    "seconds": 26,
+    "peak_rss_gib": 0.02,
+    "minimum_available_mib": 14879,
+    "peak_load": 1.44
+  },
+  "limits": [
+    "ARM64 virtual host only",
+    "CPU frequency unverified",
+    "fixed 1 percent margin retained",
+    "no x86 runtime conclusion",
+    "native preparation experiment not adopted"
+  ],
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2",
+  "regenerable_target_removed": true
+}
