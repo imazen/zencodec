@@ -167,3 +167,32 @@ native-harness Clippy on test source `90186109`: wrapper `rc=0 9s`, peak RSS
 also passed and is retained in `before.log`; the stronger assertions were added
 before landing. No production changes, new public API, native allocation bound,
 CMYK qualification or HDR reconstruction qualification are claimed here.
+
+## Retained-output review candidate and runtime qualification
+
+[PR 183](https://github.com/imazen/zencodec/pull/183) proposes optional
+`Decode::prepare_output` on the retained configured decoder. It is not on main.
+Ordinary decode does not perform the extra preparation; required-output calls
+can reject known mismatches before reconstruction and still validate the actual
+output. Unknown output remains executable. The native JPEG implementation is
+an experiment patch, not adopted codec behavior.
+
+A second runtime confirmation on 2026-10-29 reused the exact benchmark binary
+SHA256 `27ea588070f2193f2be0548c7bd8b4be906d969d7ed216f705534fd16c00ccf4`
+and unchanged five-process, 30-round, 1% margin protocol. It was also invalid:
+all five processes reported interference (15, 76, 42, 44 and 30 gate waits).
+Wrapper rc2, 38s, peak RSS 0.08 GiB, minimum available 14170 MiB. No timing
+estimate from either invalid confirmation is accepted.
+
+A separate three-round diagnostic with `ZENBENCH_GATE_TRACE=1` observed a
+foreign process briefly exceeding the 10% CPU threshold. This is evidence that
+short interference can escape a one-second process log, not attribution of all
+previous flagged intervals. Diagnostic Iterate execution (rc0) is not a valid
+confirmation. Gates and required process counts remain unchanged. Another host
+was unavailable; repeat confirmation only after establishing a suitable quiet
+slot, with the same frozen protocol and all prior failures retained.
+
+Raw confirmation, per-process evidence and diagnostic logs remain in
+`~/tmp/zencodec-retained-confirm-20261029b/`. Preparation runtime overhead and
+native adoption remain open review gates; the previously measured heap
+reduction must not be presented as a throughput result or a workspace bound.
