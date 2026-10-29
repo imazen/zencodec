@@ -172,7 +172,10 @@ fn native_trace(f: &Fixture, checksum: bool, access: Access) -> (EncodePlan, usi
             "AT_FINISH cannot expose pending bytes"
         );
         let before = feed.calls;
-        match encoder.pull_rows(&mut feed, &zencodec::NoPulse).unwrap() {
+        match encoder
+            .pull_rows(&mut feed, Some(&zencodec::NoPulse))
+            .unwrap()
+        {
             PullProgress::Filled => assert_eq!(feed.calls, before + 1),
             PullProgress::Done => {
                 assert_eq!(feed.calls, before);
@@ -280,7 +283,7 @@ fn native_retained_jobs_match_in_place_bytes_across_public_routes_and_dispatches
                                 access,
                                 Raster::new(fixture.pixels()),
                                 policy,
-                                &zencodec::NoPulse,
+                                Some(&zencodec::NoPulse),
                             )
                         } else {
                             run.execute(
@@ -292,7 +295,7 @@ fn native_retained_jobs_match_in_place_bytes_across_public_routes_and_dispatches
                                     counts.clone(),
                                 ),
                                 policy,
-                                &zencodec::NoPulse,
+                                Some(&zencodec::NoPulse),
                             )
                         }
                         .unwrap();
@@ -372,7 +375,7 @@ fn source_caps_and_exact_replay_filter_real_native_routes_before_source_or_outpu
                         Access::Forward,
                         Rows::new(&fixture, positional, counts.clone()),
                         policy,
-                        &zencodec::NoPulse,
+                        Some(&zencodec::NoPulse),
                     );
                     let allowed = if positional {
                         cap >= maximum && !exact
@@ -405,7 +408,7 @@ fn source_caps_and_exact_replay_filter_real_native_routes_before_source_or_outpu
                 PolicySet::new()
                     .with_max_source_passes(0)
                     .require_exact_replay(true),
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             )
             .unwrap_err();
         assert_requirement_refusal(&failure);
@@ -442,7 +445,7 @@ fn real_native_refusals_do_not_hide_staging_or_fabricate_job_evidence() {
                     Access::Forward,
                     Rows::new(&fixture, false, counts.clone()),
                     policy,
-                    &zencodec::NoPulse,
+                    Some(&zencodec::NoPulse),
                 )
                 .unwrap_err();
             if early_workspace {
@@ -479,7 +482,7 @@ fn real_native_refusals_do_not_hide_staging_or_fabricate_job_evidence() {
                 PolicySet::new()
                     .require_exact_replay(true)
                     .allow_raw_memory_staging(false),
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             )
             .unwrap_err();
         assert_requirement_refusal(&error);
@@ -514,7 +517,7 @@ fn native_execution_preserves_typed_source_stop_depth_and_replay_causes_and_drop
                     Access::Forward,
                     source,
                     PolicySet::new().allow_raw_memory_staging(!positional),
-                    &pulse,
+                    Some(&pulse),
                 )
                 .unwrap_err();
             match fault {
@@ -572,7 +575,7 @@ fn native_output_cap_and_scratch_start_failures_keep_native_types_and_publish_no
                     Access::Forward,
                     Rows::new(&fixture, false, counts.clone()),
                     PolicySet::new(),
-                    &zencodec::NoPulse,
+                    Some(&zencodec::NoPulse),
                 )
                 .unwrap_err();
             assert_eq!(
@@ -611,7 +614,7 @@ fn unconfigured_registry_job_exposes_native_scratch_selection_gap() {
         &mut output,
         PolicySet::new(),
         row_encode::Options::new(storage.clone(), BUDGET as u64),
-        &zencodec::NoPulse,
+        Some(&zencodec::NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().stage, Stage::Prepare);

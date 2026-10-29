@@ -198,7 +198,7 @@ impl Run {
         access: Access,
         source: S,
         policy: R,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<row_encode::Completed, At<row_encode::Failure>> {
         match (dispatch, access) {
             (Dispatch::Typed, Access::Forward) => row_encode::encode_job(
@@ -399,7 +399,7 @@ impl Source for Rows<'_> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         self.counts.calls.fetch_add(1, Ordering::SeqCst);
         if first == 0 {

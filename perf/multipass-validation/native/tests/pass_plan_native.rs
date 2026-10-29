@@ -152,7 +152,7 @@ fn drive(
     let mut out = Vec::new();
     loop {
         let before = feed.log.len();
-        let progress = enc.pull_rows(&mut feed, &NoPulse).unwrap();
+        let progress = enc.pull_rows(&mut feed, Some(&NoPulse)).unwrap();
         let pending = enc.pending_output().len();
         out.extend_from_slice(enc.pending_output());
         enc.consume_output(pending);
@@ -192,7 +192,7 @@ fn imi_plans_a_pass_range_and_content_reaches_each_end() {
             PolicySet::new(),
             Preset,
             options(ReplayPolicy::default()),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(done.trace.passes, want, "{name}");
@@ -277,7 +277,7 @@ impl PassSource for Mem {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         self.rows.fetch_add(rows.rows(), Relaxed);
         let rb = W as usize * 3;
@@ -308,7 +308,7 @@ fn a_budget_below_imis_planned_maximum_refuses_before_any_read() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap_err();
     assert_eq!(
@@ -336,7 +336,7 @@ fn a_budget_below_imis_planned_maximum_refuses_before_any_read() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(done.route, ReplayRoute::Source);

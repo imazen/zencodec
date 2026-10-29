@@ -6,6 +6,12 @@ region read planning over large TIFF tiles. These are experiments, not
 production entry points. Each area keeps a witness of the current behavior and,
 where a shape is proposed, a candidate that passes the same native gates.
 
+Current harness sources use optional borrowed Pulse inputs and preserve absence
+when forwarding to codecs. This source migration has not been built or run.
+`candidate/prepare.py` still defaults to the frozen `f73a7e0e` core and applies
+the archived patch before copying candidate tests. Pair that export tree, patch
+and native pins with the current signatures before replaying these sources.
+
 ## Multi-pass pass plan
 
 IMI's bounded lossy encoder reads its source in several full passes. How many
@@ -48,7 +54,9 @@ changes the prototype driver and IMI adapter:
   or a final pass below the minimum) is refused before that pass reads
   anything (`Refusal::PassLimit`, `IncompletePass`). Contradictory plans refuse
   at preparation (`Refusal::InvalidPlan`).
-- The control stays the prototype's `&dyn zencodec::Pulse`: `check` is
+- Current prototype and fixture inputs use `Option<&dyn zencodec::Pulse>`;
+  the archived patch retains the earlier required borrow. `None` adds no
+  per-call control and preserves retained native controls. `check` is
   cancellation only; `advance` counts rows supplied to the encoder (staged rows
   included); the total is `Exact` when the pass count is exact, `Unknown` for a
   range until the final pass begins, then `Exact`.
@@ -56,8 +64,8 @@ changes the prototype driver and IMI adapter:
   `streaming(band_rows)` (a pull returns right after filling a band and the
   session codes it on the next pull). A single-band image withholds its head
   until finish and declares `AT_FINISH`, which streaming cannot state.
-- Custom stop policies in the native tests are passed as
-  `StopOnly::borrowed(&stop)`.
+- Custom stop policies in the current native tests are passed as
+  `Some(&StopOnly::borrowed(&stop))`.
 
 Two existing expectations change because refusals now happen earlier:
 `more passes than exact` expects `PassLimit { pass: 2 }` instead of

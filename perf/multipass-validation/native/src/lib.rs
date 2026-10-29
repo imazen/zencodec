@@ -341,8 +341,9 @@ impl Encoder for ImiBounded {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, ImiError> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         let cap = self.scratch_cap;
         let stats = &mut self.stats;
         let a = self
@@ -368,7 +369,7 @@ impl Encoder for ImiBounded {
             ..
         } = a;
         loop {
-            if stop.check().is_err() {
+            if local_stop.check().is_err() {
                 session.fail(StreamEncodeError::Codec(imij::Error::Cancelled));
                 return Err(ImiError::Cancelled);
             }
