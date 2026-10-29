@@ -6,6 +6,13 @@ controls and policy/storage checks active. This signature migration has not been
 built or run against the pinned native crates. Dated receipts below describe
 their recorded revisions.
 
+The optional-control candidate now pins AVIF/MP4 `94116d26` and IVF/WebM
+`403d46b9`, retaining the merged native packet-context changes. Ultra HDR uses
+version edges through `7e9d296c`, with both registry and git core-family edges
+mapped to this checkout. The previous `dependencies.lock` remains retained;
+resolution/audit, runtime, strict Clippy and independent readback must be rerun
+before this graph qualifies. No container timing or pixel expectations change.
+
 ## Container destination and timing qualification
 
 The shared `Muxer::begin_exact_timing` entry point is now exercised through
