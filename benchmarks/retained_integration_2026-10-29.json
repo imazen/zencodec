@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-29",
+  "source": "9803d85743ddf6ea9c54b40d16c823ee6e3bdd52",
+  "parents": [
+    "31af54cf",
+    "870f5d15"
+  ],
+  "workspace": {
+    "commands": [
+      "cargo test --workspace --all-features --all-targets --locked",
+      "cargo test --workspace --all-features --doc --locked",
+      "cargo clippy --workspace --all-features --all-targets --locked -- -D warnings",
+      "python3 docs/generate-code-catalog.py ."
+    ],
+    "passed": 1429,
+    "failed": 0,
+    "inherited_ignored": 39,
+    "catalogs": 8,
+    "wrapper": "rc=0 249s | peak-RSS 0.47GiB | min-avail 14120MiB | peak-load 1.76"
+  },
+  "rustdoc": {
+    "command": "python3 docs/build-reference.py",
+    "packages": 8,
+    "warnings": "deny",
+    "wrapper": "rc=0 20s | peak-RSS 0.34GiB | min-avail 14086MiB | peak-load 0.92"
+  },
+  "guide": {
+    "commands": [
+      "just docs-site-check",
+      "just docs-site-browser"
+    ],
+    "source_checks": 26,
+    "browser": "passed; source scopes, signatures, role navigation, context expansion, clipboard, responsive views and reference links",
+    "wrapper": "rc=0 64s | peak-RSS 0.34GiB | min-avail 12770MiB | peak-load 1.70",
+    "prior_failure": "Existing local Rustdoc artifact belonged to an older revision. Identity guard refused it. Rebuilt matching reference; unchanged checks passed."
+  },
+  "native_lock_audit": "No existing package identity removed or upgraded. Every added package record exactly matches reviewed PR183; additions are optional zenbench closure. Existing dependency strings are disambiguated where duplicate package versions now coexist.",
+  "limits": [
+    "All-target benchmark invocations are smoke checks, not accepted timing evidence.",
+    "Native JPEG preparation and metadata reuse remain experiments, not production adoption.",
+    "No whole-operation workspace bound or guarantee of early refusal from default-None codecs.",
+    "Platform release CI and registry publication remain separate gates."
+  ],
+  "artifacts": "~/tmp/retained-merge-20261029/; logs and source retained; inactive Cargo target deleted after verified exit"
+}

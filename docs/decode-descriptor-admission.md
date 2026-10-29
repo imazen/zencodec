@@ -293,3 +293,15 @@ The [ARM regression receipt](../benchmarks/preparation_stop_2026-10-29.json)
 records the failing-first mismatch, all 682 core library tests passing, and
 strict all-target Clippy. Earlier missing-lock and toolchain/lint failures are
 retained separately; no behavioral assertion was weakened.
+
+### Core integration
+
+The optional hook and automatic `with_output` integration are implemented in
+zencodec. Existing codecs inherit `None`; that preserves decoding and final
+validation without claiming early refusal. Native JPEG preparation and metadata
+reuse remain separately qualified experiments, not adopted implementations.
+
+[Integration receipt](../benchmarks/retained_integration_2026-10-29.json): the
+merged workspace passed tests, doctests and strict Clippy; all eight API catalogs
+and Rustdoc references were regenerated, and guide source/browser checks passed.
+The all-target gate's benchmark executions are smoke checks, not timing evidence.
