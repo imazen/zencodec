@@ -175,3 +175,14 @@ See the [scenario matrix](../../docs/policy-scenarios.md),
 [proposed contract](../../docs/policy-resolution.md). All types remain private
 experiments. The harness does not implement a generic disk spool or establish
 native whole-operation memory bounds. Logical fixture costs are not measured RSS.
+
+### Paired pixel lock qualification (2026-10-29)
+
+The guide CI copies `locks/harness.lock` before running `--locked`; update that
+tracked lock whenever harness pixel patches move. The previous lock retained
+zenpixels 0.2.17 after the manifest moved to 0.3.1. Incremental resolution changed
+only zenpixels and zenpixels-convert identities to `f23ac753`.
+
+On core `d0873950`, the repaired lock passed `just docs-site-examples` in an
+isolated export: 77 tests and strict Clippy, rc=0, 16 seconds, peak RSS 0.38 GiB.
+No example assertions or codec fixtures changed.
