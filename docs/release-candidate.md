@@ -6,13 +6,20 @@ codec family or every native mode qualified from this candidate's evidence.
 
 ## Freeze
 
-Use main plus PR175's joint route and production Rows/Replay driver. The only
-additional API candidate in this batch is `EncodeJob::into_dyn_job`: an additive
+Use main plus PR175's joint route and production Rows/Replay driver. The retained-job API candidate in this batch is `EncodeJob::into_dyn_job`: an additive
 provided method using the existing adapter, needed to retain native job-specific
 configuration through shared dispatch. No new policy domains, proof framework,
 source abstraction or rendering redesign enters this landing batch.
 
-Keep conservative explicit refusals for unknown evidence. Native AT_FINISH
+The subsequent caller convenience decision makes borrowed per-call controls
+`Option<&dyn Pulse>`. `None` does not disable retained job cancellation or
+mandatory policy checks. Unknown optional facts do not prevent default success;
+unknown evidence for an explicit requirement still refuses before affected
+effects. A situational callback may act on later facts while those effects remain
+withheld under admitted storage. See [the contract and current native
+qualification](optional-pulse.md).
+
+Keep explicit refusals for unproven required evidence. Native AT_FINISH
 continues to retain compressed output; this is not a streaming memory guarantee.
 The provided erasure method passes core ownership controls and the native public
 replay-driver matrix with strict Clippy on `a39616ba`. The separate native final
@@ -30,15 +37,19 @@ Clippy correction qualified. See [the receipts](../benchmarks/replay_driver_2026
 3. **Passed on `c910076c`:** refreshed API snapshots and eight catalogs,
    eight-crate Rustdoc HTML, 24 site/source controls and the full browser suite on
    its own server. Generated snapshots are committed unchanged from that export.
-4. Require green PR CI on Linux, Windows x64/ARM64, macOS ARM64, i686, WASM,
-   MSRV, Clippy, format and API/semver gates. The first Windows run found a
+4. Inspect PR CI on Linux, Windows x64/ARM64, macOS ARM64, i686, WASM,
+   MSRV, Clippy, format and API/semver gates. Locally qualified related changes
+   may merge without waiting for CI under the owner's current instruction;
+   investigate failures promptly. Publication still requires all release gates
+   green. The first Windows run found a
    fixture's HOME assumption; the USERPROFILE correction passes on `d7b5a159`.
    The subsequent configured-job/reference update has fresh CI in progress.
 5. Review the exact public API diff, deprecated replacements, README, changelog
    and supported-mode matrix. Record remaining unmeasured performance/memory/
    compile-time costs explicitly; validation-wrapper RSS is not an encoder bound.
 
-Merge only qualified commits. Unbuilt native proposals remain local, and no test
+Merge only qualified commits. Unbuilt native proposals may be reviewed in draft
+PRs with their missing gates explicit, and no test
 failure is hidden with an ignore, feature exclusion or weaker assertion.
 
 ## Separate application integration gate
