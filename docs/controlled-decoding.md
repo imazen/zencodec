@@ -284,20 +284,22 @@ Without a workspace requirement, normal metadata discovery remains available.
 
 ```rust,ignore
 // Default success: construct only after entry admission, then reuse this policy.
-let decoder = PolicyDecoder::try_from_factory(
+let decoder = PolicyDecoder::try_new(
     || request.start_controlled(&codecs, storage),
     policy,
+    pulse, // Option<&dyn Pulse>; None is valid
 )?;
 
 // Strict native workspace is currently unqualified: refuses BEFORE the closure.
-let result = PolicyDecoder::try_from_factory(
+let result = PolicyDecoder::try_new(
     || request.start_controlled(&codecs, storage),
     PolicySet::new().with_workspace_limit(limit),
+    None,
 );
 // find_cause::<UnmetRequirements>(&error) identifies Workspace(Unknown).
 ```
 
-Use `try_from_factory` when construction may allocate: it refuses an unqualified
+Use `try_new` when construction may allocate: it refuses an unqualified
 workspace requirement before invoking the factory, and otherwise invokes it once.
 It preserves native factory errors and moves the unchanged policy into the
 session. Metadata requirements remain pending for later interpretation boundaries;
@@ -308,3 +310,11 @@ cannot undo its construction. Neither entry point accounts for allocations made
 while evaluating captured values before the closure runs. Positive qualification
 of bounded native factories and shared per-effect deferred obligations remain
 open; discovery never postpones a required allocation deadline.
+
+Image and video policy decoders both use `try_new(factory, policy, pulse)`.
+Cancellation is checked before construction and again after a successful factory
+return. A decoder completed after cancellation is dropped before it escapes;
+long constructors still need their own cooperative checks. An actual factory
+failure retains its original cause even if cancellation occurs concurrently.
+The image adapter's earlier `try_from_factory(factory, policy)` is deprecated;
+its existing no-per-call-cancellation behavior remains available for migration.

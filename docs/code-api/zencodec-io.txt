@@ -434,6 +434,7 @@ pub fn zencodec_io::IoLimits::default() -> Self
 pub struct zencodec_io::PolicyDecoder<D, R>
 impl<D, R: zencodec::operation::binding::OperationPolicy> zencodec_io::PolicyDecoder<D, R>
 pub fn zencodec_io::PolicyDecoder<D, R>::try_from_factory<E>(factory: impl core::ops::function::FnOnce() -> core::result::Result<D, E>, policy: R) -> core::result::Result<Self, zencodec_io::PolicyDecodeError<E>>
+pub fn zencodec_io::PolicyDecoder<D, R>::try_new<E>(factory: impl core::ops::function::FnOnce() -> core::result::Result<D, E>, policy: R, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec::traits::incremental::StepError<zencodec_io::PolicyDecodeError<E>>>
 impl<D, R> zencodec_io::PolicyDecoder<D, R>
 pub fn zencodec_io::PolicyDecoder<D, R>::new(decoder: D, resolver: R) -> Self
 pub const fn zencodec_io::PolicyDecoder<D, R>::report(&self) -> &zencodec::operation::policy::OperationReport

@@ -32,7 +32,7 @@ export const api = {
   operationResolver: {path:'zencodec::operation::PolicyResolver',file:'src/operation/policy.rs',scope:'pub trait PolicyResolver',methods:['resolve']},
   operationPreset: {path:'zencodec::operation::PolicySet',file:'src/operation/policy.rs',scope:'impl PolicySet {',methods:['new','prefer_lossless','require_metadata','allow_opaque_profiles','with_workspace_limit','allow_assumed_chroma_siting','require_extended_range','require_output_schedule','with_output_wait_limit']},
   operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_encoder','with_send_encoder','with_limits','with_pulse','pulse']},
-  controlledFactory: {path:'zencodec_io::PolicyDecoder::try_from_factory',file:'zencodec-io/src/policy_decoder.rs',scope:'impl<D, R: OperationPolicy> PolicyDecoder<D, R>',methods:['try_from_factory']},
+  controlledFactory: {path:'zencodec_io::PolicyDecoder::try_new',file:'zencodec-io/src/policy_decoder.rs',scope:'impl<D, R: OperationPolicy> PolicyDecoder<D, R>',methods:['try_new','try_from_factory']},
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
   framePolicyAdmission: {path:'zencodec_media::policy::PolicyDecoder::try_new',file:'zencodec-media/src/policy.rs',scope:'impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R>',methods:['try_new']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},

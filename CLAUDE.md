@@ -249,7 +249,7 @@ CHANGELOGs. Full design context:
 - Controlled decode workspace deadline (2026-10-29): PolicyDecoder previously
   polled native discovery before rejecting an unqualified workspace requirement.
   Admission now precedes the first native step and retains a typed named cause.
-  Use PolicyDecoder::try_from_factory to admit requirements before construction;
+  Use PolicyDecoder::try_new to admit requirements before construction;
   the already-owned new path cannot undo prior allocations. Positive native
   workspace bounds remain unqualified. Native failing-first control and receipts:
   `benchmarks/controlled_workspace_2026-10-29.md`.

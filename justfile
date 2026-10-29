@@ -1623,3 +1623,7 @@ controlled-workspace-check:
 # Compile-report evidence survives removal of completed Cargo targets.
 compile-runner-check:
     python3 -m unittest discover -s perf -p test_compile_cleanup.py
+
+# Image/video factories share optional controls and pre/post-construction checks.
+controlled-factory-pulse-check: controlled-workspace-check
+    cargo test -p zencodec-media-testkit --test frame_policy --locked

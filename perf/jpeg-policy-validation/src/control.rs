@@ -678,6 +678,7 @@ fn workspace_requirement_refuses_before_native_discovery() {
 }
 
 #[test]
+#[allow(deprecated)] // Preserve compatibility controls for the no-pulse constructor.
 fn factory_admission_precedes_native_construction_and_retains_errors() {
     use zencodec::operation::{
         BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
@@ -731,6 +732,7 @@ fn factory_admission_precedes_native_construction_and_retains_errors() {
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the original admission composition control.
 fn factory_keeps_metadata_requirements_pending_for_native_boundaries() {
     use zencodec::operation::{BoundPolicy, MetadataTransfer, PolicyFailure};
     let bytes = fixtures::fixture(false, fixtures::Placement::Header);
@@ -761,4 +763,67 @@ fn factory_keeps_metadata_requirements_pending_for_native_boundaries() {
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
     drop(session);
     assert_eq!(decisions, 1, "only discovery reaches the callback");
+}
+
+#[test]
+fn factory_pulse_refuses_before_construction_and_drops_cancelled_native_owner() {
+    use std::sync::atomic::AtomicBool;
+    use zencodec::enough::{Stop, StopReason};
+    struct Cancel(AtomicBool);
+    impl Stop for Cancel {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    for already_cancelled in [false, true] {
+        let stop = Cancel(AtomicBool::new(already_cancelled));
+        let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
+        let budget = StorageBudget::new(64 * 1024, 4);
+        let work = Arc::new(Work::default());
+        let mut calls = 0;
+        let result = PolicyDecoder::try_new(
+            || -> Result<_, Infallible> {
+                calls += 1;
+                let native = configured_decoder(budget.clone(), work.clone(), true);
+                assert!(budget.reserved_objects() > 0);
+                stop.0.store(true, Ordering::SeqCst);
+                Ok(native)
+            },
+            PolicySet::new(),
+            Some(&pulse),
+        );
+        assert!(matches!(
+            result,
+            Err(StepError::Cancelled(StopReason::TimedOut))
+        ));
+        assert_eq!(calls, usize::from(!already_cancelled));
+        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        assert_eq!(work.constructors.load(Ordering::SeqCst), 0);
+    }
+    // A native failure remains the actual failure even if cancellation also
+    // arrives during construction; the post-success check cannot replace it.
+    let stop = Cancel(AtomicBool::new(false));
+    let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
+    let result = PolicyDecoder::<Box<DynControlledDecoder>, _>::try_new(
+        || {
+            stop.0.store(true, Ordering::SeqCst);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "factory failure",
+            ))
+        },
+        PolicySet::new(),
+        Some(&pulse),
+    );
+    let error = result.err().expect("factory failed");
+    assert_eq!(
+        zencodec::find_cause::<std::io::Error>(&error)
+            .unwrap()
+            .kind(),
+        std::io::ErrorKind::BrokenPipe
+    );
 }
