@@ -1,0 +1,104 @@
+{
+  "before_revision": "eae62eeabeda072f28ee854e8f294354bcc34e70",
+  "after_revision": "951db93c66a7383717fc906282bab62eec60675b",
+  "before_binary_sha256": "0a950eb375c86347d1be659218ef29f356466be340dcc464c289a1566ed85242",
+  "after_binary_sha256": "3909e40e77ff2e287159cb5925e41d9f9dd0ef795abf62dd82393223e8341ebe",
+  "dimensions": [
+    1024,
+    768
+  ],
+  "native_revision": "7c5a9501270210d6ef534c23221ff2660508b7cf",
+  "method": "heaptrack event replay and heaptrack_print cross-check; equal-length fixture paths; full-process heap; not throughput",
+  "cells": [
+    {
+      "configuration": "baseline",
+      "mode": "one-shot-refuse",
+      "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+      "before_peak_heap_bytes": 2820084,
+      "after_peak_heap_bytes": 2820084,
+      "before_allocation_calls": 76,
+      "after_allocation_calls": 76
+    },
+    {
+      "configuration": "baseline",
+      "mode": "controlled-refuse",
+      "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+      "before_peak_heap_bytes": 494787,
+      "after_peak_heap_bytes": 494787,
+      "before_allocation_calls": 59,
+      "after_allocation_calls": 59
+    },
+    {
+      "configuration": "baseline",
+      "mode": "one-shot-ok",
+      "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+      "before_peak_heap_bytes": 2820080,
+      "after_peak_heap_bytes": 2820080,
+      "before_allocation_calls": 73,
+      "after_allocation_calls": 73
+    },
+    {
+      "configuration": "baseline",
+      "mode": "controlled-copy",
+      "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+      "before_peak_heap_bytes": 5002457,
+      "after_peak_heap_bytes": 5002553,
+      "before_allocation_calls": 99,
+      "after_allocation_calls": 100
+    },
+    {
+      "configuration": "baseline",
+      "mode": "controlled-own",
+      "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+      "before_peak_heap_bytes": 3082226,
+      "after_peak_heap_bytes": 3082322,
+      "before_allocation_calls": 98,
+      "after_allocation_calls": 99
+    },
+    {
+      "configuration": "progressive",
+      "mode": "one-shot-refuse",
+      "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+      "before_peak_heap_bytes": 5243522,
+      "after_peak_heap_bytes": 5243522,
+      "before_allocation_calls": 122,
+      "after_allocation_calls": 122
+    },
+    {
+      "configuration": "progressive",
+      "mode": "controlled-refuse",
+      "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+      "before_peak_heap_bytes": 474423,
+      "after_peak_heap_bytes": 474423,
+      "before_allocation_calls": 59,
+      "after_allocation_calls": 59
+    },
+    {
+      "configuration": "progressive",
+      "mode": "one-shot-ok",
+      "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+      "before_peak_heap_bytes": 5243518,
+      "after_peak_heap_bytes": 5243518,
+      "before_allocation_calls": 119,
+      "after_allocation_calls": 119
+    },
+    {
+      "configuration": "progressive",
+      "mode": "controlled-copy",
+      "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+      "before_peak_heap_bytes": 5401779,
+      "after_peak_heap_bytes": 5401875,
+      "before_allocation_calls": 161,
+      "after_allocation_calls": 162
+    },
+    {
+      "configuration": "progressive",
+      "mode": "controlled-own",
+      "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+      "before_peak_heap_bytes": 5401778,
+      "after_peak_heap_bytes": 5401874,
+      "before_allocation_calls": 160,
+      "after_allocation_calls": 161
+    }
+  ]
+}

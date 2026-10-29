@@ -171,3 +171,9 @@ Coverage adds a fallibly allocated bitmap with logical payload
 `8 * ceil(height / 64)` bytes and one coverage-bit update per supplied row.
 This is implementation storage accounting, not a measured whole-operation bound.
 The sink cannot prove that a codec wrote every byte of a supplied buffer.
+
+For matched 1024x768 baseline/progressive JPEGs, the collector integrity fix adds
+96 peak live-heap bytes and one allocation on both copying and owned collection.
+One-shot and early-refusal controls are unchanged. This is measured for those
+fixtures, not an encoder/decoder workspace guarantee or a throughput comparison.
+[Paired heap evidence](../benchmarks/collector_heap_2026-10-29.json).

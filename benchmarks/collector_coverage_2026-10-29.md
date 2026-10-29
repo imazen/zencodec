@@ -24,3 +24,24 @@ exact rows, metadata/extras and retained pixel pointer identity. Strict harness
 Clippy passes. Same isolated after-source, committed dependency lock unchanged;
 run-heavy 3G/jobs2 timeout900: rc0/12s, peak RSS 0.70GiB,
 minimum available 13243MiB. No native throughput or updated heap profile claimed.
+
+## Measured allocation cost
+
+Matched source revisions eae62eea and 951db93c were profiled with the existing
+`decode-admission-profile` recipe. Both use identical 1024x768 baseline and
+progressive JPEG fixture hashes and produce identical successful pixel checksums.
+Heaptrack allocation-event replay agrees with heaptrack_print. The two collecting
+paths (copy and owned) each add **96 peak live-heap bytes and one allocation**,
+for both JPEG configurations. One-shot success/refusal and controlled early
+refusal have identical peaks and allocation counts across revisions.
+
+The initial pair used fixture paths differing by one character, shifting every
+control by one byte. Those captures remain retained. An equal-length output-path
+rerun used the identical after binary (SHA256 checked before execution) and
+removed that confound. Raw measured before/after values, binary identities and
+input hashes: [measurement record](collector_heap_2026-10-29.json).
+
+First pair: run-heavy 3G/jobs2 timeout900, rc0/20s, peak RSS0.70GiB,
+minimum available13213MiB. Equal-path after rerun: rc0/4s, peak RSS0.09GiB,
+minimum available13676MiB. These are profile wrapper receipts, not native bounds.
+No throughput, compile-time or other image-size extrapolation is claimed.
