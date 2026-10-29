@@ -328,3 +328,32 @@ vocabulary. Do not force callers to parse a localized message, or infer a retry
 permission from the error kind alone. Source replayability and output
 commitments still control retries. No production error signature changed in
 this investigation.
+
+### Native cause preservation implemented and requalified (2026-10-29)
+
+The historical flattening above is fixed on main. `FileReadAt` and
+`BufferedReadAt` use `zencodec_io::StdSourceError`: its `Io` variant owns the
+original std error and its `Source` variant retains structured range failures.
+The core remains std-free; only the std driver layer owns native IO errors.
+`DriveFailure::Source` and source erasure preserve the chain. Callers can use
+`zencodec::find_cause::<std::io::Error>(&error)` and inspect `kind()`,
+`raw_os_error()` or the custom payload without parsing display text.
+
+`just io-source-errors-check` qualifies the file's NotFound/OS code and changed
+length failure, structured EOF, borrowed/thread-local erased sources, reader
+bridge provenance and no-retry behavior, and driver propagation after partial
+input for PermissionDenied, ConnectionReset and TimedOut. Permission failures
+are injected by a reader, so the test does not rely on host filesystem privileges.
+The driver control retains six consumed bytes, no completed output, and the
+original custom cause through a boxed driver error. Existing assertions remain.
+
+On isolated source `3951187912d3968a116f02aae971c2e442a0a98b`, all 12 focused
+tests and strict scoped Clippy passed:
+
+```text
+run-heavy: done rc=0 5s | peak-RSS 0.34GiB | min-avail 13913MiB | peak-load 0.54
+```
+
+This closes the cause-preservation gap in
+[issue 167](https://github.com/imazen/zencodec/issues/167). It does not authorize
+retry after partial reads or writes, and does not certify every external adapter.

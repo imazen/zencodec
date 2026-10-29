@@ -1663,3 +1663,9 @@ gainmap-portability-check:
     just collection-api-bare-metal
     cargo test -p zencodec --lib gainmap:: --no-default-features --locked
     cargo test -p zencodec --lib gainmap:: --features std --locked
+
+# Native source failures retain causes across readers, erasure and drivers.
+io-source-errors-check:
+    cargo test -p zencodec-io --features std --test std_source_errors --test read_at_reader --locked
+    cargo test -p zencodec-io --features std --lib native_file_errors_retain_kind_and_os_code --locked
+    cargo clippy -p zencodec-io --features std --test std_source_errors --test read_at_reader --locked -- -D warnings

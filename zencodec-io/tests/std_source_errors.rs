@@ -16,14 +16,12 @@ impl std::error::Error for Disconnected {}
 
 struct FailsAfterPrefix {
     remaining: usize,
+    kind: io::ErrorKind,
 }
 impl Read for FailsAfterPrefix {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         if self.remaining == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionReset,
-                Disconnected(17),
-            ));
+            return Err(io::Error::new(self.kind, Disconnected(17)));
         }
         let count = out.len().min(self.remaining);
         out[..count].fill(9);
@@ -35,7 +33,10 @@ impl Read for FailsAfterPrefix {
 #[test]
 fn reader_cause_and_payload_survive_partial_input_and_dyn_erasure() {
     let mut source = BufferedReadAt::new(
-        FailsAfterPrefix { remaining: 6 },
+        FailsAfterPrefix {
+            remaining: 6,
+            kind: io::ErrorKind::ConnectionReset,
+        },
         BufferPolicy::Spool { max_bytes: 32 },
     );
     source.read_exact_at(0, &mut [0; 4]).unwrap();
@@ -147,4 +148,54 @@ fn explicitly_send_erased_source_can_borrow_input_across_a_scoped_thread() {
     });
     assert_eq!(first, [2, 3]);
     assert_eq!(last, [11, 13]);
+}
+
+#[test]
+fn driver_preserves_permission_and_transport_causes_after_partial_input() {
+    use zencodec_coroutine::{
+        BoxedCoroutineDecoder, CoroutineContext, CoroutineDecoder, CoroutineError,
+    };
+    use zencodec_io::{CollectSink, DriveOptions, drive_from_read_at};
+
+    for kind in [
+        io::ErrorKind::PermissionDenied,
+        io::ErrorKind::ConnectionReset,
+        io::ErrorKind::TimedOut,
+    ] {
+        let mut source = BufferedReadAt::new(
+            FailsAfterPrefix { remaining: 6, kind },
+            BufferPolicy::Spool { max_bytes: 32 },
+        );
+        let mut decoder: BoxedCoroutineDecoder<CoroutineError> =
+            CoroutineDecoder::boxed(|mut ctx: CoroutineContext| async move {
+                let mut bytes = [0; 8];
+                ctx.read_exact_at(0, &mut bytes).await?;
+                panic!("failed source must never satisfy the decoder read");
+            });
+        let mut sink = CollectSink::new();
+        let error = drive_from_read_at(
+            &mut decoder,
+            &mut source,
+            &mut sink,
+            None,
+            DriveOptions::default(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            source.watermark(),
+            6,
+            "partial consumption must remain visible"
+        );
+        assert!(!sink.finished(), "source failure must not complete output");
+        let erased: Box<dyn std::error::Error> = Box::new(error);
+        let native = zencodec::find_cause::<io::Error>(erased.as_ref()).unwrap();
+        assert_eq!(native.kind(), kind);
+        assert_eq!(
+            zencodec::find_cause::<Disconnected>(erased.as_ref())
+                .unwrap()
+                .0,
+            17
+        );
+        assert!(zencodec::find_cause::<SourceError>(erased.as_ref()).is_none());
+    }
 }

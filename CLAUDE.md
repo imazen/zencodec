@@ -449,11 +449,11 @@ CHANGELOGs. Full design context:
   ordinary `EncoderShim` was already correct. `just encoder-begin-check` covers
   typed, shimmed and direct dyn admission plus one-shot fallback after refusal.
 
-- API comparison (2026-10-25): `FileReadAt` and `BufferedReadAt` stringify native
-  I/O failures into `SourceError::Io`, which exposes no cause. The native
-  missing-file control in `just io-contract-probes` observes NotFound directly
-  but cannot find `std::io::Error` through FileReadAt. Driver error signatures
-  are unchanged; see `docs/io-contract-proposal.md#native-error-provenance-2026-10-25`.
+- Fixed native source cause loss (requalified 2026-10-29): `FileReadAt` and
+  `BufferedReadAt` retain `std::io::Error` in `StdSourceError`; source/driver
+  erasure preserves its original kind, OS code and custom payload. The scoped
+  `just io-source-errors-check` covers partial-input permission/transport errors
+  and structural refusals. See `docs/io-contract-proposal.md` for scope.
 
 - Fixed during API comparison (2026-10-25): the private policy resolver checked
   accounting scope only when a RAM cap existed, allowing driver-only evidence

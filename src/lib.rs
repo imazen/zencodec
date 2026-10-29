@@ -39,9 +39,8 @@
 
 extern crate alloc;
 
-// Pulled in only by the `std` feature, solely so [`CodecIoKind`] can carry a
-// `std::io::ErrorKind` on the I/O category. The crate stays `#![no_std]`; when
-// `core::io::ErrorKind` stabilizes this can drop.
+// The explicit `std` feature supplies native IO error kinds and platform
+// floating-point metadata math. The default graph remains std-free.
 #[cfg(feature = "std")]
 extern crate std;
 
