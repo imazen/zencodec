@@ -68,3 +68,19 @@ checks and the complete browser suite pass (rc0,42s,peak RSS0.33GiB); all eight
 Rustdoc crates build with warnings denied (rc0,6s,peak RSS0.32GiB). The first
 site attempt lacked Node dependencies and built HTML; those prerequisites were
 installed/built before rerunning the unchanged checks.
+
+### Cancellation during construction
+
+The factory boundary also polls after successful native construction. If that
+poll stops, the unpublished decoder drops before return; a failed constructor
+still preserves its original error. Long constructors must poll internally—an
+outer boundary cannot preempt synchronous work. A regression against5c4b4a77
+with the corrected borrowed-control fixture returns a decoder after timeout;
+the fixed control requires the exact TimedOut cause and zero retained storage.
+
+The corrected borrowed-control witness fails before the fix with “published a
+decoder after construction cancelled”. The full media testkit, strict Clippy
+and catalog regeneration pass onb9cc4431: rc0,13s,peak RSS0.29GiB,minimum
+available11115MiB,peak load0.33. The initial fixture lifetime compile failure
+and negative-control failure are retained under
+`/home/lilith/tmp/zencodec-video-cancel-20261029/`; no old assertions changed.

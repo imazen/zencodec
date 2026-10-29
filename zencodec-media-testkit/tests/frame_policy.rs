@@ -745,3 +745,41 @@ fn factory_admission_precedes_native_creation_and_preserves_causes() {
         Some(SessionError::Cancelled(StopReason::TimedOut))
     ));
 }
+
+#[test]
+fn cancellation_during_factory_drops_the_unpublished_native_owner() {
+    struct During<'a>(&'a AtomicBool);
+    impl Stop for During<'_> {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    let stopped = AtomicBool::new(false);
+    let during = During(&stopped);
+    let pulse = zencodec::how_far::StopOnly::borrowed(&during);
+    let budget = StorageBudget::new(16, 1);
+    let result = PolicyDecoder::try_new(
+        || {
+            let decoder = Queued::new([frame(&budget, 0)]);
+            stopped.store(true, Ordering::SeqCst);
+            Ok::<_, Native>(decoder)
+        },
+        PolicySet::new(),
+        Some(&pulse),
+    );
+    let Err(error) = result else {
+        panic!("published a decoder after construction cancelled")
+    };
+    assert_eq!(budget.reserved_bytes(), 0);
+    assert!(matches!(
+        error
+            .source()
+            .unwrap()
+            .downcast_ref::<SessionError<Infallible>>(),
+        Some(SessionError::Cancelled(StopReason::TimedOut))
+    ));
+}

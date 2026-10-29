@@ -125,7 +125,10 @@ impl<D, R> PolicyDecoder<D, R> {
 impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
     /// Check mandatory workspace requirements before constructing the native decoder.
     ///
-    /// The factory is called once on admission, and never on refusal/cancellation.
+    /// The factory is called once on admission, never on prior refusal/cancellation.
+    /// Cancellation is checked again after successful construction; a cancelled
+    /// decoder is dropped before it can be returned. The factory must poll during
+    /// lengthy work itself; this boundary cannot preempt a synchronous constructor.
     /// This generic adapter has no qualified workspace bound, so any explicit
     /// workspace limit refuses even if large. Default policies permit construction.
     /// The factory must include native preparation; constructing a decoder first
@@ -153,6 +156,16 @@ impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
                 .map_err(|cause| Error::new(Stage::Policy, &report, cause))?;
         }
         let decoder = factory().map_err(|cause| Error::new(Stage::Decode, &report, cause))?;
+        pulse
+            .unwrap_or(&zencodec::NoPulse)
+            .check()
+            .map_err(|reason| {
+                Error::new(
+                    Stage::Policy,
+                    &report,
+                    SessionError::<core::convert::Infallible>::Cancelled(reason),
+                )
+            })?;
         Ok(Self::new(decoder, resolver))
     }
     fn run<T>(

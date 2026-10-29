@@ -693,3 +693,10 @@ an unknown required workspace bound. The regression proves configure returned
 success. Both bound and legacy requirements now guard every native operation;
 try_new admits a factory before creation. Wrapping a preconstructed decoder
 cannot cover allocations already made. See docs/video-workspace-admission.md.
+
+## Fixed: cancellation during video factory construction
+
+The new PolicyDecoder::try_new initially checked only before its factory. A
+constructor that signalled timeout could return an admitted decoder. The added
+post-success poll drops that unpublished owner; native constructor errors stay
+primary. Regression and scope: docs/video-workspace-admission.md.
