@@ -60,12 +60,13 @@ impl<S: Source> Input<'_, S> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
+        control: &dyn zencodec::Pulse,
     ) -> Result<(), Cause> {
         match self {
             Self::Raster { pixels, .. } => {
                 for y in 0..rows.rows() {
-                    check(pulse)?;
+                    check(control)?;
                     rows.row_mut(y).copy_from_slice(pixels.row(first + y));
                 }
                 Ok(())
@@ -114,7 +115,8 @@ struct Filler<'a, S: Source> {
     fills: u8,
     failure: Option<(Stage, Cause)>,
     boundary: Stage,
-    pulse: &'a dyn zencodec::Pulse,
+    pulse: Option<&'a dyn zencodec::Pulse>,
+    control: &'a dyn zencodec::Pulse,
 }
 impl<S: Source> Filler<'_, S> {
     fn validate(&self) -> Result<(), Cause> {
@@ -150,10 +152,10 @@ impl<S: Source> Filler<'_, S> {
         self.next_row = 0;
         self.validate()?;
         if final_pass {
-            let _ = self.pulse.set_total(zencodec::how_far::Total::Exact(
+            let _ = self.control.set_total(zencodec::how_far::Total::Exact(
                 u64::from(count) * u64::from(self.desc.height),
             ));
-            check(self.pulse)?;
+            check(self.control)?;
             self.validate()?;
         }
         Ok(())
@@ -167,7 +169,7 @@ impl<S: Source> Filler<'_, S> {
             mut rows,
             ..
         } = demand;
-        check(self.pulse)?;
+        check(self.control)?;
         let count = rows.rows();
         if rows.width() != self.desc.width
             || rows.descriptor() != self.desc.descriptor
@@ -201,8 +203,9 @@ impl<S: Source> Filler<'_, S> {
             if let Some(context) = &self.desc.color_context {
                 destination = destination.with_color_context(context.clone());
             }
-            self.input.read(first, destination, self.pulse)?;
-            check(self.pulse)?;
+            self.input
+                .read(first, destination, self.pulse, self.control)?;
+            check(self.control)?;
             self.validate()?;
         }
         for y in 0..count {
@@ -211,7 +214,7 @@ impl<S: Source> Filler<'_, S> {
             } else {
                 Stage::Read
             };
-            check(self.pulse)?;
+            check(self.control)?;
             let at = (first + y) as usize;
             let row = rows.row_mut(y);
             let offset = at.checked_mul(self.row_bytes).ok_or(Refusal::Overflow)?;
@@ -227,16 +230,16 @@ impl<S: Source> Filler<'_, S> {
                         .origin
                         .checked_add(offset as u64)
                         .ok_or(Refusal::Overflow)?;
-                    check(self.pulse)?;
+                    check(self.control)?;
                     store.file.seek(SeekFrom::Start(offset))?;
-                    check(self.pulse)?;
+                    check(self.control)?;
                     if external {
                         let mut written = 0;
-                        write_all(&mut store.file, row, &mut written, self.pulse)?;
+                        write_all(&mut store.file, row, &mut written, self.control)?;
                     } else {
                         let mut remaining = &mut row[..];
                         while !remaining.is_empty() {
-                            check(self.pulse)?;
+                            check(self.control)?;
                             match store.file.read(remaining) {
                                 Ok(0) => {
                                     return Err(
@@ -282,10 +285,10 @@ impl<S: Source> Filler<'_, S> {
             }
         }
         self.boundary = Stage::Read;
-        check(self.pulse)?;
+        check(self.control)?;
         self.validate()?;
-        self.pulse.advance(u64::from(count));
-        check(self.pulse)?;
+        self.control.advance(u64::from(count));
+        check(self.control)?;
         self.validate()?;
         self.next_row = first + count;
         Ok(())
@@ -435,8 +438,9 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     writer: D,
     mut resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
+    let control = pulse.unwrap_or(&zencodec::NoPulse);
     let mut out = Delivery {
         writer,
         options,
@@ -451,7 +455,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     let bound_requirements = resolver.requirements();
     let entry_requirements = out.options.preset;
     let run = || -> Result<(), Cause> {
-        check(pulse)?;
+        check(control)?;
         out.boundary = Stage::Policy;
         entry_requirements.check_workspace(None)?;
         if let Some(required) = bound_requirements {
@@ -509,7 +513,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             None
         };
-        check(pulse)?;
+        check(control)?;
         input.validate(&desc, mechanism, positional)?;
         let batch_rows = out.options.batch_rows.get().min(desc.height);
         let mut reservation_error: Option<Cause> = None;
@@ -621,7 +625,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         };
         report.record(record);
         let selected = offers[selected];
-        check(pulse)?;
+        check(control)?;
         out.boundary = Stage::Read;
         input.validate(&desc, mechanism, positional)?;
         if (if out.writer.can_patch() {
@@ -689,6 +693,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             failure: None,
             boundary: Stage::Read,
             pulse,
+            control,
         };
         filler.validate()?;
         let total = match declared.max() {
@@ -697,8 +702,8 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             }
             _ => zencodec::how_far::Total::Unknown,
         };
-        let _ = pulse.set_total(total);
-        check(pulse)?;
+        let _ = control.set_total(total);
+        check(control)?;
         filler.validate()?;
         out.boundary = Stage::Start;
         let mut encoder = startup.start(&declaration, &plan)?;
@@ -708,7 +713,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let phase = plan.output_phase;
         drop(plan);
         loop {
-            check(pulse)?;
+            check(control)?;
             out.boundary = Stage::Read;
             filler.validate()?;
             if input_contract == InputRequirement::Rows && filler.next_row == desc.height {
@@ -721,7 +726,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             {
                 return Err(Refusal::EarlyOutput { pass: filler.pass }.into());
             }
-            out.drain(&mut encoder, pulse)?;
+            out.drain(&mut encoder, control)?;
             out.boundary = Stage::Encode;
             filler.fills = 0;
             if input_contract == InputRequirement::Rows {
@@ -784,7 +789,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         drop(source);
         drop(row_buffer);
         drop(desc);
-        out.finish(encoder, timing, pulse)
+        out.finish(encoder, timing, control)
     };
     match run() {
         Ok(()) => Ok(Completed {

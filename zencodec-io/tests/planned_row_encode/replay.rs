@@ -9,6 +9,7 @@ use zencodec::{
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Behavior {
     Normal,
+    RequireAbsentPulse,
     SwallowFill,
     NoFill,
     FillThenDone,
@@ -125,8 +126,14 @@ impl Encoder for PullEncoder {
     fn pull_rows(
         &mut self,
         filler: &mut dyn EncodeRows,
-        _: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<PullProgress, Self::Error> {
+        if self.job.behavior == Behavior::RequireAbsentPulse {
+            assert!(
+                pulse.is_none(),
+                "native pull keeps the absent per-call control"
+            );
+        }
         event(&self.job.events, "pull");
         if self.job.behavior == Behavior::NoFill {
             return Ok(PullProgress::Filled);
@@ -255,10 +262,17 @@ fn run<S: Source, W: io::Write, R: OperationPolicy>(
             writer,
             policy,
             options,
-            &zencodec::NoPulse,
+            Some(&zencodec::NoPulse),
         )
     } else {
-        row_encode::encode_job(job, source, writer, policy, options, &zencodec::NoPulse)
+        row_encode::encode_job(
+            job,
+            source,
+            writer,
+            policy,
+            options,
+            Some(&zencodec::NoPulse),
+        )
     }
 }
 struct ReplaySource {
@@ -302,7 +316,7 @@ impl Source for ReplaySource {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         event(&self.inner.events, "read");
         if self.fail {
@@ -365,6 +379,35 @@ fn no_native_or_reads(s: &Setup) {
     assert!(!events.contains(&"construct"));
     assert!(!events.contains(&"read"));
     assert!(!events.contains(&"write"));
+}
+
+#[test]
+fn absent_control_reaches_native_pull_and_row_source_on_both_job_routes() {
+    for erased in [false, true] {
+        let s = Setup::new();
+        let mut job = PullJob::new(&s, 2, Some(2));
+        job.behavior = Behavior::RequireAbsentPulse;
+        let mut source = s.rows();
+        source.require_absent_pulse = true;
+        let result = if erased {
+            row_encode::encode_dyn_job(
+                PullConfig(job).dyn_job(),
+                source,
+                s.writer(),
+                PolicySet::new(),
+                s.options(),
+                None,
+            )
+        } else {
+            row_encode::encode_job(job, source, s.writer(), PolicySet::new(), s.options(), None)
+        };
+        assert_eq!(result.unwrap().emitted, 13);
+        assert_eq!(
+            *s.bytes.lock().unwrap(),
+            [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]
+        );
+        assert!(reads(&s) > 0);
+    }
 }
 
 #[test]
@@ -804,7 +847,7 @@ impl Source for ClaimedBorrow {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, pulse)
     }
@@ -839,7 +882,7 @@ impl Source for DropSource {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, pulse)
     }
@@ -944,7 +987,7 @@ fn finish_cancellation_precedes_publication_and_flush_in_both_dispatches() {
                 s.writer(),
                 PolicySet::new(),
                 s.options(),
-                &stop,
+                Some(&stop),
             )
         } else {
             row_encode::encode_job(
@@ -953,7 +996,7 @@ fn finish_cancellation_precedes_publication_and_flush_in_both_dispatches() {
                 s.writer(),
                 PolicySet::new(),
                 s.options(),
-                &stop,
+                Some(&stop),
             )
         };
         let failure = result.unwrap_err();
@@ -987,7 +1030,7 @@ fn replay_job_applies_finish_patches_relative_to_the_existing_destination_prefix
                 writer,
                 PolicySet::new(),
                 s.options(),
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             )
         } else {
             row_encode::encode_job_to_destination(
@@ -996,7 +1039,7 @@ fn replay_job_applies_finish_patches_relative_to_the_existing_destination_prefix
                 writer,
                 PolicySet::new(),
                 s.options(),
-                &zencodec::NoPulse,
+                Some(&zencodec::NoPulse),
             )
         }
         .unwrap();
@@ -1073,7 +1116,7 @@ fn replay_cancellation_precedes_patch_seek_restore_and_flush_with_exact_counts()
                     destination,
                     PolicySet::new(),
                     s.options(),
-                    &pulse,
+                    Some(&pulse),
                 )
             } else {
                 row_encode::encode_job_to_destination(
@@ -1082,7 +1125,7 @@ fn replay_cancellation_precedes_patch_seek_restore_and_flush_with_exact_counts()
                     destination,
                     PolicySet::new(),
                     s.options(),
-                    &pulse,
+                    Some(&pulse),
                 )
             };
             let failure = result.unwrap_err();
@@ -1181,10 +1224,10 @@ fn raw_disk_alias_mutation_is_detected_before_replayed_fill_succeeds() {
                 s.writer(),
                 policy,
                 options,
-                &pulse,
+                Some(&pulse),
             )
         } else {
-            row_encode::encode_job(job, s.rows(), s.writer(), policy, options, &pulse)
+            row_encode::encode_job(job, s.rows(), s.writer(), policy, options, Some(&pulse))
         };
         let failure = result.unwrap_err();
         assert_eq!(

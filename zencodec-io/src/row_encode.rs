@@ -17,7 +17,7 @@
 //!     Ok(row_encode::encode(
 //!         encoder, Raster::new(pixels), writer, PolicySet::new(),
 //!         Options::new(StorageBudget::new(64 * 1024 * 1024, 4096), 64 * 1024 * 1024),
-//!         &zencodec::how_far::NoPulse,
+//!         None,
 //!     )?)
 //! }
 //! ```
@@ -122,11 +122,13 @@ pub trait Source {
     /// Fill every active sample of the requested consecutive rows, honoring
     /// destination stride. No reading beyond the declared image is requested.
     /// A late interpretation change must fail, never relabel earlier samples.
+    /// `None` adds no per-call control; any control retained by the source
+    /// remains active.
     fn read_rows(
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error>;
 }
 /// Borrow a complete raster through the same row-source interface.
@@ -158,8 +160,9 @@ impl Source for Raster<'_> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if rows.width() != self.0.width()
             || rows.descriptor() != self.0.descriptor()
             || rows.color_context() != self.0.color_context()
@@ -529,13 +532,15 @@ fn stage(
 /// reads during synchronous writes; this alone proves no native memory bound.
 /// Cancellation is checked around native calls and each writer operation; it
 /// cannot interrupt a blocking OS write. No retries or implicit finish on drop.
+/// `None` adds no per-call control. Controls retained by the encoder or source
+/// and all configured policy and resource requirements still apply.
 pub fn encode<E: Encoder, S: Source, W: Write, R: OperationPolicy>(
     encoder: E,
     source: S,
     writer: W,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
     encode_to_destination(encoder, source, Forward(writer), resolver, options, pulse)
 }
@@ -551,7 +556,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: Operation
     writer: D,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
     run_rows(
         LegacyStartup(encoder),
@@ -578,7 +583,7 @@ pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: OperationPolicy>(
     writer: W,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>>
 where
     J::Enc: Encoder,
@@ -603,7 +608,7 @@ pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: Ope
     writer: D,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>>
 where
     J::Enc: Encoder,
@@ -631,7 +636,7 @@ pub fn encode_dyn_job<S: Source, W: Write, R: OperationPolicy>(
     writer: W,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
     encode_dyn_job_to_destination(job, source, Forward(writer), resolver, options, pulse)
 }
@@ -647,7 +652,7 @@ pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: OperationPoli
     writer: D,
     resolver: R,
     options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
     planned::run(
         DynPlannedStartup(job),
@@ -762,7 +767,7 @@ impl Encoder for DynRows {
     fn pull_rows(
         &mut self,
         rows: &mut dyn zencodec::encode::EncodeRows,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::encode::PullProgress, Self::Error> {
         self.0.pull_rows(rows, pulse).map_err(Self::Error::new)
     }
@@ -782,8 +787,9 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     mut writer: D,
     mut resolver: R,
     mut options: Options,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
+    let control = pulse.unwrap_or(&zencodec::NoPulse);
     let mut boundary = Stage::Prepare;
     let mut emitted = 0;
     let mut patched_bytes = 0;
@@ -791,7 +797,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     let bound_requirements = resolver.requirements();
     let entry_requirements = options.preset;
     let run = || -> Result<OutputSchedule, Cause> {
-        check(pulse)?;
+        check(control)?;
         // This adapter has no qualified native preparation/workspace bound.
         // Refuse before asking the job to prepare any state. These checks do
         // not discharge the unchanged requirements at final route selection.
@@ -837,7 +843,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         if timing.patches_at_finish() && !writer.can_patch() {
             return Err(Refusal::Patches.into());
         }
-        check(pulse)?;
+        check(control)?;
         let mut finish_first = OutputScheduleOffer::new(OutputSchedule::FinishFirst);
         finish_first.staging = Some(StagingFacts::new(
             if options.disk.is_some() {
@@ -870,7 +876,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         };
         report.record(record);
         let schedule = offers[index].schedule;
-        check(pulse)?;
+        check(control)?;
         boundary = Stage::Read;
         validate_source(&source, &desc, mechanism)?;
         let current_access = if writer.can_patch() {
@@ -886,7 +892,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             Some(buffer) => buffer,
             None => options.storage.bytes(len)?,
         };
-        check(pulse)?;
+        check(control)?;
         boundary = Stage::Start;
         let mut encoder = startup.start(&declaration, &plan)?;
         // Exact carrier evidence can own ICC bytes. Release it before final
@@ -896,7 +902,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let mut produced = 0;
         let mut y = 0;
         loop {
-            check(pulse)?;
+            check(control)?;
             boundary = Stage::Read;
             validate_source(&source, &desc, mechanism)?;
             // The final pending bytes belong to finish. Do not introduce an
@@ -909,12 +915,12 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             count(&mut produced, pending.len(), options.max_output_bytes)?;
             if schedule == OutputSchedule::Live {
                 boundary = Stage::Write;
-                write_all(&mut writer, pending, &mut emitted, pulse)?;
+                write_all(&mut writer, pending, &mut emitted, control)?;
             } else {
                 boundary = Stage::Encode;
                 if let Some(disk) = &mut options.disk {
                     disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                    disk.append(pending, pulse)?;
+                    disk.append(pending, control)?;
                 } else {
                     stage(pending, &options.storage, &mut staged)?;
                 }
@@ -937,7 +943,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 destination = destination.with_color_context(context.clone());
             }
             source.read_rows(y, destination, pulse)?;
-            check(pulse)?;
+            check(control)?;
             validate_source(&source, &desc, mechanism)?;
             boundary = Stage::Encode;
             let mut pixels = PixelSlice::new(
@@ -952,7 +958,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 // Per-row checks retain the first contradictory absolute row;
                 // nothing in this strip reaches the encoder until all pass.
                 for row in 0..pixels.rows() {
-                    check(pulse)?;
+                    check(control)?;
                     if !exact.holds_for(&pixels.sub_rows(row, 1))? {
                         return Err(ExactDepthContradiction {
                             first_row: y + row,
@@ -980,9 +986,9 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         drop(buffer);
         drop(desc);
         boundary = Stage::Finish;
-        check(pulse)?;
+        check(control)?;
         let finished = encoder.finish_output()?;
-        check(pulse)?;
+        check(control)?;
         finished.validate(produced)?;
         if !finished.patches.is_empty() && (!writer.can_patch() || !timing.patches_at_finish()) {
             return Err(Refusal::Patches.into());
@@ -993,7 +999,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         if schedule == OutputSchedule::FinishFirst {
             if let Some(disk) = &mut options.disk {
                 disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                disk.append(rest.data(), pulse)?;
+                disk.append(rest.data(), control)?;
                 drop(rest);
                 disk.replay(
                     produced,
@@ -1001,35 +1007,35 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                     &mut writer,
                     &mut emitted,
                     &mut boundary,
-                    pulse,
+                    control,
                 )?;
             } else {
                 stage(rest.data(), &options.storage, &mut staged)?;
                 drop(rest);
                 boundary = Stage::Write;
                 while let Some(bytes) = staged.pop_front() {
-                    write_all(&mut writer, bytes.as_slice(), &mut emitted, pulse)?;
+                    write_all(&mut writer, bytes.as_slice(), &mut emitted, control)?;
                 }
             }
         } else {
             boundary = Stage::Write;
-            write_all(&mut writer, rest.data(), &mut emitted, pulse)?;
+            write_all(&mut writer, rest.data(), &mut emitted, control)?;
         }
-        check(pulse)?;
+        check(control)?;
         if !patches.is_empty() {
             boundary = Stage::Patch;
             for patch in patches {
-                check(pulse)?;
+                check(control)?;
                 writer.position(patch.offset)?;
-                write_all(&mut writer, &patch.bytes, &mut patched_bytes, pulse)?;
+                write_all(&mut writer, &patch.bytes, &mut patched_bytes, control)?;
             }
-            check(pulse)?;
+            check(control)?;
             writer.position(produced)?;
         }
         boundary = Stage::Write;
-        check(pulse)?;
+        check(control)?;
         writer.flush()?;
-        check(pulse)?;
+        check(control)?;
         Ok(schedule)
     };
     match run() {
@@ -1064,7 +1070,7 @@ mod tests {
         let view = PixelSliceMut::new(&mut output, 1, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
         assert!(
             source
-                .read_rows(0, view, &zencodec::how_far::NoPulse)
+                .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
                 .is_err()
         );
         assert_eq!(output, [77; 12]);
@@ -1072,7 +1078,7 @@ mod tests {
             .unwrap()
             .with_color_context(context);
         source
-            .read_rows(0, view, &zencodec::how_far::NoPulse)
+            .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
             .unwrap();
         assert_eq!(output, [1, 2, 3, 77, 77, 77, 77, 77, 77, 4, 5, 6]);
     }
@@ -1234,7 +1240,7 @@ mod patch_tests {
                     SeekBack::new(&mut writer).unwrap(),
                     PolicySet::new().require_output_schedule(schedule),
                     options(),
-                    &pulse,
+                    Some(&pulse),
                 );
                 assert_eq!(writer.cursor.get_ref(), &[1, 2, 3]);
                 if mode == 2 {
@@ -1272,7 +1278,7 @@ mod patch_tests {
                     zencodec::At<core::convert::Infallible>,
                 > { panic!("must refuse before policy") },
                 options(),
-                &zencodec::how_far::NoPulse,
+                Some(&zencodec::how_far::NoPulse),
             )
             .unwrap_err();
         assert!(bytes.is_empty());
@@ -1301,7 +1307,7 @@ mod patch_tests {
                     SeekBack::new(&mut writer).unwrap(),
                     PolicySet::new().require_output_schedule(schedule),
                     options(),
-                    &zencodec::how_far::NoPulse,
+                    Some(&zencodec::how_far::NoPulse),
                 );
                 assert_eq!(&writer.cursor.get_ref()[..6], b"prefix");
                 if bad {

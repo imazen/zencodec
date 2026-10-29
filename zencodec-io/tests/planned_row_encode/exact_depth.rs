@@ -168,16 +168,16 @@ fn run_with_pulse<S: Source, W: io::Write, R: OperationPolicy>(
             writer,
             policy,
             options,
-            pulse,
+            Some(pulse),
         ),
-        Route::Typed => row_encode::encode_job(job, source, writer, policy, options, pulse),
+        Route::Typed => row_encode::encode_job(job, source, writer, policy, options, Some(pulse)),
         Route::Erased => row_encode::encode_dyn_job(
             ClaimConfig(job).dyn_job(),
             source,
             writer,
             policy,
             options,
-            pulse,
+            Some(pulse),
         ),
         Route::ErasedDestination => row_encode::encode_dyn_job_to_destination(
             ClaimConfig(job).dyn_job(),
@@ -185,7 +185,7 @@ fn run_with_pulse<S: Source, W: io::Write, R: OperationPolicy>(
             zencodec_io::destination::Forward(writer),
             policy,
             options,
-            pulse,
+            Some(pulse),
         ),
     }
 }
@@ -220,7 +220,7 @@ impl Source for Samples {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         event(&self.inner.events, "read");
         for row in 0..rows.rows() {
@@ -755,7 +755,7 @@ fn supported_claims_preserve_inherited_startup_refusals_without_fallback() {
                     writer,
                     PolicySet::new(),
                     options,
-                    &zencodec::NoPulse,
+                    Some(&zencodec::NoPulse),
                 ),
                 1 => row_encode::encode_job(
                     Unplanned,
@@ -763,7 +763,7 @@ fn supported_claims_preserve_inherited_startup_refusals_without_fallback() {
                     writer,
                     PolicySet::new(),
                     options,
-                    &zencodec::NoPulse,
+                    Some(&zencodec::NoPulse),
                 ),
                 2 => row_encode::encode_job(
                     PlannedButNoDeclaredStart,
@@ -771,7 +771,7 @@ fn supported_claims_preserve_inherited_startup_refusals_without_fallback() {
                     writer,
                     PolicySet::new(),
                     options,
-                    &zencodec::NoPulse,
+                    Some(&zencodec::NoPulse),
                 ),
                 _ => unreachable!(),
             }
