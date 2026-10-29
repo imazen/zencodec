@@ -23,6 +23,8 @@ For registered configurations, use
 `operation::EncodeRequest::with_orientation_mode(mode)`; both `prepare` and
 `prepare_send` apply the same checked setter before offering a job. For an
 existing erased job, use `DynEncodeJob::try_set_orientation_mode(mode)`.
+An adapter taking ownership with `PreparedEncode::into_job` must retain the
+required orientation mode; replacing it invalidates the original preparation.
 Refusal retains the job; the consuming `try_with_orientation_mode` convenience
 consumes it on refusal, like other checked builders.
 
