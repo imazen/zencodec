@@ -202,7 +202,7 @@ fn config() -> CodecConfig {
 }
 
 #[test]
-fn absent_control_reaches_native_policy_calls_and_preserves_required_workspace_gate() {
+fn absent_control_reaches_native_policy_calls_and_preserves_required_metadata_gate() {
     for refuse in [false, true] {
         let budget = StorageBudget::new(16, 1);
         let input = frame(&budget, 0);
@@ -210,7 +210,7 @@ fn absent_control_reaches_native_policy_calls_and_preserves_required_workspace_g
         let mut native = Queued::new([input]);
         native.expected_none = Some(true);
         let policy = if refuse {
-            PolicySet::new().with_workspace_limit(0)
+            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive)
         } else {
             PolicySet::new()
         };
@@ -618,4 +618,130 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
     )
     .unwrap();
     assert_eq!(selected, 1);
+}
+
+#[test]
+#[allow(deprecated)] // Verify legacy requirements remain conjunctive with bound policy.
+fn required_unknown_workspace_refuses_every_native_entry_before_effects() {
+    use zencodec::operation::{
+        BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
+    };
+    for bound in [false, true] {
+        for entry in 0..5 {
+            let budget = StorageBudget::new(16, 1);
+            let held = frame(&budget, 0);
+            let owner = Arc::downgrade(held.picture());
+            let native = Queued::new([held]);
+            let calls = native.calls.clone();
+            let decisions = Arc::new(AtomicUsize::new(0));
+            let observed = decisions.clone();
+            let required = PolicySet::new().with_workspace_limit(u64::MAX);
+            let policy = BoundPolicy::new(
+                if bound { required } else { PolicySet::new() },
+                move |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    observed.fetch_add(1, Ordering::SeqCst);
+                    Ok(Decision::UsePreset)
+                },
+            );
+            let mut decoder = PolicyDecoder::new(native, policy).with_policy_set(if bound {
+                PolicySet::new()
+            } else {
+                required
+            });
+            let error = match entry {
+                0 => decoder.configure(&config(), None),
+                1 => decoder
+                    .send(&mut Packet::from_vec(vec![1]).unwrap(), None)
+                    .map(|_| ()),
+                2 => decoder.receive(None).map(|_| ()),
+                3 => decoder.end_input(),
+                _ => decoder.reset(),
+            }
+            .unwrap_err();
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                0,
+                "entry {entry}, bound {bound}"
+            );
+            assert_eq!(decisions.load(Ordering::SeqCst), 0);
+            let SessionError::Codec(error) = error else {
+                panic!("missing policy error")
+            };
+            assert_eq!(error.stage(), Stage::Policy);
+            let unmet = error
+                .source()
+                .unwrap()
+                .downcast_ref::<UnmetRequirements>()
+                .unwrap();
+            assert_eq!(
+                unmet.iter().collect::<Vec<_>>(),
+                vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+            assert!(decoder.is_failed());
+            assert!(owner.upgrade().is_none());
+            assert_eq!(budget.reserved_bytes(), 0);
+            assert!(matches!(decoder.receive(None), Err(SessionError::Finished)));
+        }
+    }
+}
+
+#[test]
+fn factory_admission_precedes_native_creation_and_preserves_causes() {
+    for required in [false, true] {
+        let calls = AtomicUsize::new(0);
+        let result = PolicyDecoder::try_new(
+            || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, Native>(Queued::new([]))
+            },
+            if required {
+                PolicySet::new().with_workspace_limit(u64::MAX)
+            } else {
+                PolicySet::new()
+            },
+            None,
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), usize::from(!required));
+        assert_eq!(result.is_err(), required);
+        if let Err(error) = result {
+            assert_eq!(error.stage(), Stage::Policy);
+            assert!(
+                error
+                    .source()
+                    .unwrap()
+                    .is::<zencodec::operation::UnmetRequirements>()
+            );
+        }
+    }
+    let result = PolicyDecoder::<Queued, _>::try_new(|| Err(Native(99)), PolicySet::new(), None);
+    let Err(error) = result else {
+        panic!("factory error lost")
+    };
+    assert_eq!(error.stage(), Stage::Decode);
+    assert_eq!(
+        error.source().unwrap().downcast_ref::<Native>().unwrap().0,
+        99
+    );
+    struct Cancelled;
+    impl Stop for Cancelled {
+        fn check(&self) -> Result<(), StopReason> {
+            Err(StopReason::TimedOut)
+        }
+    }
+    let pulse = zencodec::how_far::StopOnly::new(Cancelled);
+    let result = PolicyDecoder::<Queued, _>::try_new(
+        || -> Result<Queued, Native> { panic!("cancelled factory ran") },
+        PolicySet::new(),
+        Some(&pulse),
+    );
+    let Err(error) = result else {
+        panic!("cancelled factory admitted")
+    };
+    assert!(matches!(
+        error
+            .source()
+            .unwrap()
+            .downcast_ref::<SessionError<Infallible>>(),
+        Some(SessionError::Cancelled(StopReason::TimedOut))
+    ));
 }

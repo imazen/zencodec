@@ -8,6 +8,12 @@ to add no per-call control. Retained job controls, resource limits and required
 policy checks still apply. Forwarding adapters preserve the supplied option;
 `Some(pulse)` retains reporting, phases and sharing as well as cancellation.
 
+For policy-controlled decoding, `PolicyDecoder::try_new(factory, policy, pulse)`
+checks admission before calling the native factory. Explicit workspace limits
+refuse when no qualified bound exists; default policy permits construction.
+`PolicyDecoder::new` wraps an already-created decoder and cannot cover its prior
+allocations. Both constructors preserve late interpretation checks at publication.
+
 With `std`, `staged::StagedEncode::new(encoder, muxer, destination, resolver,
 storage, pulse)` provides finite video encoding: push frames, then finish. It
 holds conversion through policy and stages compressed payloads, releasing the

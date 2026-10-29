@@ -57,7 +57,7 @@ export const codeFlows = [
     {example:'jpeg_icc_refusal',file:'docs/examples/jpeg_policy.rs',api:['rewritePlan']},
   ]},
   {id:'app-video',role:'consumer',title:'Packets → owned frames → policy',steps:[
-    {example:'checked_video',file:'docs/examples/checked_video.rs',api:['video','framePolicy']},
+    {example:'checked_video',file:'docs/examples/checked_video.rs',api:['video','framePolicyAdmission','framePolicy']},
     {example:'checked_video_storage',file:'docs/examples/checked_video.rs',api:['operationStorage']},
     {example:'checked_video_rule',file:'docs/examples/checked_video.rs',api:['frameResolution']},
   ]},

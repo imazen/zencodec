@@ -3,14 +3,13 @@
 
 mod ordinary {
     // EXAMPLE: checked_video
-    use zenavif::media::{Av1SessionError, Av1VideoDecoder};
+    use zenavif::media::Av1VideoDecoder;
     use zencodec::operation::PolicySet;
-    use zencodec_media::policy::PolicyDecoder;
+    use zencodec_media::policy::{Error, PolicyDecoder};
 
-    pub fn open_video() -> Result<PolicyDecoder<Av1VideoDecoder, PolicySet>, Av1SessionError> {
-        let native = Av1VideoDecoder::new()?;
+    pub fn open_video() -> Result<PolicyDecoder<Av1VideoDecoder, PolicySet>, Error> {
         // ANCHOR: checked_video
-        let decoder = PolicyDecoder::new(native, PolicySet::new());
+        let decoder = PolicyDecoder::try_new(Av1VideoDecoder::new, PolicySet::new(), None)?;
         // END: checked_video
         // Configure and drive it through VideoDecoder; None adds no per-call Pulse.
         // Every receive checks policy before returning a native Frame.

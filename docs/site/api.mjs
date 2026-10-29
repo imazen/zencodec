@@ -32,6 +32,7 @@ export const api = {
   operationPreset: {path:'zencodec::operation::PolicySet',file:'src/operation/policy.rs',scope:'impl PolicySet {',methods:['new','prefer_lossless','require_metadata','allow_opaque_profiles','with_workspace_limit','allow_assumed_chroma_siting','require_extended_range','require_output_schedule','with_output_wait_limit']},
   operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_encoder','with_send_encoder','with_limits','with_pulse','pulse']},
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
+  framePolicyAdmission: {path:'zencodec_media::policy::PolicyDecoder::try_new',file:'zencodec-media/src/policy.rs',scope:'impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R>',methods:['try_new']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
   imageConversion: {path:'zencodec::operation::resolve_image_conversion',file:'src/operation/conversion.rs',methods:['resolve_image_conversion']},
   imageConversionOffer: {path:'zencodec::operation::ImageConversionOffer',file:'src/operation/conversion.rs',scope:'pub struct ImageConversionOffer',methods:[],item:true},

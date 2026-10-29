@@ -685,3 +685,11 @@ Repinning the native JPEG harness to zenpipe e5cd3f9a without recapturing
 docs/integration-api.json made the guide build refuse its stale revision.
 Recapture from the pinned commit preserves the signatures and identity guard;
 the full source/browser gates pass. Receipt: benchmarks/guide_snapshot_2026-10-29.json.
+
+## Fixed: video workspace requirements after native effects
+
+PolicyDecoder previously reached native configure/send/receive before refusing
+an unknown required workspace bound. The regression proves configure returned
+success. Both bound and legacy requirements now guard every native operation;
+try_new admits a factory before creation. Wrapping a preconstructed decoder
+cannot cover allocations already made. See docs/video-workspace-admission.md.
