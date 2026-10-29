@@ -68,12 +68,15 @@ checks for the supplement. [Validation receipt](../../benchmarks/source_catalog_
 
 ## Qualified integration snapshot (2026-10-29)
 
-The JPEG harness now uses zenpipe `e5cd3f9a`. Recapture its named declarations
+The JPEG harness uses zenpipe `f0322466`. Recapture its named declarations
 with `just checked-guide-api <zenpipe-checkout> <full-revision>` whenever that
-dependency changes. The generated integration revision must match the native
-manifest even when the declarations themselves are unchanged. The optional-Pulse
-repin initially failed this identity check; recapture preserved the displayed
-signatures and restored the build. The complete source and browser gates pass
-on `99fa6e0e`, including inline expansion, exact copying and all three viewports.
-See [the receipt](../../benchmarks/guide_snapshot_2026-10-29.json). This does not
-qualify zenpipe's outstanding full-feature HEIC/RAW graph.
+dependency changes. The generated revision must match the native manifest,
+even when the declarations themselves are unchanged.
+
+On `9b606366`, all 48 native JPEG/conversion scenarios, strict harness Clippy,
+24 source tests and the complete browser suite pass. The lock delta changes
+only zencodecs' Git revision. The paired consumer separately qualifies its full
+HEIC/RAW feature-profile compilation and API snapshot generation; that is not
+whole-codec/platform runtime coverage. Two AVIF encode-orientation carrier
+assertions still conflict with native baking and remain unresolved.
+See [the receipt](../../benchmarks/guide_integration_2026-10-29.json).

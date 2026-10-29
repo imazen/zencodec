@@ -1,0 +1,21 @@
+{
+  "source": "9b6063661a32be913483dfac146642c3ecc4e21f",
+  "consumer": "f03224661f6912221f75dd7a43b1329431cc2e16",
+  "commands": [
+    "just jpeg-policy-setup",
+    "cargo metadata --manifest-path perf/jpeg-policy-validation/Cargo.toml --format-version 1",
+    "just jpeg-policy-check",
+    "just docs-site-browser-check 3548"
+  ],
+  "native_tests": 48,
+  "source_tests": 24,
+  "clippy": "pass",
+  "browser": "pass; full existing suite and assertions",
+  "lock_delta": "only zencodecs Git revision",
+  "receipt": "run-heavy: done rc=0 58s | peak-RSS 0.71GiB | min-avail 14140MiB | peak-load 1.08",
+  "limits": [
+    "No encoding performance claim",
+    "AVIF encode-orientation carrier conflict remains",
+    "Full codec/platform runtime qualification remains separate"
+  ]
+}
