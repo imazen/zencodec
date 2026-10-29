@@ -388,14 +388,13 @@ where
 {
     let pulse_ref: Option<&dyn Pulse> = pulse.as_ref().map(|p| p as &dyn Pulse);
     let mut progress = Progressor::new(pulse_ref);
-    let pulse = progress.pulse();
     let mut steps = 0usize;
     let outcome = loop {
         if steps == quota.max_steps() {
             break Ok(BatchEnd::Yield);
         }
         let input = window.input();
-        let p = match decoder.step(input, &mut sink, pulse) {
+        let p = match decoder.step(input, &mut sink, pulse_ref) {
             Ok(p) => p,
             Err(e) => break Err(BatchFail::Step(e)),
         };
@@ -584,7 +583,7 @@ impl AsyncCursor {
         &mut self,
         source: &mut Src,
         stage: &mut S,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<crate::Yield<S::Output>, crate::DriveFailure<S::Error, BoxedError>>
     where
         S: crate::ByteStepper + ?Sized,

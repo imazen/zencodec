@@ -32,11 +32,10 @@ where
     D: IncrementalDecode + ?Sized,
 {
     let mut progress = Progressor::new(pulse);
-    let stop = progress.pulse();
     let mut cursor = ReadCursor::new(read_size, max_window);
     loop {
         let input = cursor.offer();
-        let p = decoder.step(input, sink, stop).map_err(PumpError::Step)?;
+        let p = decoder.step(input, sink, pulse).map_err(PumpError::Step)?;
         if p.event == Event::Need {
             check_need(decoder.requested(), &input, p.consumed).map_err(PumpError::Protocol)?;
         }

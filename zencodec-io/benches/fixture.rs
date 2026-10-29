@@ -161,8 +161,9 @@ impl IncrementalDecode for HandWritten {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<SynError>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         if let Some(d) = &self.done {
             return Ok(Progress::new(0, Event::Done(d.clone())));
         }

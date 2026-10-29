@@ -17,6 +17,12 @@ past a known end (`ProtocolViolation`) instead of looping, and takes
 `Option<&dyn how_far::Pulse>` for cancellation and progress (`Pulse: Stop`; a
 plain stop passes as `how_far::StopOnly::borrowed`).
 
+All public borrowed Pulse inputs accept `None` for no additional per-call
+control, including byte cursors, controlled resume, row sources and row encoding.
+`None` leaves retained decoder, encoder and source controls active and preserves
+policy and resource checks. Pass `Some(&pulse)` for cancellation and reporting;
+forwarding preserves phase planning and sharing as well as progress.
+
 Use `PolicyDecoder` for automatic resolution of mandatory interpretation
 boundaries. Adapters that need to prepare conversion and encoding while decode
 is paused use `ControlledStepper` with the existing byte cursors. A

@@ -31,11 +31,12 @@ pub trait ByteStepper {
     /// The stage's error.
     type Error;
 
-    /// Take a prefix of `input` and report what happened.
+    /// Take a prefix of `input` and report what happened. `None` adds no
+    /// per-call control; any control retained by the stage remains active.
     fn step(
         &mut self,
         input: Input<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<Self::Output>, Self::Error>;
 
     /// What the stage needs next, after a [`Step::Need`]. Never empty then.
@@ -231,7 +232,7 @@ impl SliceCursor {
         &mut self,
         bytes: &[u8],
         stage: &mut S,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Next<S, Infallible> {
         loop {
             let input = self.offer(bytes);
@@ -356,7 +357,7 @@ impl ReadAtCursor {
         &mut self,
         source: &mut Src,
         stage: &mut S,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Next<S, Src::Error>
     where
         S: ByteStepper + ?Sized,
@@ -708,7 +709,7 @@ mod read {
             &mut self,
             reader: &mut R,
             stage: &mut S,
-            pulse: &dyn zencodec::Pulse,
+            pulse: Option<&dyn zencodec::Pulse>,
         ) -> Result<Yield<S::Output>, PumpFailure<S::Error>>
         where
             S: ByteStepper + ?Sized,
