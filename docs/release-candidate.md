@@ -134,3 +134,17 @@ strict queue-consumer Clippy pass; the old builder retains compatibility coverag
 Native pre-allocation capacity evidence and an explicit hard admission requirement
 remain required contract work in [issue160](https://github.com/imazen/zencodec/issues/160#issuecomment-6488692572).
 A callback cannot establish a bound from output readiness or lookahead alone.
+
+## AVIF landing and remaining decode admission
+
+AVIF PR75 merged as `a21bb7b1`: the optional-Pulse native/media/MP4 migration,
+clear output-pull-threshold builder and qualified standalone consumer/fuzz graphs
+are on main. The temporary pulse workspace was forgotten and removed after
+ancestry verification; ignored fixtures and logs were preserved separately.
+Application encode-orientation expectations remain unresolved; this merge does
+not change them or certify all native memory bounds.
+
+[Required one-shot decode descriptors](decode-descriptor-admission.md) still
+validate after decoding. Existing output prediction cannot safely substitute
+for negotiation-aware admission, and switching to a sink must preserve full
+metadata/extras. This remains a contract-design gate.
