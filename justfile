@@ -1644,3 +1644,8 @@ registry-snapshot-check:
 
 registry-allocation-probe:
     cargo run --manifest-path perf/api-usability-validation/Cargo.toml --locked -- --registry-only
+
+# Executable source scopes displayed in the code-first Tokio journeys.
+tokio-guide-check:
+    cargo test -p zencodec-io --features tokio --test drivers --test work_quota --locked
+    cargo clippy -p zencodec-io --features tokio --test drivers --test work_quota --locked -- -D warnings
