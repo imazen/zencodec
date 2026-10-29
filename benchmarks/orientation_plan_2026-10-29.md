@@ -32,3 +32,10 @@ All six native tests and the unchanged core/doctest/Clippy gates pass: rc0,
 13s, peak RSS 0.45GiB, minimum available 11451MiB. These controls supersede
 the missing adversarial-declaration item above; exact-depth assertions and
 late PixelSlice color attachment still need direct controls.
+
+Generated reference and guide: b9d7b88a36a7be9c8635d2ae907da26a680685df.
+All eight crate references, source checks and complete browser suites pass.
+Command: just docs-reference && just docs-site-browser-check 3547, isolated export.
+Serialized run-heavy 3G/jobs2 timeout900: rc0, 46s, peak RSS 0.33GiB,
+minimum available 10986MiB. OrientationPlan reference returned HTTP 200 after
+switching the preview to this qualified export.
