@@ -141,3 +141,126 @@ fn ranked_native_output_does_not_promote_a_later_float_preference() {
         }
     }
 }
+
+#[test]
+fn native_owned_result_split_preserves_pixels_metadata_and_all_extras() {
+    for progressive in [false, true] {
+        let base = fixtures::base(progressive);
+        let mut bytes = base[..2].to_vec();
+        bytes.extend(fixtures::descriptive());
+        bytes.extend_from_slice(&base[2..]);
+        let output = JpegDecoderConfig::new()
+            .job()
+            .decoder(Cow::Borrowed(&bytes), &[PixelDescriptor::RGBA8_SRGB])
+            .unwrap()
+            .decode()
+            .unwrap();
+        let metadata = output.metadata();
+        let pixels = output.pixels().row(0).as_ptr();
+        let source = output.source_encoding_details().unwrap() as *const _ as *const ();
+        let extras = output.extras::<zenjpeg::decoder::DecodedExtras>().unwrap() as *const _;
+        let count = output.extensions().len();
+        let (buffer, details) = output.into_parts();
+        assert_eq!(buffer.as_slice().row(0).as_ptr(), pixels);
+        assert_eq!(details.info.metadata(), metadata);
+        assert_eq!(
+            details.source_encoding.as_deref().unwrap() as *const _ as *const (),
+            source
+        );
+        assert_eq!(
+            details
+                .extensions
+                .get::<zenjpeg::decoder::DecodedExtras>()
+                .unwrap() as *const _,
+            extras
+        );
+        assert_eq!(details.extensions.len(), count);
+        let restored = zencodec::decode::DecodeOutput::from_parts(buffer, details);
+        assert_eq!(restored.pixels().row(0).as_ptr(), pixels);
+        assert_eq!(restored.metadata(), metadata);
+        assert_eq!(
+            restored
+                .extras::<zenjpeg::decoder::DecodedExtras>()
+                .unwrap() as *const _,
+            extras
+        );
+    }
+}
+
+/// Private completion transport witness. The native one-shot decode has already
+/// happened; this deliberately makes no early-admission or streaming-RAM claim.
+struct OwnedResultRows {
+    output: Option<zencodec::decode::DecodeOutput>,
+    details: Option<zencodec::decode::DecodeDetails>,
+}
+impl zencodec::decode::IncrementalDecode for OwnedResultRows {
+    type Error = std::io::Error;
+    fn step(
+        &mut self,
+        _: zencodec::decode::Input<'_>,
+        sink: &mut dyn zencodec::decode::DecodeRowSink,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>> {
+        use zencodec::decode::{Event, Progress, StepError};
+        let output = self.output.take().ok_or(StepError::Finished)?;
+        let info =
+            zencodec::decode::OutputInfo::full_decode(output.width(), output.height(), output.descriptor());
+        let (pixels, details) = output.into_parts();
+        sink.begin(info.width, info.height, info.native_format)
+            .map_err(StepError::Sink)?;
+        for y in 0..info.height {
+            sink.provide_next_buffer(y, 1, info.width, info.native_format)
+                .map_err(StepError::Sink)?
+                .row_mut(0)
+                .copy_from_slice(pixels.as_slice().row(y));
+        }
+        sink.finish().map_err(StepError::Sink)?;
+        self.details = Some(details);
+        Ok(Progress::new(0, Event::Done(info)))
+    }
+    fn requested(&self) -> &[zencodec::decode::InputRequest] {
+        &[]
+    }
+    fn info(&self) -> Option<&zencodec::ImageInfo> {
+        None
+    }
+    fn take_details(&mut self) -> Option<zencodec::decode::DecodeDetails> {
+        self.details.take()
+    }
+}
+
+#[test]
+fn native_owned_details_survive_terminal_erasure_and_row_delivery() {
+    use zencodec::decode::{Input, erase_incremental};
+    for progressive in [false, true] {
+        let bytes = fixtures::base(progressive);
+        let output = JpegDecoderConfig::new()
+            .job()
+            .decoder(Cow::Borrowed(&bytes), &[PixelDescriptor::RGBA8_SRGB])
+            .unwrap()
+            .decode()
+            .unwrap();
+        let metadata = output.metadata();
+        let source = output.source_encoding_details().unwrap() as *const _ as *const ();
+        let expected: Vec<_> = (0..output.height())
+            .map(|y| output.pixels().row(y).to_vec())
+            .collect();
+        let mut decoder = erase_incremental(OwnedResultRows {
+            output: Some(output),
+            details: None,
+        });
+        assert!(decoder.take_details().is_none());
+        let mut sink = zencodec_io::CollectSink::new();
+        decoder.step(Input::empty(), &mut sink, None).unwrap();
+        let details = decoder.take_details().unwrap();
+        assert_eq!(details.info.metadata(), metadata);
+        assert_eq!(
+            details.source_encoding.as_deref().unwrap() as *const _ as *const (),
+            source
+        );
+        for (y, row) in expected.iter().enumerate() {
+            assert_eq!(sink.as_pixel_slice().unwrap().row(y as u32), row);
+        }
+        assert!(decoder.take_details().is_none());
+    }
+}

@@ -4,6 +4,13 @@
 
 ### Added
 
+- Review proposal: `decode::DecodeDetails` and `DecodeOutput::{into_parts,
+  from_parts}` move pixels and all owned result details independently without
+  cloning. The optional `IncrementalDecode::take_details` hook transports them
+  after success, with single-take guards in Fused and forwarding adapters.
+  Existing codecs default to unavailable; native streaming producers remain
+  unqualified. This does not certify metadata completeness.
+
 - `PolicyDecoder::try_new(factory, policy, pulse)` admits native video creation
   before invoking the factory. Unknown explicit workspace bounds refuse; default
   policy remains permissive. Existing decoder wrappers now check both bound and

@@ -1565,3 +1565,20 @@ collect-allocation-check:
     cargo test -p zencodec-io --features std --test drivers --locked
     cargo clippy -p zencodec-io --lib --tests --all-features --locked -- -D warnings
     cargo check -p zencodec-io --no-default-features --locked
+
+# Ownership bridge only; not a streaming-completeness or admission claim.
+decode-details-check:
+    cargo test -p zencodec --lib output::tests --locked
+    cargo clippy -p zencodec --lib --all-features --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked
+    just jpeg-decode-admission-check
+
+# Optional terminal details: native ownership transport and protocol guards.
+terminal-details-check:
+    cargo test -p zencodec-coroutine --locked
+    cargo clippy -p zencodec-coroutine --all-targets --locked -- -D warnings
+    cargo test -p zencodec --lib --locked
+    cargo test -p zencodec-io --features tokio --locked
+    cargo clippy -p zencodec -p zencodec-io --lib --all-features --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked
+    just jpeg-decode-admission-check

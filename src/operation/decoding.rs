@@ -72,6 +72,9 @@ impl IncrementalDecode for CheckedDecoder {
     fn info(&self) -> Option<&ImageInfo> {
         self.inner.as_ref().and_then(|d| d.info())
     }
+    fn take_details(&mut self) -> Option<DecodeDetails> {
+        self.inner.as_mut().and_then(|d| d.take_details())
+    }
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
         self.inner.as_ref().and_then(|d| d.output_descriptor())
     }

@@ -206,6 +206,7 @@ pub(crate) struct Shared {
     pub(crate) storage: Option<StorageBudget>,
     pub(crate) metadata: Option<MetadataUpdate>,
     pub(crate) info: Option<ImageInfo>,
+    pub(crate) details: Option<zencodec::decode::DecodeDetails>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
     pub(crate) info_generation: u64,
     pub(crate) descriptor: Option<PixelDescriptor>,
@@ -230,6 +231,7 @@ impl Shared {
             storage: None,
             metadata: None,
             info: None,
+            details: None,
             info_generation: 0,
             descriptor: None,
             accepts_provisional: false,
@@ -428,6 +430,32 @@ impl CoroutineContext {
         }
         shared.info = Some(info);
         shared.info_generation += 1;
+    }
+
+    /// Supply the owned result details for terminal extraction.
+    ///
+    /// These remain private until the future and sink finish successfully.
+    /// Replacing a pending value drops its old owners. Failure or cancellation
+    /// discards pending details; `take_details` never returns a partial result.
+    /// This is not a metadata-completeness or privacy certificate. The producer
+    /// must include every result detail promised by its configured operation.
+    pub fn set_details(&mut self, details: zencodec::decode::DecodeDetails) {
+        let previous = {
+            let mut shared = self.shared.lock();
+            if shared.adopted.is_some()
+                && shared.info.as_ref().is_some_and(|old| {
+                    old.width != details.info.width
+                        || old.height != details.info.height
+                        || old.orientation != details.info.orientation
+                        || old.source_color != details.info.source_color
+                })
+            {
+                shared.control_failure = Some(ControlError::FinalInterpretationChanged);
+            }
+            shared.details.replace(details)
+        };
+        // Extension destructors run outside the shared-state lock.
+        drop(previous);
     }
 
     /// Set the negotiated output descriptor.

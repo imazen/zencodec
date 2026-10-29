@@ -5,25 +5,25 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "4c89fcb251758c7e5ed68b5a8617ad7d33031843d96ac175ce24bb339d02c650",
-      "surface_sha256": "58eb70f42f137c3c0e55a175e37aa4b87958d1f14ac96d22a289bc97add5fa0a",
-      "details_sha256": "b6551560abd3295fad1d359858d654834eff6a81d85c56e49a409ee409fac087"
+      "fingerprint": "9238058fa392a8b296072c11714d441ad86a5d6747443b9e1b0d01a4485c77a3",
+      "surface_sha256": "4fa57393081bd4d3d0250859950dcce3a167caf3e65a21c745b518d68202d1a8",
+      "details_sha256": "5223941752acaba0ea73171d975a644dbb5770a2f71ef461832075ee4a815a66"
     },
     {
       "name": "zencodec-io",
       "directory": "zencodec-io",
       "features": "all",
-      "fingerprint": "c6d1ddc0e8ab6b0b62450d153569b686c8c345a1884fc42042b831e6e5b34793",
-      "surface_sha256": "e4803f3481589216e6617c4c0a2a8992982459977bcd4cc26f7c10c7f03ed633",
-      "details_sha256": "b8b07284d068864695582e16082b6e3cb2950801ca1812254f83fe412109bc8a"
+      "fingerprint": "84bb0fedbeeea283cccc308b8375eeeab45a3b1e3614f60d8fd6697471dd871d",
+      "surface_sha256": "10aefb2d6ce49092b557d9f01227d24cf43d0c9f0be538ba2b4a08a34737ec7d",
+      "details_sha256": "35f596a8035d05a95182c5f607ddf73cd90b1e98c5b42d26ce699ea88ecaf03c"
     },
     {
       "name": "zencodec-coroutine",
       "directory": "zencodec-coroutine",
       "features": "all",
-      "fingerprint": "7f53f5d9cfc96cbf3452bbb6cd9efe23409aea88dc12ada0d3ca1d867ca6d04f",
-      "surface_sha256": "b720ed4b0c378d5be16c23eee4573cf8192be8c757de9e57a0bd3f84a945803b",
-      "details_sha256": "bc9fc36891e957d00ed46dbbe4fd4de9c4bc39340dc3689ed666c8ac55eee01d"
+      "fingerprint": "bac893c13d909ac2e01b39c0b95237edefd65b08756be77134ed0c5fac396283",
+      "surface_sha256": "5c5f6deb80a8cddeeacefb6e52b98dd31984b07a2cc9d0fdd1e656d0a1da5def",
+      "details_sha256": "362e146f555e086e199d316cf33f102848bcfe2e2039f650df48a0569ede0847"
     },
     {
       "name": "zencodec-media",

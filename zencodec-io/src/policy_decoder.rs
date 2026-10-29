@@ -132,6 +132,12 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
     fn info(&self) -> Option<&ImageInfo> {
         self.decoder.as_ref().and_then(|d| d.info())
     }
+    fn take_details(&mut self) -> Option<zencodec::decode::DecodeDetails> {
+        if self.failed {
+            return None;
+        }
+        self.decoder.as_mut().and_then(|d| d.take_details())
+    }
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
         self.decoder.as_ref().and_then(|d| d.output_descriptor())
     }
