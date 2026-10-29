@@ -1,0 +1,177 @@
+{
+  "execution": {
+    "protocol": "zenbench-process-v1",
+    "plan": {
+      "mode": "confirm",
+      "processes": 5,
+      "rounds": 30,
+      "margin_pct": 1.0,
+      "confidence": 0.95,
+      "workload_id": "retained-jpeg-noise-patches-v1",
+      "scope": null,
+      "timeout": {
+        "secs": 300,
+        "nanos": 0
+      }
+    },
+    "binary_sha256": "dede8d1c0d60547e02f794ba0cfad612af7cb9502e8542e6f00d008f87396c55",
+    "process_id": 1400691,
+    "independent_processes": true,
+    "timer_backend": "hardware_counter"
+  },
+  "process_comparisons": [
+    {
+      "group": "retained/97x65/progressive=false",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 1.1634235260403456,
+      "lower_pct": -0.46910145097192113,
+      "upper_pct": 2.8227254923034035,
+      "verdict": "inconclusive",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/97x65/progressive=true",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 0.8780997630308719,
+      "lower_pct": 0.1834487886130095,
+      "upper_pct": 1.5775673012833238,
+      "verdict": "inconclusive",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/1024x768/progressive=false",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 0.6216569893543862,
+      "lower_pct": -0.31900402588264615,
+      "upper_pct": 1.5711947532328199,
+      "verdict": "inconclusive",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    },
+    {
+      "group": "retained/1024x768/progressive=true",
+      "baseline": "decode",
+      "candidate": "prepare_then_decode",
+      "estimate_pct": 0.24256951328868998,
+      "lower_pct": 0.03901777845288823,
+      "upper_pct": 0.4465354196115251,
+      "verdict": "equivalent",
+      "baseline_processes": 5,
+      "candidate_processes": 5,
+      "family_confidence": 0.95,
+      "margin_pct": 1.0,
+      "comparisons_in_family": 4,
+      "method": "paired_process_log_ratio_t_v1"
+    }
+  ],
+  "cpu_placement": {
+    "policy": "performance",
+    "topology": {
+      "kind": "homogeneous",
+      "classes": [
+        {
+          "name": "capacity1024",
+          "cpus": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "logical_cpu_count": 8,
+          "performance_rank": 1024
+        }
+      ],
+      "source": "linux_pmu_capacity_cpuid_cache",
+      "diagnostic": null
+    },
+    "status": "enforced_uniform",
+    "core_class": "capacity1024",
+    "effective_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "requested_cpus": null,
+    "thread_affinity_requested": null,
+    "thread_affinity_effective": null,
+    "enforcement": "cpuset"
+  },
+  "testbed": {
+    "cpu_model": "Neoverse-N1",
+    "arch": "aarch64",
+    "os": "linux",
+    "logical_cores": 8,
+    "physical_cores": 8
+  },
+  "unreliable": false,
+  "incomplete": false,
+  "gate_waits": 0,
+  "source": "91db6bf3",
+  "exit": 2,
+  "replicates": [
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    },
+    {
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false
+    }
+  ],
+  "raw_log_sha256": "8df5c172eb7dffc1eec05105f7d0798268f26418935a00d4e73a241e2fcaa905",
+  "artifacts": "~/tmp/retained-reuse-20261029",
+  "run_heavy": {
+    "seconds": 25,
+    "peak_rss_gib": 0.02,
+    "minimum_available_mib": 14823,
+    "peak_load": 1.74
+  },
+  "limits": [
+    "ARM only; frequency unverified",
+    "inconclusive is not non-inferiority",
+    "does not compare ordinary decode across implementations"
+  ]
+}

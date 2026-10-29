@@ -56,10 +56,31 @@ explicit carrier-release refinement passed in29s/peakRSS0.71GiB. These are build
 and validation resources, not decoder memory measurements. Full logs remain
 at `~/tmp/retained-reuse-20261029/{check,check2,check3}.log`.
 
-**Runtime and allocation improvements remain unmeasured.** The inline cached
+**Runtime non-inferiority is not established; allocation costs remain unmeasured.** The inline cached
 owner changes decoder layout; retaining full metadata between preparation and
 execution can change peak memory. Early release is not a numeric bound. Before
 native adoption, repeat matched heap profiles and the unchanged five-process,
 30-round, 1% runtime protocol; compare ordinary decode too. Do not infer that
 removing two parses eliminates the observed regression. Native main checkouts
 and their unrelated work remain untouched.
+
+## Runtime confirmation
+
+The unchanged five-process/30-round/1% ARM confirmation completed with zero
+gate waits and no unreliable/incomplete replicate. Aggregate rc2 is an
+inconclusive result, not a successful optimization gate:
+
+| Fixture | Preparation overhead | 95% family interval | Verdict |
+|---|---:|---:|---|
+| 97×65 baseline | +1.1634% | -0.4691% to +2.8227% | Inconclusive |
+| 97×65 progressive | +0.8781% | +0.1834% to +1.5776% | Inconclusive |
+| 1024×768 baseline | +0.6217% | -0.3190% to +1.5712% | Inconclusive |
+| 1024×768 progressive | +0.2426% | +0.0390% to +0.4465% | Equivalent within 1% |
+
+[Exact receipt](../../benchmarks/retained_reuse_runtime_2026-10-29.json).
+The point estimates cannot establish improvement over the earlier experiment:
+these are separate confirmations, and ordinary decode also changes carrier
+lifetime in this candidate. Uniform ARM CPU placement is enforced; frequency
+is unverified. No x86, whole-application or memory claim follows. Wrapper rc2,
+25s, peak RSS0.02GiB, minimum available14823MiB, load1.74; build separately
+passed in198s/peakRSS0.72GiB. Raw results remain in the run directory above.
