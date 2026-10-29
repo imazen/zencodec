@@ -1,7 +1,7 @@
 [workspace]
-# zencodec (this manifest's package) is the root member; zencodec-testkit is a
-# dev/conformance helper that depends on zencodec by path and is never published
-# alongside it.
+# zencodec is the root member. The versioned conformance testkit depends on
+# core and I/O; its publication requires those registry dependencies first.
+# See docs/release-candidate.md for the coordinated publication gates.
 members = [
     "zencodec-testkit",
     "zencodec-io",

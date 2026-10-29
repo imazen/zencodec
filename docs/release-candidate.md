@@ -401,3 +401,47 @@ Before publication, the owner must review the corrected
 and approve release. Publish and validate the paired dependency contents before
 publishing zencodec. No crate was published or version requirement relaxed as
 part of this audit.
+
+
+## Package dependency audit (2026-10-29)
+
+At `af1c9578`, `cargo package --list --allow-dirty --no-verify` succeeded
+for all seven workspace packages in an isolated export. This checks inclusion,
+not registry resolution or compilation. The separate renderer is not part of
+that seven-package gate.
+
+The versioned testkit has a normal dependency on `zencodec-io 0.1.0`.
+I/O still has `publish = false`, and its
+[sparse registry entry](https://index.crates.io/ze/nc/zencodec-io) returned HTTP
+404 during this audit. Thus publishing the testkit requires a reviewed I/O
+release first; core's successful workspace tests do not discharge that gate.
+Coroutine, media, media-testkit and the separate renderer also retain their
+explicit publication guards. Do not remove those guards as routine packaging
+cleanup.
+
+The dependency order, once each package receives release approval, is:
+
+1. Paired zenpixels, then zenpixels-convert, with registry-only consumer checks.
+2. zencodec core.
+3. zenmeta and zencodec-io (each depends on core); coroutine can follow core.
+4. zencodec-testkit after I/O, and media after I/O.
+5. media-testkit after media; renderer after its own qualification.
+
+This is dependency ordering, not a requirement to publish every companion in
+one batch. Each selected package still needs the release gates above. Verify
+normal, optional, target-specific and dev dependency resolution from the actual
+normalized package; path patches must not conceal unavailable registry edges.
+
+A focused I/O normalization probe used:
+
+```sh
+cargo package -p zencodec-io --allow-dirty --no-verify --exclude-lockfile
+```
+
+Cargo removed excluded test/example/benchmark targets and the unversioned
+path-only coroutine dev dependency from the normalized manifest. There are no
+dangling excluded targets in that manifest. This deliberately omitted lock
+resolution and build verification: it is not a publication dry run. The
+serialized wrapper exited 0 with peak RSS 0.03 GiB; that is packaging resource
+usage, not codec memory. Full logs and file lists are retained under
+`~/tmp/zencodec-package-audit-20261029` on the qualification host.
