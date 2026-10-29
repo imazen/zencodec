@@ -261,3 +261,29 @@ available 14635MiB; `~/tmp/zencodec-tokio-guide/worker-lifetime-fixed.log`.
 The initial compile failure is retained in `worker-lifetime.log`. These controls
 use explicit release channels rather than timing-based assertions; the five-second
 timeouts are hang guards, not cancellation latency measurements.
+
+## Request cancellation should be automatic
+
+The request example now wraps its operation with `cancel_on_request_drop`.
+Its guard is constructed before returning the future, so even dropping an
+unpolled future signals operation-local cancellation. Tokio abort causes that
+signal when Tokio actually drops the task; calling `abort()` schedules this,
+it does not synchronously run its destructors. Normal success disarms the guard;
+errors and unwinding cancel remaining local work without replacing the error.
+The cancellation closure must be nonblocking and must not panic.
+
+The worker ownership test no longer calls `pulse.cancel()` before abort. It
+requires abort alone to signal the worker's Pulse while admission remains held.
+Separate controls cover success, typed error, unpolled drop and panic. This is
+an application helper, not a newly published library API. Its completion boundary
+must encompass owned work; do not disarm after merely dispatching a worker.
+For a streaming HTTP response, retain cancellation ownership with the response
+body, not only the handler that returns it. Dropping that body should stop its
+producer. A disconnect that the HTTP framework has not observed cannot yet drop
+that owner. Caller/tenant-wide controls must not be cancelled by this guard.
+
+The updated guard and worker controls pass all 40 driver and 3 quota tests plus
+strict Clippy. Receipt: rc0, 1s, peak RSS 0.31GiB, minimum available 14631MiB;
+`~/tmp/zencodec-tokio-guide/request-drop-fixed.log`. Initial Clippy diagnostics
+remain in `request-drop.log`. This establishes lifecycle behavior, not a measured
+request-to-native cancellation latency bound.
