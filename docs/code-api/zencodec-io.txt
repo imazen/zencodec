@@ -441,6 +441,7 @@ pub fn zencodec_io::PolicyDecoder<D, R>::info(&self) -> core::option::Option<&ze
 pub fn zencodec_io::PolicyDecoder<D, R>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec_io::PolicyDecoder<D, R>::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
 pub fn zencodec_io::PolicyDecoder<D, R>::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<Self::Error>>
+pub fn zencodec_io::PolicyDecoder<D, R>::take_details(&mut self) -> core::option::Option<zencodec::output::DecodeDetails>
 pub struct zencodec_io::ReadAtCursor
 impl zencodec_io::ReadAtCursor
 pub fn zencodec_io::ReadAtCursor::new(opts: zencodec_io::DriveOptions) -> Self

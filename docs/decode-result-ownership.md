@@ -59,11 +59,22 @@ is retained in the qualification log.
 
 ## What it does not establish
 
-This is the ownership bridge, not a streaming completion implementation.
-Incremental decoders still need a terminal result channel carrying these details
-with explicit completeness evidence and single-take/error/drop behavior. Native
-JPEG controlled decoding does not yet return the owned extras carried by its
-one-shot path. No HDR gain-map reconstruction parity is claimed by these fixtures.
+The optional `IncrementalDecode::take_details(&mut self) -> Option<DecodeDetails>`
+now carries these owners after successful completion. `Fused` exposes them only
+after `Done` and delegates at most one take, including through error erasure.
+Before completion and after failure/cancellation it does not call the native
+getter. Older decoders default to `None`; this means unavailable, not empty.
+Box/reference adapters, CodecSet selection, checked decode and PolicyDecoder
+forward the hook. Consumers needing owned details must reject `None`.
+
+This is not yet a native streaming completion implementation. Native JPEG
+controlled decoding still does not produce these details. The transport witness
+moves an actual native one-shot result through a private row adapter and the
+public erased incremental interface. It compares delivered rows and retained
+metadata/source identity, but starts with a full decoded raster; it is not an
+early-admission or low-memory streaming witness. Coroutine producers and direct
+native streaming completion remain unimplemented. No HDR gain-map reconstruction
+parity is claimed by these fixtures.
 
 An empty details object is not proof that opaque metadata is absent. Privacy and
 retention requirements still need native evidence; no fallback may construct empty
@@ -77,3 +88,31 @@ catalog passes generation (rc0, 6s, peak RSS 0.26 GiB). Site/source controls and
 the full browser suite pass on the candidate: all role tabs, inline context,
 copy/search, signatures, keyboard navigation and 390/768/1440-pixel layouts
 (rc0, 41s, peak RSS 0.33 GiB). No browser assertion changed.
+
+## Terminal extraction for adapters
+
+Ordinary consumers keep calling `DecodeRequest::decode`. An incremental adapter
+that needs the complete owned result uses this sequence:
+
+```rust,ignore
+// After the driver has returned Event::Done successfully:
+let details = decoder.take_details().ok_or(MyError::DetailsUnavailable)?;
+// Keep details with the matching collected pixel storage.
+let result = DecodeOutput::from_parts(pixels, details);
+```
+
+The optional hook avoids requiring every existing codec to implement completion
+immediately. It does not make partial header information sufficient. A provider
+returning Some must retain all result details its configured operation produced;
+this still does not assert discovery of every opaque input carrier. Late privacy
+or retention decisions need an admitted publication owner holding affected output
+until those obligations are discharged. The getter does not retract live output.
+
+Terminal-hook qualification: 673 core tests and 144 IO tests/doctests passed,
+with strict core/IO Clippy and no-default-features build. That run then stopped
+at an obsolete root `OutputInfo` import in the new native witness. Correcting
+only that import to `decode::OutputInfo` gave six passing native tests, strict
+harness Clippy and regenerated API snapshots (rc0, 10s, peak RSS 0.59 GiB).
+The initial failing log is preserved. The core terminal controls deliberately
+use an eager/repeating provider to prove the Fused gate, plus native-error and
+cancellation paths that must not invoke the getter.

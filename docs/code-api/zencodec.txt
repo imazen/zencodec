@@ -485,6 +485,7 @@ pub fn zencodec::decode::Fused<D>::info(&self) -> core::option::Option<&zencodec
 pub fn zencodec::decode::Fused<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::Fused<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::Fused<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 pub struct zencodec::decode::IncrementalDecoderShim<D>(pub D)
 impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
 pub fn zencodec::decode::IncrementalDecoderShim<D>::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<zencodec::decode::ErasedError>>
@@ -496,6 +497,7 @@ pub fn zencodec::decode::IncrementalDecoderShim<D>::info(&self) -> core::option:
 pub fn zencodec::decode::IncrementalDecoderShim<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::IncrementalDecoderShim<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::IncrementalDecoderShim<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 #[non_exhaustive] pub struct zencodec::decode::Input<'a>
 pub zencodec::decode::Input::bytes: &'a [u8]
 pub zencodec::decode::Input::offset: u64
@@ -722,6 +724,7 @@ pub fn zencodec::decode::IncrementalDecode::info(&self) -> core::option::Option<
 pub fn zencodec::decode::IncrementalDecode::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::IncrementalDecode::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::IncrementalDecode::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::decode::IncrementalDecode::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl zencodec::decode::IncrementalDecode for zencodec::CodecSetIncrementalDecoder
 pub type zencodec::CodecSetIncrementalDecoder::Error = zencodec::CodecSetError
 pub fn zencodec::CodecSetIncrementalDecoder::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -729,6 +732,7 @@ pub fn zencodec::CodecSetIncrementalDecoder::info(&self) -> core::option::Option
 pub fn zencodec::CodecSetIncrementalDecoder::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::CodecSetIncrementalDecoder::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::CodecSetIncrementalDecoder::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::CodecSetError>>
+pub fn zencodec::CodecSetIncrementalDecoder::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for &mut D
 pub type &mut D::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn &mut D::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -736,6 +740,7 @@ pub fn &mut D::info(&self) -> core::option::Option<&zencodec::ImageInfo>
 pub fn &mut D::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn &mut D::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn &mut D::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn &mut D::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for alloc::boxed::Box<D>
 pub type alloc::boxed::Box<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn alloc::boxed::Box<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -743,6 +748,7 @@ pub fn alloc::boxed::Box<D>::info(&self) -> core::option::Option<&zencodec::Imag
 pub fn alloc::boxed::Box<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn alloc::boxed::Box<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn alloc::boxed::Box<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn alloc::boxed::Box<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::Fused<D>
 pub type zencodec::decode::Fused<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn zencodec::decode::Fused<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -750,6 +756,7 @@ pub fn zencodec::decode::Fused<D>::info(&self) -> core::option::Option<&zencodec
 pub fn zencodec::decode::Fused<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::Fused<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::Fused<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
 pub type zencodec::decode::IncrementalDecoderShim<D>::Error = zencodec::decode::ErasedError
 pub fn zencodec::decode::IncrementalDecoderShim<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -757,6 +764,7 @@ pub fn zencodec::decode::IncrementalDecoderShim<D>::info(&self) -> core::option:
 pub fn zencodec::decode::IncrementalDecoderShim<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::IncrementalDecoderShim<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::IncrementalDecoderShim<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::IncrementalDecode for zencodec::Unsupported<E>
 pub type zencodec::Unsupported<E>::Error = E
 pub fn zencodec::Unsupported<E>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -764,6 +772,7 @@ pub fn zencodec::Unsupported<E>::info(&self) -> core::option::Option<&zencodec::
 pub fn zencodec::Unsupported<E>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::Unsupported<E>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::Unsupported<E>::step(&mut self, _input: zencodec::decode::Input<'_>, _sink: &mut dyn zencodec::decode::DecodeRowSink, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<E>>
+pub fn zencodec::Unsupported<E>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<J, E> zencodec::decode::IncrementalDecode for zencodec::helpers::WholeFileIncremental<J> where J: for<'a> zencodec::decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type zencodec::helpers::WholeFileIncremental<J>::Error = E
 pub fn zencodec::helpers::WholeFileIncremental<J>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -771,6 +780,7 @@ pub fn zencodec::helpers::WholeFileIncremental<J>::info(&self) -> core::option::
 pub fn zencodec::helpers::WholeFileIncremental<J>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::helpers::WholeFileIncremental<J>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::helpers::WholeFileIncremental<J>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::helpers::WholeFileIncremental<J>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 pub trait zencodec::decode::SourceEncodingDetails: core::any::Any + core::marker::Send + core::marker::Sync
 pub fn zencodec::decode::SourceEncodingDetails::is_lossless(&self) -> bool
 pub fn zencodec::decode::SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
@@ -1610,6 +1620,7 @@ pub fn zencodec::helpers::WholeFileIncremental<J>::info(&self) -> core::option::
 pub fn zencodec::helpers::WholeFileIncremental<J>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::helpers::WholeFileIncremental<J>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::helpers::WholeFileIncremental<J>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::helpers::WholeFileIncremental<J>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 pub fn zencodec::helpers::copy_decode_to_sink<'a, J>(job: J, data: alloc::borrow::Cow<'a, [u8]>, sink: &mut dyn zencodec::decode::DecodeRowSink, preferred: &[zenpixels::descriptor::PixelDescriptor], wrap_sink_error: fn(zencodec::decode::SinkError) -> <J as zencodec::decode::DecodeJob>::Error) -> core::result::Result<zencodec::decode::OutputInfo, <J as zencodec::decode::DecodeJob>::Error> where J: zencodec::decode::DecodeJob<'a>
 pub fn zencodec::helpers::copy_frame_to_sink<D: zencodec::decode::AnimationFrameDecoder>(decoder: &mut D, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, sink: &mut dyn zencodec::decode::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::decode::OutputInfo>, <D as zencodec::decode::AnimationFrameDecoder>::Error>
 pub fn zencodec::helpers::copy_rows_to_sink(sink: &mut dyn zencodec::decode::DecodeRowSink, meta: zencodec::decode::BatchMeta, pixels: &zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), zencodec::decode::SinkError>
@@ -2766,6 +2777,7 @@ pub fn zencodec::prelude::IncrementalDecode::info(&self) -> core::option::Option
 pub fn zencodec::prelude::IncrementalDecode::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::prelude::IncrementalDecode::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::prelude::IncrementalDecode::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::prelude::IncrementalDecode::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl zencodec::decode::IncrementalDecode for zencodec::CodecSetIncrementalDecoder
 pub type zencodec::CodecSetIncrementalDecoder::Error = zencodec::CodecSetError
 pub fn zencodec::CodecSetIncrementalDecoder::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2773,6 +2785,7 @@ pub fn zencodec::CodecSetIncrementalDecoder::info(&self) -> core::option::Option
 pub fn zencodec::CodecSetIncrementalDecoder::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::CodecSetIncrementalDecoder::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::CodecSetIncrementalDecoder::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::CodecSetError>>
+pub fn zencodec::CodecSetIncrementalDecoder::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for &mut D
 pub type &mut D::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn &mut D::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2780,6 +2793,7 @@ pub fn &mut D::info(&self) -> core::option::Option<&zencodec::ImageInfo>
 pub fn &mut D::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn &mut D::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn &mut D::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn &mut D::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for alloc::boxed::Box<D>
 pub type alloc::boxed::Box<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn alloc::boxed::Box<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2787,6 +2801,7 @@ pub fn alloc::boxed::Box<D>::info(&self) -> core::option::Option<&zencodec::Imag
 pub fn alloc::boxed::Box<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn alloc::boxed::Box<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn alloc::boxed::Box<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn alloc::boxed::Box<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::Fused<D>
 pub type zencodec::decode::Fused<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
 pub fn zencodec::decode::Fused<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2794,6 +2809,7 @@ pub fn zencodec::decode::Fused<D>::info(&self) -> core::option::Option<&zencodec
 pub fn zencodec::decode::Fused<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::Fused<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::Fused<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
 pub type zencodec::decode::IncrementalDecoderShim<D>::Error = zencodec::decode::ErasedError
 pub fn zencodec::decode::IncrementalDecoderShim<D>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2801,6 +2817,7 @@ pub fn zencodec::decode::IncrementalDecoderShim<D>::info(&self) -> core::option:
 pub fn zencodec::decode::IncrementalDecoderShim<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::decode::IncrementalDecoderShim<D>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::decode::IncrementalDecoderShim<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::IncrementalDecode for zencodec::Unsupported<E>
 pub type zencodec::Unsupported<E>::Error = E
 pub fn zencodec::Unsupported<E>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2808,6 +2825,7 @@ pub fn zencodec::Unsupported<E>::info(&self) -> core::option::Option<&zencodec::
 pub fn zencodec::Unsupported<E>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::Unsupported<E>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::Unsupported<E>::step(&mut self, _input: zencodec::decode::Input<'_>, _sink: &mut dyn zencodec::decode::DecodeRowSink, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<E>>
+pub fn zencodec::Unsupported<E>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<J, E> zencodec::decode::IncrementalDecode for zencodec::helpers::WholeFileIncremental<J> where J: for<'a> zencodec::decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type zencodec::helpers::WholeFileIncremental<J>::Error = E
 pub fn zencodec::helpers::WholeFileIncremental<J>::access_pattern(&self) -> zencodec::source::AccessPattern
@@ -2815,6 +2833,7 @@ pub fn zencodec::helpers::WholeFileIncremental<J>::info(&self) -> core::option::
 pub fn zencodec::helpers::WholeFileIncremental<J>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::helpers::WholeFileIncremental<J>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::helpers::WholeFileIncremental<J>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::helpers::WholeFileIncremental<J>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 pub trait zencodec::prelude::StreamingDecode
 pub type zencodec::prelude::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::prelude::StreamingDecode::info(&self) -> &zencodec::ImageInfo
@@ -3448,6 +3467,7 @@ pub fn zencodec::CodecSetIncrementalDecoder::info(&self) -> core::option::Option
 pub fn zencodec::CodecSetIncrementalDecoder::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::CodecSetIncrementalDecoder::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::CodecSetIncrementalDecoder::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::CodecSetError>>
+pub fn zencodec::CodecSetIncrementalDecoder::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 #[non_exhaustive] pub struct zencodec::ColorEmitFields
 pub zencodec::ColorEmitFields::cicp: zencodec::CicpEmission
 pub zencodec::ColorEmitFields::icc: zencodec::IccRetention
@@ -3815,6 +3835,7 @@ pub fn zencodec::Unsupported<E>::info(&self) -> core::option::Option<&zencodec::
 pub fn zencodec::Unsupported<E>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec::Unsupported<E>::requested(&self) -> &[zencodec::decode::InputRequest]
 pub fn zencodec::Unsupported<E>::step(&mut self, _input: zencodec::decode::Input<'_>, _sink: &mut dyn zencodec::decode::DecodeRowSink, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<E>>
+pub fn zencodec::Unsupported<E>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
 impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::StreamingDecode for zencodec::Unsupported<E>
 pub type zencodec::Unsupported<E>::Error = E
 pub fn zencodec::Unsupported<E>::info(&self) -> &zencodec::ImageInfo
