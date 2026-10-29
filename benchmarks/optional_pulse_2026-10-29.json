@@ -68,5 +68,30 @@
     "merge": "a5f2a58834d41cbace94368ca19eeb374f6b9873",
     "gates": "root resolution/graph, native tests, strict Clippy, no-default, fuzz bins PASS",
     "wrapper": "rc0 44s peak-RSS0.58GiB min-avail14538MiB peak-load1.47"
+  },
+  "native_followup": {
+    "sources": {
+      "zenbitmaps": "7d89635c966231ab4034a4e8cbc7f30ab7cf5c2a",
+      "zenwebp": "fb4388e280895a268ef5231ebccdccbff1e0fefc",
+      "zenjpeg": "31b789f37de97cf410d23226e50d4e8c02ade555"
+    },
+    "wrapper": "run-heavy: done rc=1 62s | peak-RSS 0.62GiB | min-avail 14490MiB | peak-load 0.99",
+    "steps": [
+      "bitmap-clippy\t0",
+      "bitmap-inventory-lib\t0",
+      "bitmap-resolve\t101",
+      "webp-resolve\t0",
+      "webp-audit\t0",
+      "webp-check\t0",
+      "jpeg-resolve\t101",
+      "recompress-resolve\t0",
+      "recompress-audit\t0",
+      "recompress-check\t0",
+      "jpeg-api-generate\t0",
+      "jpeg-api-check\t0"
+    ],
+    "remaining": "JPEG and bitmap fuzz locks retain 0.2.16; targeted updates required before compilation. Existing JPEG rustdoc ambiguous-link warnings retained.",
+    "webp_merge": "d5893295cc7562002017980b44753bf3237a89f3",
+    "webp_merged_head": "0a3d7fbd2f1de755cdb8e5ca67b68f4d52906635"
   }
 }
