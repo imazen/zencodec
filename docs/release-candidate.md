@@ -376,3 +376,28 @@ paths now discharge that flag while retaining all native emission requirements;
 unfitted retained jobs still receive the complete policy. Nine native color-fit
 controls and strict Clippy pass with unchanged dependency lock. Full application
 CI is separate. See the [consumer receipt](https://github.com/imazen/zenpipe/blob/43301b4cbad056bf5b30256b2063e3d31a5b3377/benchmarks/strict_color_fit_2026-10-29.md).
+
+## Registry availability recheck (2026-10-29)
+
+The live sparse index still has no unyanked release satisfying the current
+`>=0.2.17, <0.4.0` requirement for either pixel crate. Both indexes contain
+yanked 0.3.0; the highest unyanked version is 0.2.16. Checked directly from
+[zenpixels index](https://index.crates.io/ze/np/zenpixels) and
+[converter index](https://index.crates.io/ze/np/zenpixels-convert), after the
+crates.io HTTP API returned 403. Index records are not assumed to be sorted
+by semantic version. Git-patched qualification therefore still does not prove
+a fresh registry-only consumer can resolve this candidate.
+
+The paired source manifests are 0.3.1. Pixel source `f23ac753` has green
+[CI](https://github.com/imazen/zenpixels/actions/runs/40833032100).
+Documentation-only follow-through `33682afc` corrects the candidate README and
+changelog: estimation APIs are removed even with the compatibility feature;
+concrete-type conversion extensions and CllMeasure are sealed, while Pixel and
+CMS plugin traits remain open. The generated crates.io README is refreshed.
+These corrections change no library source or dependency requirement.
+
+Before publication, the owner must review the corrected
+[paired README](https://github.com/imazen/zenpixels/blob/33682afcfbc4a0192aa8143c0d6cb5334bcb0275/README.md)
+and approve release. Publish and validate the paired dependency contents before
+publishing zencodec. No crate was published or version requirement relaxed as
+part of this audit.
