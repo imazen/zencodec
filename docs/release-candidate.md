@@ -312,3 +312,24 @@ feature in media-testkit; enabling it for tests preserves the production default
 and lets every existing assertion run. All-target tests, doctests and strict
 Clippy pass after that repair. [Evidence](../benchmarks/release_workspace_2026-10-29.md).
 This is not crate-publication approval or completion of the full application goal.
+
+## Async cancellation and WebP row follow-through
+
+All core CI, native/documentation and fuzz workflows pass on `da247a4a`:
+[CI](https://github.com/imazen/zencodec/actions/runs/40943789698),
+[docs/native](https://github.com/imazen/zencodec/actions/runs/40943789648),
+[fuzz](https://github.com/imazen/zencodec/actions/runs/40943789647).
+The async batch driver now polls Pulse before each native step and checks again
+before returning successful decode completion. The queued-cancellation control
+fails before the fix; 45 driver/quota tests and strict Clippy pass afterward.
+This is cooperative cancellation at boundaries, not preemption inside native
+steps. See [Tokio execution](tokio-execution.md).
+
+WebP main `014b0e69` repairs inherited `begin` refusal and padded-row corruption.
+Four explicit regression controls, all 51 existing codec unit tests and strict
+Clippy pass on ARM64, including libwebp lossless readback. The shared testkit
+permits configuration-specific row refusal, so passing that helper alone did
+not establish that the advertised route worked. This adapter still buffers a
+full raw raster and emits at finish. Consumer repinning, the other candidates
+in issue 164, and checked plan/color admission are not covered by this result.
+[Native receipt](https://github.com/imazen/zenwebp/blob/014b0e699a7694546f1008768da62086f1d54fc8/benchmarks/declared_rows_2026-10-29.md).
