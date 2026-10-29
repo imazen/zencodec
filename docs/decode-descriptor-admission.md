@@ -69,3 +69,21 @@ checks; native library/test Clippy also passes (rc0, 8s, peak RSS 0.59GiB).
 The harness lock changes only the JPEG source revision. Full logs are retained
 in `~/tmp/zenpixels-release-reconcile-20261029/jpeg-rgba-final.log` and
 `jpeg-rgba-native4.log`. No decoder allocation measurement is claimed.
+
+## Ranked precision selection
+
+A mixed preference regression found another native mismatch: JPEG e49c76f0
+returned RGBF32 for `[RGB8_SRGB, RGBF32_LINEAR]`, because its one-shot adapter
+enabled float output when any alternative was F32. Native b2495f7d uses the
+first-supported layout selection after reading component count to select
+precision, preserving preference order. No public signature changed.
+
+The new control compares RGB/RGBA and U8-first/F32-first lists against
+singleton-preference execution for baseline/progressive JPEG, including exact
+row bytes and metadata. All four admission tests and strict harness Clippy pass
+on the published pin (rc0, 12s, peak RSS 0.69 GiB); the native controlled-decode
+target passes 18 tests and strict Clippy (rc0, 20s, peak RSS 0.68 GiB).
+The original failing control remains in the run log `jpeg-ranked-before.log`.
+Early allocation admission remains open. These mismatches demonstrate why a
+second prediction implementation cannot substitute for the actual configured
+decoder's output-selection boundary.

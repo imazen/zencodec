@@ -19,14 +19,14 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e49c76f0d59660701be6fcf52d0892b75d10c39f", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "b2495f7d65b9121c031a706f485b56d53ed0ab00", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
 zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "f03224661f6912221f75dd7a43b1329431cc2e16", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
 # Paired PNG requires the unpublished 0.4 DEFLATE family.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e49c76f0d59660701be6fcf52d0892b75d10c39f" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "b2495f7d65b9121c031a706f485b56d53ed0ab00" }
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "7b6d1436db5d771fc43226c146847fc76305afde" }
 zencodec = { path = "../.." }
 zencodec-io = { path = "../../zencodec-io" }
