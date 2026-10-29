@@ -1,0 +1,40 @@
+--- a/zenjpeg/src/codec/decode.rs
++++ b/zenjpeg/src/codec/decode.rs
+@@ -1292,6 +1292,37 @@
+ 
+ impl zencodec::decode::Decode for JpegDecoder<'_> {
+     type Error = At<CodecError>;
++
++    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, Self::Error> {
++        // Prototype: qualify only the ordinary configured sample route. Unknown
++        // routes retain existing execution and final output validation.
++        if self.crop_hint.is_some()
++            || self.gain_map_render != zencodec::GainMapRender::BaseOnly
++            || self.config.inner.correct_color.is_some()
++            || self.config.inner.crop_region.is_some()
++            || self.config.inner.decode_transform.is_some()
++            || self.config.inner.force_f32_idct
++            || self.config.inner.output_target != crate::decode::OutputTarget::Srgb8
++            || self.config.inner.gain_map != crate::decode::GainMapHandling::Discard
++        {
++            return Ok(None);
++        }
++        let cfg = build_decode_config(&self.config.inner, &self.limits,
++            self.crop_hint, self.orientation, self.policy.as_ref());
++        let stop: &dyn enough::Stop = self.stop.as_ref()
++            .map_or(&enough::Unstoppable as &dyn enough::Stop, |s| s);
++        stop.check().map_err(Error::from)?;
++        let header = read_job_info(&cfg, &self.data, self.policy.as_ref())?;
++        check_progressive_policy(&header, self.policy.as_ref())?;
++        self.limits.check_dimensions(header.dimensions.width, header.dimensions.height)
++            .map_err(Error::from)?;
++        let info = cfg.read_full_info_preserving(&self.data,
++            &metadata_preserve(self.policy.as_ref()), stop)?;
++        if info.precision != 8 || !matches!(info.num_components, 1 | 3) || info.is_xyb {
++            return Ok(None);
++        }
++        Ok(Some(decode_descriptor(&self.preferred, &info, None)))
++    }
+ 
+     fn decode(self) -> Result<DecodeOutput, Self::Error> {
+         {

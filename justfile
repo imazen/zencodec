@@ -1649,3 +1649,8 @@ registry-allocation-probe:
 tokio-guide-check:
     cargo test -p zencodec-io --features tokio --test drivers --test work_quota --locked
     cargo clippy -p zencodec-io --features tokio --test drivers --test work_quota --locked -- -D warnings
+
+# Retained one-shot output facts never bypass actual-result validation.
+decode-output-admission-check:
+    cargo test -p zencodec --all-features --locked --lib operation::decoding::admission_tests
+    cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings

@@ -1288,6 +1288,7 @@ first it can produce without lossy conversion. Pass `&[]` for native format.
 ```rust
 trait Decode: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
+    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, Self::Error>; // default None
     fn decode(self) -> Result<DecodeOutput, Self::Error>;
 }
 ```
@@ -1557,6 +1558,7 @@ trait DynDecodeJob<'a> {
 }
 
 trait DynDecoder {
+    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, BoxedError>; // default None
     fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError>;
 }
 

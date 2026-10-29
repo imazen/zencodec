@@ -233,8 +233,10 @@ impl DecodeRequest {
     /// Require this output descriptor. An unsupported result is an error;
     /// conversion or lower precision is never selected implicitly.
     ///
-    /// The one-shot path verifies the actual result after native decoding, so
-    /// refusal can follow a full raster allocation. For controlled execution,
+    /// The one-shot path first asks the retained decoder to prepare its output
+    /// descriptor, when supported, then always verifies the actual result. When
+    /// early facts are unavailable, refusal can follow a full raster allocation.
+    /// For controlled execution,
     /// [`Self::start_controlled`] checks the final interpretation before sink
     /// effects; this is not a bound on native decoding workspace.
     pub fn with_output(mut self, descriptor: PixelDescriptor) -> Self {
@@ -297,20 +299,11 @@ impl DecodeRequest {
             let decoder = job
                 .into_decoder(Cow::Borrowed(input), preferred)
                 .map_err(|e| OperationError::Codec(e.into()))?;
-            let output = decoder
-                .decode()
-                .map_err(|e| OperationError::Codec(e.into()))?;
-            codecs
-                .operation_pulse()
-                .check()
-                .map_err(OperationError::Stopped)?;
-            if let Output::Require(requested) = self.output {
-                let actual = output.pixels().descriptor();
-                if actual != requested {
-                    return Err(OperationError::OutputDescriptor { requested, actual });
-                }
-            }
-            Ok(output)
+            let required = match self.output {
+                Output::Require(descriptor) => Some(descriptor),
+                _ => None,
+            };
+            decoding::decode_owned(decoder, required, codecs.operation_pulse())
         };
         run()
             .map(|output| Outcome {

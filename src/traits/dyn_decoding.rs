@@ -32,6 +32,12 @@ use super::decoding::{DecodeJob, DecoderConfig};
 /// Wraps [`Decode`] for dyn dispatch. Produced by
 /// [`DynDecodeJob::into_decoder`].
 pub trait DynDecoder {
+    /// Optional early output facts from the retained configured decoder.
+    /// See [`Decode::prepare_output`]; `None` preserves ordinary execution.
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, BoxedError> {
+        Ok(None)
+    }
+
     /// Decode to owned pixels (consumes self).
     fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError>;
 }
@@ -45,6 +51,12 @@ impl core::fmt::Debug for dyn DynDecoder + '_ {
 pub(super) struct DecoderShim<D>(pub(super) D);
 
 impl<D: Decode> DynDecoder for DecoderShim<D> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, BoxedError> {
+        self.0
+            .prepare_output()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
     fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
         self.0.decode().map_err(|e| Box::new(e) as BoxedError)
     }
