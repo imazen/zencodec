@@ -31,6 +31,11 @@
 
 ### Fixed
 
+- Codec registry snapshots share registration lists without per-clone allocation;
+  extending a snapshot copies lists on write and preserves independent defaults.
+  Registry construction now allocates one shared owner. See the 2026-10-29
+  registry snapshot allocation comparison.
+
 - Controlled decoders cannot turn swallowed destination failures into success;
   original typed causes survive and later sink effects are blocked.
 

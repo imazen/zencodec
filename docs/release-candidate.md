@@ -181,12 +181,14 @@ metadata/extras. This remains a contract-design gate.
 
 ## Registry reuse
 
-`CodecSet::clone()` now shares registered templates while copying registration
-lists and per-set defaults. Only the selected config is cloned for an operation,
-including controlled decode. Existing registration and job-isolation controls
-and native JPEG controlled decoding pass. See the
-[clone-count qualification](../benchmarks/registry_cloning_2026-10-29.md);
-this establishes removed config clones, not a measured throughput improvement.
+`CodecSet::clone()` shares immutable registration lists and templates; extending
+a snapshot copies the lists on write. Per-set defaults remain independent. Only
+the selected config is cloned for an operation. The
+[config-clone controls](../benchmarks/registry_cloning_2026-10-29.md) and
+[allocation comparison](../benchmarks/registry_snapshot_2026-10-29.md) distinguish
+these costs: populated clones now allocate nothing, while constructing the shared
+registry adds one 88-byte allocation on the measured target. This is not a
+throughput or whole-operation memory claim.
 
 ## Paired pixel retirement integration
 

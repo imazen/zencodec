@@ -1636,3 +1636,11 @@ late-metadata-prepare repository revision output:
 media-staging-owner-check:
     cargo test -p zencodec-media --all-features --locked --lib staging::tests
     cargo clippy -p zencodec-media --all-features --all-targets --locked -- -D warnings
+
+# Registry snapshot semantics and allocation counts (run before/after in exports).
+registry-snapshot-check:
+    cargo test -p zencodec-testkit --test registry_cloning --test codec_set --locked
+    cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings
+
+registry-allocation-probe:
+    cargo run --manifest-path perf/api-usability-validation/Cargo.toml --locked -- --registry-only

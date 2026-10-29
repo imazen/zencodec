@@ -44,8 +44,9 @@
 //! set on the concrete config before registration, and per-call fidelity goes
 //! through [`CodecSet::encode_with`], which clones the template internally.
 //! [`CodecSet`] is also [`Clone`], so a shared base set can be extended per
-//! tenant or per request. Cloning copies the registration lists and shares
-//! immutable templates; it does not clone every native configuration. Creating
+//! tenant or per request. Cloning shares the immutable registration lists and
+//! templates; extending a clone copies the lists on write. It does not clone
+//! every native configuration. Creating
 //! an operation still clones its selected config into an independently owned job.
 //!
 //! # Format detection
@@ -254,6 +255,13 @@ impl From<BoxedError> for CodecSetError {
 // CodecSet
 // ===========================================================================
 
+#[derive(Clone, Default)]
+struct Registrations {
+    decoders: Vec<Arc<dyn DecoderEntry>>,
+    encoders: Vec<Arc<dyn EncoderEntry>>,
+    collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
+}
+
 /// A runtime set of codecs with one entry point per operation.
 ///
 /// Register configs with [`with_decoder`](Self::with_decoder) and
@@ -268,9 +276,7 @@ impl From<BoxedError> for CodecSetError {
 /// / [`encode_job`](Self::encode_job), which return the stamped job for
 /// further configuration.
 pub struct CodecSet {
-    decoders: Vec<Arc<dyn DecoderEntry>>,
-    encoders: Vec<Arc<dyn EncoderEntry>>,
-    collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
+    registrations: Arc<Registrations>,
     limits: Option<ResourceLimits>,
     pulse: Option<how_far::SharedPulse>,
     decode_policy: Option<DecodePolicy>,
@@ -282,9 +288,7 @@ impl CodecSet {
     /// and [`with_encoder`](Self::with_encoder).
     pub fn new() -> Self {
         Self {
-            decoders: Vec::new(),
-            encoders: Vec::new(),
-            collections: Vec::new(),
+            registrations: Arc::new(Registrations::default()),
             limits: None,
             pulse: None,
             decode_policy: None,
@@ -300,7 +304,9 @@ impl CodecSet {
     /// If several registered decoders claim the same format, the first
     /// registered wins.
     pub fn with_decoder(mut self, config: impl DecoderConfig + 'static) -> Self {
-        self.decoders.push(Arc::new(config));
+        Arc::make_mut(&mut self.registrations)
+            .decoders
+            .push(Arc::new(config));
         self
     }
 
@@ -316,7 +322,9 @@ impl CodecSet {
         <C::Job as EncodeJob>::Enc: Encoder + Send,
         <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
     {
-        self.encoders.push(Arc::new(config));
+        Arc::make_mut(&mut self.registrations)
+            .encoders
+            .push(Arc::new(config));
         self
     }
 
@@ -332,7 +340,9 @@ impl CodecSet {
         <C::Job as EncodeJob>::Enc: Encoder + Send,
         <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
     {
-        self.encoders.push(Arc::new(SendEncoderEntry(config)));
+        Arc::make_mut(&mut self.registrations)
+            .encoders
+            .push(Arc::new(SendEncoderEntry(config)));
         self
     }
 
@@ -409,14 +419,18 @@ impl CodecSet {
     ///
     /// May repeat a format if several decoders claim it.
     pub fn decodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        self.decoders
+        self.registrations
+            .decoders
             .iter()
             .flat_map(|d| d.formats().iter().copied())
     }
 
     /// Formats with a registered encoder, in registration order.
     pub fn encodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        self.encoders.iter().map(|e| e.as_dyn().format())
+        self.registrations
+            .encoders
+            .iter()
+            .map(|e| e.as_dyn().format())
     }
 
     /// Detect the input's format from magic bytes, consulting only formats
@@ -434,7 +448,7 @@ impl CodecSet {
                 return Some(format);
             }
         }
-        for decoder in &self.decoders {
+        for decoder in &self.registrations.decoders {
             for &format in decoder.formats() {
                 if let ImageFormat::Custom(def) = format
                     && (def.detect)(data)
@@ -644,7 +658,8 @@ impl CodecSet {
     }
 
     pub(crate) fn operation_access_pattern(&self) -> crate::source::AccessPattern {
-        self.decoders
+        self.registrations
+            .decoders
             .iter()
             .map(|d| d.capabilities().access_pattern())
             .fold(crate::source::AccessPattern::Sequential, |a, b| {
@@ -988,14 +1003,16 @@ impl CodecSet {
     // --- Internals ----------------------------------------------------------
 
     fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DecoderEntry> {
-        self.decoders
+        self.registrations
+            .decoders
             .iter()
             .find(|d| d.formats().contains(&format))
             .map(|b| &**b)
     }
 
     fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn EncoderEntry> {
-        self.encoders
+        self.registrations
+            .encoders
             .iter()
             .find(|e| e.as_dyn().format() == format)
             .map(|b| &**b)
@@ -1027,9 +1044,7 @@ impl Default for CodecSet {
 impl Clone for CodecSet {
     fn clone(&self) -> Self {
         Self {
-            decoders: self.decoders.clone(),
-            encoders: self.encoders.clone(),
-            collections: self.collections.clone(),
+            registrations: self.registrations.clone(),
             limits: self.limits,
             pulse: self.pulse.clone(),
             decode_policy: self.decode_policy,

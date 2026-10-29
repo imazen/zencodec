@@ -63,7 +63,8 @@ fn gradient(width: u32, height: u32) -> Vec<u8> {
 /// P5: per-operation registry cloning.
 fn registry_clone() {
     for n in [0usize, 1, 4, 16] {
-        let codecs = registry(n);
+        let (codecs, blocks, bytes) = heap(|| registry(n));
+        println!("registry_build\tpairs={n}\tallocs={blocks}\tbytes={bytes}");
         let (_, blocks, bytes) = heap(|| drop(codecs.clone()));
         println!("registry_clone\tpairs={n}\tclone_allocs={blocks}\tclone_bytes={bytes}");
         let (session, blocks, bytes) = heap(|| {
@@ -431,6 +432,10 @@ fn policy_matrix() {
 fn main() {
     let profiler = dhat::Profiler::builder().testing().build();
     registry_clone();
+    if std::env::args().any(|arg| arg == "--registry-only") {
+        std::mem::forget(profiler);
+        return;
+    }
     required_descriptor();
     row_encode_copies_and_staging();
     tenant_preset_on_encode();

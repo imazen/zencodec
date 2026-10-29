@@ -1,0 +1,25 @@
+# Allocation counters; before 88531042, after d6a47664; same probe source.
+before	registry_build	pairs=0	allocs=0	bytes=0
+before	registry_clone	pairs=0	clone_allocs=0	clone_bytes=0
+before	start_controlled	pairs=0	ok=true	allocs=2	bytes=448
+before	registry_build	pairs=1	allocs=4	bytes=160
+before	registry_clone	pairs=1	clone_allocs=2	clone_bytes=32
+before	start_controlled	pairs=1	ok=true	allocs=4	bytes=480
+before	registry_build	pairs=4	allocs=10	bytes=256
+before	registry_clone	pairs=4	clone_allocs=2	clone_bytes=128
+before	start_controlled	pairs=4	ok=true	allocs=4	bytes=576
+before	registry_build	pairs=16	allocs=38	bytes=1408
+before	registry_clone	pairs=16	clone_allocs=2	clone_bytes=512
+before	start_controlled	pairs=16	ok=true	allocs=4	bytes=960
+after	registry_build	pairs=0	allocs=1	bytes=88
+after	registry_clone	pairs=0	clone_allocs=0	clone_bytes=0
+after	start_controlled	pairs=0	ok=true	allocs=2	bytes=384
+after	registry_build	pairs=1	allocs=5	bytes=248
+after	registry_clone	pairs=1	clone_allocs=0	clone_bytes=0
+after	start_controlled	pairs=1	ok=true	allocs=2	bytes=384
+after	registry_build	pairs=4	allocs=11	bytes=344
+after	registry_clone	pairs=4	clone_allocs=0	clone_bytes=0
+after	start_controlled	pairs=4	ok=true	allocs=2	bytes=384
+after	registry_build	pairs=16	allocs=39	bytes=1496
+after	registry_clone	pairs=16	clone_allocs=0	clone_bytes=0
+after	start_controlled	pairs=16	ok=true	allocs=2	bytes=384

@@ -16,7 +16,9 @@ impl CodecSet {
     /// including failures: opening never silently falls back to another factory.
     /// This does not register a still-image decoder or change `detect` behavior.
     pub fn with_collection(mut self, factory: impl CollectionFactory + 'static) -> Self {
-        self.collections.push(Arc::new(factory));
+        Arc::make_mut(&mut self.registrations)
+            .collections
+            .push(Arc::new(factory));
         self
     }
 
@@ -44,6 +46,7 @@ impl CodecSet {
             .expect("owned operation pulses are shareable");
         CheckedCollection::open(pulse, resolver, |pulse| {
             let factory = self
+                .registrations
                 .collections
                 .iter()
                 .find(|factory| factory.formats().contains(&format))

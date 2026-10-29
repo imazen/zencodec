@@ -83,3 +83,25 @@ fn registry_clone_and_controlled_start_do_not_clone_unselected_templates() {
         copy.decodable_formats().count()
     );
 }
+
+#[test]
+fn extending_a_snapshot_does_not_change_existing_registrations() {
+    let decodes = Arc::new(AtomicUsize::new(0));
+    let encodes = Arc::new(AtomicUsize::new(0));
+    let base = CodecSet::new()
+        .with_decoder(CountedDecoder(decodes.clone()))
+        .with_encoder(CountedEncoder(encodes.clone()));
+    let snapshot = base.clone();
+    let extended = base
+        .with_decoder(CountedDecoder(decodes.clone()))
+        .with_send_encoder(CountedEncoder(encodes.clone()));
+    assert_eq!(snapshot.decodable_formats().count(), 1);
+    assert_eq!(snapshot.encodable_formats().count(), 1);
+    assert_eq!(extended.decodable_formats().count(), 2);
+    assert_eq!(extended.encodable_formats().count(), 2);
+    assert_eq!(decodes.load(Ordering::SeqCst), 0);
+    assert_eq!(encodes.load(Ordering::SeqCst), 0);
+    drop(snapshot.encode_job(ImageFormat::Pnm).unwrap());
+    drop(extended.encode_job(ImageFormat::Pnm).unwrap());
+    assert_eq!(encodes.load(Ordering::SeqCst), 2);
+}
