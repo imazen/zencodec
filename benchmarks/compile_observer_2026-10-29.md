@@ -60,3 +60,7 @@ The full current-main comparison has **not run**. Required next evidence is an
 observer that can account for owned descendant exits while retaining foreign-load,
 PID-reuse, missing-accounting and observation-limit controls. Keep the existing
 strict gate; do not subtract guessed CPU or accept A/A as a cleanliness proof.
+
+Accounting qualification is tracked in
+[zenbench issue 44](https://github.com/imazen/zenbench/issues/44), separately from
+[issue 42](https://github.com/imazen/zenbench/issues/42)'s retained diagnostics.

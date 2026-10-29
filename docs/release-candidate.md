@@ -27,7 +27,7 @@ on the optional-control graph at `6ab547aa`; its Undefined-slot native/shared
 controls preserve the existing slot bytes and row-padding invariance. See [the optional-control receipt](../benchmarks/optional_pulse_2026-10-29.json) and
 [the public-driver receipt](../benchmarks/replay_driver_2026-10-28.md).
 
-## Current main documentation and platform qualification
+## Recorded documentation and platform qualification
 
 On `eb4b9835217ed13b2b025de5a5a7d8b94600fb40`, the complete
 [CI workflow](https://github.com/imazen/zencodec/actions/runs/40869926926),
@@ -46,7 +46,8 @@ The serialized `run-heavy --mem 3G --jobs 2` invocation of
 peak RSS 0.32 GiB and minimum available memory 13045 MiB. Those resource figures
 measure documentation validation, not codec execution.
 
-This verifies the current core documentation and platform gates. It does not
+This verifies core documentation and platform gates at that recorded revision.
+Later changes require their own current-head gates before publication. It does not
 qualify the separate application graph, resolve its orientation expectations,
 or establish the still-open native workspace and deferred-policy contracts.
 
@@ -454,3 +455,5 @@ clean admission observations, while all 15 short-lived-child invocations are
 invalidated (151 unclean during-work observations). No statistical or resource
 gate was relaxed. The current-main compile plan is portable and prepared, but
 full confirmation remains unqualified pending descendant-lifecycle accounting.
+
+Descendant-lifecycle accounting is tracked in [zenbench issue 44](https://github.com/imazen/zenbench/issues/44).
