@@ -47,6 +47,15 @@ class Cleanup(unittest.TestCase):
             if not failure:
                 self.assertEqual(json.loads((output / "build.json").read_text())["maximum_resident_kib"], 1234)
 
+    def test_consumer_carries_only_pinned_source_patches(self):
+        with tempfile.TemporaryDirectory(dir=Path.home() / "tmp") as scratch:
+            root = Path(scratch)
+            (root / "Cargo.toml").write_text('[patch.crates-io]\nzenpixels = { git = "https://example.test/pixels", rev = "' + 'a' * 40 + '" }\n')
+            self.assertIn('rev = "' + 'a' * 40 + '"', runner.root_patches(root))
+            (root / "Cargo.toml").write_text('[patch.crates-io]\nzenpixels = { git = "https://example.test/pixels", branch = "main" }\n')
+            with self.assertRaises(ValueError):
+                runner.root_patches(root)
+
     def test_success(self): self.exercise()
     def test_failure(self): self.exercise(subprocess.CalledProcessError(101, "cargo"))
     def test_timeout_retains_target_until_supervised_exit(self): self.exercise(subprocess.TimeoutExpired("cargo", 120))

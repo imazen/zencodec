@@ -98,3 +98,10 @@ One integration owner, no new exploratory lanes, one serialized qualification
 batch per candidate, and focused reruns only for actual failures. Preserve all
 reports and source commits. Maintain a bounded failure list in the owning docs;
 do not spend remaining capacity repeating already-qualified unchanged matrices.
+
+A fresh outer-consumer resolution on 2026-10-29 rejected the registry requirement
+`zenpixels >=0.2.17, <0.4.0` (Cargo reported 0.3.0 yanked). The candidate's root
+patch selects `283655c5`; downstream roots must provide that patch until the
+paired pixel release is published. Benchmark consumers now carry the immutable
+source patch explicitly. A successful workspace build does not qualify an
+unpatched crates.io consumer graph.

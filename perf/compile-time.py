@@ -14,6 +14,21 @@ def run(args, **kwargs):
     return subprocess.run(args, check=True, timeout=120, **kwargs)
 
 
+def root_patches(source):
+    """An outer consumer must explicitly select unpublished source dependencies."""
+    patches = tomllib.loads((source / "Cargo.toml").read_text()).get("patch", {}).get("crates-io", {})
+    if not patches:
+        return ""
+    lines = ["\n[patch.crates-io]"]
+    for name, dep in sorted(patches.items()):
+        if not isinstance(dep, dict) or set(dep) != {"git", "rev"}:
+            raise ValueError(f"unsupported benchmark patch for {name}: require immutable git/rev")
+        if len(dep["rev"]) != 40 or any(c not in "0123456789abcdef" for c in dep["rev"]):
+            raise ValueError(f"benchmark patch must use full immutable revision: {name}")
+        lines.append(f"{name} = {{ git = {json.dumps(dep['git'])}, rev = {json.dumps(dep['rev'])} }}")
+    return "\n".join(lines) + "\n"
+
+
 def prepare(root, main, ideal):
     root.mkdir(parents=True, exist_ok=False)
     script = root / "runner-measured.py"
@@ -39,7 +54,8 @@ def prepare(root, main, ideal):
                 dep += ', features = ["std"]'
             (project / "Cargo.toml").write_text(
                 '[package]\nname = "compile-consumer"\nversion = "0.0.0"\nedition = "2024"\n'
-                '[workspace]\n[dependencies]\nzencodec = { ' + dep + ' }\n')
+                '[workspace]\n[dependencies]\nzencodec = { ' + dep + ' }\n' +
+                (root_patches(source) if name != 'published' else ''))
             run(["cargo", "generate-lockfile", "--manifest-path", str(project / "Cargo.toml")])
             run(["cargo", "fetch", "--locked", "--manifest-path", str(project / "Cargo.toml")])
             with (project / "tree.txt").open("w") as output:
@@ -101,7 +117,7 @@ def prepare_adapters(root, main, ideal):
                 available = tomllib.loads((directory / "Cargo.toml").read_text()).get("features", {})
                 flags = ', features=["std"]' if feature == "std" and "std" in available else ''
                 manifest += f'{package} = {{ path={json.dumps(str(directory))}, default-features=false{flags} }}\n'
-            (project / "Cargo.toml").write_text(manifest)
+            (project / "Cargo.toml").write_text(manifest + root_patches(source))
             run(["cargo", "generate-lockfile", "--manifest-path", str(project / "Cargo.toml")])
             run(["cargo", "fetch", "--locked", "--manifest-path", str(project / "Cargo.toml")])
             with (project / "tree.txt").open("w") as output:
