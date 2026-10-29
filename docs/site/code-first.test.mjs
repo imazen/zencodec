@@ -76,3 +76,12 @@ use zencodecs::{
     JpegDecoderConfig, PngEncoderConfig,
 };`);
 });
+
+test('Tokio journeys cover caller, adapter and codec responsibilities',()=>{
+  for (const [id,role] of [['app-tokio','consumer'],['adapter-tokio','adapter'],['codec-async','implementor']]) {
+    const flow=codeFlows.find(f=>f.id===id);
+    assert.equal(flow.role,role);
+    assert.equal(flow.steps.length,3);
+    for(const step of flow.steps)assert.ok(step.title && step.why);
+  }
+});
