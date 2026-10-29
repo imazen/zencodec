@@ -152,10 +152,11 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Error>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         self.run(|decoder, _, _, report| {
-            pulse.check()?;
+            local_pulse.check()?;
             decoder
                 .configure(config, pulse)
                 .map_err(|e| native(e, report))
@@ -164,19 +165,21 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
     fn send(
         &mut self,
         packet: &mut Packet,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<Error>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         self.run(|decoder, _, _, report| {
-            pulse.check()?;
+            local_pulse.check()?;
             decoder.send(packet, pulse).map_err(|e| native(e, report))
         })
     }
     fn receive(
         &mut self,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Frame>, SessionError<Error>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         self.run(|decoder, resolver, preset, report| {
-            pulse.check()?;
+            local_pulse.check()?;
             let output = decoder.receive(pulse).map_err(|e| native(e, report))?;
             if let Receive::Ready(frame) = &output {
                 match resolve_frame(

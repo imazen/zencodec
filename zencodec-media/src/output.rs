@@ -12,10 +12,9 @@
 //! fn write<M: Muxer, W: std::io::Write>(
 //!     muxer: M, writer: W, tracks: &[TrackInfo], packets: impl IntoIterator<Item = Packet>,
 //! ) -> Result<Stats, Failure> {
-//!     let pulse = &zencodec::how_far::NoPulse;
-//!     let mut output = Output::new(muxer, Forward(writer), tracks, &pulse)?;
-//!     for packet in packets { output.send(packet, &pulse)?; }
-//!     output.finish(&pulse)
+//!     let mut output = Output::new(muxer, Forward(writer), tracks, None)?;
+//!     for packet in packets { output.send(packet, None)?; }
+//!     output.finish(None)
 //! }
 //! ```
 //!
@@ -28,6 +27,8 @@
 //! encoder backpressure: finish or separately qualify upstream raw-buffer retention
 //! before sending packets to a slow writer. No whole-operation memory bound is
 //! implied. Dropping either state does not implicitly finish or publish.
+//! `None` for a borrowed Pulse adds no per-call control and preserves native
+//! retained controls, timing validation and destination checks.
 
 use crate::{
     container::{MuxHint, MuxTiming, Muxer},
@@ -126,8 +127,9 @@ impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
         mux: M,
         destination: D,
         tracks: &[TrackInfo],
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, Failure> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         Output::prepare_unpublished(mux, destination, tracks, pulse, true, M::begin_exact_timing)
             .map(Self)
     }
@@ -145,7 +147,8 @@ impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
         self.0.validate_packet(packet)
     }
     /// Publish the retained header; any failure consumes the preparation.
-    pub fn publish(self, pulse: &dyn zencodec::Pulse) -> Result<Output<M, D>, Failure> {
+    pub fn publish(self, pulse: Option<&dyn zencodec::Pulse>) -> Result<Output<M, D>, Failure> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let mut output = self.0;
         let mut mux = output.mux.take().expect("prepared muxer is retained");
         output
@@ -196,7 +199,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         mux: M,
         destination: D,
         tracks: &[TrackInfo],
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, Failure> {
         Self::prepare(mux, destination, tracks, pulse, false, M::begin)
     }
@@ -206,7 +209,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         mux: M,
         destination: D,
         tracks: &[TrackInfo],
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, Failure> {
         Self::prepare(mux, destination, tracks, pulse, true, M::begin_exact_timing)
     }
@@ -215,7 +218,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         mux: M,
         destination: D,
         tracks: &[TrackInfo],
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
         exact_timing: bool,
         begin: impl FnOnce(&mut M, &[TrackInfo], MuxHint) -> Result<MuxTiming, SessionError<M::Error>>,
     ) -> Result<Self, Failure> {
@@ -223,7 +226,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             mux,
             destination,
             tracks,
-            pulse,
+            pulse.unwrap_or(&zencodec::NoPulse),
             exact_timing,
             begin,
         )?)
@@ -317,7 +320,12 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         self.mux.is_none()
     }
     /// Validate and write one packet. Failure is terminal and preserves its cause.
-    pub fn send(&mut self, packet: Packet, pulse: &dyn zencodec::Pulse) -> Result<(), Failure> {
+    pub fn send(
+        &mut self,
+        packet: Packet,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), Failure> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let mut mux = self.mux.take().ok_or_else(|| {
             self.failure(
                 Stage::Packet,
@@ -325,10 +333,10 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             )
         })?;
         let work = || -> Result<(), Cause> {
-            stopped(pulse)?;
+            stopped(local_pulse)?;
             self.validate_packet(&packet)?;
             mux.write_packet(packet, pulse)?;
-            self.drain(&mut mux, pulse)?;
+            self.drain(&mut mux, local_pulse)?;
             Ok(())
         };
         work().map_err(|cause| self.failure(Stage::Packet, cause))?;
@@ -337,14 +345,15 @@ impl<M: Muxer, D: Destination> Output<M, D> {
     }
     /// Preflight final patches, append the tail, apply patches and flush.
     /// A patch I/O failure can leave partial overwrites; it is not a transaction.
-    pub fn finish(mut self, pulse: &dyn zencodec::Pulse) -> Result<Stats, Failure> {
+    pub fn finish(mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<Stats, Failure> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let mux = self.mux.take().ok_or_else(|| {
             self.failure(
                 Stage::Finish,
                 Box::new(SessionError::<ErasedError>::Finished),
             )
         })?;
-        stopped(pulse).map_err(|cause| self.failure(Stage::Finish, cause))?;
+        stopped(local_pulse).map_err(|cause| self.failure(Stage::Finish, cause))?;
         let finish = mux
             .finish(pulse)
             .map_err(|e| self.failure(Stage::Finish, Box::new(e)))?;
@@ -366,7 +375,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             &mut self.destination,
             &finish.tail,
             &mut self.stats.emitted,
-            pulse,
+            local_pulse,
         )
         .map_err(|cause| self.failure(Stage::Finish, cause))?;
         self.stats.patches = finish.patches.len();
@@ -375,8 +384,13 @@ impl<M: Muxer, D: Destination> Output<M, D> {
                 .position(patch.offset)
                 .map_err(|e| self.failure(Stage::Patch, Box::new(e)))?;
             let mut written = 0;
-            write_all(&mut self.destination, &patch.bytes, &mut written, pulse)
-                .map_err(|cause| self.failure(Stage::Patch, cause))?;
+            write_all(
+                &mut self.destination,
+                &patch.bytes,
+                &mut written,
+                local_pulse,
+            )
+            .map_err(|cause| self.failure(Stage::Patch, cause))?;
             self.stats.patch_bytes += patch.bytes.len();
         }
         if self.stats.patches > 0 {
@@ -387,7 +401,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         self.destination
             .flush()
             .map_err(|e| self.failure(Stage::Finish, Box::new(e)))?;
-        stopped(pulse).map_err(|cause| self.failure(Stage::Finish, cause))?;
+        stopped(local_pulse).map_err(|cause| self.failure(Stage::Finish, cause))?;
         Ok(self.stats)
     }
 }
