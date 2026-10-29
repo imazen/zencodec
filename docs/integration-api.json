@@ -1,6 +1,6 @@
 {
   "repository": "imazen/zenpipe",
-  "revision": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+  "revision": "f03224661f6912221f75dd7a43b1329431cc2e16",
   "path": "zencodecs/src/checked_transcode.rs",
   "related_paths": [
     "zencodecs/src/checked_transcode/asynchronous.rs"

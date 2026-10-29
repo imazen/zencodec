@@ -21,7 +21,7 @@ zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e0bb92b4d0751526b64269ca6dcf25240e91d8bc", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
-zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "f03224661f6912221f75dd7a43b1329431cc2e16", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
 # Paired PNG requires the unpublished 0.4 DEFLATE family.
