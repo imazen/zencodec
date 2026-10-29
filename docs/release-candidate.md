@@ -226,3 +226,17 @@ allows exactly seven package identity changes: core family, pixels and GIF.
 This qualifies compilation, not every native runtime route. Reconciled pixel
 PR77 head `7b502075` now includes the source and qualification record; its final
 workspace run passes 1,450 tests with 49 existing ignores and strict Clippy.
+
+The reconciled pixel candidate is merged on main as `f23ac753` (PR77).
+PR82's checked projection/error/finalizer functions and regression tests were
+verified present; PR90's ICC implementation and tests were verified
+byte-identical. Both redundant backport PRs are closed. The older
+`release/0.3.1` bookmark was not advanced; main is the consolidated candidate.
+Neither pixel package has been published. Required-platform CI and release
+approval remain gates; this merge does not change zencodec's existing pixel pin.
+
+GIF follow-through `a258e93c` also aligns its independent fuzz graph and uses
+a fixture constructor available on its older pixel pin. The actual pinned
+source graph now passes its 45 adapter controls, strict lib Clippy and all fuzz
+target compilation. This repairs the initial CI failures without changing
+pixel assertions or codec runtime logic.
