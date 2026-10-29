@@ -7,9 +7,9 @@ extern crate alloc;
 // This mode isolates the resolver from the root's unrelated pixel/gain-map
 // graph. It compiles the ACTUAL fidelity source, not an imitation of its types.
 #[cfg(not(feature = "full-zencodec"))]
-extern crate self as zencodec;
-#[cfg(not(feature = "full-zencodec"))]
 pub(crate) extern crate enough;
+#[cfg(not(feature = "full-zencodec"))]
+extern crate self as zencodec;
 #[cfg(not(feature = "full-zencodec"))]
 pub(crate) use how_far::{NoPulse, Pulse};
 #[cfg(not(feature = "full-zencodec"))]
@@ -57,7 +57,7 @@ fn resolve_without_std() -> Result<(), zencodec::At<policy::Failure<core::conver
         },
         Context::default(),
         &mut preset,
-        &zencodec::NoPulse,
+        Some(&zencodec::NoPulse),
     )?;
     Ok(())
 }

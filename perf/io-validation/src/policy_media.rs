@@ -27,7 +27,7 @@ pub(crate) fn select_track<R: PolicyResolver + ?Sized>(
     source: u64,
     may_drop: bool,
     resolver: &mut R,
-    stop: &dyn zencodec::Pulse,
+    stop: Option<&dyn zencodec::Pulse>,
 ) -> Result<TrackSelection, At<Failure<R::Error>>> {
     assert_eq!(track.index(), first.track());
     let facts = MediaFacts {

@@ -7,11 +7,7 @@ use crate::policy::{
     plan::{Plan, PlanError},
 };
 use std::{error::Error, fmt, sync::Arc};
-use zencodec::{
-    At,
-    decode::ByteRange,
-    enough::StopReason,
-};
+use zencodec::{At, decode::ByteRange, enough::StopReason};
 
 #[derive(Debug)]
 pub(crate) enum AdmissionError {
@@ -52,11 +48,13 @@ impl Admitted {
         current: Context,
         memory: &Storage,
         disk: &Storage,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, At<AdmissionError>> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         plan.validate_start(current)
             .map_err(|e| e.map_error(AdmissionError::Plan))?;
-        stop.check()
+        local_stop
+            .check()
             .map_err(|e| At::wrap(AdmissionError::Stopped(e)).at())?;
         let size = usize::try_from(plan.ram).map_err(|_| At::wrap(AdmissionError::Size).at())?;
         let disk_size =
@@ -92,13 +90,15 @@ impl Admitted {
         &self,
         range: ByteRange,
         current: Context,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Pending, At<AdmissionError>> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         self.0
             .plan
             .validate_start(current)
             .map_err(|e| e.map_error(AdmissionError::Plan))?;
-        stop.check()
+        local_stop
+            .check()
             .map_err(|e| At::wrap(AdmissionError::Stopped(e)).at())?;
         let transfer = Transfer::new(&self.0.local, Identity(current.source_revision), range)
             .map_err(|e| At::wrap(AdmissionError::Capacity(e)).at())?;

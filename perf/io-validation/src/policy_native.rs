@@ -9,7 +9,7 @@ use std::{
 };
 use zenbitmaps::{BmpEncoderConfig, QoiEncoderConfig};
 use zencodec::{
-    At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, NoPulse,
+    At, CodecSet, ImageFormat, Metadata, MetadataPolicy, NoPulse, ResourceLimits,
     encode::{EncodeJob, EncoderConfig, Fidelity},
 };
 use zenpixels::PixelSlice;
@@ -190,7 +190,7 @@ fn select_exif<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .map(|selection| ResolvedExif {
                 packet: None,
@@ -262,7 +262,7 @@ fn select_exif<R: PolicyResolver + ?Sized>(
             requirements,
             Context::default(),
             resolver,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .map_err(policy_error)?;
     Ok(ResolvedExif {
@@ -369,7 +369,7 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .map_err(policy_error)?;
         let Action::Fidelity(action) = selected.alternative.action else {
@@ -391,7 +391,7 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
                 requirements,
                 Context::default(),
                 resolver,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .map_err(policy_error)?;
         let Action::Execution(action) = selected.alternative.action else {

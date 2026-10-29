@@ -60,7 +60,7 @@ fn run<R: PolicyResolver + ?Sized>(
         requirements,
         Context::default(),
         resolver,
-        &NoPulse,
+        Some(&NoPulse),
     ) {
         Ok(selected) => {
             assert_eq!(selected.index, 1);
