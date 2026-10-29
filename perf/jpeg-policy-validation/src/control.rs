@@ -676,3 +676,89 @@ fn workspace_requirement_refuses_before_native_discovery() {
         }
     }
 }
+
+#[test]
+fn factory_admission_precedes_native_construction_and_retains_errors() {
+    use zencodec::operation::{
+        BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
+    };
+    for limit in [0, u64::MAX] {
+        let budget = StorageBudget::new(64 * 1024, 4);
+        let work = Arc::new(Work::default());
+        let calls = std::cell::Cell::new(0);
+        let policy = BoundPolicy::new(
+            PolicySet::new().with_workspace_limit(limit),
+            |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                panic!("admission must precede callback")
+            },
+        );
+        let result = PolicyDecoder::try_from_factory(
+            || -> Result<_, Infallible> {
+                calls.set(calls.get() + 1);
+                Ok(decoder(budget.clone(), work.clone()))
+            },
+            policy,
+        );
+        let error = result
+            .err()
+            .expect("unknown bound must refuse before construction");
+        assert_eq!(calls.get(), 0);
+        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        assert_eq!(
+            zencodec::find_cause::<UnmetRequirements>(&error)
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+        );
+    }
+    let calls = std::cell::Cell::new(0);
+    let result = PolicyDecoder::<Box<DynControlledDecoder>, _>::try_from_factory(
+        || {
+            calls.set(calls.get() + 1);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "native factory timeout",
+            ))
+        },
+        PolicySet::new(),
+    );
+    let error = result.err().expect("original factory failure");
+    assert_eq!(calls.get(), 1);
+    let cause = zencodec::find_cause::<std::io::Error>(&error).unwrap();
+    assert_eq!(cause.kind(), std::io::ErrorKind::TimedOut);
+    assert_eq!(cause.to_string(), "native factory timeout");
+}
+
+#[test]
+fn factory_keeps_metadata_requirements_pending_for_native_boundaries() {
+    use zencodec::operation::{BoundPolicy, MetadataTransfer, PolicyFailure};
+    let bytes = fixtures::fixture(false, fixtures::Placement::Header);
+    let budget = StorageBudget::new(64 * 1024, 4);
+    let work = Arc::new(Work::default());
+    let mut factory_calls = 0;
+    let mut decisions = 0;
+    let mut session = PolicyDecoder::try_from_factory(
+        || -> Result<_, Infallible> {
+            factory_calls += 1;
+            Ok(decoder(budget.clone(), work.clone()))
+        },
+        BoundPolicy::new(
+            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
+            |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                decisions += 1;
+                Ok(Decision::UsePreset)
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(factory_calls, 1);
+    let mut sink = Sink::default();
+    let error = drive_from_slice(&mut session, &bytes, &mut sink, None, 13).unwrap_err();
+    assert!(zencodec::find_cause::<PolicyFailure>(&error).is_some());
+    assert_eq!(session.report().decisions().count(), 2);
+    assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+    drop(session);
+    assert_eq!(decisions, 1, "only discovery reaches the callback");
+}

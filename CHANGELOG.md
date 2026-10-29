@@ -757,6 +757,10 @@ removes that whole class).
 
 ### [Unreleased]
 
+- Add `PolicyDecoder::try_from_factory` to check workspace requirements before
+  native construction, preserve factory errors and retain the same operation
+  policy through later decoding decisions.
+
 - Refuse unqualified workspace requirements before controlled native polling;
   retain `Workspace(Unknown)` through `PolicyDecodeError::Requirements` and
   release the session on refusal. Native construction remains outside this gate.

@@ -85,6 +85,44 @@ impl<D, R> PolicyDecoder<D, R> {
         &self.report
     }
 }
+impl<D, R: OperationPolicy> PolicyDecoder<D, R> {
+    /// Admit requirements before constructing a native decoder.
+    ///
+    /// Prefer this to [`Self::new`] when native construction may allocate. The
+    /// factory is invoked exactly once on successful admission and never on
+    /// admission refusal. Its original error is retained as
+    /// [`PolicyDecodeError::Native`]. The same policy is moved into the returned
+    /// adapter, where metadata and interpretation decisions still occur later.
+    ///
+    /// This generic adapter has no qualified native workspace bound, so any
+    /// configured workspace limit refuses with `Workspace(Unknown)` before the
+    /// factory runs. Other requirements remain pending for their boundaries;
+    /// success here does not certify metadata, fidelity or output scheduling.
+    /// Configure requirements on `policy` before this call, not with a later
+    /// legacy setter. Values evaluated before the closure is invoked (including
+    /// captured allocations) cannot be admitted by this method.
+    ///
+    /// ```ignore
+    /// let decoder = PolicyDecoder::try_from_factory(
+    ///     || request.start_controlled(&codecs, storage),
+    ///     policy,
+    /// )?;
+    /// ```
+    pub fn try_from_factory<E>(
+        factory: impl FnOnce() -> Result<D, E>,
+        policy: R,
+    ) -> Result<Self, PolicyDecodeError<E>> {
+        if let Some(requirements) = policy.requirements() {
+            requirements.check_workspace(None).map_err(|error| {
+                PolicyDecodeError::Requirements(
+                    At::wrap(error).at_named("controlled decoder factory admission"),
+                )
+            })?;
+        }
+        let decoder = factory().map_err(PolicyDecodeError::Native)?;
+        Ok(Self::new(decoder, policy))
+    }
+}
 impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for PolicyDecoder<D, R> {
     type Error = PolicyDecodeError<D::Error>;
     fn step(
