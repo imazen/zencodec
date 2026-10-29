@@ -54,3 +54,19 @@ The isolated site build preserves those guards and does not claim a new browser
 or full HTML Rustdoc run. Catalog receipt: rc0, 22s, peak-RSS 0.35GiB,
 min-avail 14241MiB, load 1.20. All remote validation processes exited; the owned
 Cargo target was deleted, with logs retained and no executables archived.
+
+## Public consumer follow-through
+
+`tests/collection_workspace.rs` additionally qualifies the registered `CodecSet`
+path with limits 0, 1 and u64::MAX: none invokes the native factory or selection
+callback. With ordinary defaults the same factory executes and its concrete
+error survives. A late legacy workspace requirement prevents native decode and
+its transform; explicit removal of that legacy requirement proves that the same
+retained collection owner remains usable and preserves its native error.
+These are controlled factories, not additional native codec qualification.
+
+Both integration tests and their strict Clippy pass on the same isolated ARM
+export and unchanged lock: rc0, 77s, peak-RSS 0.40GiB, min-avail 14136MiB,
+peak-load 1.44. Full log: `~/tmp/render-workspace-20261029/public.log` on
+zen-arm-big and r7900x. The existing `render-workspace-check` now includes them.
+Core CI for the production fix `7972cea7` passed (run 40956517731).

@@ -1679,4 +1679,5 @@ async-batch-cancellation-check:
 # Fail-before-effects workspace admission, plus existing renderer and core controls.
 render-workspace-check: render-check
     cargo test -p zencodec --lib --locked
-    cargo clippy -p zencodec --lib --locked -- -D warnings
+    cargo test -p zencodec --test collection_workspace --locked
+    cargo clippy -p zencodec --lib --test collection_workspace --locked -- -D warnings
