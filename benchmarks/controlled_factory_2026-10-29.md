@@ -28,3 +28,10 @@ controls remain unchanged; the original failure is retained.
 No codec trait or zenpixels change is needed. Captured values evaluated before
 the closure runs are outside this gate. Positive evidence for bounded native
 factories and general deferred obligations are still unqualified.
+
+Guide qualification at `bd04ce03c383294c674c7e172d52df498557b6e7`:
+eight-crate Rustdoc, all 24 source controls and the complete browser suite passed.
+`just docs-reference` and `just docs-site-browser-check 3547` ran in an isolated
+export under run-heavy 3G/jobs2 and timeout180: rc0, 46s, peak RSS 0.34 GiB,
+minimum available 13707 MiB, peak load 1.59. The code-first example exposes the
+factory signature alongside the executing native JPEG completion control.
