@@ -52,21 +52,24 @@ name = "zencodec"
 
 [features]
 # Opt-in: lets `ErrorCategory::Io`'s `CodecIoKind` carry a `std::io::ErrorKind`.
-# The crate is `#![no_std]` by default; this only pulls in `std` for that one
-# payload. When `core::io::ErrorKind` stabilizes this feature becomes a no-op.
-std = []
+# Also opts zenpixels into std and retains platform floating-point math.
+# Without this feature, metadata math uses libm and ICC parsing stays alloc-only.
+std = ["zenpixels/std"]
 
 [dependencies]
 # Published manifest uses crates.io versions (CI + `cargo publish` build the
 # real artifact). Local development builds against the in-tree zen sources via
 # a gitignored `.cargo/config.toml` `paths` override — see CONTRIBUTING note.
-zenpixels = { version = ">=0.2.17, <0.4.0", features = ["icc"] }
+zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false, features = ["icc"] }
 almost-enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
 enough = "0.4.4"
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5" }
 # Preserve the exact first cancellation reason without a std-only lock.
 spin = { version = "0.12.3", default-features = false, features = ["once"] }
+
+# Portable scalar math for gain-map metadata helpers without std.
+libm = { version = "0.2.16", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "io-util", "macros"] }

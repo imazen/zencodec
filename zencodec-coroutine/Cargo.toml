@@ -13,7 +13,7 @@ publish = false
 
 [dependencies]
 zencodec = { path = "..", version = ">=0.2.0, <0.4.0" }
-zenpixels = { version = ">=0.2.17, <0.4.0" }
+zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false }
 enough = "0.4.4"
 # Single-threaded hand-off cell between the decoder and the coroutine it
 # polls; never contended, so the lock never spins. Keeps the crate no_std.

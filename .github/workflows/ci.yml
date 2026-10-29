@@ -106,7 +106,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip1
+          targets: wasm32-wasip1, thumbv7em-none-eabihf
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -117,6 +117,9 @@ jobs:
 
       - name: Check WASM (no_std)
         run: cargo check --target wasm32-wasip1 --no-default-features
+
+      - name: Check freestanding core (no standard library available)
+        run: cargo check -p zencodec -p zencodec-io -p zencodec-coroutine -p zencodec-media -p zenmeta --lib --target thumbv7em-none-eabihf --no-default-features --locked
 
   # ==========================================================================
   # Clippy

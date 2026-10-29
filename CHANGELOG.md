@@ -563,6 +563,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Make the core dependency graph genuinely std-free, including ICC support.
+  Gain-map metadata helpers use portable math without `std`; explicit `std`
+  retains platform math. Add a freestanding CI gate and exact rounding/power
+  boundary controls without changing existing rational or metadata assertions.
+
 - Enforce mandatory `PolicySet` constraints before custom callback selection;
   preserve original offer indices and report named unknown/contradicted evidence.
   Lossless preferences and disclosed chroma-siting decisions remain situational.

@@ -17,6 +17,8 @@
 //! | `base_hdr_headroom` | log2 | 0.0 = SDR (1:1) |
 //! | `alternate_hdr_headroom` | log2 | 1.3 ≈ 2.46× peak brightness |
 
+mod math;
+
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -253,12 +255,12 @@ impl Default for GainMapChannel {
 impl GainMapChannel {
     /// Minimum gain in linear domain: 2^min.
     pub fn linear_min(&self) -> f64 {
-        2.0f64.powf(self.min)
+        math::pow2(self.min)
     }
 
     /// Maximum gain in linear domain: 2^max.
     pub fn linear_max(&self) -> f64 {
-        2.0f64.powf(self.max)
+        math::pow2(self.max)
     }
 }
 
@@ -320,12 +322,12 @@ impl GainMapParams {
 
     /// Base HDR headroom in linear domain: 2^base_hdr_headroom.
     pub fn linear_base_headroom(&self) -> f64 {
-        2.0f64.powf(self.base_hdr_headroom)
+        math::pow2(self.base_hdr_headroom)
     }
 
     /// Alternate HDR headroom in linear domain: 2^alternate_hdr_headroom.
     pub fn linear_alternate_headroom(&self) -> f64 {
-        2.0f64.powf(self.alternate_hdr_headroom)
+        math::pow2(self.alternate_hdr_headroom)
     }
 
     /// Validate parameters for correctness.
@@ -719,23 +721,23 @@ fn float_to_unsigned_fraction(
     let max_d: u64 = if v <= 1.0 {
         u32::MAX as u64
     } else {
-        (max_numerator as f64 / v).floor() as u64
+        math::floor(max_numerator as f64 / v) as u64
     };
     *denominator = 1;
     let mut previous_d: u32 = 0;
-    let mut current_v = v - v.floor();
+    let mut current_v = v - math::floor(v);
     const MAX_ITER: usize = 39;
     for _ in 0..MAX_ITER {
         let num_double = (*denominator as f64) * v;
         if num_double > max_numerator as f64 {
             return false;
         }
-        *numerator = num_double.round() as u32;
+        *numerator = math::round(num_double) as u32;
         if (num_double - (*numerator as f64)).abs() == 0.0 {
             return true;
         }
         current_v = 1.0 / current_v;
-        let new_d = previous_d as f64 + current_v.floor() * (*denominator as f64);
+        let new_d = previous_d as f64 + math::floor(current_v) * (*denominator as f64);
         if new_d > max_d as f64 {
             return true;
         }
@@ -744,9 +746,9 @@ fn float_to_unsigned_fraction(
             return false;
         }
         *denominator = new_d as u32;
-        current_v -= current_v.floor();
+        current_v -= math::floor(current_v);
     }
-    *numerator = ((*denominator as f64) * v).round() as u32;
+    *numerator = math::round((*denominator as f64) * v) as u32;
     true
 }
 
@@ -781,7 +783,7 @@ impl Fraction {
     )]
     pub fn from_f64(value: f64, denominator: u32) -> Self {
         Self {
-            numerator: (value * denominator as f64).round() as i32,
+            numerator: math::round(value * denominator as f64) as i32,
             denominator,
         }
     }
@@ -853,7 +855,7 @@ impl UFraction {
     )]
     pub fn from_f64(value: f64, denominator: u32) -> Self {
         Self {
-            numerator: (value.max(0.0) * denominator as f64).round() as u32,
+            numerator: math::round(value.max(0.0) * denominator as f64) as u32,
             denominator,
         }
     }

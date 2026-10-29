@@ -421,10 +421,9 @@ collection-api-check:
     cargo clippy -p zencodec --lib --locked -- -D warnings
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
 
-# Reproducer for the existing full-crate portability gap: zenpixels defaults
-# enable std, and disabling those exposes gain-map floating-point methods.
+# A genuinely freestanding target; WASM with std installed is not this gate.
 collection-api-bare-metal:
-    cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
+    cargo check -p zencodec -p zencodec-io -p zencodec-coroutine -p zencodec-media -p zenmeta --lib --no-default-features --target thumbv7em-none-eabihf --locked
 
 collection-api-resolve:
     cargo update -p zencodec
@@ -1658,3 +1657,9 @@ media-publication-check:
 native-request-cancellation-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked request_cancellation:: -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Numeric metadata contracts on both portable and explicit-std paths.
+gainmap-portability-check:
+    just collection-api-bare-metal
+    cargo test -p zencodec --lib gainmap:: --no-default-features --locked
+    cargo test -p zencodec --lib gainmap:: --features std --locked
