@@ -160,6 +160,58 @@ impl<S: Source> Filler<'_, S> {
         }
         Ok(())
     }
+    // Rows input can retain the source's immutable view through the push. Replay
+    // still fills the native-owned destination supplied by the codec.
+    fn push_borrowed<E: Encoder>(&mut self, encoder: &mut E, count: u32) -> Result<(), Cause> {
+        self.boundary = Stage::Read;
+        check(self.control)?;
+        if self.pass.is_none() {
+            self.begin_pass(0, true)?;
+        }
+        let first = self.next_row;
+        if count == 0
+            || first
+                .checked_add(count)
+                .is_none_or(|end| end > self.desc.height)
+        {
+            return Err(Refusal::RequestOrder { pass: 0, first }.into());
+        }
+        self.validate()?;
+        let Input::Raster { pixels, .. } = &self.input else {
+            return Err(Refusal::PullProtocol.into());
+        };
+        let mut rows = pixels.sub_rows(first, count);
+        for row in 0..count {
+            self.boundary = if self.desc.exact_depth.is_some() {
+                Stage::Encode
+            } else {
+                Stage::Read
+            };
+            check(self.control)?;
+            if let Some(exact) = self.desc.exact_depth
+                && !exact.holds_for(&rows.sub_rows(row, 1))?
+            {
+                return Err(ExactDepthContradiction {
+                    first_row: first + row,
+                    claim: exact,
+                }
+                .into());
+            }
+        }
+        if let Some(exact) = self.desc.exact_depth {
+            rows = rows.with_exact_depth(exact)?;
+        }
+        self.boundary = Stage::Read;
+        check(self.control)?;
+        self.validate()?;
+        self.control.advance(u64::from(count));
+        check(self.control)?;
+        self.validate()?;
+        self.next_row = first + count;
+        self.boundary = Stage::Encode;
+        encoder.push_rows(rows)?;
+        Ok(())
+    }
     fn fill_inner(&mut self, demand: RowDemand<'_>) -> Result<(), Cause> {
         self.boundary = Stage::Read;
         let RowDemand {
@@ -660,7 +712,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             None
         };
-        let mut row_buffer = if plan.input == InputRequirement::Rows {
+        let mut row_buffer = if plan.input == InputRequirement::Rows && !borrowed {
             Some(
                 out.options.storage.bytes(
                     row_bytes
@@ -732,6 +784,12 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             if input_contract == InputRequirement::Rows {
                 let first = filler.next_row;
                 let count = batch_rows.min(desc.height - first);
+                if borrowed {
+                    let pushed = filler.push_borrowed(&mut encoder, count);
+                    out.boundary = filler.boundary;
+                    pushed?;
+                    continue;
+                }
                 let size = row_bytes
                     .checked_mul(count as usize)
                     .ok_or(Refusal::Overflow)?;

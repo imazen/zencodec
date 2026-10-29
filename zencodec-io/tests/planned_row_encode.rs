@@ -32,6 +32,7 @@ struct Job {
     drift: bool,
     fail_start: bool,
     patches: bool,
+    row_pointers: Option<Arc<Mutex<Vec<usize>>>>,
 }
 impl EncodeJob for Job {
     type Error = io::Error;
@@ -64,6 +65,7 @@ impl EncodeJob for Job {
             drift: self.drift,
             fail_start: self.fail_start,
             patches: self.patches,
+            row_pointers: self.row_pointers,
             pending: vec![],
         })
     }
@@ -116,6 +118,7 @@ struct Enc {
     drift: bool,
     fail_start: bool,
     patches: bool,
+    row_pointers: Option<Arc<Mutex<Vec<usize>>>>,
     pending: Vec<u8>,
 }
 impl Encoder for Enc {
@@ -175,6 +178,12 @@ impl Encoder for Enc {
             Some(&ColorContext::from_cicp(Cicp::DISPLAY_P3))
         );
         for row in 0..pixels.rows() {
+            if let Some(pointers) = &self.row_pointers {
+                pointers
+                    .lock()
+                    .unwrap()
+                    .push(pixels.row(row).as_ptr() as usize);
+            }
             self.pending.extend_from_slice(pixels.row(row));
         }
         Ok(())
@@ -279,6 +288,7 @@ impl Setup {
             drift: false,
             fail_start: false,
             patches: false,
+            row_pointers: None,
         }
     }
     fn rows(&self) -> Rows {
@@ -669,3 +679,52 @@ mod exact_depth_tests;
 
 #[path = "planned_row_encode/replay.rs"]
 mod replay_tests;
+
+#[test]
+fn retained_raster_rows_reach_native_push_without_copying_or_padding_changes() {
+    for erased in [false, true] {
+        for batch in [1, 2] {
+            let setup = Setup::new();
+            let bytes = [1, 2, 3, 4, 5, 6, 99, 98, 97, 7, 8, 9, 10, 11, 12];
+            let pixels = PixelSlice::new(&bytes, 2, 2, 9, PixelDescriptor::RGB8_SRGB)
+                .unwrap()
+                .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3)));
+            let expected = (0..2)
+                .map(|row| pixels.row(row).as_ptr() as usize)
+                .collect::<Vec<_>>();
+            let pointers = Arc::new(Mutex::new(Vec::new()));
+            let mut job = setup.job();
+            job.row_pointers = Some(pointers.clone());
+            let source = row_encode::Raster::new(pixels);
+            let options = setup
+                .options()
+                .with_batch_rows(std::num::NonZeroU32::new(batch).unwrap());
+            if erased {
+                row_encode::encode_dyn_job(
+                    Config(job).dyn_job(),
+                    source,
+                    setup.writer(),
+                    PolicySet::new(),
+                    options,
+                    None,
+                )
+                .unwrap();
+            } else {
+                row_encode::encode_job(
+                    job,
+                    source,
+                    setup.writer(),
+                    PolicySet::new(),
+                    options,
+                    None,
+                )
+                .unwrap();
+            }
+            assert_eq!(*pointers.lock().unwrap(), expected);
+            assert_eq!(
+                *setup.bytes.lock().unwrap(),
+                [80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 90]
+            );
+        }
+    }
+}

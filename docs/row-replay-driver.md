@@ -21,7 +21,7 @@ use zencodec_io::row_encode::{self, Completed, Failure, Options, Raster};
 use zenpixels::PixelSlice;
 
 fn save<J: EncodeJob, W: Write>(
-    job: J, pixels: PixelSlice<'_>, writer: W, pulse: &dyn Pulse,
+    job: J, pixels: PixelSlice<'_>, writer: W, pulse: Option<&dyn Pulse>,
 ) -> Result<Completed, At<Failure>>
 where J::Enc: Encoder {
     row_encode::encode_job(
@@ -89,7 +89,7 @@ the existing zero-reservation callback contract.
 
 | Acquisition | Actual storage and replay validation |
 |---|---|
-| Retained raster | `Source::borrowed_pixels()` returns the actual held `PixelSlice`; native requests copy its active rows and honor both strides |
+| Retained raster | `Source::borrowed_pixels()` returns the actual held `PixelSlice`; `Rows` pushes borrowed strided views directly; `Replay` fills native-owned rows and honors both strides |
 | Direct rows, native maximum one | One source traversal, with no replay hash or snapshot |
 | Positional replay | `supports_positional_replay()` permits restarts; row digests and an optional `replay_identity()` detect changes |
 | Private RAM snapshot | One source traversal copies active rows into admitted private storage; later native requests read that storage |
@@ -154,11 +154,12 @@ methods conservatively return no borrow, no positional replay and no identity.
 The historical `row_encode` module name now covers both protocols.
 
 The driver uses a fixed six-slot offer array. Borrowed replay allocates no raw
-snapshot or digest table. Push mode owns one managed strip; replay uses the native
-loan directly. Snapshot mode reserves one raw array, disk/direct replay reserve
+snapshot or digest table. Forward-source push mode owns one managed strip;
+borrowed-raster push does not. Replay uses the native loan directly. Snapshot mode reserves one raw array, disk/direct replay reserve
 one row-digest array, and compressed finish-first storage retains its existing
-chunk/file costs. Each borrowed/snapshot/raw-disk fill copies active samples;
-direct source acquisition fills the native loan without an intermediate strip.
+chunk/file costs. Replay fills copy active samples from borrowed/snapshot/raw-disk storage;
+borrowed `Rows` pushes use the original views without an intermediate row buffer.
+Direct source acquisition fills the native loan without an intermediate strip.
 ICC-bearing plans remain borrowed by policy; bounded decision records carry no
 ICC payload. Source/context checks can clone reference-counted handles; the
 driver does not clone a full metadata owner for each candidate. No throughput,
@@ -202,3 +203,20 @@ for source cap zero and forbidden staging, source/stop failures, and output
 publication order. Keep color and depth declarations identical across routes.
 The scripted tests cannot establish native equivalence, Send behavior, metadata
 completeness or a native workspace bound.
+
+## Borrowed row push qualification (2026-10-29)
+
+The retained-job `Rows` route now passes `Raster` views directly to native push.
+The typed/erased pointer control covers one- and two-row batches with padded
+input; it failed against the copying driver. Exact-depth verification still
+checks every active row before push, and Pulse/source revalidation surrounds
+verification and progress callbacks. The existing 42 planned-driver controls,
+including contradictory claims and declaration changes, and strict I/O Clippy
+pass. Legacy raw-encoder input and native-owned replay fills keep their existing
+copying contracts.
+
+Native JPEG baseline/progressive output, with and without exact-depth claims,
+is byte-identical across legacy copying and typed/erased borrowing. Independent
+JPEG readback controls remain in that test. All six legacy native row-driver
+controls also pass. This is pointer/byte evidence, not a measured throughput or
+whole-process memory improvement. Reproduce with `just row-borrow-check <artifacts>`.

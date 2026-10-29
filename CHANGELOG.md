@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- Retained-job `Rows` encoding borrows raster strips directly, preserving stride,
+  color and exact-depth checks without allocating a copying row buffer. Replay
+  and legacy raw-encoder input retain their existing contracts.
+
 - `CodecSet::clone` shares registered templates instead of deep-cloning every
   codec configuration. Each operation still clones its selected config;
   registration lists and per-set defaults remain independent.

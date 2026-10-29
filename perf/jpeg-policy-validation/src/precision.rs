@@ -16,6 +16,7 @@ fn native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples
     let raw = fixtures::raw();
     let claim = ExactDepth::new(ChannelType::U8, SignalRange::Full, 8, 8).unwrap();
     for progressive in [false, true] {
+        let mut route_outputs = Vec::new();
         let config = zenjpeg::JpegEncoderConfig::new()
             .with_progressive(progressive)
             .with_prefer_streaming(true);
@@ -67,6 +68,15 @@ fn native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples
                 "claim changed native bytes in route {route}"
             );
             assert_eq!(fixtures::oracle(&outputs[0]), fixtures::oracle(&outputs[1]));
+            route_outputs.push(outputs.remove(0));
         }
+        assert_eq!(
+            route_outputs[0], route_outputs[1],
+            "typed borrowing differs from legacy copying"
+        );
+        assert_eq!(
+            route_outputs[0], route_outputs[2],
+            "erased borrowing differs from legacy copying"
+        );
     }
 }

@@ -1542,3 +1542,10 @@ registry-sharing-check:
     cargo test -p zencodec-testkit --locked --test registry_cloning --test codec_set --test operation_requests
     cargo clippy -p zencodec -p zencodec-testkit --locked --all-targets -- -D warnings
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib control:: -- --test-threads=1
+
+# Retained raster pointer identity plus existing admission and native parity.
+row-borrow-check artifacts:
+    cargo test -p zencodec-io --all-features --locked --test planned_row_encode
+    cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib row_driver -- --test-threads=1
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib precision:: -- --test-threads=1
