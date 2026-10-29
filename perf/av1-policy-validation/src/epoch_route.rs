@@ -1,7 +1,6 @@
 //! Native witness for output transitions. Fixed AV1 settings per segment;
 //! finish/drop native encoders before exposing admitted compressed output.
-use enough::{Stop, };
-use zencodec::how_far::NoPulse;
+use enough::Stop;
 use std::{
     error::Error,
     sync::{
@@ -10,13 +9,14 @@ use std::{
     },
 };
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
+use zencodec::how_far::NoPulse;
 use zencodec::{
     At, CodecError,
     encode::Fidelity,
     frame::{ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling},
     operation::{
         DestinationFacts, FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer,
-        FrameRouteState, OperationReport, OperationPolicy, PolicySet, resolve_frame_route,
+        FrameRouteState, OperationPolicy, OperationReport, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
     time::TimeBase,
@@ -162,13 +162,14 @@ impl<R: OperationPolicy> Candidate<R> {
     pub fn publish_header(
         &mut self,
         publish: impl FnOnce(&CodecConfig) -> Result<(), Cause>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Cause> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         let state = self
             .state
             .take()
             .ok_or_else(|| std::io::Error::other("terminal frame route"))?;
-        check(stop)?;
+        check(local_stop)?;
         if self.committed {
             return Err(std::io::Error::other("header already committed").into());
         }
@@ -179,11 +180,11 @@ impl<R: OperationPolicy> Candidate<R> {
             .ok_or_else(|| std::io::Error::other("no prepared output configuration"))?;
         self.committed = true;
         publish(config)?;
-        check(stop)?;
+        check(local_stop)?;
         self.state = Some(state);
         Ok(())
     }
-    pub fn push(&mut self, frame: &Frame, stop: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pub fn push(&mut self, frame: &Frame, stop: Option<&dyn zencodec::Pulse>) -> Result<(), Cause> {
         self.push_route(
             frame,
             (frame.interpretation(), frame.timing()),
@@ -198,7 +199,7 @@ impl<R: OperationPolicy> Candidate<R> {
         target: (&FrameInterpretation, FrameTiming),
         conversion: Option<FrameConversionOffer>,
         execute: impl FnOnce() -> Result<Frame, Cause>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Cause> {
         self.push_route_with_destination(
             frame,
@@ -218,13 +219,14 @@ impl<R: OperationPolicy> Candidate<R> {
         conversion: Option<FrameConversionOffer>,
         prepare_destination: impl FnOnce(&CodecConfig) -> Result<(D, Option<DestinationFacts>), Cause>,
         execute: impl FnOnce() -> Result<Frame, Cause>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<D, Cause> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         let mut state = self
             .state
             .take()
             .ok_or_else(|| std::io::Error::other("terminal frame route"))?;
-        check(stop)?;
+        check(local_stop)?;
         let (target, timing) = target;
         if conversion.is_some_and(|c| c.encoder_input != FrameFacts::new(target, timing)) {
             return Err(std::io::Error::other("conversion offer target mismatch").into());
@@ -252,7 +254,7 @@ impl<R: OperationPolicy> Candidate<R> {
         } else {
             None
         };
-        check(stop)?;
+        check(local_stop)?;
         let mut offer = FrameRouteOffer::new(if changed {
             FrameRoute::BeginSegment
         } else {
@@ -291,7 +293,7 @@ impl<R: OperationPolicy> Candidate<R> {
         // The selected converter is consumed exactly once, after policy and
         // before any old encoder is drained or replacement installed.
         let converted = execute()?;
-        check(stop)?;
+        check(local_stop)?;
         if converted.interpretation().as_ref() != target || converted.timing() != timing {
             return Err(std::io::Error::other("prepared conversion target changed").into());
         }
@@ -329,17 +331,18 @@ impl<R: OperationPolicy> Candidate<R> {
         state.inputs.try_reserve(1)?;
         state.inputs.push(converted.timing());
         state.previous = Some(FrameFacts::new(frame.interpretation(), frame.timing()));
-        check(stop)?;
+        check(local_stop)?;
         self.state = Some(state);
         Ok(destination.expect("selected route retains destination").0)
     }
-    pub fn finish(mut self, stop: &dyn zencodec::Pulse) -> Result<Vec<Segment>, Cause> {
+    pub fn finish(mut self, stop: Option<&dyn zencodec::Pulse>) -> Result<Vec<Segment>, Cause> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         let mut state = self
             .state
             .take()
             .ok_or_else(|| std::io::Error::other("terminal frame route"))?;
         finish_segment(&mut state, &self.storage, stop)?;
-        check(stop)?;
+        check(local_stop)?;
         // No live native encoder reaches the writer. It may wait while keeping
         // only admitted compressed payloads; caller-owned sources are separate.
         assert_eq!(self.live.load(Ordering::SeqCst), 0);
@@ -385,12 +388,13 @@ fn stage(packets: &mut Vec<Packet>, packet: Packet, storage: &StorageBudget) -> 
 fn finish_segment(
     state: &mut State,
     storage: &StorageBudget,
-    stop: &dyn zencodec::Pulse,
+    stop: Option<&dyn zencodec::Pulse>,
 ) -> Result<(), Cause> {
+    let local_stop = stop.unwrap_or(&zencodec::NoPulse);
     let Some(mut native) = state.native.take() else {
         return Ok(());
     };
-    check(stop)?;
+    check(local_stop)?;
     let mut config = native.encoder.output_config().unwrap().clone();
     config.epoch = state.segments.len().try_into()?;
     native.encoder.end_input()?;

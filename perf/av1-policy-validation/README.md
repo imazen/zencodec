@@ -1,5 +1,11 @@
 # Native AV1 policy qualification
 
+Borrowed controls in current session/mux wrappers and route experiments are
+optional. Forwarders retain the original `Option`; `None` leaves native retained
+controls and policy/storage checks active. This signature migration has not been
+built or run against the pinned native crates. Dated receipts below describe
+their recorded revisions.
+
 ## Container destination and timing qualification
 
 The shared `Muxer::begin_exact_timing` entry point is now exercised through
