@@ -784,3 +784,13 @@ color preparation. Request-local refusal preserves the collection owner;
 unconstrained rendering stays available. Three failing-first controls, existing
 renderer controls and core tests qualify the fix. See
 [validation](benchmarks/render_workspace_2026-10-29.md).
+
+## Incremental testkit pre-cancellation gap (2026-10-29)
+
+The trip-after-two probe could complete before cancellation was exercised.
+The shared incremental helper now independently requires pre-cancellation and
+pre-timeout to preserve their reasons, invoke no sink hooks and remain terminal.
+Mutation controls catch ignored stops, early sink effects and reason collapse;
+how-far-really diagnostics also detect a swallowed stop. This is testkit coverage,
+not proof of native in-flight responsiveness. See
+`benchmarks/testkit_precancellation_2026-10-29.md` and `just testkit-pulse-check`.

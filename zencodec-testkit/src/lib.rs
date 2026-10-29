@@ -68,7 +68,8 @@
 //!   does (the allowed/denied category policy is documented on
 //!   [`check_decode_truncation_series`]).
 //!
-//! [`check_all`] runs them all with default inputs — the one-call entry point.
+//! [`check_all`] runs the default subset. Fixture-driven and opt-in checks
+//! require separate calls; passing the subset is not complete certification.
 //!
 //! The [`reference`](mod@reference) module ships a faithful codec (declares and
 //! honors every capability) the harness is validated against — it doubles as a
@@ -4008,9 +4009,10 @@ pub fn check_inventory_dispatch<D: DecoderConfig + 'static>(dec: D, valid: &[u8]
     Ok(())
 }
 
-/// Run every conformance check with sensible default inputs, returning the first
-/// failure. The one-call entry point for a codec's test suite; for control over
-/// image sizes or animation frames, call the individual `check_*` functions.
+/// Run the default conformance subset, returning the first failure.
+/// Fixture-driven policy, timing, rewrite and opt-in error checks require separate
+/// calls. For control over image sizes or animation frames, call individual
+/// `check_*` functions. This does not certify all native configurations.
 pub fn check_all<E, D>(enc: E, dec: D) -> Conformance
 where
     E: EncoderConfig,

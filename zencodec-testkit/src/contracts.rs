@@ -804,6 +804,55 @@ impl zencodec::decode::DecodeRowSink for PassSink {
     }
 }
 
+// Pre-cancellation must precede every sink effect, including failed loans.
+#[derive(Default)]
+struct UntouchedSink {
+    calls: u32,
+}
+
+impl zencodec::decode::DecodeRowSink for UntouchedSink {
+    fn begin(
+        &mut self,
+        _: u32,
+        _: u32,
+        _: PixelDescriptor,
+    ) -> Result<(), zencodec::decode::SinkError> {
+        self.calls += 1;
+        Ok(())
+    }
+
+    fn provide_next_buffer(
+        &mut self,
+        _: u32,
+        _: u32,
+        _: u32,
+        _: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        self.calls += 1;
+        Err("pre-cancelled decoder requested rows".into())
+    }
+
+    fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
+        self.calls += 1;
+        Ok(())
+    }
+
+    fn accepts_provisional(&self) -> bool {
+        true
+    }
+
+    fn provide_pass_buffer(
+        &mut self,
+        _: zencodec::decode::BatchMeta,
+        _: u32,
+        _: u32,
+        _: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        self.calls += 1;
+        Err("pre-cancelled decoder requested provisional rows".into())
+    }
+}
+
 /// A stop that trips after `n` checks.
 struct TripAfter {
     left: std::sync::atomic::AtomicU32,
@@ -833,6 +882,7 @@ impl enough::Stop for TripAfter {
 /// - an input at an offset the decoder did not request is ignored without
 ///   error (nothing taken, still asking);
 /// - after `Done`, further steps return `Done` again and take nothing;
+/// - pre-cancellation preserves its reason, invokes no sink effects and is terminal;
 /// - a stop that trips mid-decode yields `Cancelled` within one step, then
 ///   `Finished`;
 /// - a sink that accepts provisional rows still gets every final row once
@@ -874,6 +924,47 @@ where
     use zencodec::decode::{Event, IncrementalDecode, Input, StepError};
     const CHECK: &str = "incremental_contract";
     let new_dec = || new_decoder().map_err(|e| fail(CHECK, format!("new decoder: {e}")));
+    // Run independently of fixture size: a tiny decoder may finish before
+    // TripAfter reaches its threshold in the mid-decode control below.
+    for reason in [enough::StopReason::Cancelled, enough::StopReason::TimedOut] {
+        struct Stopped(enough::StopReason);
+        impl enough::Stop for Stopped {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                Err(self.0)
+            }
+        }
+        let stop = Stopped(reason);
+        let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
+        let mut inc = new_dec()?;
+        let mut sink = UntouchedSink::default();
+        match inc.step(Input::empty(), &mut sink, Some(&pulse)) {
+            Err(StepError::Cancelled(actual)) if actual == reason => {}
+            other => {
+                return Err(fail(
+                    CHECK,
+                    format!("pre-cancellation {reason:?}: {other:?}"),
+                ));
+            }
+        }
+        if sink.calls != 0 {
+            return Err(fail(CHECK, "pre-cancellation caused sink effects"));
+        }
+        match inc.step(Input::empty(), &mut sink, None) {
+            Err(StepError::Finished) => {}
+            other => {
+                return Err(fail(
+                    CHECK,
+                    format!("step after pre-cancellation: {other:?}"),
+                ));
+            }
+        }
+        if sink.calls != 0 {
+            return Err(fail(
+                CHECK,
+                "step after pre-cancellation caused sink effects",
+            ));
+        }
+    }
     let reference = one_shot(data).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
     let (w, h, desc, bytes) = pixels_of(&reference);
     let budget = 4 * data.len() as u64 + 4 * h as u64 + 1000;

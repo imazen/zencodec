@@ -1,7 +1,7 @@
 # zencodec-testkit [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodec/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zencodec/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square)](https://crates.io/crates/zencodec-testkit) [![lib.rs](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodec-testkit) [![docs.rs](https://img.shields.io/docsrs/zencodec-testkit?style=flat-square)](https://docs.rs/zencodec-testkit) [![license](https://img.shields.io/crates/l/zencodec-testkit?style=flat-square)](#license)
 
 The testkit versions independently from zencodec and may make breaking changes
-to implementor tests. The upcoming 0.2.0 requires zencodec 0.1.27; construct
+to implementor tests. The upcoming 0.2.0 requires zencodec 0.2.0; construct
 reference decode jobs through the config's `job()` method instead of the former
 `RefDecodeJob` unit value. See the [changelog](https://github.com/imazen/zencodec/blob/main/CHANGELOG.md#zencodec-testkit).
 
@@ -100,7 +100,7 @@ use zencodec_testkit as tk;
 
 #[test]
 fn my_codec_is_conformant() {
-    // One call runs every check with default inputs.
+    // Run the default checks; add applicable fixture-driven checks below.
     tk::check_all(MyEncoderConfig::new(), MyDecoderConfig).expect("conformance failed");
 }
 
@@ -130,3 +130,14 @@ independent decoder/parser as well as the codec under test.
 Animation sink results currently carry no duration or frame index; the testkit
 cannot verify information the API does not expose. Coverage is tracked in
 [the contract matrix](https://github.com/imazen/zencodec/blob/main/docs/testkit-contract-coverage.md).
+
+## Coverage boundary
+
+`check_all` is the default suite, not complete certification. Use the
+[current coverage audit](https://github.com/imazen/zencodec/blob/main/docs/testkit-release-audit.md)
+to select additional fixture-driven, native, media and application checks.
+Incremental conformance requires pre-cancellation (including timeout) before
+sink effects and terminal state afterward, even for tiny inputs. Diagnostic
+Pulse controls in `tests/sansio_checks.rs` detect swallowed stops without
+asserting machine-dependent timing thresholds. Native checkpoint latency and
+progress completeness still require explicit workloads and expected-work oracles.

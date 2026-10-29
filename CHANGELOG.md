@@ -568,6 +568,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Incremental conformance now checks pre-cancellation and timeout reasons, zero
+  sink effects and terminal state independently of input size. Diagnostic Pulse
+  mutation controls detect swallowed stops; instrumentation is dev-only.
+
 - Make the core dependency graph genuinely std-free, including ICC support.
   Gain-map metadata helpers use portable math without `std`; explicit `std`
   retains platform math. Add a freestanding CI gate and exact rounding/power

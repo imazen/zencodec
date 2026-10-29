@@ -1686,3 +1686,9 @@ render-workspace-check: render-check
 placement-oracle-check:
     cargo test -p zencodec --test placement_oracle --locked
     cargo clippy -p zencodec --test placement_oracle --locked -- -D warnings
+
+# Pre-cancellation effect ordering and structured Pulse diagnostic controls.
+testkit-pulse-check:
+    cargo test --locked -p zencodec-testkit --test sansio_checks
+    cargo test --locked -p zencodec-testkit --lib
+    cargo clippy --locked -p zencodec-testkit --lib --test sansio_checks -- -D warnings

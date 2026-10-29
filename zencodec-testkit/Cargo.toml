@@ -25,6 +25,9 @@ enough = "0.4.4"
 whereat = "0.1.5"
 
 [dev-dependencies]
+# Diagnostic instrumentation stays out of codec and consumer runtime graphs.
+how-far-really = "0.1.0"
+how-far-along = { version = "0.1.0", default-features = false, features = ["std"] }
 zenmeta = { path = "../zenmeta", version = "0.1.0", features = ["rewrite"] }
 # For the decode-parallelism examples (tests/decode_parallelism.rs) — exercises
 # capping codec thread count via a sized rayon pool.
