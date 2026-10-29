@@ -105,3 +105,7 @@ ownership. Until those native paths are qualified, retain the one-shot route
 and its final descriptor validation. Do not invent an empty extras map as proof
 of completeness. Collector capacity refusal is now fallible, but this does not
 supply that missing completion contract or native workspace evidence.
+
+The [owned result split proposal](decode-result-ownership.md) now has native
+JPEG address/metadata retention controls. It provides the ownership primitive;
+it does not yet add a streaming terminal result channel or early admission.

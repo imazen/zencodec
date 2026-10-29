@@ -4,6 +4,10 @@
 
 ### Added
 
+- Review proposal: `decode::DecodeDetails` and `DecodeOutput::{into_parts,
+  from_parts}` move pixels and all owned result details independently without
+  cloning. This does not certify streaming completion or metadata completeness.
+
 - `PolicyDecoder::try_new(factory, policy, pulse)` admits native video creation
   before invoking the factory. Unknown explicit workspace bounds refuse; default
   policy remains permissive. Existing decoder wrappers now check both bound and

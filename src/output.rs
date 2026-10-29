@@ -311,6 +311,47 @@ impl AsRef<[u8]> for EncodeOutput {
     }
 }
 
+/// Owned non-pixel details returned by a decode operation.
+///
+/// This carries the decoder's actual result, not a promise that all container
+/// metadata was discovered or retained. Empty extensions do not certify absence
+/// of opaque data. Streaming completion still needs an explicit completeness
+/// contract before it can substitute for one-shot decoding.
+///
+/// Keep these details attached to the same decoded samples. Source metadata and
+/// encoding details must not be relabeled as facts about transformed pixels.
+#[non_exhaustive]
+pub struct DecodeDetails {
+    /// Image geometry, interpretation, metadata and source facts.
+    pub info: ImageInfo,
+    /// Owned codec-specific source encoding details, when supplied.
+    pub source_encoding: Option<Box<dyn SourceEncodingDetails>>,
+    /// All typed extras, including any gain-map or container-specific owners.
+    pub extensions: Extensions,
+}
+
+impl DecodeDetails {
+    /// Start details with image information and no additional owned extras.
+    /// This does not assert metadata completeness or absence of private data.
+    pub fn new(info: ImageInfo) -> Self {
+        Self {
+            info,
+            source_encoding: None,
+            extensions: Extensions::new(),
+        }
+    }
+}
+
+impl core::fmt::Debug for DecodeDetails {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DecodeDetails")
+            .field("format", &self.info.format)
+            .field("has_source_encoding", &self.source_encoding.is_some())
+            .field("extension_count", &self.extensions.len())
+            .finish()
+    }
+}
+
 /// Output from a decode operation.
 ///
 /// Stores pixel data as a [`PixelBuffer`] with embedded format descriptor.
@@ -340,6 +381,59 @@ impl DecodeOutput {
             info,
             source_encoding: None,
             extensions: Extensions::new(),
+        }
+    }
+
+    /// Split pixels from their owned details without cloning either owner.
+    ///
+    /// Unlike [`Self::into_buffer`], this preserves metadata, source encoding
+    /// details and every typed extension for later delivery or reconstruction.
+    ///
+    /// ```
+    /// use zencodec::{ImageFormat, ImageInfo, decode::DecodeOutput};
+    /// use zenpixels::{PixelBuffer, PixelDescriptor};
+    /// let decoded = DecodeOutput::new(
+    ///     PixelBuffer::new(3, 2, PixelDescriptor::RGB8_SRGB),
+    ///     ImageInfo::new(3, 2, ImageFormat::Png),
+    /// );
+    /// let (pixels, details) = decoded.into_parts();
+    /// // An adapter can retain these two owners independently.
+    /// let decoded = DecodeOutput::from_parts(pixels, details);
+    /// assert_eq!(decoded.width(), 3);
+    /// ```
+    pub fn into_parts(self) -> (PixelBuffer, DecodeDetails) {
+        let Self {
+            pixels,
+            info,
+            source_encoding,
+            extensions,
+        } = self;
+        (
+            pixels,
+            DecodeDetails {
+                info,
+                source_encoding,
+                extensions,
+            },
+        )
+    }
+
+    /// Reassemble decoded pixels and their corresponding details.
+    ///
+    /// Like [`Self::new`], this is a raw result constructor: the caller must keep
+    /// geometry and interpretation consistent. It performs no conversion and
+    /// does not update provenance after image processing.
+    pub fn from_parts(pixels: PixelBuffer, details: DecodeDetails) -> Self {
+        let DecodeDetails {
+            info,
+            source_encoding,
+            extensions,
+        } = details;
+        Self {
+            pixels,
+            info,
+            source_encoding,
+            extensions,
         }
     }
 
@@ -731,6 +825,50 @@ mod tests {
     use super::*;
     use alloc::vec;
     use zenpixels::PixelDescriptor;
+
+    #[test]
+    fn decode_parts_move_and_drop_each_owner_once() {
+        use alloc::sync::Arc;
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        struct Tracked(Arc<AtomicUsize>);
+        impl Drop for Tracked {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        impl SourceEncodingDetails for Tracked {
+            fn source_generic_quality(&self) -> Option<f32> {
+                Some(87.0)
+            }
+        }
+        fn assert_send<T: Send>() {}
+        assert_send::<DecodeDetails>();
+        let drops = Arc::new(AtomicUsize::new(0));
+        let output = DecodeOutput::new(
+            make_rgb8_buffer(3, 2),
+            ImageInfo::new(3, 2, ImageFormat::Jpeg),
+        )
+        .with_source_encoding_details(Tracked(drops.clone()))
+        .with_extras(Tracked(drops.clone()));
+        let pixels = output.pixels().row(0).as_ptr();
+        let (buffer, details) = output.into_parts();
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        let output = DecodeOutput::from_parts(buffer, details);
+        assert_eq!(output.pixels().row(0).as_ptr(), pixels);
+        assert_eq!(
+            output
+                .source_encoding_details()
+                .unwrap()
+                .source_generic_quality(),
+            Some(87.0)
+        );
+        assert!(output.extras::<Tracked>().is_some());
+        drop(output);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+        let details = DecodeDetails::new(ImageInfo::new(0, 0, ImageFormat::Unknown));
+        assert!(details.source_encoding.is_none());
+        assert!(details.extensions.is_empty());
+    }
 
     fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuffer {
         PixelBuffer::new(w, h, PixelDescriptor::RGB8_SRGB)

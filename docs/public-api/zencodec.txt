@@ -6,28 +6,28 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3262 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
+# files: zencodec.txt 3271 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                20
-#   pub types (struct/enum/trait/alias)       387
+#   pub types (struct/enum/trait/alias)       388
 #   pub consts/statics                        340
 #   free functions                             95
-#   inherent methods                         1107
-#   struct fields                             518
+#   inherent methods                         1110
+#   struct fields                             521
 #   enum variants                             543
 #   re-exports                                 18
-#   trait roster entries (type × trait)      1149
+#   trait roster entries (type × trait)      1150
 #   conditional trait impls (verbatim)          9
 #   auto-trait-complete types                 210
-#   auto-trait exceptions                      45
+#   auto-trait exceptions                      46
 #
 # per-module pub lines:
 #   (root)                         1014
 #   animation                        11
 #   collection                      100
-#   decode                          284
+#   decode                          291
 #   encode                          250
 #   estimate                         48
 #   exif                             94
@@ -45,7 +45,7 @@
 #   storage                          38
 #   time                             22
 
-## items (2942 lines)
+## items (2949 lines)
 
 pub mod zencodec
 pub use At
@@ -328,16 +328,23 @@ pub const fn decode::DecodeCapabilities::with_streaming(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_threads_supported_range(self, u16, u16) -> Self
 pub const fn decode::DecodeCapabilities::with_xmp(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::xmp(&self) -> bool
+#[non_exhaustive] pub struct decode::DecodeDetails
+pub decode::DecodeDetails::extensions: Extensions
+pub decode::DecodeDetails::info: ImageInfo
+pub decode::DecodeDetails::source_encoding: core::option::Option<alloc::boxed::Box<dyn SourceEncodingDetails>>
+pub fn decode::DecodeDetails::new(ImageInfo) -> Self
 #[non_exhaustive] pub struct decode::DecodeOutput
 pub fn decode::DecodeOutput::descriptor(&self) -> zenpixels::descriptor::PixelDescriptor
 pub fn decode::DecodeOutput::extensions(&self) -> &Extensions
 pub fn decode::DecodeOutput::extensions_mut(&mut self) -> &mut Extensions
 pub fn decode::DecodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
 pub fn decode::DecodeOutput::format(&self) -> ImageFormat
+pub fn decode::DecodeOutput::from_parts(zenpixels::buffer::PixelBuffer, decode::DecodeDetails) -> Self
 pub fn decode::DecodeOutput::has_alpha(&self) -> bool
 pub fn decode::DecodeOutput::height(&self) -> u32
 pub fn decode::DecodeOutput::info(&self) -> &ImageInfo
 pub fn decode::DecodeOutput::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn decode::DecodeOutput::into_parts(self) -> (zenpixels::buffer::PixelBuffer, decode::DecodeDetails)
 pub fn decode::DecodeOutput::metadata(&self) -> Metadata
 pub fn decode::DecodeOutput::new(zenpixels::buffer::PixelBuffer, ImageInfo) -> Self
 pub fn decode::DecodeOutput::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
@@ -2990,7 +2997,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (265 types)
+## trait impls (266 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -3075,6 +3082,7 @@ decode::ControlError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 decode::ControlledProgress: Clone, Debug, From<decode::Progress>
 decode::DecodeBoundary: Clone, Copy, Debug, Eq, PartialEq
 decode::DecodeCapabilities: Clone, Debug, Default, Eq, PartialEq
+decode::DecodeDetails: Debug
 decode::DecodeOutput: Debug
 decode::DecodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 decode::EmbeddedMetadata: Clone, Debug, Default, PartialEq
@@ -3283,6 +3291,7 @@ collection::CollectionOpenContext: !RefUnwindSafe !UnwindSafe
 collection::Discovery<C>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 collection::ErasedCollection<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
 collection::ErasedCursor: !RefUnwindSafe !Send !Sync !UnwindSafe
+decode::DecodeDetails: !RefUnwindSafe !UnwindSafe
 decode::DecodeOutput: !RefUnwindSafe !UnwindSafe
 decode::ErasedError: !RefUnwindSafe !UnwindSafe
 decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

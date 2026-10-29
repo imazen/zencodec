@@ -141,3 +141,46 @@ fn ranked_native_output_does_not_promote_a_later_float_preference() {
         }
     }
 }
+
+#[test]
+fn native_owned_result_split_preserves_pixels_metadata_and_all_extras() {
+    for progressive in [false, true] {
+        let base = fixtures::base(progressive);
+        let mut bytes = base[..2].to_vec();
+        bytes.extend(fixtures::descriptive());
+        bytes.extend_from_slice(&base[2..]);
+        let output = JpegDecoderConfig::new()
+            .job()
+            .decoder(Cow::Borrowed(&bytes), &[PixelDescriptor::RGBA8_SRGB])
+            .unwrap()
+            .decode()
+            .unwrap();
+        let metadata = output.metadata();
+        let pixels = output.pixels().row(0).as_ptr();
+        let source = output.source_encoding_details().unwrap() as *const _ as *const ();
+        let extras = output.extras::<zenjpeg::decoder::DecodedExtras>().unwrap() as *const _;
+        let count = output.extensions().len();
+        let (buffer, details) = output.into_parts();
+        assert_eq!(buffer.as_slice().row(0).as_ptr(), pixels);
+        assert_eq!(details.info.metadata(), metadata);
+        assert_eq!(
+            details.source_encoding.as_deref().unwrap() as *const _ as *const (),
+            source
+        );
+        assert_eq!(
+            details
+                .extensions
+                .get::<zenjpeg::decoder::DecodedExtras>()
+                .unwrap() as *const _,
+            extras
+        );
+        assert_eq!(details.extensions.len(), count);
+        let restored = zencodec::decode::DecodeOutput::from_parts(buffer, details);
+        assert_eq!(restored.pixels().row(0).as_ptr(), pixels);
+        assert_eq!(restored.metadata(), metadata);
+        assert_eq!(
+            restored.extras::<zenjpeg::decoder::DecodedExtras>().unwrap() as *const _,
+            extras
+        );
+    }
+}

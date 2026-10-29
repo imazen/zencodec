@@ -268,7 +268,7 @@ pub mod decode {
     // Types
     pub use crate::capabilities::DecodeCapabilities;
     pub use crate::cost::OutputInfo;
-    pub use crate::output::{AnimationFrame, DecodeOutput, OwnedAnimationFrame};
+    pub use crate::output::{AnimationFrame, DecodeDetails, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};
     pub use crate::traits::ByteRange;
