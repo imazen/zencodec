@@ -314,9 +314,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.16.1"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "foldhash",
 ]
@@ -370,7 +370,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jxl-encoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -387,17 +387,17 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-macros"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.4.0"
-source = "git+https://github.com/imazen/jxl-encoder?rev=3c1be8179ac7fdb7e7322e299cdad645046acf6c#3c1be8179ac7fdb7e7322e299cdad645046acf6c"
+source = "git+https://github.com/imazen/jxl-encoder?rev=55c59fe740181129cf15f734608b016735c6794a#55c59fe740181129cf15f734608b016735c6794a"
 dependencies = [
  "archmage",
  "libm",

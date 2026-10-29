@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- Native spatial qualification now uses the current JXL stack containing the
+  intrinsic SizeHeader fix. All 147 TIFF/JXL spatial controls and strict Clippy
+  pass without changing assertions (`benchmarks/paired_pixel_native_2026-10-29.md`).
+
 - Paired pixel release pins and standalone harness locks are aligned with the
   merged 0.3.1 candidate; IMI/JXL dependency edges admit one pixel family.
 
