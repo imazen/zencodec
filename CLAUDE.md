@@ -769,3 +769,10 @@ sink hooks have an adversarial control. Before/after root-package exports sharin
 a Cargo target can reuse stale executables: separate targets or force a package
 rebuild, and verify compilation paths before accepting evidence. See
 `benchmarks/controlled_sink_errors_2026-10-29.md`.
+
+## Channel publication after cancellation (2026-10-29, fixed)
+
+The Tokio bridge checked Pulse only after a non-ready channel attempt. A cancelled
+strip sink could publish Begin into an available channel. The helper now checks
+before every attempt; the failing-first driver control asserts zero publication.
+Backoff caps requested sleep, not wall-clock cancellation latency.

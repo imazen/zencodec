@@ -107,3 +107,19 @@ Clippy with all features. The failing-first and fixed receipts are retained at
 `~/tmp/zencodec-tokio-guide/media-cancel-before2.log` and `media-publication.log`.
 The latter wrapper reports rc0, 4s, peak RSS 0.28GiB and minimum available
 14407MiB; no native performance claim follows from these controls.
+
+## Cancellation before an immediately ready send
+
+The channel bridge formerly checked Pulse only after a failed nonblocking
+attempt. A cancelled `ChannelRowSink::begin` could therefore publish into a
+channel with spare capacity. The failing-first control
+`cancelled_strip_sink_does_not_publish_into_an_available_channel` reproduces
+that effect; the wait helper now checks before every attempt. This also covers
+retry attempts in the pull bridge. It does not make check-and-send atomic with
+concurrent cancellation.
+
+The driver/quota suite and strict Clippy pass after the fix. Logs:
+`~/tmp/zencodec-tokio-guide/sink-cancel-before.log` (expected failure) and
+`sink-cancel-after.log` (rc0, 2s, peak RSS 0.31GiB, minimum available 14478MiB).
+The sleep backoff caps requested sleep at 2ms; it is not a wall-clock cancellation
+latency guarantee. OS scheduling and arbitrary Pulse implementations can delay it.

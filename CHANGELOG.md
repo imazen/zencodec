@@ -2554,3 +2554,8 @@ which tracks `zenpixels 0.2.7`.
   Geometry/color implementations moved from the native prototype; tests now
   import the shared crate. Conversion remains outside core codec dependencies.
   The review converter requires Rust 1.89; the core MSRV is unchanged.
+
+### Tokio channel cancellation (2026-10-29)
+
+- Check Pulse before every channel attempt, including immediately ready sends;
+  prevent a previously cancelled strip sink from publishing Begin.

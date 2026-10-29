@@ -1982,6 +1982,19 @@ mod tokio_drivers {
         );
     }
 
+    #[test]
+    fn cancelled_strip_sink_does_not_publish_into_an_available_channel() {
+        let pulse = RecordingPulse::default();
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let mut sink = ChannelRowSink::new(tx, false).with_pulse(pulse.shared());
+        pulse.cancel();
+        assert!(sink.begin(W, H, RGBA).is_err());
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancel_while_blocked_on_a_stuck_strip_consumer() {
         let mut source = BytesSource(sequential_file(8).into());

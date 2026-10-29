@@ -866,8 +866,9 @@ enum Attempt<T> {
 /// Block until `attempt` is ready, re-checking `pulse` between attempts.
 ///
 /// Without a pulse the caller uses the channel's own blocking call; with
-/// one, a short spin then a sleep that doubles from 50 µs to 2 ms bounds
-/// both the cancellation latency and the idle wakeups.
+/// one, check cancellation before each attempt, then spin briefly and sleep
+/// with exponential backoff from 50 µs to 2 ms. This caps the requested sleep,
+/// not wall-clock cancellation latency: OS scheduling and Pulse work can delay it.
 fn wait_with_stop<T>(
     pulse: Option<&dyn zencodec::Pulse>,
     mut attempt: impl FnMut() -> Attempt<T>,
@@ -875,15 +876,15 @@ fn wait_with_stop<T>(
     let mut sleep = core::time::Duration::from_micros(50);
     let mut spins = 0u32;
     loop {
-        match attempt() {
-            Attempt::Ready(v) => return Ok(v),
-            Attempt::Closed => return Err(AsyncDriveError::Disconnected),
-            Attempt::Pending => {}
-        }
         if let Some(s) = pulse
             && let Err(reason) = s.check()
         {
             return Err(AsyncDriveError::Cancelled(reason));
+        }
+        match attempt() {
+            Attempt::Ready(v) => return Ok(v),
+            Attempt::Closed => return Err(AsyncDriveError::Disconnected),
+            Attempt::Pending => {}
         }
         if spins < 64 {
             spins += 1;
