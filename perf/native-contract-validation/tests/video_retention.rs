@@ -49,9 +49,10 @@ impl VideoEncoder for Toy {
     fn send(
         &mut self,
         frame: &Frame,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<ToyError>> {
-        pulse.check()?;
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        local_pulse.check()?;
         if self.held.len() > self.delay {
             return Ok(SendStatus::ReceivePending);
         }
@@ -74,9 +75,10 @@ impl VideoEncoder for Toy {
     }
     fn receive(
         &mut self,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Packet>, SessionError<ToyError>> {
-        pulse.check()?;
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        local_pulse.check()?;
         if self.held.len() > self.delay || (self.ended && !self.held.is_empty()) {
             let (_, _, pts) = self.held.pop_front().unwrap();
             let packet = Packet::from_vec(vec![1])
@@ -148,10 +150,10 @@ fn transcode(enc: &mut Toy, capacity: usize, frames: usize) -> Outcome {
             return Outcome::PoolExhausted { frame: i, packets };
         };
         loop {
-            match enc.send(&frame, &NoPulse).unwrap() {
+            match enc.send(&frame, Some(&NoPulse)).unwrap() {
                 SendStatus::Accepted => break,
                 SendStatus::ReceivePending => {
-                    if let Receive::Ready(_) = enc.receive(&NoPulse).unwrap() {
+                    if let Receive::Ready(_) = enc.receive(Some(&NoPulse)).unwrap() {
                         packets += 1;
                     }
                 }
@@ -159,12 +161,12 @@ fn transcode(enc: &mut Toy, capacity: usize, frames: usize) -> Outcome {
             }
         }
         drop(frame);
-        while let Receive::Ready(_) = enc.receive(&NoPulse).unwrap() {
+        while let Receive::Ready(_) = enc.receive(Some(&NoPulse)).unwrap() {
             packets += 1;
         }
     }
     enc.end_input().unwrap();
-    while let Receive::Ready(_) = enc.receive(&NoPulse).unwrap() {
+    while let Receive::Ready(_) = enc.receive(Some(&NoPulse)).unwrap() {
         packets += 1;
     }
     Outcome::Done(packets)

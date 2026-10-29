@@ -29,13 +29,16 @@ impl VideoEncoder for OwnedEncoder {
     fn send(
         &mut self,
         frame: &Frame,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<Self::Error>> {
         let status = self.native.send(frame, stop)?;
         self.accepted |= status == SendStatus::Accepted;
         Ok(status)
     }
-    fn receive(&mut self, stop: &dyn zencodec::Pulse) -> Result<Receive<Packet>, SessionError<Self::Error>> {
+    fn receive(
+        &mut self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Receive<Packet>, SessionError<Self::Error>> {
         Ok(match self.native.receive(stop)? {
             Receive::Ready(packet) if self.corrupt_epoch => {
                 Receive::Ready(packet.with_config_epoch(99))
@@ -120,14 +123,14 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
             }),
             PolicySet::new(),
             budget.clone(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let settings = settings(8, Subsampling::Yuv420, false);
         let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
         for (index, input) in frames.iter().enumerate() {
             if index == 0 {
-                operation.push(input.clone(), &NoPulse).unwrap();
+                operation.push(input.clone(), Some(&NoPulse)).unwrap();
             } else {
                 let target = input.interpretation().clone();
                 let conversion =
@@ -142,14 +145,14 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
                             executions.set(executions.get() + 1);
                             Ok(held)
                         },
-                        &NoPulse,
+                        Some(&NoPulse),
                     )
                     .unwrap();
                 assert_eq!(executions.get(), 1);
             }
             assert_eq!(calls.get(), 0);
         }
-        let result = operation.finish(&NoPulse);
+        let result = operation.finish(Some(&NoPulse));
         assert!(!live.get());
         assert_eq!(budget.reserved_bytes(), 0);
         if fail {
@@ -225,7 +228,7 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
                 }
             },
             budget.clone(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
@@ -256,13 +259,13 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
                         Ok(held)
                     }
                 },
-                &zencodec::how_far::StopOnly::borrowed(&control),
+                Some(&zencodec::how_far::StopOnly::borrowed(&control)),
             )
         }));
         if mode == "budget" || mode == "epoch" {
             // Native encoders may delay their first packet until draining.
             if result.unwrap().is_ok() {
-                assert!(operation.finish(&NoPulse).is_err());
+                assert!(operation.finish(Some(&NoPulse)).is_err());
             } else {
                 assert!(operation.is_failed());
             }
@@ -288,7 +291,7 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
                 }
             }
             assert!(operation.is_failed());
-            assert!(operation.push(input, &NoPulse).is_err());
+            assert!(operation.push(input, Some(&NoPulse)).is_err());
         }
         assert!(!live.get());
         assert_eq!(calls.get(), 0);
@@ -364,7 +367,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 Ok(Decision::UsePreset)
             },
             encoded.clone(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap()
         .with_policy_set(
@@ -397,7 +400,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
             drop(operation);
             assert!(bytes.is_empty());
         } else {
-            let completed = operation.finish(&NoPulse).unwrap();
+            let completed = operation.finish(Some(&NoPulse)).unwrap();
             assert_eq!(calls.get(), inputs.len());
             assert_eq!(executions.get(), inputs.len());
             assert_eq!(completed.stats.emitted as usize, bytes.len());
@@ -496,12 +499,12 @@ fn staged_native_disk_spool_preserves_output_and_refuses_before_destination_effe
                 }
             },
             staging,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let mut failure = None;
         for input in &frames {
-            if let Err(error) = operation.push(input.clone(), &NoPulse) {
+            if let Err(error) = operation.push(input.clone(), Some(&NoPulse)) {
                 failure = Some(error);
                 break;
             }
@@ -518,7 +521,7 @@ fn staged_native_disk_spool_preserves_output_and_refuses_before_destination_effe
             drop(operation);
             Err(error)
         } else {
-            operation.finish(&NoPulse)
+            operation.finish(Some(&NoPulse))
         };
         assert!(!live.get());
         assert_eq!(budget.reserved_bytes(), 0);
@@ -614,14 +617,14 @@ fn staged_native_late_spool_failure_retains_confirmed_output_progress() {
         }),
         PolicySet::new(),
         staging,
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let settings = settings(8, Subsampling::Yuv420, false);
     for i in 0..3 {
-        operation.push(frame(&settings, i), &NoPulse).unwrap();
+        operation.push(frame(&settings, i), Some(&NoPulse)).unwrap();
     }
-    let error = operation.finish(&NoPulse).unwrap_err();
+    let error = operation.finish(Some(&NoPulse)).unwrap_err();
     let failure = zencodec::find_cause::<zencodec_media::staged::Failure>(&error).unwrap();
     assert_eq!(failure.stage, EncodeStage::Publish);
     assert!(!bytes.is_empty(), "fault must follow actual publication");
@@ -660,16 +663,16 @@ fn staged_native_schedule_requirements_use_the_owned_operation_guarantee() {
             }),
             policy,
             StorageBudget::new(1 << 20, 64),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let settings = settings(8, Subsampling::Yuv420, false);
         let input = frame(&settings, 0);
-        let result = operation.push(input.clone(), &NoPulse);
+        let result = operation.push(input.clone(), Some(&NoPulse));
         assert_eq!(calls.get(), 0);
         if succeeds {
             result.unwrap();
-            operation.finish(&NoPulse).unwrap();
+            operation.finish(Some(&NoPulse)).unwrap();
             assert!(!live.get());
             oracle_container(
                 &root(),

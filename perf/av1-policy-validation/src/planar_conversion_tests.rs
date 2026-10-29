@@ -2,13 +2,13 @@
 //! This qualifies mapping/cropping/row partitioning, not RGB color accuracy.
 //! Full-range RGB words stay separate from the original component-code facts.
 use crate::fixtures::*;
-use zencodec::how_far::NoPulse;
 use std::sync::Arc;
 use zenavif::{media::Av1VideoDecoder, yuv_convert::*};
 use zencodec::frame::{
     ChromaSiting, Crop, Frame, FrameInterpretation, FrameTiming, PlaneRole, PlaneSamples,
     PlaneView, Presentation, SampleEncoding, Subsampling,
 };
+use zencodec::how_far::NoPulse;
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zencodec_media::session::VideoDecoder;
 use zenpixels::{ChannelType, Cicp};
@@ -275,7 +275,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                 let mut settings = rav1d_safe::Settings::default();
                 settings.threads = 1;
                 let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
-                let frames = decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
+                let frames = decode(&mut decoder, &config, &packets, Some(&NoPulse)).unwrap();
                 assert_eq!(frames.len(), 3);
                 oracle(
                     root,
@@ -638,7 +638,7 @@ fn planar_native_signalled_siting_cannot_be_overridden_by_unknown_fallback() {
         let mut settings = rav1d_safe::Settings::default();
         settings.threads = 1;
         let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
-        let frames = decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
+        let frames = decode(&mut decoder, &config, &packets, Some(&NoPulse)).unwrap();
         assert_eq!(frames.len(), 1);
         let native = &frames[0];
         assert_eq!(native.interpretation().siting, siting);
@@ -760,7 +760,7 @@ fn qualify_packed_publication(native: &Frame, expected: &[[u16; 3]]) {
             Ok(Decision::UsePreset)
         },
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap()
     .into_output();

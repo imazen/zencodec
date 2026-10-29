@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::*;
-use zencodec::how_far::NoPulse;
 use std::{fs::OpenOptions, path::PathBuf};
+use zencodec::how_far::NoPulse;
 use zencodec::time::TimeBase;
 use zencodec_media::{
     container::{MuxFinish, Patch, PatchError},
@@ -38,7 +38,7 @@ fn mux_native_checked_legacy_support_refuses_before_header() {
         zenivf::IvfMuxer::new(),
         Forward(&mut bytes),
         &[],
-        &NoPulse,
+        Some(&NoPulse),
     ) {
         Ok(_) => panic!("unqualified implementation was admitted"),
         Err(failure) => failure,
@@ -145,7 +145,7 @@ impl Muxer for ExactMp4 {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Self::Error>> {
         self.0.write_packet(packet, stop)
     }
@@ -158,7 +158,10 @@ impl Muxer for ExactMp4 {
     fn take_output(&mut self, into: &mut Vec<u8>) {
         self.0.take_output(into);
     }
-    fn finish(self, stop: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<Self::Error>> {
+    fn finish(
+        self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<Self::Error>> {
         self.0.finish(stop)
     }
 }
@@ -168,13 +171,13 @@ fn write_exact<D: Destination>(destination: D, info: &TrackInfo, packets: &[Pack
         ExactMp4(zenmp4::Mp4Muxer::new()),
         destination,
         std::slice::from_ref(info),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     for packet in packets {
-        output.send(packet.clone(), &NoPulse).unwrap();
+        output.send(packet.clone(), Some(&NoPulse)).unwrap();
     }
-    output.finish(&NoPulse).unwrap()
+    output.finish(Some(&NoPulse)).unwrap()
 }
 
 #[test]
@@ -307,16 +310,16 @@ fn mux_native_exact_timing_packet_refusal_is_terminal_with_prior_progress() {
             ExactMp4(zenmp4::Mp4Muxer::new()),
             Forward(&mut bytes),
             &[track(&config)],
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let before = output.stats().emitted;
-        let failure = output.send(invalid, &NoPulse).unwrap_err();
+        let failure = output.send(invalid, Some(&NoPulse)).unwrap_err();
         assert!(matches!(failure.stage, Stage::Packet));
         assert_eq!(failure.emitted, before);
         assert!(zencodec::find_cause::<SessionError<zenmp4::Mp4Error>>(&failure).is_some());
         assert!(output.is_failed());
-        assert!(output.send(packets[0].clone(), &NoPulse).is_err());
+        assert!(output.send(packets[0].clone(), Some(&NoPulse)).is_err());
         drop(output);
         assert_eq!(bytes.len() as u64, before);
     }
@@ -360,16 +363,16 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
             interrupted: false,
         });
         let mut output =
-            Output::with_container_timing(make(), destination, &[track], &NoPulse).unwrap();
+            Output::with_container_timing(make(), destination, &[track], Some(&NoPulse)).unwrap();
         let facts = output.facts();
         assert!(!facts.seek_back);
         assert!(!facts.exact_timing);
         assert!(!facts.patches_at_finish);
 
         for packet in packets {
-            output.send(packet, &NoPulse).unwrap();
+            output.send(packet, Some(&NoPulse)).unwrap();
         }
-        let stats = output.finish(&NoPulse).unwrap();
+        let stats = output.finish(Some(&NoPulse)).unwrap();
         assert_eq!(stats.patches, 0);
         (bytes, stats)
     } else {
@@ -388,16 +391,16 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
         })
         .unwrap();
         let mut output =
-            Output::with_container_timing(make(), destination, &[track], &NoPulse).unwrap();
+            Output::with_container_timing(make(), destination, &[track], Some(&NoPulse)).unwrap();
         let facts = output.facts();
         assert!(facts.seek_back);
         assert!(!facts.exact_timing);
         assert_eq!(facts.patches_at_finish, extension != "webm");
 
         for packet in packets {
-            output.send(packet, &NoPulse).unwrap();
+            output.send(packet, Some(&NoPulse)).unwrap();
         }
-        let stats = output.finish(&NoPulse).unwrap();
+        let stats = output.finish(Some(&NoPulse)).unwrap();
         assert_eq!(
             file.stream_position().unwrap(),
             prefix.len() as u64 + stats.emitted
@@ -456,7 +459,7 @@ fn mismatched<M: Muxer>(make: impl Fn() -> M) {
             make(),
             Forward(&mut bytes),
             &[track(&config)],
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let before = output.stats().emitted;
@@ -468,7 +471,7 @@ fn mismatched<M: Muxer>(make: impl Fn() -> M) {
                 TimeBase::hz(90_000).unwrap(),
             ))
         };
-        let failure = output.send(bad, &NoPulse).unwrap_err();
+        let failure = output.send(bad, Some(&NoPulse)).unwrap_err();
         assert_eq!(failure.emitted, before);
         assert!(matches!(failure.stage, Stage::Packet));
         let expected = if epoch {
@@ -480,7 +483,7 @@ fn mismatched<M: Muxer>(make: impl Fn() -> M) {
             matches!(failure.cause.downcast_ref::<SessionError<ErasedError>>(), Some(SessionError::Protocol(actual)) if *actual == expected)
         );
         assert!(output.is_failed());
-        assert!(output.send(packets[1].clone(), &NoPulse).is_err());
+        assert!(output.send(packets[1].clone(), Some(&NoPulse)).is_err());
         drop(output);
         assert_eq!(bytes.len() as u64, before);
     }
@@ -523,7 +526,7 @@ fn partial_header<M: Muxer>(make: impl Fn() -> M) {
             remaining: 13,
         }),
         &[track(&config)],
-        &NoPulse,
+        Some(&NoPulse),
     ) {
         Ok(_) => panic!("partial header must fail"),
         Err(e) => e,
@@ -557,7 +560,7 @@ impl<M: Muxer> Muxer for BadFinish<M> {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Self::Error>> {
         self.0.write_packet(packet, stop)
     }
@@ -570,7 +573,10 @@ impl<M: Muxer> Muxer for BadFinish<M> {
     fn take_output(&mut self, into: &mut Vec<u8>) {
         self.0.take_output(into);
     }
-    fn finish(self, stop: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<Self::Error>> {
+    fn finish(
+        self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<Self::Error>> {
         let mut finish = self.0.finish(stop)?;
         finish.patches.push(Patch {
             offset: 0,
@@ -600,14 +606,14 @@ fn mux_native_invalid_final_patch_changes_neither_tail_nor_previous_bytes() {
         BadFinish(zenmp4::Mp4Muxer::new()),
         SeekBack::new(&mut file).unwrap(),
         &[track(&config)],
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     for packet in packets {
-        output.send(packet, &NoPulse).unwrap();
+        output.send(packet, Some(&NoPulse)).unwrap();
     }
     let before = std::fs::read(&path).unwrap();
-    let failure = output.finish(&NoPulse).unwrap_err();
+    let failure = output.finish(Some(&NoPulse)).unwrap_err();
     assert_eq!(
         zencodec::find_cause::<PatchError>(&failure),
         Some(&PatchError::OutOfRange)
@@ -637,25 +643,25 @@ fn shifted_origin<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool
             make(),
             Forward(&mut writer),
             &[track(&config)],
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         for packet in &packets {
-            output.send(packet.clone(), &NoPulse).unwrap();
+            output.send(packet.clone(), Some(&NoPulse)).unwrap();
         }
-        output.finish(&NoPulse)
+        output.finish(Some(&NoPulse))
     } else {
         let mut output = Output::with_container_timing(
             make(),
             SeekBack::new(&mut writer).unwrap(),
             &[track(&config)],
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         for packet in &packets {
-            output.send(packet.clone(), &NoPulse).unwrap();
+            output.send(packet.clone(), Some(&NoPulse)).unwrap();
         }
-        output.finish(&NoPulse)
+        output.finish(Some(&NoPulse))
     };
     let name = format!("mux-origin-{extension}-{forward}");
     if extension == "mp4" && !forward {
@@ -760,18 +766,23 @@ fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
                 stop: &stop,
             }),
             &[track(&config)],
-            &zencodec::how_far::StopOnly::borrowed(&stop),
+            Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
         )
         .unwrap();
         let header = output.stats().emitted;
         stop.armed.store(true, std::sync::atomic::Ordering::SeqCst);
-        let error = output.send(packets[0].clone(), &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap_err();
+        let error = output
+            .send(
+                packets[0].clone(),
+                Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+            )
+            .unwrap_err();
         assert_eq!(error.emitted, header + 7);
         assert!(
             matches!(zencodec::find_cause::<SessionError<ErasedError>>(&error), Some(SessionError::Cancelled(actual)) if *actual == reason)
         );
         assert!(output.is_failed());
-        assert!(output.send(packets[0].clone(), &NoPulse).is_err());
+        assert!(output.send(packets[0].clone(), Some(&NoPulse)).is_err());
         drop(output);
         assert_eq!(bytes.len() as u64, error.emitted);
     }
@@ -798,7 +809,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         &mut zenavif::media::Av1VideoDecoder::new().unwrap(),
         &config,
         &packets,
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let clock = TimeBase::hz(90_000).unwrap();
@@ -859,7 +870,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                                 interrupted: false,
                             }),
                             &[track(config)],
-                            &NoPulse,
+                            Some(&NoPulse),
                         )?;
                         assert!(!output.timing().patches_at_finish());
                         preparations.set(preparations.get() + 1);
@@ -875,17 +886,17 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                     expected.push(output.clone());
                     Ok(output)
                 },
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         if i == 0 {
             operation
                 .publish_header(
                     |_| {
-                        destination = Some(prepared.unwrap().publish(&NoPulse)?);
+                        destination = Some(prepared.unwrap().publish(Some(&NoPulse))?);
                         Ok(())
                     },
-                    &NoPulse,
+                    Some(&NoPulse),
                 )
                 .unwrap();
         }
@@ -897,7 +908,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         assert!(offer.destination.unwrap().exact_timing);
         assert!(!offer.destination.unwrap().seek_back);
     }
-    let segments = operation.finish(&NoPulse).unwrap();
+    let segments = operation.finish(Some(&NoPulse)).unwrap();
     assert_eq!(segments.len(), 1);
     assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
     let segment = &segments[0];
@@ -906,9 +917,9 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         assert_eq!(packet.pts(), timing.pts);
         assert_eq!(packet.duration_ticks(), timing.duration_ticks);
         // No timestamp rewriting between native encoder and native muxer.
-        destination.send(packet.clone(), &NoPulse).unwrap();
+        destination.send(packet.clone(), Some(&NoPulse)).unwrap();
     }
-    let stats = destination.finish(&NoPulse).unwrap();
+    let stats = destination.finish(Some(&NoPulse)).unwrap();
     assert_eq!(stats.patches, 0);
     let name = "mux-coupled-retimed";
     oracle_container(&root(), name, "mp4", &segment.settings, &bytes, &expected);
@@ -935,7 +946,7 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
         storage.clone(),
         live.clone(),
     );
-    operation.push(&input, &NoPulse).unwrap();
+    operation.push(&input, Some(&NoPulse)).unwrap();
     assert_eq!(live.load(Ordering::SeqCst), 1);
     let mut bytes = Vec::new();
     let failure = operation
@@ -948,11 +959,11 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
                         remaining: 13,
                     }),
                     &[track(config)],
-                    &NoPulse,
+                    Some(&NoPulse),
                 )?;
                 Ok(())
             },
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
     let mux = zencodec::find_cause::<Failure>(&*failure).unwrap();
@@ -966,12 +977,12 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
     assert!(operation.is_failed());
     assert_eq!(live.load(Ordering::SeqCst), 0);
     assert_eq!(storage.reserved_bytes(), 0);
-    assert!(operation.push(&input, &NoPulse).is_err());
+    assert!(operation.push(&input, Some(&NoPulse)).is_err());
     assert!(
         operation
             .publish_header(
                 |_| panic!("terminal operation retried publication"),
-                &NoPulse
+                Some(&NoPulse)
             )
             .is_err()
     );
@@ -1017,13 +1028,13 @@ fn mux_native_coupled_destination_refusal_precedes_policy_and_conversion() {
                 zenivf::IvfMuxer::new(),
                 Forward(&mut bytes),
                 &[track(config)],
-                &NoPulse,
+                Some(&NoPulse),
             )?;
             let facts = output.facts();
             Ok((output, Some(facts)))
         },
         || panic!("unsupported destination executed conversion"),
-        &NoPulse,
+        Some(&NoPulse),
     ) {
         Ok(_) => panic!("unqualified exact timing accepted"),
         Err(error) => error,
@@ -1085,14 +1096,14 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
                 ExactMp4(zenmp4::Mp4Muxer::new()),
                 Forward(&mut bytes),
                 &[track(config)],
-                &NoPulse,
+                Some(&NoPulse),
             )?;
             prepared.set(true);
             let facts = output.facts();
             Ok((output, Some(facts)))
         },
         || panic!("declined route executed conversion"),
-        &NoPulse,
+        Some(&NoPulse),
     ) {
         Ok(_) => panic!("declined route accepted"),
         Err(error) => error,
@@ -1171,11 +1182,11 @@ impl zencodec::encode::Encoder for RasterIvf {
         let mut bytes = Vec::new();
         mux.take_output(&mut bytes);
         for packet in packets {
-            mux.write_packet(packet, &NoPulse)
+            mux.write_packet(packet, Some(&NoPulse))
                 .map_err(io::Error::other)?;
             mux.take_output(&mut bytes);
         }
-        let finish = mux.finish(&NoPulse).map_err(io::Error::other)?;
+        let finish = mux.finish(Some(&NoPulse)).map_err(io::Error::other)?;
         bytes.extend_from_slice(&finish.tail);
         Ok(zencodec::output_patch::OutputFinish::new(
             zencodec::encode::EncodeOutput::new(bytes, zencodec::ImageFormat::Unknown)
@@ -1252,7 +1263,7 @@ fn mux_native_raster_destination_negotiates_and_applies_real_ivf_count_patch() {
         &mut forward,
         PolicySet::new(),
         options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(result.patched_bytes, 0);
@@ -1264,7 +1275,7 @@ fn mux_native_raster_destination_negotiates_and_applies_real_ivf_count_patch() {
         SeekBack::new(&mut disk).unwrap(),
         PolicySet::new(),
         options(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(result.patched_bytes, 4);
