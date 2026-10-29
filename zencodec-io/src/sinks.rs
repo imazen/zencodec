@@ -12,7 +12,7 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 /// place, so the decoder writes straight into the final image.
 #[derive(Default)]
 pub struct CollectSink {
-    data: Vec<u8>,
+    data: Option<PixelBuffer>,
     width: u32,
     height: u32,
     descriptor: Option<PixelDescriptor>,
@@ -53,20 +53,24 @@ impl CollectSink {
 
     /// The collected pixels, tightly packed.
     pub fn bytes(&self) -> &[u8] {
-        &self.data
+        self.data
+            .as_ref()
+            .map_or(&[], |buffer| buffer.as_slice().as_strided_bytes())
     }
 
     /// A zero-copy view of the collected image.
     pub fn as_pixel_slice(&self) -> Option<PixelSlice<'_>> {
-        let desc = self.descriptor?;
-        PixelSlice::new(
-            &self.data,
-            self.width,
-            self.height,
-            self.width as usize * desc.bytes_per_pixel(),
-            desc,
-        )
-        .ok()
+        self.data.as_ref().map(PixelBuffer::as_slice)
+    }
+
+    /// Take the finished image without copying its pixels or allocating.
+    ///
+    /// Returns `None` before [`DecodeRowSink::finish`] succeeds. Call this only
+    /// after the driver returns success: a sink's finish is not proof that the
+    /// decoder's later validation succeeded. This does not include metadata;
+    /// retain the decoder's completion details separately.
+    pub fn into_buffer(self) -> Option<PixelBuffer> {
+        self.finished.then_some(self.data).flatten()
     }
 
     /// Copy the collected image into an owned [`PixelBuffer`].
@@ -112,10 +116,17 @@ impl DecodeRowSink for CollectSink {
         let total = stride
             .checked_mul(height as usize)
             .ok_or_else(|| SinkError::from("CollectSink: image too large"))?;
+        // Retain the original reservation cause and leave state unchanged on
+        // failure. Prefix slack lets PixelBuffer align U16/F32 storage without
+        // copying; every row is written through that same aligned owner.
+        let capacity = total
+            .checked_add(descriptor.min_alignment() - 1)
+            .ok_or_else(|| SinkError::from("CollectSink: aligned image too large"))?;
         let mut data = Vec::new();
-        data.try_reserve_exact(total)?;
-        data.resize(total, 0);
-        self.data = data;
+        data.try_reserve_exact(capacity)?;
+        data.resize(capacity, 0);
+        let buffer = PixelBuffer::from_vec(data, width, height, descriptor)?;
+        self.data = Some(buffer);
         self.width = width;
         self.height = height;
         self.descriptor = Some(descriptor);
@@ -139,8 +150,7 @@ impl DecodeRowSink for CollectSink {
             )
             .into());
         }
-        let end = y
-            .checked_add(height)
+        y.checked_add(height)
             .filter(|end| *end <= self.height)
             .ok_or_else(|| {
                 SinkError::from(format!(
@@ -150,17 +160,11 @@ impl DecodeRowSink for CollectSink {
                 ))
             })?;
         self.rows_written += height as u64;
-        let stride = width as usize * desc.bytes_per_pixel();
-        let start = y as usize * stride;
-        let len = (end - y) as usize * stride;
-        PixelSliceMut::new(
-            &mut self.data[start..start + len],
-            width,
-            height,
-            stride,
-            desc,
-        )
-        .map_err(|e| format!("CollectSink: {e}").into())
+        Ok(self
+            .data
+            .as_mut()
+            .expect("begin installed pixel storage")
+            .rows_mut(y, height))
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
@@ -172,6 +176,42 @@ impl DecodeRowSink for CollectSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finished_storage_moves_without_copy_for_integer_and_float_rows() {
+        for descriptor in [
+            PixelDescriptor::RGB8_SRGB,
+            PixelDescriptor::RGB16_SRGB,
+            PixelDescriptor::RGBAF32_LINEAR,
+        ] {
+            let mut sink = CollectSink::new();
+            sink.begin(3, 2, descriptor).unwrap();
+            let original = sink.bytes().as_ptr();
+            for y in 0..2 {
+                let mut rows = sink.provide_next_buffer(y, 1, 3, descriptor).unwrap();
+                rows.row_mut(0).fill(37 + y as u8);
+            }
+            sink.finish().unwrap();
+            let buffer = sink.into_buffer().unwrap();
+            assert_eq!(buffer.as_slice().as_strided_bytes().as_ptr(), original);
+            assert_eq!(buffer.descriptor(), descriptor);
+            for y in 0..2 {
+                assert!(buffer.as_slice().row(y).iter().all(|b| *b == 37 + y as u8));
+            }
+        }
+    }
+
+    #[test]
+    fn unfinished_collectors_do_not_yield_owned_completion() {
+        assert!(CollectSink::new().into_buffer().is_none());
+        let mut sink = CollectSink::new();
+        sink.begin(2, 1, PixelDescriptor::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 2, PixelDescriptor::GRAY8_SRGB)
+            .unwrap()
+            .row_mut(0)
+            .copy_from_slice(&[17, 23]);
+        assert!(sink.into_buffer().is_none());
+    }
 
     #[test]
     fn collect_sink_refuses_unrepresentable_capacity_without_panic_or_state_change() {

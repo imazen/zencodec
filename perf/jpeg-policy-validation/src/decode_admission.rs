@@ -313,10 +313,16 @@ fn native_controlled_completion_retains_descriptive_metadata_and_extras() {
                 (b.marker, b.segment_type, &b.data)
             );
         }
-        let pixels = sink.as_pixel_slice().unwrap();
-        assert_eq!(pixels.descriptor(), direct.pixels().descriptor());
+        let storage = sink.bytes().as_ptr();
+        let output = zencodec::decode::DecodeOutput::from_parts(
+            sink.into_buffer().expect("driver finished the sink"),
+            details,
+        );
+        assert_eq!(output.pixels().as_strided_bytes().as_ptr(), storage);
+        assert_eq!(output.metadata(), direct.metadata());
+        assert_eq!(output.pixels().descriptor(), direct.pixels().descriptor());
         for y in 0..direct.height() {
-            assert_eq!(pixels.row(y), direct.pixels().row(y));
+            assert_eq!(output.pixels().row(y), direct.pixels().row(y));
         }
     }
 }
