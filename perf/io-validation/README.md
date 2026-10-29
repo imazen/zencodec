@@ -13,6 +13,12 @@ artifacts. These pins and the current harness require lock resolution, runtime
 and Clippy qualification. They do not inherit performance results measured on
 the prior revisions, and no existing pixel/protocol assertion is relaxed.
 
+The consumer root patches both registry and git edges for the shared family.
+The optional IVF/WebM sources use version requirements: a git-source patch alone
+does not supply their unpublished `zencodec-media` dependency. The initial CI
+resolution failure is retained; the registry patches still require a fresh
+resolved lock and execution of the unchanged guide controls.
+
 Private harnesses for the [2026-10-24 investigation](../../benchmarks/io_validation_2026-10-24.md).
 They add no library API. Run builds and benchmarks serially under your host's
 resource limiter. The disk probe uses Linux/Unix positional file I/O; the
