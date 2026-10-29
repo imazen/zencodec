@@ -76,10 +76,10 @@ Qualification and retained failing-first evidence:
 
 `just native-pulse-diagnostics-check` runs the strengthened incremental helper
 on baseline and progressive native JPEG fixtures, plus direct native decode with
-DiagnosticPulse. Both modes preserve one-shot Cancelled and TimedOut at early,
-middle and final observed checkpoints. This exercises native code, not only the
+DiagnosticPulse. Both modes preserve one-shot Cancelled and TimedOut at every checkpoint
+observed in successful runs of these fixtures. This exercises native code, not only the
 shared Fused wrapper. The fixture is 97x65; it is not full JPEG configuration or
-all-checkpoint coverage.
+all-input-path coverage.
 
 The successful traces contain 15 cancellation checks for baseline and 57 for
 progressive, but only one progress report of 65 units in each mode. Intermediate
@@ -98,3 +98,12 @@ row-streaming or bounded-memory decode. The direct and erased cancellation
 contracts remain useful even while progress delivery needs native work.
 PNG reporting propagation is tracked in
 [zenpng issue 49](https://github.com/imazen/zenpng/issues/49).
+
+The controlled PNG RGB8/RGBA8 factory is now independently run through the shared
+incremental helper, including pixel equality at four input-window sizes,
+pre-cancel/timeout without effects and terminal-state checks. The direct native
+JPEG and retained PNG diagnostic loops cover every observed checkpoint on the
+four fixtures: 408 interrupted operations and four successful traces. These
+results do not establish Adam7/APNG/16-bit, encoding, worker-thread, browser,
+whole-operation memory or independent pixel-oracle qualification. Progress
+reporting gaps above remain open; successful cancellation does not repair them.

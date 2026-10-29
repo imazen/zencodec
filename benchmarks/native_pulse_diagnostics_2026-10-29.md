@@ -79,3 +79,31 @@ setup. No codec performance inference follows from build/test wrapper figures.
 
 Progress delivery is tracked in
 [zenpng issue 49](https://github.com/imazen/zenpng/issues/49).
+
+## Controlled PNG and every observed checkpoint
+
+Base `db9711d4`, unchanged native pins. The PNG dev dependency now explicitly
+requests `controlled-decode`. The resolved Cargo.lock is byte-identical to the
+tracked dependencies.lock. The controlled factory is wrapped in PolicyDecoder
+and passed to the existing shared incremental helper for both RGB8 and RGBA8.
+It passes exact same-native pixel comparison at input windows 1, 7, 64 and the
+whole file, pre-cancel/timeout with no sink effects, cancellation terminality,
+completion and the helper's remaining routing checks. This is not an independent
+PNG pixel oracle or evidence of bounded whole-operation memory.
+
+The native diagnostic loops now inject each reason at **every checkpoint
+observed in a successful run**, rather than only early/middle/last checkpoints.
+The final run retained 412 JSON traces: four successes and 408 one-shot
+interruptions (144 JPEG, 264 PNG). All preserve the original reason without
+StopOutcomeMismatch, active spans or dropped trace records. This covers the
+observed paths on these four fixtures, not all input-dependent native paths.
+The controlled PNG test uses the shared cancellation checks; exhaustive native
+checkpoint traces still belong to the direct JPEG and retained PNG paths.
+
+Both four-test runs and strict test Clippy passed. Initial controlled run:
+run-heavy rc=0, 8s, peak RSS 0.34 GiB, min available 14357 MiB, peak load 0.08.
+Final exhaustive-checkpoint run: rc=0, 8s, peak RSS 0.34 GiB, min available
+14387 MiB, peak load 0.28. ARM64, 3 GiB cap, two jobs, timeout 900s. These are
+validation wrapper measurements, not codec benchmarks. Logs `controlled.log`
+and `all-checkpoints.log` and `all-checkpoints-artifacts` are retained beside
+prior receipts. Verified no Cargo/rustc/rustdoc process remained after exit.

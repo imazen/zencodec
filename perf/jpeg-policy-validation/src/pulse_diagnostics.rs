@@ -105,7 +105,7 @@ fn native_jpeg_preserves_one_shot_stops_with_diagnostics() {
             checks > 2,
             "need distinct early/middle/last native checkpoints"
         );
-        for at in [0, checks / 2, checks - 1] {
+        for at in 0..checks {
             for reason in [StopReason::Cancelled, StopReason::TimedOut] {
                 observed_decode(&bytes, progressive, at, reason);
             }
@@ -214,10 +214,50 @@ fn native_png_retains_pulse_and_meets_incremental_contract() {
             .unwrap();
         let checks = observed_png(bytes, alpha, usize::MAX, StopReason::Cancelled);
         assert!(checks > 2);
-        for at in [0, checks / 2, checks - 1] {
+        for at in 0..checks {
             for reason in [StopReason::Cancelled, StopReason::TimedOut] {
                 observed_png(bytes, alpha, at, reason);
             }
         }
+    }
+}
+
+#[test]
+fn native_png_controlled_streaming_meets_incremental_contract() {
+    use zencodec::{
+        decode::{DecodeJob, DecoderConfig, erase_incremental},
+        encode::EncoderConfig,
+        operation::PolicySet,
+        storage::StorageBudget,
+    };
+    for alpha in [false, true] {
+        let pixels = if alpha {
+            zencodec_testkit::TestImage::rgba8_gradient(97, 65)
+        } else {
+            zencodec_testkit::TestImage::rgb8_gradient(97, 65)
+        };
+        let encoded = zenpng::PngEncoderConfig::new()
+            .encode(pixels.as_slice())
+            .unwrap();
+        let bytes = encoded.data();
+        zencodec_testkit::check_incremental_decoder(
+            || {
+                let native = zenpng::PngDecoderConfig::new()
+                    .job()
+                    .dyn_controlled_decoder(&[], StorageBudget::new(bytes.len() + 65536, 8))
+                    .map_err(|e| e.to_string())?;
+                Ok(erase_incremental(zencodec_io::PolicyDecoder::new(
+                    native,
+                    PolicySet::new(),
+                )))
+            },
+            |input| {
+                zenpng::PngDecoderConfig::new()
+                    .decode(input)
+                    .map_err(|e| e.to_string())
+            },
+            bytes,
+        )
+        .unwrap();
     }
 }
