@@ -29,3 +29,18 @@ refusal. Default decode remains successful without mandatory caller queries.
 
 This is a source-verified open contract, not a completed preflight implementation.
 No new public planning API was introduced from this review alone.
+
+## Executed native controls
+
+`just jpeg-decode-admission-check` qualifies the pinned JPEG `e0bb92b4`:
+for baseline and progressive JPEG, native output prediction differs from the
+requested RGBA descriptor, while the checked decode succeeds with that exact
+descriptor. Rows, dimensions, orientation and descriptive metadata equal direct
+native execution. A separate RGB16 requirement verifies that native fallback
+still produces a typed `OutputDescriptor` refusal.
+
+Both tests and strict harness Clippy passed on source `4f955592` (2026-10-29).
+The run-heavy receipt is rc=0, 12 seconds, peak RSS 0.70 GiB. This measures the
+validation process, not decoder allocation. No early-allocation or HDR gain-map
+qualification is claimed. The controls guard valid negotiation and final
+validation while the early-admission contract is developed.

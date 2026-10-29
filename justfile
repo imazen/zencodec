@@ -1528,3 +1528,8 @@ media-staged-admission-check artifacts:
     cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_workspace_refusal
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
     cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume
+
+# Native negotiation counterexamples for required one-shot output admission.
+jpeg-decode-admission-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked decode_admission:: -- --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib --tests -- -D warnings

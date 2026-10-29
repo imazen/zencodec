@@ -268,7 +268,8 @@ pub trait DynDecodeJob<'a> {
     /// Mutable access to codec-specific extensions.
     fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
 
-    /// Predict what the decoder will produce given current hints.
+    /// Predict native output given current hints, without format preferences.
+    /// This is not admission evidence for a subsequent negotiated decode.
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, BoxedError>;
 
     /// Create a one-shot decoder bound to `data` (consumes this job).

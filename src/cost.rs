@@ -20,8 +20,9 @@ use zenpixels::PixelDescriptor;
 /// original dimensions, original orientation, embedded metadata.
 ///
 /// `OutputInfo` describes the decoder's output: post-crop, post-scale,
-/// post-orientation dimensions and pixel format. This is what your
-/// buffer must match.
+/// post-orientation dimensions and native pixel format. Format preferences
+/// supplied when creating an executor can select another descriptor;
+/// `native_format` does not reject or admit that negotiated choice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct OutputInfo {

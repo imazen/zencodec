@@ -337,7 +337,10 @@ pub trait DecodeJob<'a>: Sized {
     /// Predict what the decoder will produce given current hints.
     ///
     /// Returns dimensions, pixel format, and which hints were honored.
-    /// Call after setting hints, before creating a decoder.
+    /// Call after setting hints, before creating a decoder. This method receives
+    /// no output preferences: `native_format` is not proof of the format selected
+    /// by a subsequent negotiated decode. Do not use it to reject a requested
+    /// format that differs from the native default.
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, Self::Error>;
 
     // --- Executor creation ---

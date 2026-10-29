@@ -232,6 +232,11 @@ impl DecodeRequest {
 
     /// Require this output descriptor. An unsupported result is an error;
     /// conversion or lower precision is never selected implicitly.
+    ///
+    /// The one-shot path verifies the actual result after native decoding, so
+    /// refusal can follow a full raster allocation. For controlled execution,
+    /// [`Self::start_controlled`] checks the final interpretation before sink
+    /// effects; this is not a bound on native decoding workspace.
     pub fn with_output(mut self, descriptor: PixelDescriptor) -> Self {
         self.output = Output::Require(descriptor);
         self

@@ -48,3 +48,6 @@ mod preparation;
 
 #[cfg(all(test, feature = "native-preflight"))]
 mod native_preflight;
+
+#[cfg(test)]
+mod decode_admission;
