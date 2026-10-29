@@ -757,6 +757,10 @@ removes that whole class).
 
 ### [Unreleased]
 
+- Refuse unqualified workspace requirements before controlled native polling;
+  retain `Workspace(Unknown)` through `PolicyDecodeError::Requirements` and
+  release the session on refusal. Native construction remains outside this gate.
+
 #### Added
 
 - `CollectSink::into_buffer` moves finished pixel storage without another raster

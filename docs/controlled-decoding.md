@@ -271,3 +271,26 @@ The guard shares the original error on the failure path so both the backend and
 the operation retain its typed cause. Successful row buffers stay borrowed;
 this adds no success-path error allocation. It cannot interrupt computation
 inside a backend that ignores errors, nor roll back previously successful I/O.
+
+## Workspace deadlines during discovery
+
+`PolicyDecoder` cannot qualify native workspace. If either its bound operation
+policy or legacy preset requires a workspace limit, the first `step` refuses
+before polling the native decoder, including when the limit is `u64::MAX`.
+The typed cause is `UnmetRequirements` with `Workspace(Unknown)`, retained in
+`PolicyDecodeError::Requirements`. No callback or synthetic boundary decision
+is recorded. Refusal drops the retained decoder and makes later steps terminal.
+Without a workspace requirement, normal metadata discovery remains available.
+
+```rust,ignore
+let policy = PolicySet::new().with_workspace_limit(limit);
+let mut decoder = PolicyDecoder::new(native_decoder, policy);
+// Refuses on the first step: this adapter has no native workspace proof.
+// find_cause::<UnmetRequirements>(&error) identifies Workspace(Unknown).
+```
+
+This admission check cannot undo construction of `native_decoder`, which happens
+before it is passed to the adapter. Callers needing a preparation-inclusive bound
+must admit the native factory before calling it. Deferred metadata discovery is
+not permission to defer allocation requirements. The constructor/factory contract
+and shared per-effect deferred obligations remain open.
