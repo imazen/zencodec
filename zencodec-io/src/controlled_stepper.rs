@@ -70,11 +70,12 @@ impl<'a, D: ControlledIncrementalDecode, S: DecodeRowSink> ControlledStepper<'a,
 
     /// Apply a decision to the exact held boundary. This resumes the protocol;
     /// the cursor's next call performs subsequent native work.
+    /// `None` adds no per-call control and preserves native retained controls.
     pub fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), StepError<D::Error>> {
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
         decoder.resume(boundary, action, pulse)?;
@@ -90,7 +91,7 @@ impl<D: ControlledIncrementalDecode, S: DecodeRowSink> ByteStepper for Controlle
     fn step(
         &mut self,
         input: Input<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<Self::Output>, Self::Error> {
         // Taking ownership also makes a caught native/sink unwind terminal and
         // releases the session before control returns to its caller.

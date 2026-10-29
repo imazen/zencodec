@@ -15,6 +15,10 @@ api-doc:
 api-doc-check:
     ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
 
+# Generate Rustdoc for the same eight crates as the guide's signature catalog.
+docs-reference:
+    python3 docs/build-reference.py
+
 # CI-exact clippy
 clippy:
     cargo clippy --all-targets -- -D warnings
@@ -739,6 +743,11 @@ planned-row-check:
     cargo test -p zencodec-io --all-features --tests --locked
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
 
+# Configured job erasure preserves the retained owner before native startup.
+configured-job-check:
+    cargo test -p zencodec --all-features --lib traits::dyn_encoding::job_erasure_tests --locked
+    cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings
+
 # Operation-bound requirements, callback composition and diagnostic controls.
 policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked
@@ -1430,6 +1439,12 @@ encoder-pull-check:
     cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
     cargo test -p zencodec --all-features --locked --doc
 
+# Joint prepared input/replay/output route admission and existing policy domains.
+encoding-route-check:
+    cargo test --workspace --all-features --locked
+    cargo test -p zencodec --all-features --locked --doc
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
 # Refuse unknown preparation workspace before native planning, typed and erased.
 row-preparation-check:
     cargo test -p zencodec-io --features std --locked --test planned_row_encode
@@ -1489,3 +1504,7 @@ policy-completion-check:
 transcode-composition-check:
     cargo test --locked -p zencodec operation::transcode::composition_tests
     cargo clippy --locked -p zencodec --all-features --all-targets -- -D warnings
+
+# Source-only guard for portable codec family graphs; no Cargo invocation.
+optional-native-audit-check:
+    python3 perf/optional-native/test-audit.py

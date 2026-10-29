@@ -223,19 +223,21 @@ impl From<Progress> for ControlledProgress {
 /// and facts; it never calls an application resolver from codec internals.
 pub trait ControlledIncrementalDecode: IncrementalDecode {
     /// Advance or return a mandatory suspension.
+    /// `None` adds no per-call control; retained job controls still apply.
     fn step_controlled(
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>>;
     /// Resume exactly one outstanding boundary. A stale, invalid or cancelled
-    /// reply is terminal. This performs no sink work.
+    /// reply is terminal. This performs no sink work. `None` preserves the
+    /// retained control and does not bypass cancellation at the boundary.
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<Self::Error>>;
 }
 
@@ -247,7 +249,7 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for Bo
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
         (**self).step_controlled(input, sink, pulse)
     }
@@ -255,7 +257,7 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for Bo
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<Self::Error>> {
         (**self).resume(boundary, action, pulse)
     }
@@ -265,7 +267,7 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for &m
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
         (**self).step_controlled(input, sink, pulse)
     }
@@ -273,7 +275,7 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for &m
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<Self::Error>> {
         (**self).resume(boundary, action, pulse)
     }
@@ -283,7 +285,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Incremental
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<ControlledProgress, StepError<ErasedError>> {
         self.0
             .step_controlled(input, sink, pulse)
@@ -293,7 +295,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Incremental
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), StepError<ErasedError>> {
         self.0
             .resume(boundary, action, pulse)
@@ -418,7 +420,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             sink: &mut dyn DecodeRowSink,
-            _: &dyn crate::Pulse,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<Progress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB)
@@ -440,7 +442,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             sink: &mut dyn DecodeRowSink,
-            _: &dyn crate::Pulse,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<ControlledProgress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             match self.early_output {
@@ -472,7 +474,7 @@ mod tests {
             &mut self,
             _: BoundaryId,
             _: BoundaryAction,
-            _: &dyn crate::Pulse,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<(), StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(()) // Intentionally accepts every reply: the framework must check.
@@ -531,7 +533,7 @@ mod tests {
             let mut sink = NoEffects;
             for _ in 0..3 {
                 assert!(
-                    matches!(dec.step_controlled(Input::empty(), &mut sink, &crate::how_far::NoPulse).unwrap(), ControlledProgress::Suspended { consumed: 0, boundary: b } if b == boundary)
+                    matches!(dec.step_controlled(Input::empty(), &mut sink, Some(&crate::how_far::NoPulse)).unwrap(), ControlledProgress::Suspended { consumed: 0, boundary: b } if b == boundary)
                 );
             }
             assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -540,29 +542,33 @@ mod tests {
                     dec.resume(
                         boundary.id(),
                         BoundaryAction::ContinueReading,
-                        &crate::how_far::NoPulse
+                        Some(&crate::how_far::NoPulse)
                     ),
                     Err(StepError::Control(ControlError::InvalidReply))
                 ));
             } else {
                 assert!(matches!(
-                    dec.step(Input::empty(), &mut sink, &crate::how_far::NoPulse),
+                    dec.step(Input::empty(), &mut sink, Some(&crate::how_far::NoPulse)),
                     Err(StepError::Control(ControlError::UnhandledBoundary))
                 ));
             }
             assert!(matches!(
-                dec.step_controlled(Input::empty(), &mut sink, &crate::how_far::NoPulse),
+                dec.step_controlled(Input::empty(), &mut sink, Some(&crate::how_far::NoPulse)),
                 Err(StepError::Finished)
             ));
             assert_eq!(calls.load(Ordering::SeqCst), 1);
         }
         let (calls, mut dec, boundary) = fixture();
-        dec.step_controlled(Input::empty(), &mut NoEffects, &crate::how_far::NoPulse)
-            .unwrap();
+        dec.step_controlled(
+            Input::empty(),
+            &mut NoEffects,
+            Some(&crate::how_far::NoPulse),
+        )
+        .unwrap();
         dec.resume(
             boundary.id(),
             BoundaryAction::AdoptInterpretation,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
@@ -575,7 +581,11 @@ mod tests {
             inner.early_output = effect;
             let mut dec = Fused::new(inner);
             assert!(matches!(
-                dec.step_controlled(Input::empty(), &mut NoEffects, &crate::how_far::NoPulse),
+                dec.step_controlled(
+                    Input::empty(),
+                    &mut NoEffects,
+                    Some(&crate::how_far::NoPulse)
+                ),
                 Err(StepError::Control(ControlError::OutputBeforeInterpretation))
             ));
             assert_eq!(calls.load(Ordering::SeqCst), 1);

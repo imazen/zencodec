@@ -53,7 +53,7 @@ fn invalid_reader_requests_do_not_consume_input_or_change_destination() {
         let mut bytes = [77; 36];
         let view = PixelSliceMut::new(&mut bytes, width, rows, 12, descriptor).unwrap();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            source.read_rows(0, view, &NoPulse)
+            source.read_rows(0, view, Some(&NoPulse))
         }));
         assert_eq!(calls.get(), 0, "invalid declaration consumed source bytes");
         assert_eq!(bytes, [77; 36]);
@@ -95,7 +95,7 @@ fn invalid_file_requests_do_not_write_destination() {
         );
         let mut bytes = [77; 24];
         let view = PixelSliceMut::new(&mut bytes, width, rows, 12, descriptor).unwrap();
-        let result = source.read_rows(first, view, &NoPulse);
+        let result = source.read_rows(first, view, Some(&NoPulse));
         assert_eq!(bytes, [77; 24], "invalid declaration touched destination");
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
@@ -161,7 +161,7 @@ fn padding_is_bounded_and_cancellable_with_typed_reason() {
     let result = source.read_rows(
         0,
         PixelSliceMut::new(&mut bytes, 2, 1, 6, PixelDescriptor::RGB8_SRGB).unwrap(),
-        &pulse,
+        Some(&pulse),
     );
     assert!(
         largest.get() <= 4096,
@@ -201,7 +201,7 @@ fn cancellation_before_read_keeps_typed_timeout() {
         .read_rows(
             0,
             PixelSliceMut::new(&mut bytes, 2, 1, 6, PixelDescriptor::RGB8_SRGB).unwrap(),
-            &pulse,
+            Some(&pulse),
         )
         .unwrap_err();
     assert_eq!(calls.get(), 0);
@@ -227,7 +227,7 @@ fn unaligned_source_pitch_and_destination_padding_preserve_samples() {
         .read_rows(
             0,
             PixelSliceMut::new(&mut bytes, 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     assert_eq!(

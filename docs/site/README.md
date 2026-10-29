@@ -35,11 +35,22 @@ Setup above and continuation below expand independently. The cancellation
 recipe accepts the application's `SharedPulse`; the file recipe keeps the
 operation policy and checks cancellation before opening the destination.
 
+Public borrowed controls now take `Option<&dyn Pulse>`. Beginner driver examples
+use `None` for no additional per-call control. Keep any set/job `SharedPulse`
+active, and forward the original option through adapters. `Some(pulse)` carries
+reporting, phase planning and sharing along with cancellation. Required policy
+and resource checks still apply. The default policy selects a permitted route;
+later evidence can require a scoped callback before affected output is released.
+See the [optional control contract](../optional-pulse.md).
+
 The [native receipt](../../benchmarks/code_guide_2026-10-28.json) records the
 five new cancellation/publication controls, full JPEG harness, preflight, lint
 and browser checks. Captured integration signatures must match both the native
 dependency revision and the `OperationPolicy` accepted by the copied examples.
 Synchronous file writes are not transactional or preemptively cancellable.
+That receipt predates optional borrowed controls; it does not qualify the new
+signatures or their native adapters. Re-run the matching native guide, source
+catalog and browser gates after integration.
 
 ## Source-backed codec-detail methods (2026-10-28)
 
@@ -54,3 +65,18 @@ build so the explicit supplement can be reviewed.
 including identity-preserving downcasts and mismatched-type refusal. Site and
 browser checks retain the existing catalog coverage and add search/source-link
 checks for the supplement. [Validation receipt](../../benchmarks/source_catalog_2026-10-28.json).
+
+## Qualified integration snapshot (2026-10-29)
+
+The JPEG harness uses zenpipe `f0322466`. Recapture its named declarations
+with `just checked-guide-api <zenpipe-checkout> <full-revision>` whenever that
+dependency changes. The generated revision must match the native manifest,
+even when the declarations themselves are unchanged.
+
+On `9b606366`, all 48 native JPEG/conversion scenarios, strict harness Clippy,
+24 source tests and the complete browser suite pass. The lock delta changes
+only zencodecs' Git revision. The paired consumer separately qualifies its full
+HEIC/RAW feature-profile compilation and API snapshot generation; that is not
+whole-codec/platform runtime coverage. Two AVIF encode-orientation carrier
+assertions still conflict with native baking and remain unresolved.
+See [the receipt](../../benchmarks/guide_integration_2026-10-29.json).

@@ -23,7 +23,7 @@ fn metadata_services_cannot_return_over_budget_packets() {
             &self,
             _: &[u8],
             _: usize,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<Option<Vec<u8>>, Error> {
             Ok(Some(vec![0; 17]))
         }
@@ -47,7 +47,7 @@ fn cancellation_retains_deadline_reason() {
         }
     }
     let pulse = zencodec::how_far::StopOnly::borrowed(&Deadline);
-    let request = RewriteRequest::new(b"data").with_pulse(&pulse);
+    let request = RewriteRequest::new(b"data").with_pulse(Some(&pulse));
     assert!(matches!(
         Context::new(&request),
         Err(Error::Stopped(zencodec::enough::StopReason::TimedOut))
@@ -228,7 +228,7 @@ fn cancellation_prevents_calling_a_packet_service() {
             _: zencodec::metadata_rewrite::Compression,
             _: &[u8],
             _: usize,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<Vec<u8>, Error> {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(vec![])
@@ -239,7 +239,7 @@ fn cancellation_prevents_calling_a_packet_service() {
     let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
     let context = Context::new(
         &RewriteRequest::new(b"")
-            .with_pulse(&pulse)
+            .with_pulse(Some(&pulse))
             .with_services(&service),
     )
     .unwrap();

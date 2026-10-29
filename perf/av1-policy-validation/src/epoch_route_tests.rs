@@ -35,7 +35,7 @@ fn native_stream(threads: u32) -> Vec<Frame> {
         let (mut config, packets) = encode(settings, &frames);
         config.epoch = 10 + group as u32;
         config.time_base = clock;
-        decoder.configure(&config, &NoPulse).unwrap();
+        decoder.configure(&config, Some(&NoPulse)).unwrap();
         for (index, packet) in packets.into_iter().enumerate() {
             let pts = (group * 3 + index) as i64 * if clock == TB { 40 } else { 3600 };
             let mut packet = packet
@@ -44,8 +44,8 @@ fn native_stream(threads: u32) -> Vec<Frame> {
                 .with_config_epoch(config.epoch)
                 .with_ordinal(7)
                 .with_input_offset(1000 + (group * 3 + index) as u64);
-            while decoder.send(&mut packet, &NoPulse).unwrap() != SendStatus::Accepted {
-                let Receive::Ready(frame) = decoder.receive(&NoPulse).unwrap() else {
+            while decoder.send(&mut packet, Some(&NoPulse)).unwrap() != SendStatus::Accepted {
+                let Receive::Ready(frame) = decoder.receive(Some(&NoPulse)).unwrap() else {
                     panic!("native decoder progress promise")
                 };
                 actual.push(frame);
@@ -54,7 +54,7 @@ fn native_stream(threads: u32) -> Vec<Frame> {
     }
     decoder.end_input().unwrap();
     loop {
-        match decoder.receive(&NoPulse).unwrap() {
+        match decoder.receive(Some(&NoPulse)).unwrap() {
             Receive::Ready(frame) => actual.push(frame),
             Receive::EndOfStream => break,
             other => panic!("native decoder failed to drain: {other:?}"),
@@ -111,7 +111,7 @@ fn epoch_route_native_changes_prepare_once_preserve_input_context_and_drain_befo
         };
         let mut operation = Candidate::new(resolver, true, false, storage.clone(), live.clone());
         for frame in &frames {
-            operation.push(frame, &NoPulse).unwrap();
+            operation.push(frame, Some(&NoPulse)).unwrap();
         }
         assert_eq!(operation.report().dropped_decisions(), 2);
         for record in operation.report().decisions() {
@@ -121,7 +121,7 @@ fn epoch_route_native_changes_prepare_once_preserve_input_context_and_drain_befo
             assert_eq!(selected.fidelity, Some(Fidelity::Lossless));
             assert!(selected.workspace_upper_bound.is_none());
         }
-        let segments = operation.finish(&NoPulse).unwrap();
+        let segments = operation.finish(Some(&NoPulse)).unwrap();
         assert_eq!(segments.len(), 5);
         assert_eq!(live.load(Ordering::SeqCst), 0);
         assert_eq!(seen.len(), frames.len());
@@ -205,7 +205,7 @@ fn epoch_route_fixed_committed_output_refuses_before_new_frame_acceptance() {
         storage.clone(),
         live.clone(),
     );
-    operation.push(&frames[0], &NoPulse).unwrap();
+    operation.push(&frames[0], Some(&NoPulse)).unwrap();
     // The publisher owns these irreversible bytes, outside the operation.
     // A header is committed even though no encoded picture has been sent.
     let mut published = Vec::new();
@@ -221,16 +221,16 @@ fn epoch_route_fixed_committed_output_refuses_before_new_frame_acceptance() {
                 ));
                 Ok(())
             },
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
     let header = published.clone();
     assert_eq!(header.len(), 32);
     assert_eq!(&header[12..16], &[17, 0, 13, 0]);
     for frame in &frames[1..6] {
-        operation.push(frame, &NoPulse).unwrap();
+        operation.push(frame, Some(&NoPulse)).unwrap();
     }
-    let error = operation.push(&frames[6], &NoPulse).unwrap_err();
+    let error = operation.push(&frames[6], Some(&NoPulse)).unwrap_err();
     let policy = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
     assert_eq!(policy.record().offered, 0);
     assert_eq!(policy.record().code, DecisionCode::Declined);
@@ -241,7 +241,7 @@ fn epoch_route_fixed_committed_output_refuses_before_new_frame_acceptance() {
         (storage.reserved_bytes(), storage.reserved_objects()),
         (0, 0)
     );
-    assert!(operation.push(&frames[7], &NoPulse).is_err());
+    assert!(operation.push(&frames[7], Some(&NoPulse)).is_err());
     assert_eq!(calls.get(), 7);
     assert_eq!(published, header);
 }
@@ -293,7 +293,7 @@ fn epoch_route_fixed_header_refuses_same_size_interpretation_and_clock_changes()
             storage.clone(),
             live.clone(),
         );
-        operation.push(old, &NoPulse).unwrap();
+        operation.push(old, Some(&NoPulse)).unwrap();
         let mut published = None;
         operation
             .publish_header(
@@ -301,16 +301,16 @@ fn epoch_route_fixed_header_refuses_same_size_interpretation_and_clock_changes()
                     published = Some(config.clone());
                     Ok(())
                 },
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         let published = published.unwrap();
-        let error = operation.push(incoming, &NoPulse).unwrap_err();
+        let error = operation.push(incoming, Some(&NoPulse)).unwrap_err();
         let failure = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
         assert_eq!(failure.record().offered, 0);
         assert_eq!(failure.record().code, DecisionCode::Declined);
         assert!(operation.is_failed());
-        assert!(operation.push(old, &NoPulse).is_err());
+        assert!(operation.push(old, Some(&NoPulse)).is_err());
         assert_eq!(calls.get(), 2);
         assert_eq!(live.load(Ordering::SeqCst), 0);
         assert_eq!(
@@ -374,19 +374,19 @@ fn epoch_route_stop_at_preparation_transition_and_finish_keeps_reason_and_releas
             let error = if point == 3 {
                 for frame in &frames[..6] {
                     operation
-                        .push(frame, &zencodec::how_far::StopOnly::borrowed(&stop))
+                        .push(frame, Some(&zencodec::how_far::StopOnly::borrowed(&stop)))
                         .unwrap();
                 }
                 stop.stopped.store(true, Ordering::SeqCst);
                 operation
-                    .finish(&zencodec::how_far::StopOnly::borrowed(&stop))
+                    .finish(Some(&zencodec::how_far::StopOnly::borrowed(&stop)))
                     .err()
                     .expect("finish must stop")
             } else {
                 let index = if point == 2 {
                     for frame in &frames[..6] {
                         operation
-                            .push(frame, &zencodec::how_far::StopOnly::borrowed(&stop))
+                            .push(frame, Some(&zencodec::how_far::StopOnly::borrowed(&stop)))
                             .unwrap();
                     }
                     6
@@ -396,12 +396,12 @@ fn epoch_route_stop_at_preparation_transition_and_finish_keeps_reason_and_releas
                 let error = operation
                     .push(
                         &frames[index],
-                        &zencodec::how_far::StopOnly::borrowed(&stop),
+                        Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
                     )
                     .unwrap_err();
                 assert!(operation.is_failed());
                 let before = calls.get();
-                assert!(operation.push(&frames[index], &NoPulse).is_err());
+                assert!(operation.push(&frames[index], Some(&NoPulse)).is_err());
                 assert_eq!(calls.get(), before);
                 error
             };
@@ -436,7 +436,7 @@ fn epoch_route_partial_header_failure_and_unwind_cannot_resume_or_undo_publicati
             storage.clone(),
             live.clone(),
         );
-        operation.push(&frames[0], &NoPulse).unwrap();
+        operation.push(&frames[0], Some(&NoPulse)).unwrap();
         let mut published = Vec::new();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             operation.publish_header(
@@ -453,7 +453,7 @@ fn epoch_route_partial_header_failure_and_unwind_cannot_resume_or_undo_publicati
                             .into(),
                     )
                 },
-                &NoPulse,
+                Some(&NoPulse),
             )
         }));
         if unwind {
@@ -470,7 +470,7 @@ fn epoch_route_partial_header_failure_and_unwind_cannot_resume_or_undo_publicati
         assert_eq!(published.len(), 13);
         assert_eq!(&published[..4], b"DKIF");
         assert!(operation.is_failed());
-        assert!(operation.push(&frames[1], &NoPulse).is_err());
+        assert!(operation.push(&frames[1], Some(&NoPulse)).is_err());
         assert_eq!(live.load(Ordering::SeqCst), 0);
         assert_eq!(
             (storage.reserved_bytes(), storage.reserved_objects()),
@@ -525,7 +525,7 @@ fn epoch_route_policy_error_decline_stale_choice_unwind_and_storage_failure_are_
         }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             for frame in &frames[..7] {
-                operation.push(frame, &NoPulse)?;
+                operation.push(frame, Some(&NoPulse))?;
             }
             Ok::<(), Cause>(())
         }));

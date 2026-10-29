@@ -36,7 +36,7 @@ impl<R: PolicyResolver> ExerciseBinding for BoundPolicy<R> {
             offers,
             self,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
     }
     fn boundary(
@@ -53,7 +53,7 @@ impl<R: PolicyResolver> ExerciseBinding for BoundPolicy<R> {
             .unwrap(),
             self,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
     }
 }
@@ -221,7 +221,7 @@ fn direct_preset_names_unknown_wait_and_contradictory_schedule() {
             &[OutputScheduleOffer::new(OutputSchedule::FinishFirst)],
             &mut policy,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         let record = error.error().record();
@@ -271,7 +271,7 @@ fn legacy_and_bound_requirements_intersect_without_replacing_each_other() {
             &offers,
             &mut policy,
             legacy,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(index, 2);
@@ -292,7 +292,7 @@ fn erased_callback_and_reborrowed_operation_keep_the_same_admission() {
         &[OutputScheduleOffer::new(OutputSchedule::Live)],
         operation,
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap_err();
     assert_eq!(

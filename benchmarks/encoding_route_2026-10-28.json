@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "source": "754cf33a9958e14570824f28d6fabcfe7c8eb8e4",
+  "result": "Workspace tests and doctests pass; strict Clippy fails on one new collapsible_if. Original log preserved.",
+  "initial_resource": "rc101 55s | peak-RSS0.47GiB | min-avail4208MiB | peak-load1.65",
+  "corrected_source": "a075912b10ac0848fb8536df4c5a9d6d60a3511a",
+  "correction": "Equivalent let-chain syntax, no behavior/assertion/lint relaxation.",
+  "corrected_gates": [
+    "16 joint-route controls",
+    "workspace all-target all-feature strict Clippy",
+    "public API generate/check",
+    "8 compiler-derived catalogs",
+    "24 site source checks",
+    "WASM no-default-features build"
+  ],
+  "resource": "rc0 75s | peak-RSS0.48GiB | min-avail4048MiB | peak-load1.46",
+  "limits": "run-heavy3G/jobs2 timeout900",
+  "logs": "~/tmp/zencodec-encoding-route-20261028 on r7900x",
+  "not_qualified": [
+    "production replay driver",
+    "retained native job integration",
+    "throughput/compile-time delta",
+    "whole-operation memory"
+  ]
+}

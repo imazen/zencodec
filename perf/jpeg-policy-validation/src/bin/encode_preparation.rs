@@ -27,7 +27,7 @@ impl Source for Unread {
         &mut self,
         _: u32,
         _: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         panic!("refused preparation must not request pixels")
     }
@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             required,
             Options::new(StorageBudget::new(2 * 1024 * 1024, 16), 1024 * 1024)
                 .with_policy_set(required),
-            &zencodec::how_far::NoPulse,
+            Some(&zencodec::how_far::NoPulse),
         )
         .expect_err("unknown native workspace cannot establish the required bound");
         assert_eq!(error.error().stage, Stage::Policy);

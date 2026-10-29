@@ -84,7 +84,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Self::Error>> {
         if self.failed {
             return Err(StepError::Finished);

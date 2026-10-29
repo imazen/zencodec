@@ -17,6 +17,12 @@ past a known end (`ProtocolViolation`) instead of looping, and takes
 `Option<&dyn how_far::Pulse>` for cancellation and progress (`Pulse: Stop`; a
 plain stop passes as `how_far::StopOnly::borrowed`).
 
+All public borrowed Pulse inputs accept `None` for no additional per-call
+control, including byte cursors, controlled resume, row sources and row encoding.
+`None` leaves retained decoder, encoder and source controls active and preserves
+policy and resource checks. Pass `Some(&pulse)` for cancellation and reporting;
+forwarding preserves phase planning and sharing as well as progress.
+
 Use `PolicyDecoder` for automatic resolution of mandatory interpretation
 boundaries. Adapters that need to prepare conversion and encoding while decode
 is paused use `ControlledStepper` with the existing byte cursors. A
@@ -103,4 +109,14 @@ retain decisions, original causes and confirmed partial writes.
 or `Encoder::encode` followed by writing its output for a one-shot encoder.
 The row driver rejects unsupported row mode; it never allocates a complete
 raster as a fallback. Managed payload limits exclude native workspace and
-queue bookkeeping. This synchronous driver does not yet provide disk staging.
+queue bookkeeping. `Options::with_disk_staging` supplies a distinct owned file
+for compressed staging.
+
+Configured jobs use `row_encode::encode_job` or `encode_dyn_job`. One joint
+policy decision selects acquisition and output before native construction:
+`Rows` pushes managed strips; `Replay` fills native-owned strips. A retained
+`Raster` provides immutable replay, forward sources can use an admitted private
+snapshot, and positional sources use row digests plus optional version checks.
+`with_raw_disk_staging` offers a separate raw store; disk and hashes do not prove
+exact replay. Whole-raster jobs still refuse explicitly. See the
+[driver contract and source-only qualification status](../docs/row-replay-driver.md).

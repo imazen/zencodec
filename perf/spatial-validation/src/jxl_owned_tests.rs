@@ -15,7 +15,7 @@ use std::{
     },
 };
 use zencodec::{
-    At, SharedPulse, NoPulse,
+    At, NoPulse, SharedPulse,
     collection::Cause,
     enough::{Stop, StopReason},
     image::{
@@ -311,9 +311,14 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
         budget: budget.clone(),
         observed: Arc::new(AtomicBool::new(false)),
     };
-    let error = reconstruct(&bytes, &template, &budget, SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())))
-        .err()
-        .unwrap();
+    let error = reconstruct(
+        &bytes,
+        &template,
+        &budget,
+        SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())),
+    )
+    .err()
+    .unwrap();
     assert!(
         stop.observed.load(Ordering::SeqCst),
         "native control must observe admitted output"
@@ -332,7 +337,7 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
         assert_eq!(budget.reserved_bytes(), size);
         Ok(Decision::decline(Decline::ApplicationRule))
     };
-    let error = resolve_image(image, &mut resolver, PolicySet::new(), &NoPulse).unwrap_err();
+    let error = resolve_image(image, &mut resolver, PolicySet::new(), Some(&NoPulse)).unwrap_err();
     assert!(zencodec::find_cause::<Decline>(&error).is_some());
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 }

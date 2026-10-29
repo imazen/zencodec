@@ -16,6 +16,10 @@
 //! caller whose destination cannot seek back passes
 //! [`MuxHint::forward_only`] and gets a layout without patches, or a refusal
 //! at `begin`.
+//!
+//! Borrowed Pulse arguments are optional. `None` adds no per-call control;
+//! retained job controls and structural limits still apply. Forwarding adapters
+//! pass the original option through to the implementation.
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -178,7 +182,7 @@ pub trait Demuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<DemuxProgress, SessionError<Self::Error>>;
 
     /// What the demuxer needs next, after [`DemuxEvent::Need`]. Never empty
@@ -301,7 +305,7 @@ pub trait Muxer {
     fn write_packet(
         &mut self,
         packet: Packet,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Self::Error>>;
 
     /// Bytes ready to send, not yet consumed.
@@ -314,7 +318,10 @@ pub trait Muxer {
     fn take_output(&mut self, into: &mut Vec<u8>);
 
     /// Finish: the bytes not yet consumed, and any patches.
-    fn finish(self, pulse: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<Self::Error>>
+    fn finish(
+        self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<Self::Error>>
     where
         Self: Sized;
 }
@@ -340,7 +347,7 @@ pub trait DynMuxer {
     fn write_packet(
         &mut self,
         packet: Packet,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ErasedError>>;
     /// See [`Muxer::pending_output`].
     fn pending_output(&self) -> &[u8];
@@ -351,7 +358,7 @@ pub trait DynMuxer {
     /// See [`Muxer::finish`].
     fn finish(
         self: Box<Self>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<MuxFinish, SessionError<ErasedError>>;
 }
 
@@ -381,7 +388,7 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     fn write_packet(
         &mut self,
         packet: Packet,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<ErasedError>> {
         self.0
             .write_packet(packet, pulse)
@@ -398,7 +405,7 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     }
     fn finish(
         self: Box<Self>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<MuxFinish, SessionError<ErasedError>> {
         self.0
             .finish(pulse)
@@ -436,7 +443,7 @@ impl<D: Demuxer + ?Sized> ByteStepper for DemuxStage<'_, D> {
     fn step(
         &mut self,
         input: Input<'_>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<DemuxEvent>, Self::Error> {
         let p = self.0.step(input, pulse)?;
         let step = match p.event {

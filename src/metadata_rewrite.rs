@@ -59,7 +59,7 @@ pub trait Services {
         _descriptive: &[u8],
         _required: &[u8],
         _limit: usize,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported("XMP merge service not supplied"))
     }
@@ -70,7 +70,7 @@ pub trait Services {
         &self,
         _xml: &[u8],
         _limit: usize,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
         Err(Error::Unsupported("XMP editing service not supplied"))
     }
@@ -80,7 +80,7 @@ pub trait Services {
         &self,
         _icc: &[u8],
         _limit: usize,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
@@ -90,7 +90,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata decompression service not supplied",
@@ -102,7 +102,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata compression service not supplied",
@@ -234,7 +234,7 @@ pub struct RewriteRequest<'a> {
     max_output: usize,
     max_metadata: usize,
     max_carriers: usize,
-    pulse: &'a dyn crate::Pulse,
+    pulse: Option<&'a dyn crate::Pulse>,
 }
 /// Legacy ambiguous name for a metadata rewrite request.
 #[deprecated(note = "use RewriteRequest")]
@@ -254,7 +254,7 @@ impl<'a> RewriteRequest<'a> {
             max_output: 512 << 20,
             max_metadata: 16 << 20,
             max_carriers: 65_536,
-            pulse: &crate::how_far::NoPulse,
+            pulse: None,
         }
     }
     /// Metadata retention. Retained XMP is copied unless an editor is requested.
@@ -301,7 +301,7 @@ impl<'a> RewriteRequest<'a> {
         self
     }
     /// Cooperative cancellation, checked between carriers and long byte walks.
-    pub fn with_pulse(mut self, pulse: &'a dyn crate::Pulse) -> Self {
+    pub fn with_pulse(mut self, pulse: Option<&'a dyn crate::Pulse>) -> Self {
         self.pulse = pulse;
         self
     }
@@ -346,7 +346,7 @@ impl<'a> RewriteRequest<'a> {
         self.max_carriers
     }
     /// Caller pulse token.
-    pub fn pulse(&self) -> &'a dyn crate::Pulse {
+    pub fn pulse(&self) -> Option<&'a dyn crate::Pulse> {
         self.pulse
     }
     /// Reuse the same policy, limits and services for a contained image.

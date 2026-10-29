@@ -106,8 +106,9 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn crate::Pulse,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Progress, StepError<Self::Error>> {
+        let pulse = pulse.unwrap_or(&crate::NoPulse);
         pulse.check()?;
         if let Some(out) = &self.decoded {
             return Ok(Progress::new(0, Event::Done(out.clone())));

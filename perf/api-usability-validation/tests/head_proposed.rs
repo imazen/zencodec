@@ -2,7 +2,7 @@
 //! ideal-api head e8f16683. Default test for the current Pulse core.
 //!
 //! Below `mod common;` this file must equal `policy_proposed.rs` except for the
-//! `STOP` line: head takes a `Pulse`, which `enough::Unstoppable` is not.
+//! `STOP` line: head takes an optional `Pulse`; the baseline takes `enough::Stop`.
 //! `head-replay.sh` checks that before running anything.
 mod common;
 use common::*;
@@ -11,7 +11,7 @@ use zencodec::{
     operation::{DecisionCode, PolicySet, Question, resolve_transcode},
 };
 
-static STOP: &zencodec::how_far::Inert = &zencodec::NoPulse;
+static STOP: Option<&dyn zencodec::Pulse> = Some(&zencodec::NoPulse);
 
 /// Mandatory requirements survive a direct Choose: the callback never sees,
 /// and cannot select, a route that violates them.

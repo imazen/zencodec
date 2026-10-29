@@ -81,8 +81,20 @@ rotates a second time.
 `Metadata::orientation` is the single authority. `filtered` reconciles the
 embedded EXIF tag to match it (rewriting `0x0112` in place via
 `helpers::set_exif_orientation` only when they disagree, so the common case keeps
-the zero-copy `Arc` clone). A codec embeds the field's value; it does not invent
-orientation from a second source.
+the zero-copy `Arc` clone). Encoding preserves the requested display transform;
+it must not invent orientation from a second source. A codec may carry that
+transform or bake it into pixels and reconcile emitted orientation to identity.
+The reader-compatibility defaults in
+[issue 132](https://github.com/imazen/zencodec/issues/132) deliberately choose
+baking for several re-encode paths.
+
+`check_orientation_roundtrip` checks displayed pixels and accepts either storage
+strategy. It does **not** prove unchanged stored dimensions/samples, tag carriage,
+or a low-memory streaming route. A caller requiring pass-through orientation
+needs an explicit supported route; the current common encode interface does not
+yet select or prove that representation. The native AVIF inner configuration is
+not a portable substitute. Keep tag-carriage and memory requirements separate
+from display equivalence when qualifying adapters.
 
 ## Color emission: resolve, then embed
 

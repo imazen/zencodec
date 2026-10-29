@@ -106,7 +106,7 @@ impl MultiPassEncoder for Script {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, MockError> {
         if self.pass == self.passes {
             return Ok(PassProgress::Done);
@@ -179,7 +179,7 @@ impl PassSource for Counting {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         self.rows.fetch_add(rows.rows(), Relaxed);
         for y in 0..rows.rows() {
@@ -265,7 +265,7 @@ fn run(
         policy,
         Preset,
         opts.with_output_policy(policy),
-        pulse,
+        Some(pulse),
     );
     (r, out)
 }
@@ -620,7 +620,7 @@ fn cancellation_prevents_later_publication_callbacks() {
             PolicySet::new(),
             Preset,
             options(ReplayPolicy::default()),
-            &pulse,
+            Some(&pulse),
         );
         if matches!(trip, Trip::Never) {
             let done = result.unwrap();

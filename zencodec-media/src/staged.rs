@@ -8,6 +8,8 @@
 //! compressed sequence; it is not a live streaming/backpressure mechanism.
 //! Caller-held pictures, codec/CMS workspace and bookkeeping are outside the
 //! payload budget. Unsupported timing/layout fails before the first frame.
+//! Optional borrowed Pulse arguments add per-call control. `None` leaves retained
+//! native controls, storage admission and required policy checks in force.
 //! ```
 //! use zencodec::{frame::Frame, operation::PolicySet, storage::StorageBudget};
 //! use zencodec_media::{container::Muxer, output::Forward, session::VideoEncoder,
@@ -15,11 +17,10 @@
 //! fn encode<E: VideoEncoder, M: Muxer, W: std::io::Write>(
 //!     encoder: E, mux: M, writer: W, frames: impl IntoIterator<Item = Frame>,
 //! ) -> Result<(), Box<dyn core::error::Error>> {
-//!     let pulse = &zencodec::how_far::NoPulse;
 //!     let mut job = StagedEncode::new(encoder, mux, Forward(writer),
-//!         PolicySet::new(), StorageBudget::new(64 * 1024 * 1024, 4096), &pulse)?;
-//!     for frame in frames { job.push(frame, &pulse)?; }
-//!     let completed = job.finish(&pulse)?;
+//!         PolicySet::new(), StorageBudget::new(64 * 1024 * 1024, 4096), None)?;
+//!     for frame in frames { job.push(frame, None)?; }
+//!     let completed = job.finish(None)?;
 //!     let _ = (completed.stats, completed.report);
 //!     Ok(())
 //! }
@@ -188,7 +189,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         destination: D,
         resolver: R,
         storage: StorageBudget,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, At<Failure>> {
         Self::with_staging(
             encoder,
@@ -207,10 +208,11 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         destination: D,
         resolver: R,
         staging: Staging,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, At<Failure>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let prepare = || -> Result<_, Cause> {
-            check(pulse)?;
+            check(local_pulse)?;
             let config = encoder
                 .output_config()
                 .ok_or_else(|| invalid(Refusal::ConfigurationUnavailable))?
@@ -287,7 +289,11 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
     }
     /// Send the exact held picture without conversion or timing changes.
     /// Prepared encoder fidelity is disclosed; native workspace remains unqualified.
-    pub fn push(&mut self, input: Frame, pulse: &dyn zencodec::Pulse) -> Result<(), At<Failure>> {
+    pub fn push(
+        &mut self,
+        input: Frame,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), At<Failure>> {
         let target = input.interpretation().clone();
         let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
         offer.preserves_samples = true;
@@ -304,15 +310,16 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         target: &FrameInterpretation,
         conversion: FrameConversionOffer,
         execute: impl FnOnce(Frame) -> Result<Frame, Cause>,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), At<Failure>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let mut state = self
             .state
             .take()
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut stage = Stage::Policy;
         let run = || -> Result<(), Cause> {
-            check(pulse)?;
+            check(local_pulse)?;
             if self.policy_changed_after_input {
                 return Err(invalid(Refusal::PolicyChangedAfterInput));
             }
@@ -356,7 +363,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             stage = Stage::Convert;
             let previous = FrameFacts::new(input.interpretation(), input.timing());
             let converted = execute(input)?;
-            check(pulse)?;
+            check(local_pulse)?;
             if converted.interpretation().as_ref() != target
                 || converted.timing() != conversion.encoder_input.timing
             {
@@ -364,22 +371,22 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             }
             stage = Stage::Encode;
             loop {
-                check(pulse)?;
+                check(local_pulse)?;
                 match state.encoder.send(&converted, pulse)? {
                     SendStatus::Accepted => break,
                     SendStatus::ReceivePending => match state.encoder.receive(pulse)? {
                         Receive::Ready(packet) => {
-                            stage_packet(&mut state.packets, packet, &state.output, pulse)?
+                            stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
                         }
                         _ => return Err(invalid(Refusal::ReceivePendingWithoutPacket)),
                     },
                 }
             }
             loop {
-                check(pulse)?;
+                check(local_pulse)?;
                 match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, pulse)?
+                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
                     }
                     Receive::NeedInput => break,
                     Receive::EndOfStream => return Err(invalid(Refusal::EarlyEnd)),
@@ -394,7 +401,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
             state.previous = Some(previous);
-            check(pulse)
+            check(local_pulse)
         };
         run().map_err(|cause| self.failure(stage, cause))?;
         self.state = Some(state);
@@ -405,13 +412,14 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
     /// confirmed append count remain in the error chain. No retry is performed.
     /// An operation with no admitted input frames refuses before draining;
     /// empty-container publication has no supported admission route.
-    pub fn finish(mut self, pulse: &dyn zencodec::Pulse) -> Result<Completed, At<Failure>> {
+    pub fn finish(mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<Completed, At<Failure>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let mut state = self
             .state
             .take()
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut drain = || -> Result<(), Cause> {
-            check(pulse)?;
+            check(local_pulse)?;
             if self.policy_changed_after_input {
                 return Err(invalid(Refusal::PolicyChangedAfterInput));
             }
@@ -420,10 +428,10 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             }
             state.encoder.end_input()?;
             loop {
-                check(pulse)?;
+                check(local_pulse)?;
                 match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, pulse)?
+                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
                     }
                     Receive::EndOfStream => break,
                     Receive::NeedInput => {
@@ -439,7 +447,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
-            check(pulse)
+            check(local_pulse)
         };
         drain().map_err(|cause| self.failure(Stage::Finish, cause))?;
         let State {
@@ -451,15 +459,15 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         drop(encoder);
         let mut emitted = 0;
         let publish = || -> Result<Stats, Cause> {
-            packets.begin_replay(pulse)?;
+            packets.begin_replay(local_pulse)?;
             // Admit/read the first packet before any final destination effects.
-            let mut packet = packets.next(pulse)?;
+            let mut packet = packets.next(local_pulse)?;
             let mut output = output.publish(pulse)?;
             emitted = output.stats().emitted;
             while let Some(held) = packet {
                 output.send(held, pulse)?;
                 emitted = output.stats().emitted;
-                packet = packets.next(pulse)?;
+                packet = packets.next(local_pulse)?;
             }
             Ok(output.finish(pulse)?)
         };

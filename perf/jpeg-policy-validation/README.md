@@ -1,7 +1,8 @@
 # Native JPEG policy qualification
 
-Private experiments against zenjpeg main `a2a128ab0bc36f01338225f61c285f462ae67ca6`.
-These do not add a public policy API. QOI remains a simple control in the I/O
+Native qualification against pinned JPEG `e0bb92b4` and the optional-control
+zencodecs consumer `e5cd3f9a`, using the current exported framework. The standalone
+harness does not add a public API. QOI remains a simple control in the I/O
 harness; JPEG exercises metadata placement, progressive scans, output timing,
 orientation, rewriting and refusal before publication.
 
@@ -135,3 +136,18 @@ before refusal, and an unavailable schedule used to invoke the callback once.
 Admission now refuses before callback invocation. Their refusal, ownership and
 pixel guarantees remain required; this receipt does not claim those full suites
 are green. Scoped obligations across multiple operation stages remain open.
+
+
+### Optional-control consumer follow-through (2026-10-29)
+
+The paired consumer graph passes all 48 native policy cases, five effective-job
+preflight cases and both strict Clippy profiles. Independent `djpeg` checks and
+all previous assertions remain. The resolved lock changes only six selected
+sources, with unchanged package versions and dependency lists. Actual metadata
+passes the same exported-framework validator used in CI.
+
+The initial run finished native tests/lint but hit the disk floor before preflight;
+after removing inactive Cargo output, the same frozen source/lock passed only the
+remaining preflight gate. Both receipts remain in
+[the optional-control record](../../benchmarks/optional_pulse_2026-10-29.json).
+No new full-native-feature, platform, memory-bound or performance claim.

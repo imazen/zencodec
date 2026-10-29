@@ -42,7 +42,7 @@ impl IncrementalDecode for Burst {
         &mut self,
         _: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Failed>> {
         self.steps.fetch_add(1, Ordering::SeqCst);
         let phase = self.next;

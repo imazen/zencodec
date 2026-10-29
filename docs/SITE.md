@@ -50,6 +50,11 @@ Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Otherwise install
 one with `cd docs && npx playwright install chromium`. Set `TMPDIR` to a
 persistent scratch directory when running locally.
 
+The keyboard skip-link check waits for the `#journeys` URL transition before
+asserting its destination. Completing the Enter key event does not establish
+that the browser has committed the fragment navigation. The original focus and
+destination assertions remain required; a missing transition still times out.
+
 ## Keeping examples truthful
 
 The checked video examples in `examples/checked_video.rs` execute through the

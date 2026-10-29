@@ -34,10 +34,13 @@ impl<'a> Context<'a> {
     }
     /// Poll cancellation while preserving the caller's stop reason.
     pub fn check(&self) -> Result<(), Error> {
-        self.pulse().check().map_err(|reason| match reason {
-            enough::StopReason::Cancelled => Error::Cancelled,
-            other => Error::Stopped(other),
-        })?;
+        self.pulse()
+            .unwrap_or(&zencodec::NoPulse)
+            .check()
+            .map_err(|reason| match reason {
+                enough::StopReason::Cancelled => Error::Cancelled,
+                other => Error::Stopped(other),
+            })?;
         if self.input().len() > self.max_input() {
             return Err(Error::Limit(zencodec::LimitKind::InputSize));
         }

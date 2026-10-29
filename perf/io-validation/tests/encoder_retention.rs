@@ -289,7 +289,7 @@ async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting
                 },
                 Context::default(),
                 &mut resolver,
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         let finish_first = selected.alternative.action == Action::Execution(Execution::Buffered);

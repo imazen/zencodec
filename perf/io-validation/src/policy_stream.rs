@@ -200,7 +200,7 @@ impl Gate {
         &mut self,
         engine: &mut Engine,
         resolver: &mut R,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receipt, At<ResolveFailure<R::Error>>> {
         if self.phase != Phase::Suspended {
             let code = if self.phase == Phase::Terminal {
@@ -303,11 +303,12 @@ impl Gate {
         &mut self,
         receipt: &Receipt,
         bytes: &[u8],
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), At<GateCode>> {
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
         self.check(receipt, Phase::Holding)?;
         let result = (|| {
-            stop.check().map_err(|_| GateCode::Stopped)?;
+            local_stop.check().map_err(|_| GateCode::Stopped)?;
             let end = self
                 .staged_end
                 .checked_add(bytes.len() as u64)

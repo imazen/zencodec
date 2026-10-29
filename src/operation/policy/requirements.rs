@@ -18,14 +18,26 @@ pub enum PolicyRequirement {
     OutputSchedule,
     /// Qualified retained memory bound during output waits.
     OutputWait,
+    /// Maximum external source traversals, not internal staged replays.
+    SourcePasses,
+    /// No native replay is needed, or exact retained immutable replay evidence.
+    ExactReplay,
+    /// Exclusion of private raw RAM staging.
+    RawMemoryStaging,
+    /// Executable route consistent with the retained declaration and plan.
+    EncodeRoute,
 }
-const REQUIREMENTS: [PolicyRequirement; 6] = [
+const REQUIREMENTS: [PolicyRequirement; 10] = [
     PolicyRequirement::Metadata,
     PolicyRequirement::OpaqueProfiles,
     PolicyRequirement::Workspace,
     PolicyRequirement::ExtendedRange,
     PolicyRequirement::OutputSchedule,
     PolicyRequirement::OutputWait,
+    PolicyRequirement::SourcePasses,
+    PolicyRequirement::ExactReplay,
+    PolicyRequirement::RawMemoryStaging,
+    PolicyRequirement::EncodeRoute,
 ];
 
 /// Why an alternative cannot establish a requirement. No payloads are retained.
@@ -43,8 +55,8 @@ pub enum RequirementEvidence {
 /// Contains only enum bits, with no allocations or input payloads.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct UnmetRequirements {
-    unknown: u8,
-    contradicted: u8,
+    unknown: u16,
+    contradicted: u16,
 }
 impl UnmetRequirements {
     /// No alternatives were excluded for mandatory requirements.
@@ -133,6 +145,9 @@ impl PolicySet {
             || self.require_extended_range
             || self.output_schedule.is_some()
             || self.output_wait_limit.is_some()
+            || self.max_source_passes.is_some()
+            || self.exact_replay
+            || !self.allow_raw_memory_staging
     }
 
     /// Evaluate one original-index choice. Discovery is the only deferred case:
@@ -143,7 +158,41 @@ impl PolicySet {
         let mut workspace = None;
         let mut range = None;
         let mut schedule = None;
+        let mut passes = None;
+        let mut exact = None;
+        let mut no_raw_staging = None;
+        let mut route = None;
         match question {
+            Question::EncodeRoute {
+                plan,
+                facts,
+                choices,
+                ..
+            } => {
+                let offer = choices.first().expect("one admission candidate").value();
+                metadata = facts.evidence.metadata;
+                opaque = facts
+                    .evidence
+                    .retains_opaque_profile
+                    .map(|retained| !retained);
+                workspace = offer.workspace_upper_bound;
+                range = offer.preserves_extended_range.and_then(|preserves| {
+                    if preserves {
+                        facts
+                            .evidence
+                            .encoder
+                            .fidelity
+                            .map(|f| f == Fidelity::Lossless)
+                    } else {
+                        Some(false)
+                    }
+                });
+                schedule = Some(offer.output);
+                passes = offer.external_source_passes(plan).and_then(|p| p.max());
+                exact = offer.exact_replay(plan);
+                no_raw_staging = offer.no_raw_memory_staging();
+                route = Some(offer.compatible(plan));
+            }
             Question::Transcode { choices, .. } => {
                 let offer = choices.first().expect("one admission candidate").value();
                 schedule = offer.output_schedule;
@@ -206,6 +255,16 @@ impl PolicySet {
                 .zip(schedule.and_then(|s| s.wait_retained_upper_bound))
                 .map(|(limit, bound)| bound <= limit),
         );
+        unmet.check(
+            6,
+            self.max_source_passes.is_some(),
+            self.max_source_passes
+                .zip(passes)
+                .map(|(limit, max)| max <= limit),
+        );
+        unmet.check(7, self.exact_replay, exact);
+        unmet.check(8, !self.allow_raw_memory_staging, no_raw_staging);
+        unmet.check(9, route.is_some(), route);
         unmet
     }
 }
@@ -278,7 +337,7 @@ mod tests {
                             })
                         },
                         preset,
-                        &crate::how_far::NoPulse,
+                        Some(&crate::how_far::NoPulse),
                     );
                     match (early, joint) {
                         (Ok(()), Ok(_)) => assert_eq!(callbacks, 1),
@@ -325,7 +384,7 @@ mod tests {
                 panic!("workspace success must not clear metadata requirements")
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(
@@ -346,7 +405,7 @@ mod tests {
                 panic!("standalone final adoption must remain refused")
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert!(
@@ -396,7 +455,7 @@ mod tests {
                 Ok(Decision::choose(choice))
             },
             requirements(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 63);
@@ -427,7 +486,7 @@ mod tests {
                 panic!("requirements must precede callback")
             },
             requirements(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         let record = error.error().record();
@@ -473,7 +532,7 @@ mod tests {
                 Ok(Decision::choose(choices.first().unwrap()))
             },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 0);
@@ -482,7 +541,7 @@ mod tests {
             &offers,
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) },
             preset,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 1);

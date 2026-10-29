@@ -6,29 +6,29 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3206 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 233 lines (233 hidden + 0 excluded-feature)
+# files: zencodec.txt 3262 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                20
-#   pub types (struct/enum/trait/alias)       382
-#   pub consts/statics                        332
-#   free functions                             94
-#   inherent methods                         1105
-#   struct fields                             501
-#   enum variants                             525
+#   pub types (struct/enum/trait/alias)       387
+#   pub consts/statics                        340
+#   free functions                             95
+#   inherent methods                         1107
+#   struct fields                             518
+#   enum variants                             543
 #   re-exports                                 18
-#   trait roster entries (type × trait)      1128
+#   trait roster entries (type × trait)      1149
 #   conditional trait impls (verbatim)          9
-#   auto-trait-complete types                 205
+#   auto-trait-complete types                 210
 #   auto-trait exceptions                      45
 #
 # per-module pub lines:
-#   (root)                         1006
+#   (root)                         1014
 #   animation                        11
 #   collection                      100
 #   decode                          284
-#   encode                          249
+#   encode                          250
 #   estimate                         48
 #   exif                             94
 #   frame                            97
@@ -38,14 +38,14 @@
 #   image                           138
 #   inventory                       103
 #   metadata_rewrite                 59
-#   operation                       288
+#   operation                       329
 #   output_patch                     15
-#   prelude                         244
+#   prelude                         245
 #   source                           37
 #   storage                          38
 #   time                             22
 
-## items (2891 lines)
+## items (2942 lines)
 
 pub mod zencodec
 pub use At
@@ -474,10 +474,10 @@ pub fn decode::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::o
 pub fn decode::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn how_far::pulse::Pulse>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
 pub fn decode::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
 pub trait decode::ControlledIncrementalDecode: decode::IncrementalDecode
-pub fn decode::ControlledIncrementalDecode::resume(&mut self, decode::BoundaryId, decode::BoundaryAction, &dyn how_far::pulse::Pulse) -> core::result::Result<(), decode::StepError<Self::Error>>
-pub fn decode::ControlledIncrementalDecode::step_controlled(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, &dyn how_far::pulse::Pulse) -> core::result::Result<decode::ControlledProgress, decode::StepError<Self::Error>>
-pub fn &mut D::resume(&mut self, decode::BoundaryId, decode::BoundaryAction, &dyn how_far::pulse::Pulse) -> core::result::Result<(), decode::StepError<Self::Error>>
-pub fn &mut D::step_controlled(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, &dyn how_far::pulse::Pulse) -> core::result::Result<decode::ControlledProgress, decode::StepError<Self::Error>>
+pub fn decode::ControlledIncrementalDecode::resume(&mut self, decode::BoundaryId, decode::BoundaryAction, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), decode::StepError<Self::Error>>
+pub fn decode::ControlledIncrementalDecode::step_controlled(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<decode::ControlledProgress, decode::StepError<Self::Error>>
+pub fn &mut D::resume(&mut self, decode::BoundaryId, decode::BoundaryAction, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), decode::StepError<Self::Error>>
+pub fn &mut D::step_controlled(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<decode::ControlledProgress, decode::StepError<Self::Error>>
 pub trait decode::Decode: core::marker::Sized [also: prelude]
 pub type decode::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn decode::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
@@ -581,13 +581,13 @@ pub fn decode::IncrementalDecode::access_pattern(&self) -> source::AccessPattern
 pub fn decode::IncrementalDecode::info(&self) -> core::option::Option<&ImageInfo>
 pub fn decode::IncrementalDecode::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn decode::IncrementalDecode::requested(&self) -> &[decode::InputRequest]
-pub fn decode::IncrementalDecode::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, &dyn how_far::pulse::Pulse) -> core::result::Result<decode::Progress, decode::StepError<Self::Error>>
+pub fn decode::IncrementalDecode::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<decode::Progress, decode::StepError<Self::Error>>
 pub type &mut D::Error = <D as decode::IncrementalDecode>::Error [also: (root)]
 pub fn &mut D::access_pattern(&self) -> source::AccessPattern [also: (root)]
 pub fn &mut D::info(&self) -> core::option::Option<&ImageInfo> [also: (root)]
 pub fn &mut D::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor> [also: (root)]
 pub fn &mut D::requested(&self) -> &[decode::InputRequest] [also: (root)]
-pub fn &mut D::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, &dyn how_far::pulse::Pulse) -> core::result::Result<decode::Progress, decode::StepError<<D as decode::IncrementalDecode>::Error>> [also: (root)]
+pub fn &mut D::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<decode::Progress, decode::StepError<<D as decode::IncrementalDecode>::Error>> [also: (root)]
 pub fn decode::SourceEncodingDetails::is_lossless(&self) -> bool
 pub fn decode::SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
 pub trait decode::StreamingDecode [also: prelude]
@@ -871,7 +871,7 @@ pub fn encode::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Resu
 pub fn encode::DynEncoder::finish_output(alloc::boxed::Box<Self>) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, encode::BoxedError>
 pub fn encode::DynEncoder::pending_output(&self) -> &[u8]
 pub fn encode::DynEncoder::preferred_strip_height(&self) -> u32
-pub fn encode::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, encode::BoxedError>
+pub fn encode::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<encode::PullProgress, encode::BoxedError>
 pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
 pub fn encode::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
@@ -895,6 +895,7 @@ pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> cor
 pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn encode::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn encode::EncodeJob::plan_encode(&self, &encode::EncodeDeclaration<'_>) -> core::result::Result<encode::EncodePlan, encode::BoxedError>
 pub fn encode::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
 pub fn encode::EncodeJob::try_set_resolution(&mut self, Resolution) -> core::result::Result<(), ResolutionError>
@@ -925,7 +926,7 @@ pub fn encode::Encoder::finish(self) -> core::result::Result<encode::EncodeOutpu
 pub fn encode::Encoder::finish_output(self) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, Self::Error>
 pub fn encode::Encoder::pending_output(&self) -> &[u8]
 pub fn encode::Encoder::preferred_strip_height(&self) -> u32
-pub fn encode::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, Self::Error>
+pub fn encode::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<encode::PullProgress, Self::Error>
 pub fn encode::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
 pub fn encode::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
@@ -1591,7 +1592,7 @@ pub fn metadata_rewrite::RewriteRequest<'a>::max_output(&self) -> usize
 pub fn metadata_rewrite::RewriteRequest<'a>::new(&'a [u8]) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::normalize_icc(&self) -> bool
 pub fn metadata_rewrite::RewriteRequest<'a>::policy(&self) -> &MetadataPolicy
-pub fn metadata_rewrite::RewriteRequest<'a>::pulse(&self) -> &'a dyn how_far::pulse::Pulse
+pub fn metadata_rewrite::RewriteRequest<'a>::pulse(&self) -> core::option::Option<&'a dyn how_far::pulse::Pulse>
 pub fn metadata_rewrite::RewriteRequest<'a>::remove_reconstruction(&self) -> bool
 pub fn metadata_rewrite::RewriteRequest<'a>::services(&self) -> core::option::Option<&'a dyn metadata_rewrite::Services>
 pub fn metadata_rewrite::RewriteRequest<'a>::with_byte_limits(self, usize, usize) -> Self
@@ -1601,15 +1602,15 @@ pub fn metadata_rewrite::RewriteRequest<'a>::with_input(self, &'a [u8]) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::with_jpeg_reconstruction_removal(self, bool) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::with_metadata_limit(self, usize) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::with_policy(self, MetadataPolicy) -> Self
-pub fn metadata_rewrite::RewriteRequest<'a>::with_pulse(self, &'a dyn how_far::pulse::Pulse) -> Self
+pub fn metadata_rewrite::RewriteRequest<'a>::with_pulse(self, core::option::Option<&'a dyn how_far::pulse::Pulse>) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::with_services(self, &'a dyn metadata_rewrite::Services) -> Self
 pub fn metadata_rewrite::RewriteRequest<'a>::with_xmp_editing(self, bool) -> Self
 pub trait metadata_rewrite::Services
-pub fn metadata_rewrite::Services::compress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn how_far::pulse::Pulse) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
-pub fn metadata_rewrite::Services::decompress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn how_far::pulse::Pulse) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
-pub fn metadata_rewrite::Services::merge_xmp(&self, &[u8], &[u8], usize, &dyn how_far::pulse::Pulse) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
-pub fn metadata_rewrite::Services::normalize_icc(&self, &[u8], usize, &dyn how_far::pulse::Pulse) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
-pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, &dyn how_far::pulse::Pulse) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::compress(&self, metadata_rewrite::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::decompress(&self, metadata_rewrite::Compression, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::merge_xmp(&self, &[u8], &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::normalize_icc(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
 pub type metadata_rewrite::Request<'a> = metadata_rewrite::RewriteRequest<'a>
 pub mod operation
 #[non_exhaustive] pub enum operation::CollectionStage
@@ -1632,11 +1633,13 @@ pub operation::DecisionCode::CallbackFailed
 pub operation::DecisionCode::Declined
 pub operation::DecisionCode::Exhausted
 pub operation::DecisionCode::InvalidChoice
+pub operation::DecisionCode::InvalidOffers
 pub operation::DecisionCode::Selected
 pub operation::DecisionCode::Stopped
 #[non_exhaustive] pub enum operation::DecisionContext
 pub operation::DecisionContext::Boundary(decode::InterpretationFacts)
 pub operation::DecisionContext::Encode(operation::EncodeFacts)
+pub operation::DecisionContext::EncodeRoute(operation::EncodeRouteFacts)
 pub operation::DecisionContext::Frame(operation::FrameFacts)
 pub operation::DecisionContext::FrameRoute(operation::FrameRouteFacts)
 pub operation::DecisionContext::Image(operation::ImageFacts)
@@ -1650,6 +1653,12 @@ pub operation::Decline::UnsupportedQuestion
 #[non_exhaustive] pub enum operation::FrameRoute
 pub operation::FrameRoute::BeginSegment
 pub operation::FrameRoute::Continue
+#[non_exhaustive] pub enum operation::InputAcquisition
+pub operation::InputAcquisition::BorrowedRaster
+pub operation::InputAcquisition::DirectRows
+pub operation::InputAcquisition::DiskReplay
+pub operation::InputAcquisition::MemorySnapshot
+pub operation::InputAcquisition::Unknown
 #[non_exhaustive] pub enum operation::MetadataTransfer
 pub operation::MetadataTransfer::DiscardDescriptive
 pub operation::MetadataTransfer::PreserveReported
@@ -1679,11 +1688,15 @@ pub operation::OutputSource::BorrowedRaster
 pub operation::OutputSource::PullRows
 pub operation::OutputSource::Unknown
 #[non_exhaustive] pub enum operation::PolicyRequirement
+pub operation::PolicyRequirement::EncodeRoute
+pub operation::PolicyRequirement::ExactReplay
 pub operation::PolicyRequirement::ExtendedRange
 pub operation::PolicyRequirement::Metadata
 pub operation::PolicyRequirement::OpaqueProfiles
 pub operation::PolicyRequirement::OutputSchedule
 pub operation::PolicyRequirement::OutputWait
+pub operation::PolicyRequirement::RawMemoryStaging
+pub operation::PolicyRequirement::SourcePasses
 pub operation::PolicyRequirement::Workspace
 #[non_exhaustive] pub enum operation::PublicationOffer
 pub operation::PublicationOffer::ReturnHeld
@@ -1694,6 +1707,11 @@ pub operation::Question::Boundary::facts: decode::InterpretationFacts
 pub operation::Question::Encode
 pub operation::Question::Encode::choices: operation::Choices<'a, operation::EncodeOffer>
 pub operation::Question::Encode::facts: operation::EncodeFacts
+pub operation::Question::EncodeRoute
+pub operation::Question::EncodeRoute::choices: operation::Choices<'a, operation::EncodeRouteOffer>
+pub operation::Question::EncodeRoute::declaration: &'a encode::EncodeDeclaration<'a>
+pub operation::Question::EncodeRoute::facts: operation::EncodeRouteFacts
+pub operation::Question::EncodeRoute::plan: &'a encode::EncodePlan
 pub operation::Question::Frame
 pub operation::Question::Frame::choices: operation::Choices<'a, operation::PublicationOffer>
 pub operation::Question::Frame::interpretation: &'a frame::FrameInterpretation
@@ -1716,12 +1734,19 @@ pub operation::Question::OutputSchedule::facts: operation::OutputScheduleFacts
 pub operation::Question::Transcode
 pub operation::Question::Transcode::choices: operation::Choices<'a, operation::TranscodeOffer>
 pub operation::Question::Transcode::facts: decode::InterpretationFacts
+#[non_exhaustive] pub enum operation::ReplayEvidence
+pub operation::ReplayEvidence::ImmutableBorrow
+pub operation::ReplayEvidence::PrivateSnapshot
+pub operation::ReplayEvidence::Unknown
+pub operation::ReplayEvidence::VerifiedHash
+pub operation::ReplayEvidence::VerifiedIdentity
 #[non_exhaustive] pub enum operation::RequirementEvidence
 pub operation::RequirementEvidence::Contradicted
 pub operation::RequirementEvidence::Unknown
 #[non_exhaustive] pub enum operation::Selection
 pub operation::Selection::Boundary(decode::BoundaryAction)
 pub operation::Selection::Encode(operation::EncodeOffer)
+pub operation::Selection::EncodeRoute(operation::EncodeRouteOffer)
 pub operation::Selection::Frame(operation::PublicationOffer)
 pub operation::Selection::FrameRoute(operation::FrameRouteOffer)
 pub operation::Selection::Image(operation::PublicationOffer)
@@ -1789,6 +1814,12 @@ pub operation::DestinationFacts::patches_at_finish: bool
 pub operation::DestinationFacts::seek_back: bool
 pub operation::DestinationFacts::streams: bool
 pub const fn operation::DestinationFacts::new(bool, bool, bool, bool) -> Self
+#[non_exhaustive] pub struct operation::EncodeEvidence
+pub operation::EncodeEvidence::encoder: operation::EncodeOffer
+pub operation::EncodeEvidence::metadata: core::option::Option<operation::MetadataTransfer>
+pub operation::EncodeEvidence::retains_opaque_profile: core::option::Option<bool>
+pub const fn operation::EncodeEvidence::new(operation::EncodeOffer) -> Self
+pub const fn operation::EncodeEvidence::unknown() -> Self
 #[non_exhaustive] pub struct operation::EncodeFacts
 pub operation::EncodeFacts::descriptor: zenpixels::descriptor::PixelDescriptor
 pub operation::EncodeFacts::height: u32
@@ -1810,6 +1841,21 @@ pub const fn operation::EncodeRequest::with_policy(self, encode::EncodePolicy) -
 pub const fn operation::EncodeRequest::with_policy_defaults(self, encode::EncodePolicy) -> Self
 pub const fn operation::EncodeRequest::with_policy_set(self, operation::PolicySet) -> Self
 pub const fn operation::EncodeRequest::with_resolution(self, Resolution) -> Self
+#[non_exhaustive] pub struct operation::EncodeRouteFacts
+pub operation::EncodeRouteFacts::evidence: operation::EncodeEvidence
+pub operation::EncodeRouteFacts::input: encode::InputRequirement
+pub operation::EncodeRouteFacts::output_phase: encode::OutputPhase
+pub operation::EncodeRouteFacts::pixels: operation::EncodeFacts
+pub operation::EncodeRouteFacts::timing: encode::OutputTiming
+pub const fn operation::EncodeRouteFacts::new(&encode::EncodeDeclaration<'_>, &encode::EncodePlan, operation::EncodeEvidence) -> Self
+#[non_exhaustive] pub struct operation::EncodeRouteOffer
+pub operation::EncodeRouteOffer::acquisition: operation::InputAcquisition
+pub operation::EncodeRouteOffer::output: operation::OutputScheduleOffer
+pub operation::EncodeRouteOffer::preserves_extended_range: core::option::Option<bool>
+pub operation::EncodeRouteOffer::replay: operation::ReplayEvidence
+pub operation::EncodeRouteOffer::workspace_upper_bound: core::option::Option<u64>
+pub const fn operation::EncodeRouteOffer::external_source_passes(&self, &encode::EncodePlan) -> core::option::Option<encode::SourcePasses>
+pub const fn operation::EncodeRouteOffer::new(operation::InputAcquisition, operation::OutputScheduleOffer) -> Self
 #[non_exhaustive] pub struct operation::FrameConversionOffer
 pub operation::FrameConversionOffer::admitted_bytes: usize
 pub operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<frame::ChromaSiting>
@@ -1893,11 +1939,14 @@ pub fn operation::PolicyFailure::stop_reason(&self) -> core::option::Option<enou
 pub struct operation::PolicySet
 pub const fn operation::PolicySet::allow_assumed_chroma_siting(self, bool) -> Self
 pub const fn operation::PolicySet::allow_opaque_profiles(self, bool) -> Self
+pub const fn operation::PolicySet::allow_raw_memory_staging(self, bool) -> Self
 pub const fn operation::PolicySet::new() -> Self
 pub const fn operation::PolicySet::prefer_lossless(self, bool) -> Self
+pub const fn operation::PolicySet::require_exact_replay(self, bool) -> Self
 pub const fn operation::PolicySet::require_extended_range(self, bool) -> Self
 pub const fn operation::PolicySet::require_metadata(self, operation::MetadataTransfer) -> Self
 pub const fn operation::PolicySet::require_output_schedule(self, operation::OutputSchedule) -> Self
+pub const fn operation::PolicySet::with_max_source_passes(self, u32) -> Self
 pub const fn operation::PolicySet::with_output_wait_limit(self, u64) -> Self
 pub const fn operation::PolicySet::with_workspace_limit(self, u64) -> Self
 pub fn operation::PolicySet::check_workspace(self, core::option::Option<u64>) -> core::result::Result<(), operation::UnmetRequirements>
@@ -1938,13 +1987,14 @@ pub fn operation::OperationPolicy::requirements(&self) -> core::option::Option<o
 pub trait operation::PolicyResolver
 pub type operation::PolicyResolver::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn operation::PolicyResolver::resolve(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<Self::Error>>
-pub fn operation::resolve_boundary<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(decode::BoundaryAction, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_frame<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::DecisionRecord, whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_frame_route<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, operation::FrameRouteState, &[operation::FrameRouteOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_image<R: operation::OperationPolicy + ?core::marker::Sized>(image::ImageOutput, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_image_conversion<R: operation::OperationPolicy + ?core::marker::Sized>(&image::ImageOutput, &[operation::ImageConversionOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_output_schedule<R: operation::OperationPolicy + ?core::marker::Sized>(operation::OutputScheduleFacts, &[operation::OutputScheduleOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_transcode<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &[operation::TranscodeOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_boundary<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(decode::BoundaryAction, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_encode_route<R: operation::OperationPolicy + ?core::marker::Sized>(&encode::EncodeDeclaration<'_>, &encode::EncodePlan, operation::EncodeEvidence, &[operation::EncodeRouteOffer], &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_frame<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<operation::DecisionRecord, whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_frame_route<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, operation::FrameRouteState, &[operation::FrameRouteOffer], &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_image<R: operation::OperationPolicy + ?core::marker::Sized>(image::ImageOutput, &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_image_conversion<R: operation::OperationPolicy + ?core::marker::Sized>(&image::ImageOutput, &[operation::ImageConversionOffer], &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_output_schedule<R: operation::OperationPolicy + ?core::marker::Sized>(operation::OutputScheduleFacts, &[operation::OutputScheduleOffer], &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_transcode<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &[operation::TranscodeOffer], &mut R, operation::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
 pub mod output_patch
 #[non_exhaustive] pub enum output_patch::OutputAccess
 pub output_patch::OutputAccess::Forward
@@ -2100,7 +2150,7 @@ pub fn prelude::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Res
 pub fn prelude::DynEncoder::finish_output(alloc::boxed::Box<Self>) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, encode::BoxedError>
 pub fn prelude::DynEncoder::pending_output(&self) -> &[u8]
 pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
-pub fn prelude::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, encode::BoxedError>
+pub fn prelude::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<encode::PullProgress, encode::BoxedError>
 pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
@@ -2124,6 +2174,7 @@ pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> co
 pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn prelude::EncodeJob::plan_encode(&self, &encode::EncodeDeclaration<'_>) -> core::result::Result<encode::EncodePlan, encode::BoxedError>
 pub fn prelude::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
 pub fn prelude::EncodeJob::try_set_resolution(&mut self, Resolution) -> core::result::Result<(), ResolutionError>
@@ -2151,7 +2202,7 @@ pub fn prelude::Encoder::finish(self) -> core::result::Result<encode::EncodeOutp
 pub fn prelude::Encoder::finish_output(self) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, Self::Error>
 pub fn prelude::Encoder::pending_output(&self) -> &[u8]
 pub fn prelude::Encoder::preferred_strip_height(&self) -> u32
-pub fn prelude::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, Self::Error>
+pub fn prelude::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<encode::PullProgress, Self::Error>
 pub fn prelude::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn prelude::Encoder::reject(UnsupportedOperation) -> Self::Error
 pub fn prelude::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
@@ -2183,7 +2234,7 @@ pub fn prelude::IncrementalDecode::access_pattern(&self) -> source::AccessPatter
 pub fn prelude::IncrementalDecode::info(&self) -> core::option::Option<&ImageInfo>
 pub fn prelude::IncrementalDecode::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn prelude::IncrementalDecode::requested(&self) -> &[decode::InputRequest]
-pub fn prelude::IncrementalDecode::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, &dyn how_far::pulse::Pulse) -> core::result::Result<decode::Progress, decode::StepError<Self::Error>>
+pub fn prelude::IncrementalDecode::step(&mut self, decode::Input<'_>, &mut dyn decode::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<decode::Progress, decode::StepError<Self::Error>>
 pub type prelude::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::StreamingDecode::info(&self) -> &ImageInfo
 pub fn prelude::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
@@ -2939,7 +2990,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (260 types)
+## trait impls (265 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -3150,9 +3201,12 @@ operation::DecisionRecord: Clone, Copy, Debug
 operation::Decline: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 operation::DecodeRequest: Clone, Debug, Default
 operation::DestinationFacts: Clone, Copy, Debug, Eq, PartialEq
+operation::EncodeEvidence: Clone, Copy, Debug
 operation::EncodeFacts: Clone, Copy, Debug
 operation::EncodeOffer: Clone, Copy, Debug
 operation::EncodeRequest: Clone, Debug
+operation::EncodeRouteFacts: Clone, Copy, Debug
+operation::EncodeRouteOffer: Clone, Copy, Debug
 operation::FrameConversionOffer: Clone, Copy, Debug
 operation::FrameFacts: Clone, Copy, Debug, Eq, PartialEq
 operation::FrameRoute: Clone, Copy, Debug, Eq, PartialEq
@@ -3161,6 +3215,7 @@ operation::FrameRouteOffer: Clone, Copy, Debug
 operation::FrameRouteState: Clone, Copy, Debug, Default, Eq, PartialEq
 operation::ImageConversionOffer: Clone, Copy, Debug
 operation::ImageFacts: Clone, Copy, Debug
+operation::InputAcquisition: Clone, Copy, Debug, Default, Eq, PartialEq
 operation::MetadataTransfer: Clone, Copy, Debug, Eq, PartialEq
 operation::OperationError: Debug, Display, Error
 operation::OperationReport: Clone, Debug, Default
@@ -3176,6 +3231,7 @@ operation::PreparedEncode: Debug
 operation::PreparedSendEncode: Debug
 operation::PublicationOffer: Clone, Copy, Debug, Eq, PartialEq
 operation::Question<'a>: Clone, Copy, Debug
+operation::ReplayEvidence: Clone, Copy, Debug, Default, Eq, PartialEq
 operation::RequirementEvidence: Clone, Copy, Debug, Eq, PartialEq
 operation::RouteRejection: Debug
 operation::Selection: Clone, Copy, Debug
@@ -3213,7 +3269,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-205 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+210 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

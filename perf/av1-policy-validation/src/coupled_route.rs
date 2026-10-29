@@ -1,6 +1,5 @@
 //! Executing fixed-output witness: retained YCbCr plan + native AV1 encoder.
 use crate::{epoch_route::Candidate, fixtures::*};
-use zencodec::how_far::NoPulse;
 use std::{
     cell::Cell,
     error::Error,
@@ -8,6 +7,7 @@ use std::{
     sync::{Arc, atomic::AtomicUsize},
 };
 use zenavif::media::Av1VideoDecoder;
+use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
     encode::Fidelity,
@@ -16,7 +16,7 @@ use zencodec::{
         PlaneSamples, SampleEncoding, Subsampling,
     },
     operation::{
-        Decision, DecisionCode, FrameConversionOffer, FrameFacts, PolicyFailure, OperationPolicy,
+        Decision, DecisionCode, FrameConversionOffer, FrameFacts, OperationPolicy, PolicyFailure,
         PolicySet, Question, Selection,
     },
     storage::StorageBudget,
@@ -51,7 +51,7 @@ impl<R: OperationPolicy> ConversionRoute for Candidate<R> {
             (target, input.timing()),
             Some(offer),
             execute,
-            &NoPulse,
+            Some(&NoPulse),
         )
     }
 }
@@ -69,7 +69,7 @@ impl<
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause> {
-        self.push_converted(input.clone(), target, offer, |_| execute(), &NoPulse)
+        self.push_converted(input.clone(), target, offer, |_| execute(), Some(&NoPulse))
             .map_err(Into::into)
     }
 }
@@ -216,7 +216,7 @@ pub(crate) fn sources() -> Vec<Frame> {
             &mut Av1VideoDecoder::new().unwrap(),
             &config,
             &packets,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         result.append(&mut decoded);
@@ -237,7 +237,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
         &mut Av1VideoDecoder::new().unwrap(),
         &config,
         &packets,
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let clock = TimeBase::hz(90_000).unwrap();
@@ -292,7 +292,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
                     expected.push(retimed.clone());
                     Ok(retimed)
                 },
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
         if i == 0 {
@@ -302,12 +302,12 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
                         assert_eq!(config.time_base, clock);
                         Ok(())
                     },
-                    &NoPulse,
+                    Some(&NoPulse),
                 )
                 .unwrap();
         }
     }
-    let segments = operation.finish(&NoPulse).unwrap();
+    let segments = operation.finish(Some(&NoPulse)).unwrap();
     assert_eq!(segments.len(), 1);
     assert_eq!(calls.get(), inputs.len());
     assert_eq!(executions.get(), inputs.len());
@@ -392,12 +392,12 @@ fn coupled_native_changes_convert_to_one_committed_encoder_with_disclosed_losses
                         header = Some(config.clone());
                         Ok(())
                     },
-                    &NoPulse,
+                    Some(&NoPulse),
                 )
                 .unwrap();
         }
     }
-    let segments = operation.finish(&NoPulse).unwrap();
+    let segments = operation.finish(Some(&NoPulse)).unwrap();
     assert_eq!(segments.len(), 1);
     assert_eq!(calls.get(), 3);
     assert_eq!(executions.get(), 3);
@@ -507,8 +507,10 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
             storage.clone(),
             live.clone(),
         );
-        operation.push(&inputs[0], &NoPulse).unwrap();
-        operation.publish_header(|_| Ok(()), &NoPulse).unwrap();
+        operation.push(&inputs[0], Some(&NoPulse)).unwrap();
+        operation
+            .publish_header(|_| Ok(()), Some(&NoPulse))
+            .unwrap();
         let target = inputs[0].interpretation();
         let mut conversion = FrameConversionOffer::new(FrameFacts::new(target, inputs[1].timing()));
         conversion.preserves_samples = false;
@@ -527,7 +529,7 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
                         Err(std::io::Error::other("conversion failed after policy").into())
                     }
                 },
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap_err();
         assert_eq!(
@@ -550,6 +552,6 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
         assert!(operation.is_failed());
         assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(storage.reserved_bytes(), 0);
-        assert!(operation.push(&inputs[0], &NoPulse).is_err());
+        assert!(operation.push(&inputs[0], Some(&NoPulse)).is_err());
     }
 }

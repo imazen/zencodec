@@ -1780,7 +1780,7 @@ impl IncrementalDecode for RefIncDec {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _stop: &dyn zencodec::Pulse,
+        _stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<RefError>> {
         if let Some(total) = input.total_len {
             self.limits

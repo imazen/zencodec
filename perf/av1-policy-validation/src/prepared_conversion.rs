@@ -9,7 +9,7 @@ use zencodec::{
     frame::{ChromaSiting, Frame, MappedPlanes, PlaneSamples, PlaneView, Subsampling},
     image::{ImageGeometry, ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
-        ImageConversionOffer, OperationReport, Outcome, OperationPolicy, PolicySet,
+        ImageConversionOffer, OperationPolicy, OperationReport, Outcome, PolicySet,
         resolve_image_conversion,
     },
     storage::{PreparedStorage, SharedStorage, StorageBudget, StorageError},
@@ -73,7 +73,11 @@ fn failed(
     })
     .at()
 }
-fn check(stop: &dyn zencodec::Pulse, stage: Stage, report: &OperationReport) -> Result<(), At<Failure>> {
+fn check(
+    stop: &dyn zencodec::Pulse,
+    stage: Stage,
+    report: &OperationReport,
+) -> Result<(), At<Failure>> {
     stop.check().map_err(|reason| {
         failed(
             stage,
@@ -118,7 +122,10 @@ const FLOAT_SRGB: PixelDescriptor =
     PixelDescriptor::RGBF32_LINEAR.with_transfer(zenpixels::TransferFunction::Srgb);
 // Keep the retained conversion plan inline: boxing would add an allocation
 // outside the prepared-storage admission exercised by this harness.
-#[expect(clippy::large_enum_variant, reason = "retained plans stay allocation-free")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "retained plans stay allocation-free"
+)]
 enum OutputStorage<'a> {
     Integer {
         destination: PreparedStorage<[u16; 3]>,
@@ -305,7 +312,7 @@ impl<'a> Prepared<'a> {
     ) -> Result<Outcome<ImageOutput>, At<Failure>> {
         let mut report = OperationReport::default();
         let source = ImageOutput::from_frame(self.frame.clone());
-        match resolve_image_conversion(&source, &[self.offer], resolver, preset, stop) {
+        match resolve_image_conversion(&source, &[self.offer], resolver, preset, Some(stop)) {
             Ok((index, record)) => {
                 assert_eq!(index, 0);
                 report.record(record);
@@ -652,13 +659,13 @@ pub(super) fn reject_declared_siting(native: &Frame) {
 mod tests {
     use super::*;
     use crate::fixtures;
-    use enough::{StopReason, };
-use zencodec::how_far::NoPulse;
+    use enough::StopReason;
     use std::{
         cell::Cell,
         convert::Infallible,
         sync::atomic::{AtomicUsize, Ordering},
     };
+    use zencodec::how_far::NoPulse;
     use zencodec::operation::{ChoiceId, Decision, DecisionCode, MetadataTransfer, Question};
     use zencodec_media::session::VideoDecoder;
 
@@ -670,7 +677,7 @@ use zencodec::how_far::NoPulse;
         let mut settings = rav1d_safe::Settings::default();
         settings.threads = 1;
         let mut decoder = zenavif::media::Av1VideoDecoder::with_settings(settings).unwrap();
-        let mut frames = fixtures::decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
+        let mut frames = fixtures::decode(&mut decoder, &config, &packets, Some(&NoPulse)).unwrap();
         decoder.reset().unwrap();
         frames.remove(0)
     }
@@ -693,8 +700,7 @@ use zencodec::how_far::NoPulse;
             PolicySet::new().allow_opaque_profiles(false),
         ] {
             let pool = StorageBudget::new(32_768, 2);
-            let error =
-                convert(frame.clone(), &pool, &mut preset, policy, &NoPulse).unwrap_err();
+            let error = convert(frame.clone(), &pool, &mut preset, policy, &NoPulse).unwrap_err();
             assert_eq!(error.error().stage, Stage::Policy);
             let record = error.error().report.decisions().next().unwrap();
             assert_eq!(record.code, DecisionCode::Declined);

@@ -90,7 +90,7 @@ impl Source for Rows {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         assert_eq!(first, self.calls.get());
         if first >= 16 {
@@ -190,7 +190,7 @@ fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context
                     },
                     PolicySet::new().require_output_schedule(schedule),
                     Options::new(budget.clone(), if fault == "limit" { 0 } else { 1 << 20 }),
-                    &zencodec::how_far::StopOnly::borrowed(&stop),
+                    Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
                 )
             }));
             assert!(!enc_live.get());
@@ -288,7 +288,7 @@ fn public_row_driver_raster_adapter_preserves_strides_and_never_substitutes_sche
                     },
                     Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
                         .with_policy_set(policy),
-                    &zencodec::how_far::NoPulse,
+                    Some(&zencodec::how_far::NoPulse),
                 );
                 if schedule == OutputSchedule::Live && (progressive || optimized) {
                     assert_eq!(asked, 0, "mandatory admission precedes callback");
@@ -324,7 +324,7 @@ fn public_row_driver_preserves_attached_color_context_on_every_native_push() {
         &mut bytes,
         PolicySet::new(),
         Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20),
-        &zencodec::how_far::NoPulse,
+        Some(&zencodec::how_far::NoPulse),
     )
     .unwrap();
     assert!(!live.get());
@@ -359,7 +359,7 @@ fn public_row_driver_staging_admission_failure_releases_owners_before_any_output
         &mut bytes,
         PolicySet::new(),
         Options::new(budget.clone(), 1 << 20),
-        &zencodec::how_far::StopOnly::borrowed(&Cancel(flag)),
+        Some(&zencodec::how_far::StopOnly::borrowed(&Cancel(flag))),
     )
     .unwrap_err();
     assert!(
@@ -406,7 +406,12 @@ fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
                 OutputSource::PullRows
             }
         }
-        fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> io::Result<()> {
+        fn read_rows(
+            &mut self,
+            _: u32,
+            _: PixelSliceMut<'_>,
+            _: Option<&dyn zencodec::Pulse>,
+        ) -> io::Result<()> {
             self.reads.set(self.reads.get() + 1);
             Err(io::Error::other(
                 "source must not run after preparation changed",
@@ -464,7 +469,7 @@ fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
             },
             Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
                 .with_policy_set(PolicySet::new().require_output_schedule(OutputSchedule::Live)),
-            &zencodec::how_far::NoPulse,
+            Some(&zencodec::how_far::NoPulse),
         )
         .unwrap_err();
         if phase == "policy" {
@@ -573,7 +578,7 @@ fn public_row_driver_disk_staging_preserves_pixels_prefix_policy_and_failure_eff
                         Ok(Decision::choose(offer))
                     },
                     options,
-                    &zencodec::how_far::StopOnly::borrowed(&stop),
+                    Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
                 );
                 assert!(!enc_live.get());
                 assert!(!src_live.get());

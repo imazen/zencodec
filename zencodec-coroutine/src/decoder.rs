@@ -436,8 +436,9 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<E>> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if matches!(self.state, State::Failed) {
             return Err(StepError::Finished);
         }
@@ -483,8 +484,9 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<ControlledProgress, StepError<E>> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if matches!(self.state, State::Failed) {
             return Err(StepError::Finished);
         }
@@ -499,8 +501,9 @@ where
         &mut self,
         id: BoundaryId,
         action: BoundaryAction,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), StepError<E>> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         let state = core::mem::replace(&mut self.state, State::Failed);
         if !matches!(state, State::Running) {
             return Err(StepError::Finished);

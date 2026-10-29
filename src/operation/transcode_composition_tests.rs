@@ -78,7 +78,7 @@ fn combined_evidence_is_filtered_before_callback_and_builtin_selection() {
         &offers,
         &mut callback,
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     assert_eq!(index, 5);
@@ -90,7 +90,7 @@ fn combined_evidence_is_filtered_before_callback_and_builtin_selection() {
             &offers,
             &mut builtin,
             PolicySet::new(),
-            &NoPulse
+            Some(&NoPulse)
         )
         .unwrap()
         .0,
@@ -106,7 +106,7 @@ fn combined_evidence_is_filtered_before_callback_and_builtin_selection() {
             &offers,
             &mut delegated,
             PolicySet::new(),
-            &NoPulse
+            Some(&NoPulse)
         )
         .unwrap()
         .0,
@@ -121,7 +121,7 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
         boundary(InterpretationState::Pending),
         &mut policy,
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     let final_boundary = boundary(InterpretationState::Final);
@@ -130,12 +130,20 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
         &[offer()],
         &mut policy,
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     // Only the executing adapter directly resumes the held boundary, with its
     // private sink installed. A separate native-sink question remains unproven.
-    assert!(resolve_boundary(final_boundary, &mut policy, PolicySet::new(), &NoPulse).is_err());
+    assert!(
+        resolve_boundary(
+            final_boundary,
+            &mut policy,
+            PolicySet::new(),
+            Some(&NoPulse)
+        )
+        .is_err()
+    );
     let mut workspace = requirements().with_workspace_limit(u64::MAX);
     assert!(
         resolve_transcode(
@@ -143,7 +151,7 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
             &[offer()],
             &mut workspace,
             PolicySet::new(),
-            &NoPulse
+            Some(&NoPulse)
         )
         .is_err()
     );
@@ -162,7 +170,7 @@ fn finish_first_without_wait_evidence_stays_unknown() {
             &[o],
             &mut requirements(),
             PolicySet::new(),
-            &NoPulse
+            Some(&NoPulse)
         )
         .is_err()
     );
@@ -174,7 +182,7 @@ fn finish_first_without_wait_evidence_stays_unknown() {
         &[o],
         &mut policy,
         PolicySet::new(),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
 }
@@ -210,7 +218,7 @@ fn missing_or_contradictory_publication_evidence_names_both_requirements() {
             &[candidate],
             &mut policy,
             PolicySet::new(),
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap_err();
         assert!(

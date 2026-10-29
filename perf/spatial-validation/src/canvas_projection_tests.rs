@@ -6,7 +6,7 @@ use tiff::{
     tags::Tag,
 };
 use zencodec::{
-    SharedPulse, NoPulse,
+    NoPulse, SharedPulse,
     collection::{ImageRequest, OpenRequest},
     image::{AuxiliaryKind, ColorContribution, ImageInterpretation, Row, SourcePrecision, Values},
     operation::{CheckedCollection, PolicySet},
@@ -154,7 +154,7 @@ fn qualify(source: &ImageOutput) -> usize {
     let mut checked = 0;
     for region in regions(source) {
         let pool = StorageBudget::new(256 * 1024 * 1024, 16);
-        let output = project(source, region, &pool, &NoPulse).unwrap();
+        let output = project(source, region, &pool, Some(&NoPulse)).unwrap();
         exact(source, &output);
         assert!(pool.reserved_bytes() > 0);
         let retained = output.clone();
@@ -201,16 +201,15 @@ fn tiff_bytes<C: colortype::ColorType, K: TiffKind>(
     image.write_data(samples).unwrap();
 }
 fn tiff_image(bytes: Vec<u8>, region: Option<Rect>) -> ImageOutput {
-    let mut images =
-        CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |stop| {
-            Ok(crate::tiff_items::TiffCollection::open_with_stop(
-                Cursor::new(bytes),
-                Composition::Composited,
-                crate::tiff_region::Allowances::default(),
-                stop,
-            )?)
-        })
-        .unwrap();
+    let mut images = CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |stop| {
+        Ok(crate::tiff_items::TiffCollection::open_with_stop(
+            Cursor::new(bytes),
+            Composition::Composited,
+            crate::tiff_region::Allowances::default(),
+            stop,
+        )?)
+    })
+    .unwrap();
     let request = region.map_or_else(ImageRequest::new, |r| ImageRequest::new().with_region(r));
     images.first_image(&request).unwrap().unwrap().into_output()
 }
@@ -287,11 +286,11 @@ fn canvas_projection_native_tiff_all_orientations_regions_and_float_payloads() {
                     height: ay.abs_diff(by) + 1,
                 };
                 let pool = StorageBudget::new(1024 * 1024, 1);
-                let output = project(&source, Some(region), &pool, &NoPulse).unwrap();
+                let output = project(&source, Some(region), &pool, Some(&NoPulse)).unwrap();
                 exact(&source, &output);
                 projections += 1;
                 drop(output);
-                let error = project(&source, None, &pool, &NoPulse).unwrap_err();
+                let error = project(&source, None, &pool, Some(&NoPulse)).unwrap_err();
                 assert!(matches!(
                     zencodec::find_cause::<Refusal>(&*error),
                     Some(Refusal::MissingStoredRegion { .. })
@@ -391,7 +390,7 @@ fn canvas_projection_native_jxl_all_orientations_match_independent_display() {
         let source = images.pop().unwrap();
         projections += qualify(&source);
         let pool = StorageBudget::new(256 * 1024 * 1024, 16);
-        let output = project(&source, None, &pool, &NoPulse).unwrap();
+        let output = project(&source, None, &pool, Some(&NoPulse)).unwrap();
         let (canvas, expected) = self::independent(name, &bytes);
         assert_eq!(
             canvas,
@@ -457,7 +456,7 @@ fn canvas_projection_preserves_native_canvas_and_refuses_oversized_raw_layers() 
         );
         for layer in &layers {
             let pool = StorageBudget::new(0, 0);
-            let error = project(layer, None, &pool, &NoPulse).unwrap_err();
+            let error = project(layer, None, &pool, Some(&NoPulse)).unwrap_err();
             assert_eq!(
                 zencodec::find_cause::<Refusal>(&*error),
                 Some(&Refusal::Composition(Some(Composition::Uncomposited)))
@@ -580,7 +579,7 @@ fn canvas_projection_same_size_unknown_auxiliary_registration_refuses_before_adm
         AuxiliaryGrid::Unknown,
     );
     let pool = StorageBudget::new(1 << 20, 16);
-    let error = project(&source, None, &pool, &zencodec::NoPulse).unwrap_err();
+    let error = project(&source, None, &pool, Some(&zencodec::NoPulse)).unwrap_err();
     assert!(matches!(
         zencodec::find_cause::<Refusal>(error.as_ref()),
         Some(Refusal::AuxiliaryGrid {
@@ -610,7 +609,13 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
         projections += qualify(&source);
         let counted = CheckStop::default();
         let pool = StorageBudget::new(1024 * 1024, 4);
-        let output = project(&source, None, &pool, &zencodec::how_far::StopOnly::borrowed(&counted)).unwrap();
+        let output = project(
+            &source,
+            None,
+            &pool,
+            Some(&zencodec::how_far::StopOnly::borrowed(&counted)),
+        )
+        .unwrap();
         let bytes = pool.reserved_bytes();
         drop(output);
         projections += 1;
@@ -621,7 +626,13 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
             for at in 0..counted.calls() {
                 let stop = CheckStop::with_reason(reason);
                 stop.after(at);
-                let error = project(&source, None, &pool, &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap_err();
+                let error = project(
+                    &source,
+                    None,
+                    &pool,
+                    Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
+                )
+                .unwrap_err();
                 assert_eq!(
                     zencodec::find_cause::<CodecError>(&*error)
                         .unwrap()
@@ -640,7 +651,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
                     &source,
                     None,
                     &pool,
-                    &zencodec::how_far::StopOnly::borrowed(&PanicAt(stop))
+                    Some(&zencodec::how_far::StopOnly::borrowed(&PanicAt(stop)))
                 )))
                 .is_err()
             );
@@ -649,13 +660,13 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
         }
         for objects in 0..4 {
             let pool = StorageBudget::new(1024 * 1024, objects);
-            let error = project(&source, None, &pool, &NoPulse).unwrap_err();
+            let error = project(&source, None, &pool, Some(&NoPulse)).unwrap_err();
             assert!(zencodec::find_cause::<StorageError>(&*error).is_some());
             assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
             storage_refusals += 1;
         }
         let limited = StorageBudget::new(bytes - 1, 4);
-        let error = project(&source, None, &limited, &NoPulse).unwrap_err();
+        let error = project(&source, None, &limited, Some(&NoPulse)).unwrap_err();
         assert!(matches!(
             zencodec::find_cause::<StorageError>(&*error),
             Some(StorageError::Bytes { .. })
@@ -670,7 +681,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
     let mut interpretation_refusals = 0;
     for composition in [None, Some(Composition::Uncomposited)] {
         let source = synthetic(1, false, composition);
-        let error = project(&source, None, &pool, &NoPulse).unwrap_err();
+        let error = project(&source, None, &pool, Some(&NoPulse)).unwrap_err();
         assert_eq!(
             zencodec::find_cause::<Refusal>(&*error),
             Some(&Refusal::Composition(composition))
@@ -678,7 +689,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
         interpretation_refusals += 1;
     }
     let source = synthetic(6, true, Some(Composition::Composited));
-    let error = project(&source, None, &pool, &NoPulse).unwrap_err();
+    let error = project(&source, None, &pool, Some(&NoPulse)).unwrap_err();
     assert!(matches!(
         zencodec::find_cause::<Refusal>(&*error),
         Some(Refusal::AuxiliaryGrid { index: 3, .. })
@@ -697,7 +708,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
         placed,
     )
     .unwrap();
-    let error = project(&placed, None, &pool, &NoPulse).unwrap_err();
+    let error = project(&placed, None, &pool, Some(&NoPulse)).unwrap_err();
     assert_eq!(
         zencodec::find_cause::<Refusal>(&*error),
         Some(&Refusal::Placement)
@@ -724,7 +735,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
             height: 1,
         },
     ] {
-        let error = project(&source, Some(region), &pool, &NoPulse).unwrap_err();
+        let error = project(&source, Some(region), &pool, Some(&NoPulse)).unwrap_err();
         assert!(zencodec::find_cause::<zencodec::image::GeometryError>(&*error).is_some());
         interpretation_refusals += 1;
     }

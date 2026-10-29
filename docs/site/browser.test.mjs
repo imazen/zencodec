@@ -125,7 +125,9 @@ try {
   await page.goto(url);
   await page.keyboard.press('Tab');
   assert.equal(await page.locator(':focus').getAttribute('class'),'skip');
-  await page.keyboard.press('Enter');assert.ok(page.url().endsWith('#journeys'));
+  await page.keyboard.press('Enter');
+  await page.waitForURL(current=>current.hash==='#journeys');
+  assert.ok(page.url().endsWith('#journeys'));
   for(const width of [390,768]) {
     await page.setViewportSize({width,height:844});
     await page.goto(`${url}#implementor-2`);

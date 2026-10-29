@@ -79,7 +79,7 @@ fn demux_slice<D: Demuxer>(
     dem: &mut D,
     bytes: &[u8],
     window: usize,
-    stop: &dyn zencodec::Pulse,
+    stop: Option<&dyn zencodec::Pulse>,
     mut on_event: impl FnMut(DemuxEvent) -> Result<(), SessionError<D::Error>>,
 ) -> Result<zencodec_io::DriveStats, DriveFailure<SessionError<D::Error>, std::convert::Infallible>>
 {
@@ -113,11 +113,78 @@ fn toy_file(n: u32, keyint: u32, write_count: bool) -> Vec<u8> {
             i64::from(i),
             i % keyint == 0,
         );
-        m.write_packet(p, &NoPulse).unwrap();
+        m.write_packet(p, Some(&NoPulse)).unwrap();
         m.take_output(&mut out);
     }
-    m.finish(&NoPulse).unwrap().apply_to(&mut out).unwrap();
+    m.finish(Some(&NoPulse))
+        .unwrap()
+        .apply_to(&mut out)
+        .unwrap();
     out
+}
+
+#[test]
+fn absent_container_and_decode_controls_match_explicit_noop_bytes_samples_and_timing() {
+    let track = TrackInfo::video(0, config().codec, tb(), VideoTrackInfo::new(W, H))
+        .build()
+        .unwrap();
+    let mux = |pulse: Option<&dyn zencodec::Pulse>| {
+        let mut mux = erase_muxer(ToyMuxer::new(true));
+        mux.begin(std::slice::from_ref(&track), MuxHint::default())
+            .unwrap();
+        let mut out = Vec::new();
+        for i in 0..3 {
+            mux.write_packet(
+                packet(toy_payload(&[&gray(i)], false), i64::from(i), true),
+                pulse,
+            )
+            .unwrap();
+            mux.take_output(&mut out);
+        }
+        mux.finish(pulse).unwrap().apply_to(&mut out).unwrap();
+        out
+    };
+    let absent = mux(None);
+    assert_eq!(absent, mux(Some(&NoPulse)));
+    for pulse in [None, Some(&NoPulse as &dyn zencodec::Pulse)] {
+        let mut demux = ToyDemuxer::new(MediaLimits::default());
+        let mut packets = Vec::new();
+        demux_slice(&mut demux, &absent, 7, pulse, |event| {
+            if let DemuxEvent::Packet(packet) = event {
+                packets.push(packet);
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(packets.len(), 3);
+        let mut decoder = erase_video_decoder(ToyDecoder::new(4));
+        decoder.configure(&config(), pulse).unwrap();
+        let mut frames = Vec::new();
+        for mut packet in packets {
+            send_packet_until_accepted(&mut decoder, &mut packet, pulse, |frame| {
+                frames.push(frame);
+                Ok::<(), core::convert::Infallible>(())
+            })
+            .unwrap();
+        }
+        drain_decoder(&mut decoder, pulse, |frame| {
+            frames.push(frame);
+            Ok::<(), core::convert::Infallible>(())
+        })
+        .unwrap();
+        assert_eq!(frames.len(), 3);
+        for (i, frame) in frames.iter().enumerate() {
+            assert_eq!(frame.timing().pts, Some(Timestamp::new(i as i64, tb())));
+            let mapped = frame.map().unwrap();
+            let plane = mapped.plane(0).unwrap();
+            for y in 0..H as usize {
+                let zencodec_media::frame::PlaneSamples::U8(row) = plane.row(y).unwrap() else {
+                    panic!("unexpected sample type")
+                };
+                assert_eq!(row, &gray(i as u8)[..W as usize]);
+            }
+        }
+    }
 }
 
 // ------------------------------------------------------ object safety ---
@@ -146,7 +213,7 @@ fn sessions_are_object_safe_and_send() {
     // Decoder state moves between threads (zenjxl-decoder #60's requirement).
     let handle = std::thread::spawn(move || {
         let mut dec = dec;
-        dec.configure(&config(), &NoPulse).unwrap();
+        dec.configure(&config(), Some(&NoPulse)).unwrap();
         dec
     });
     let _dec = handle.join().unwrap();
@@ -157,36 +224,45 @@ fn sessions_are_object_safe_and_send() {
 #[test]
 fn receive_pending_keeps_the_packet_and_guarantees_output() {
     let mut dec = ToyDecoder::new(2);
-    dec.configure(&config(), &NoPulse).unwrap();
+    dec.configure(&config(), Some(&NoPulse)).unwrap();
     let mut p0 = packet(toy_payload(&[&gray(1), &gray(2)], false), 0, true);
     let mut p1 = packet(toy_payload(&[&gray(3)], false), 1, false);
     let mut p2 = packet(toy_payload(&[&gray(4)], false), 2, false);
-    assert_eq!(dec.send(&mut p0, &NoPulse).unwrap(), SendStatus::Accepted);
+    assert_eq!(
+        dec.send(&mut p0, Some(&NoPulse)).unwrap(),
+        SendStatus::Accepted
+    );
     assert!(p0.is_taken());
     // p1 releases p0's two pictures into the ready queue (one-packet reorder).
-    assert_eq!(dec.send(&mut p1, &NoPulse).unwrap(), SendStatus::Accepted);
+    assert_eq!(
+        dec.send(&mut p1, Some(&NoPulse)).unwrap(),
+        SendStatus::Accepted
+    );
     assert!(!matches!(
-        dec.receive(&NoPulse).unwrap(),
+        dec.receive(Some(&NoPulse)).unwrap(),
         Receive::NeedInput
     ));
     // Refill: now ready has 1 and hold has 1 => a third send is backpressured.
-    let st = dec.send(&mut p2, &NoPulse).unwrap();
+    let st = dec.send(&mut p2, Some(&NoPulse)).unwrap();
     assert_eq!(st, SendStatus::ReceivePending);
     assert!(
         !p2.is_taken(),
         "a backpressured packet is retained for retry"
     );
     assert!(
-        matches!(dec.receive(&NoPulse).unwrap(), Receive::Ready(_)),
+        matches!(dec.receive(Some(&NoPulse)).unwrap(), Receive::Ready(_)),
         "ReceivePending guarantees output"
     );
-    assert_eq!(dec.send(&mut p2, &NoPulse).unwrap(), SendStatus::Accepted);
+    assert_eq!(
+        dec.send(&mut p2, Some(&NoPulse)).unwrap(),
+        SendStatus::Accepted
+    );
     // Drain: end_input is idempotent, EndOfStream is stable.
     dec.end_input().unwrap();
     dec.end_input().unwrap();
     let mut n = 0;
     loop {
-        match dec.receive(&NoPulse).unwrap() {
+        match dec.receive(Some(&NoPulse)).unwrap() {
             Receive::Ready(_) => n += 1,
             Receive::EndOfStream => break,
             _ => panic!("NeedInput after end_input"),
@@ -194,11 +270,14 @@ fn receive_pending_keeps_the_packet_and_guarantees_output() {
     }
     assert_eq!(n, 2, "p1's and p2's pictures were still held");
     assert!(matches!(
-        dec.receive(&NoPulse).unwrap(),
+        dec.receive(Some(&NoPulse)).unwrap(),
         Receive::EndOfStream
     ));
     assert!(matches!(
-        dec.send(&mut packet(toy_payload(&[], false), 3, false), &NoPulse),
+        dec.send(
+            &mut packet(toy_payload(&[], false), 3, false),
+            Some(&NoPulse)
+        ),
         Err(SessionError::Protocol(_))
     ));
 }
@@ -206,15 +285,15 @@ fn receive_pending_keeps_the_packet_and_guarantees_output() {
 #[test]
 fn packets_are_not_frames_and_show_existing_shares_storage() {
     let mut dec = ToyDecoder::new(8);
-    dec.configure(&config(), &NoPulse).unwrap();
+    dec.configure(&config(), Some(&NoPulse)).unwrap();
     let mut frames: Vec<Frame> = Vec::new();
     fn feed(dec: &mut ToyDecoder, p: &mut Packet, frames: &mut Vec<Frame>) {
-        send_packet_until_accepted(dec, p, &NoPulse, |f| {
+        send_packet_until_accepted(dec, p, Some(&NoPulse), |f| {
             frames.push(f);
             Ok::<(), ()>(())
         })
         .unwrap();
-        while let Receive::Ready(f) = dec.receive(&NoPulse).unwrap() {
+        while let Receive::Ready(f) = dec.receive(Some(&NoPulse)).unwrap() {
             frames.push(f);
         }
     }
@@ -236,7 +315,7 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
         &mut frames,
     ); // show existing
     assert_eq!(frames.len(), 2);
-    drain_decoder(&mut dec, &NoPulse, |f| {
+    drain_decoder(&mut dec, Some(&NoPulse), |f| {
         frames.push(f);
         Ok::<(), ()>(())
     })
@@ -275,14 +354,14 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
 #[test]
 fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     let mut dec = ToyDecoder::new(8);
-    dec.configure(&config(), &NoPulse).unwrap();
+    dec.configure(&config(), Some(&NoPulse)).unwrap();
     dec.send(
         &mut packet(toy_payload(&[&gray(9)], false), 0, true),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     dec.end_input().unwrap();
-    let Receive::Ready(first) = dec.receive(&NoPulse).unwrap() else {
+    let Receive::Ready(first) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
     let mapping = first.map().unwrap();
@@ -291,11 +370,11 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     dec.reset().unwrap();
     dec.send(
         &mut packet(toy_payload(&[&gray(5)], false), 0, true),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     dec.end_input().unwrap();
-    let Receive::Ready(second) = dec.receive(&NoPulse).unwrap() else {
+    let Receive::Ready(second) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
     drop(dec);
@@ -307,32 +386,32 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
 #[test]
 fn a_queued_frame_keeps_the_interpretation_it_was_decoded_under() {
     let mut dec = ToyDecoder::new(8);
-    dec.configure(&config(), &NoPulse).unwrap();
+    dec.configure(&config(), Some(&NoPulse)).unwrap();
     dec.send(
         &mut packet(toy_payload(&[&gray(1)], false), 0, true),
-        &NoPulse,
+        Some(&NoPulse),
     )
     .unwrap();
     // Epoch change before the queued frame was received.
     let cfg = config().with_epoch(1);
-    dec.configure(&cfg, &NoPulse).unwrap();
+    dec.configure(&cfg, Some(&NoPulse)).unwrap();
     let mut late = packet(toy_payload(&[&gray(2)], false), 1, true).with_config_epoch(1);
-    dec.send(&mut late, &NoPulse).unwrap();
+    dec.send(&mut late, Some(&NoPulse)).unwrap();
     assert!(
         matches!(
             dec.send(
                 &mut packet(toy_payload(&[&gray(3)], false), 2, true),
-                &NoPulse
+                Some(&NoPulse)
             ),
             Err(SessionError::Protocol(_))
         ),
         "a packet from the old epoch is refused"
     );
     dec.end_input().unwrap();
-    let Receive::Ready(old) = dec.receive(&NoPulse).unwrap() else {
+    let Receive::Ready(old) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
-    let Receive::Ready(new) = dec.receive(&NoPulse).unwrap() else {
+    let Receive::Ready(new) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
     assert_eq!(old.interpretation().config_epoch, 0);
@@ -350,22 +429,28 @@ impl Stop for Tripped {
 #[test]
 fn cancellation_is_terminal_until_reset() {
     let mut dec = erase_video_decoder(ToyDecoder::new(2));
-    dec.configure(&config(), &NoPulse).unwrap();
+    dec.configure(&config(), Some(&NoPulse)).unwrap();
     assert!(matches!(
-        dec.receive(&zencodec::how_far::StopOnly::borrowed(&Tripped)),
+        dec.receive(Some(&zencodec::how_far::StopOnly::borrowed(&Tripped))),
         Err(SessionError::Cancelled(_))
     ));
-    assert!(matches!(dec.receive(&NoPulse), Err(SessionError::Finished)));
+    assert!(matches!(
+        dec.receive(Some(&NoPulse)),
+        Err(SessionError::Finished)
+    ));
     dec.reset().unwrap();
-    assert!(matches!(dec.receive(&NoPulse), Ok(Receive::NeedInput)));
+    assert!(matches!(
+        dec.receive(Some(&NoPulse)),
+        Ok(Receive::NeedInput)
+    ));
     // A codec error is terminal the same way.
     let mut bad = packet(vec![9, 0], 0, true);
     assert!(matches!(
-        dec.send(&mut bad, &NoPulse),
+        dec.send(&mut bad, Some(&NoPulse)),
         Err(SessionError::Codec(_))
     ));
     assert!(matches!(
-        dec.send(&mut bad, &NoPulse),
+        dec.send(&mut bad, Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
 }
@@ -380,7 +465,7 @@ fn demuxer_output_is_identical_for_every_window_and_truncation_is_typed() {
         let mut dem = ToyDemuxer::new(MediaLimits::default());
         let mut got = Vec::new();
         let mut headers = 0;
-        let stats = demux_slice(&mut dem, &file, window, &NoPulse, |ev| {
+        let stats = demux_slice(&mut dem, &file, window, Some(&NoPulse), |ev| {
             match ev {
                 DemuxEvent::Headers => headers += 1,
                 DemuxEvent::Packet(p) => got.push((
@@ -405,7 +490,7 @@ fn demuxer_output_is_identical_for_every_window_and_truncation_is_typed() {
     // Truncated inside a packet: a codec error from the stage, not a driver violation.
     let mut dem = ToyDemuxer::new(MediaLimits::default());
     let cut = &file[..file.len() - 3];
-    let err = demux_slice(&mut dem, cut, 5, &NoPulse, |_| Ok(())).unwrap_err();
+    let err = demux_slice(&mut dem, cut, 5, Some(&NoPulse), |_| Ok(())).unwrap_err();
     assert!(
         matches!(
             err,
@@ -415,14 +500,14 @@ fn demuxer_output_is_identical_for_every_window_and_truncation_is_typed() {
     );
     // A packet above the limit is a typed limit error, checked before allocation.
     let mut dem = ToyDemuxer::new(MediaLimits::default().with_max_packet_bytes(4));
-    let err = demux_slice(&mut dem, &file, 64, &NoPulse, |_| Ok(())).unwrap_err();
+    let err = demux_slice(&mut dem, &file, 64, Some(&NoPulse), |_| Ok(())).unwrap_err();
     assert!(
         matches!(err, DriveFailure::Step(SessionError::Limit(_))),
         "{err:?}"
     );
     // Unrequested input (wrong offset) is ignored: nothing consumed, a request named.
     let mut dem = ToyDemuxer::new(MediaLimits::default());
-    let p = dem.step(Input::new(5, &file[5..]), &NoPulse).unwrap();
+    let p = dem.step(Input::new(5, &file[5..]), Some(&NoPulse)).unwrap();
     assert_eq!(p.consumed, 0);
     assert!(matches!(p.event, DemuxEvent::Need));
     assert!(!dem.requested().is_empty());
@@ -454,7 +539,7 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
                     i64::from(i),
                     i % 4 == 0,
                 ),
-                &NoPulse,
+                Some(&NoPulse),
             )
             .unwrap();
             match drain {
@@ -473,7 +558,10 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
                 _ => m.take_output(&mut out),
             }
         }
-        m.finish(&NoPulse).unwrap().apply_to(&mut out).unwrap();
+        m.finish(Some(&NoPulse))
+            .unwrap()
+            .apply_to(&mut out)
+            .unwrap();
         out
     };
     let undrained = run(0);
@@ -497,7 +585,7 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
             .unwrap(),
         MuxTiming::streaming()
     );
-    assert!(m.finish(&NoPulse).unwrap().patches.is_empty());
+    assert!(m.finish(Some(&NoPulse)).unwrap().patches.is_empty());
     // Begin twice is a protocol violation; a packet on another clock is refused.
     let mut m = ToyMuxer::new(false);
     m.begin(std::slice::from_ref(&track), MuxHint::default())
@@ -511,7 +599,7 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
         .with_track(0)
         .with_pts(Timestamp::new(0, TimeBase::MILLIS));
     assert!(matches!(
-        m.write_packet(wrong, &NoPulse),
+        m.write_packet(wrong, Some(&NoPulse)),
         Err(SessionError::Protocol(_))
     ));
 }
@@ -558,7 +646,7 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
     let mut cursor = SliceCursor::new(16);
     assert!(matches!(
         cursor
-            .next(&file, &mut DemuxStage(&mut dem), &NoPulse)
+            .next(&file, &mut DemuxStage(&mut dem), Some(&NoPulse))
             .unwrap()
             .into_inner(),
         DemuxEvent::Headers
@@ -573,7 +661,7 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
             SeekStatus::Positioned(r) => r,
             SeekStatus::Scanning => loop {
                 if let DemuxEvent::Seeked(r) = cursor
-                    .next(&file, &mut DemuxStage(&mut *dem), &NoPulse)
+                    .next(&file, &mut DemuxStage(&mut *dem), Some(&NoPulse))
                     .unwrap()
                     .into_inner()
                 {
@@ -614,18 +702,18 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
     assert_eq!(r.ordinal, 4);
     let mut dec = ToyDecoder::new(8);
     dec.reset().unwrap();
-    dec.configure(&CodecConfig::from(&dem.tracks()[0]), &NoPulse)
+    dec.configure(&CodecConfig::from(&dem.tracks()[0]), Some(&NoPulse))
         .unwrap();
     let (mut packets_read, mut discarded, mut shown) = (0u64, 0u64, Vec::new());
     loop {
         match cursor
-            .next(&file, &mut DemuxStage(&mut dem), &NoPulse)
+            .next(&file, &mut DemuxStage(&mut dem), Some(&NoPulse))
             .unwrap()
             .into_inner()
         {
             DemuxEvent::Packet(mut p) => {
                 packets_read += 1;
-                send_packet_until_accepted(&mut dec, &mut p, &NoPulse, |f| {
+                send_packet_until_accepted(&mut dec, &mut p, Some(&NoPulse), |f| {
                     if f.timing().pts.unwrap().compare(target_ms) == std::cmp::Ordering::Less {
                         discarded += 1;
                     } else {
@@ -639,7 +727,7 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
             _ => {}
         }
     }
-    drain_decoder(&mut dec, &NoPulse, |f| {
+    drain_decoder(&mut dec, Some(&NoPulse), |f| {
         shown.push(f.timing().pts.unwrap().ticks());
         Ok::<(), ()>(())
     })

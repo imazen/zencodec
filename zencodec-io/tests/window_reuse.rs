@@ -18,7 +18,7 @@ impl ByteStepper for Plan {
     fn step(
         &mut self,
         input: Input<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<Stepped<Vec<u8>>, Self::Error> {
         let request = self.rounds[self.at][0];
         if !request.is_satisfied_by(&input) {
@@ -128,7 +128,7 @@ fn read_at_reuses_overlap_and_retains_the_unused_suffix() {
     let mut cursor = ReadAtCursor::new(opts());
     let mut plan = overlap_plan();
     while !cursor
-        .next(&mut source, &mut plan, &NoPulse)
+        .next(&mut source, &mut plan, Some(&NoPulse))
         .unwrap()
         .is_finished()
     {}
@@ -141,7 +141,7 @@ fn read_at_reuses_a_batched_range_for_a_sequential_request() {
     let mut cursor = ReadAtCursor::new(opts());
     let mut plan = batch_plan();
     while !cursor
-        .next(&mut source, &mut plan, &NoPulse)
+        .next(&mut source, &mut plan, Some(&NoPulse))
         .unwrap()
         .is_finished()
     {}
@@ -159,9 +159,9 @@ fn true_backtracking_still_reaches_the_forward_source_refusal() {
     };
     let mut source = Forward::default();
     let mut cursor = ReadAtCursor::new(opts());
-    cursor.next(&mut source, &mut plan, &NoPulse).unwrap();
+    cursor.next(&mut source, &mut plan, Some(&NoPulse)).unwrap();
     assert!(matches!(
-        cursor.next(&mut source, &mut plan, &NoPulse),
+        cursor.next(&mut source, &mut plan, Some(&NoPulse)),
         Err(zencodec_io::DriveFailure::Source(
             SourceError::BeyondWindow { .. }
         ))
@@ -206,7 +206,7 @@ mod asynchronous {
                 };
                 let mut cursor = AsyncCursor::new(opts());
                 while !cursor
-                    .next(&mut source, &mut plan, &NoPulse)
+                    .next(&mut source, &mut plan, Some(&NoPulse))
                     .await
                     .unwrap()
                     .is_finished()

@@ -74,7 +74,7 @@ impl MultiPassEncoder for Script {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, MockError> {
         if self.pass == self.passes {
             return Ok(PassProgress::Done);
@@ -136,7 +136,7 @@ impl PassSource for Counting {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> io::Result<()> {
         self.0.set(self.0.get() + rows.rows());
         for y in 0..rows.rows() {
@@ -163,7 +163,7 @@ fn run(enc: Script, policy: ReplayPolicy) -> (Result<Completed, At<Failure>>, Ve
         Options::new(StorageBudget::new(1 << 20, 64), u64::MAX)
             .with_replay_policy(policy)
             .with_output_policy(schedule),
-        &NoPulse,
+        Some(&NoPulse),
     );
     (r, out, rows.get())
 }

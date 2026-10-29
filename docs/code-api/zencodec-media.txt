@@ -96,7 +96,7 @@ impl<D: zencodec_media::container::Demuxer + ?core::marker::Sized> zencodec_io::
 pub type zencodec_media::container::DemuxStage<'_, D>::Error = zencodec_media::session::SessionError<<D as zencodec_media::container::Demuxer>::Error>
 pub type zencodec_media::container::DemuxStage<'_, D>::Output = zencodec_media::container::DemuxEvent
 pub fn zencodec_media::container::DemuxStage<'_, D>::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
-pub fn zencodec_media::container::DemuxStage<'_, D>::step(&mut self, input: zencodec::traits::incremental::Input<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::stepper::Stepped<zencodec_media::container::DemuxEvent>, Self::Error>
+pub fn zencodec_media::container::DemuxStage<'_, D>::step(&mut self, input: zencodec::traits::incremental::Input<'_>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_io::stepper::Stepped<zencodec_media::container::DemuxEvent>, Self::Error>
 #[non_exhaustive] pub struct zencodec_media::container::MuxHint
 pub zencodec_media::container::MuxHint::forward_only: bool
 impl zencodec_media::container::MuxHint
@@ -113,10 +113,10 @@ impl<M: zencodec_media::container::Muxer> zencodec_media::container::DynMuxer fo
 pub fn zencodec_media::container::MuxerShim<M>::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::consume_output(&mut self, n: usize)
-pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::pending_output(&self) -> &[u8]
 pub fn zencodec_media::container::MuxerShim<M>::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_media::container::MuxerShim<M>::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 #[non_exhaustive] pub struct zencodec_media::container::SeekResult
 pub zencodec_media::container::SeekResult::config_epoch: u32
 pub zencodec_media::container::SeekResult::ordinal: u64
@@ -136,33 +136,33 @@ pub type zencodec_media::container::Demuxer::Error: core::error::Error + core::m
 pub fn zencodec_media::container::Demuxer::access_pattern(&self) -> zencodec::source::AccessPattern
 pub fn zencodec_media::container::Demuxer::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
 pub fn zencodec_media::container::Demuxer::seek(&mut self, target: &zencodec_media::container::SeekTarget) -> core::result::Result<zencodec_media::container::SeekStatus, zencodec_media::session::SessionError<Self::Error>>
-pub fn zencodec_media::container::Demuxer::step(&mut self, input: zencodec::traits::incremental::Input<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::container::DemuxProgress, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::container::Demuxer::step(&mut self, input: zencodec::traits::incremental::Input<'_>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::container::DemuxProgress, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::Demuxer::tracks(&self) -> &[zencodec_media::track::TrackInfo]
 pub trait zencodec_media::container::DynMuxer
 pub fn zencodec_media::container::DynMuxer::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::DynMuxer::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::DynMuxer::consume_output(&mut self, n: usize)
-pub fn zencodec_media::container::DynMuxer::finish(self: alloc::boxed::Box<Self>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::DynMuxer::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::DynMuxer::pending_output(&self) -> &[u8]
 pub fn zencodec_media::container::DynMuxer::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_media::container::DynMuxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::DynMuxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 impl<M: zencodec_media::container::Muxer> zencodec_media::container::DynMuxer for zencodec_media::container::MuxerShim<M>
 pub fn zencodec_media::container::MuxerShim<M>::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::consume_output(&mut self, n: usize)
-pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::pending_output(&self) -> &[u8]
 pub fn zencodec_media::container::MuxerShim<M>::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_media::container::MuxerShim<M>::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub trait zencodec_media::container::Muxer
 pub type zencodec_media::container::Muxer::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec_media::container::Muxer::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::Muxer::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::Muxer::consume_output(&mut self, n: usize)
-pub fn zencodec_media::container::Muxer::finish(self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<Self::Error>> where Self: core::marker::Sized
+pub fn zencodec_media::container::Muxer::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<Self::Error>> where Self: core::marker::Sized
 pub fn zencodec_media::container::Muxer::pending_output(&self) -> &[u8]
 pub fn zencodec_media::container::Muxer::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_media::container::Muxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::container::Muxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::apply_finish(file: &mut alloc::vec::Vec<u8>, finish: zencodec::output_patch::OutputFinish) -> core::result::Result<(), zencodec::output_patch::PatchError>
 pub fn zencodec_media::container::erase_muxer<M: zencodec_media::container::Muxer + core::marker::Send + 'static>(m: M) -> alloc::boxed::Box<(dyn zencodec_media::container::DynMuxer + core::marker::Send)>
 pub type zencodec_media::container::Request = zencodec::traits::incremental::InputRequest
@@ -252,17 +252,17 @@ pub fn zencodec_media::output::Failure::fmt(&self, f: &mut core::fmt::Formatter<
 pub struct zencodec_media::output::Output<M, D>
 impl<M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination> zencodec_media::output::Output<M, D>
 pub fn zencodec_media::output::Output<M, D>::facts(&self) -> zencodec::operation::transition::DestinationFacts
-pub fn zencodec_media::output::Output<M, D>::finish(self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::output::Stats, zencodec_media::output::Failure>
+pub fn zencodec_media::output::Output<M, D>::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::output::Stats, zencodec_media::output::Failure>
 pub fn zencodec_media::output::Output<M, D>::is_failed(&self) -> bool
-pub fn zencodec_media::output::Output<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, zencodec_media::output::Failure>
-pub fn zencodec_media::output::Output<M, D>::send(&mut self, packet: zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::output::Failure>
+pub fn zencodec_media::output::Output<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
+pub fn zencodec_media::output::Output<M, D>::send(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::output::Failure>
 pub const fn zencodec_media::output::Output<M, D>::stats(&self) -> &zencodec_media::output::Stats
-pub fn zencodec_media::output::Output<M, D>::with_container_timing(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, zencodec_media::output::Failure>
+pub fn zencodec_media::output::Output<M, D>::with_container_timing(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
 pub struct zencodec_media::output::PreparedOutput<M, D>(_)
 impl<M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination> zencodec_media::output::PreparedOutput<M, D>
 pub fn zencodec_media::output::PreparedOutput<M, D>::facts(&self) -> zencodec::operation::transition::DestinationFacts
-pub fn zencodec_media::output::PreparedOutput<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, zencodec_media::output::Failure>
-pub fn zencodec_media::output::PreparedOutput<M, D>::publish(self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::output::Output<M, D>, zencodec_media::output::Failure>
+pub fn zencodec_media::output::PreparedOutput<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
+pub fn zencodec_media::output::PreparedOutput<M, D>::publish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::output::Output<M, D>, zencodec_media::output::Failure>
 pub const fn zencodec_media::output::PreparedOutput<M, D>::timing(&self) -> zencodec_media::container::MuxTiming
 #[non_exhaustive] pub struct zencodec_media::output::Stats
 pub zencodec_media::output::Stats::emitted: u64
@@ -357,11 +357,11 @@ pub fn zencodec_media::policy::PolicyDecoder<D, R>::report(&self) -> &zencodec::
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
 impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
 pub type zencodec_media::policy::PolicyDecoder<D, R>::Error = zencodec_media::policy::Error
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 pub mod zencodec_media::session
 pub use zencodec_media::session::ErasedError
@@ -435,11 +435,11 @@ pub fn zencodec_media::session::FusedDecoder<D>::into_inner(self) -> D
 pub const fn zencodec_media::session::FusedDecoder<D>::new(inner: D) -> Self
 impl<D: zencodec_media::session::VideoDecoder> zencodec_media::session::VideoDecoder for zencodec_media::session::FusedDecoder<D>
 pub type zencodec_media::session::FusedDecoder<D>::Error = <D as zencodec_media::session::VideoDecoder>::Error
-pub fn zencodec_media::session::FusedDecoder<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn zencodec_media::session::FusedDecoder<D>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn zencodec_media::session::FusedDecoder<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 pub struct zencodec_media::session::FusedEncoder<E>
 impl<E> zencodec_media::session::FusedEncoder<E>
@@ -450,16 +450,16 @@ pub type zencodec_media::session::FusedEncoder<E>::Error = <E as zencodec_media:
 pub fn zencodec_media::session::FusedEncoder<E>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 pub fn zencodec_media::session::FusedEncoder<E>::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn zencodec_media::session::FusedEncoder<E>::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn zencodec_media::session::FusedEncoder<E>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
-pub fn zencodec_media::session::FusedEncoder<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn zencodec_media::session::FusedEncoder<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn zencodec_media::session::FusedEncoder<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 pub struct zencodec_media::session::VideoDecoderShim<D>(pub D)
 impl<D: zencodec_media::session::VideoDecoder> zencodec_media::session::VideoDecoder for zencodec_media::session::VideoDecoderShim<D>
 pub type zencodec_media::session::VideoDecoderShim<D>::Error = zencodec::traits::incremental::ErasedError
-pub fn zencodec_media::session::VideoDecoderShim<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoDecoderShim<D>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoDecoderShim<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 pub struct zencodec_media::session::VideoEncoderShim<E>(pub E)
 impl<E: zencodec_media::session::VideoEncoder> zencodec_media::session::VideoEncoder for zencodec_media::session::VideoEncoderShim<E>
@@ -467,8 +467,8 @@ pub type zencodec_media::session::VideoEncoderShim<E>::Error = zencodec::traits:
 pub fn zencodec_media::session::VideoEncoderShim<E>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoEncoderShim<E>::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn zencodec_media::session::VideoEncoderShim<E>::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn zencodec_media::session::VideoEncoderShim<E>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoEncoderShim<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoEncoderShim<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoEncoderShim<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 #[non_exhaustive] pub struct zencodec_media::session::VideoStreamInfo
 pub zencodec_media::session::VideoStreamInfo::interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
 pub zencodec_media::session::VideoStreamInfo::reorder_depth: core::option::Option<u32>
@@ -476,78 +476,78 @@ impl zencodec_media::session::VideoStreamInfo
 pub fn zencodec_media::session::VideoStreamInfo::new(interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>) -> Self
 pub trait zencodec_media::session::VideoDecoder
 pub type zencodec_media::session::VideoDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
-pub fn zencodec_media::session::VideoDecoder::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::session::VideoDecoder::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::session::VideoDecoder::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
-pub fn zencodec_media::session::VideoDecoder::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::session::VideoDecoder::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::session::VideoDecoder::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
-pub fn zencodec_media::session::VideoDecoder::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::session::VideoDecoder::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::session::VideoDecoder::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 impl<D: zencodec_media::session::VideoDecoder + ?core::marker::Sized> zencodec_media::session::VideoDecoder for alloc::boxed::Box<D>
 pub type alloc::boxed::Box<D>::Error = <D as zencodec_media::session::VideoDecoder>::Error
-pub fn alloc::boxed::Box<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn alloc::boxed::Box<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn alloc::boxed::Box<D>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn alloc::boxed::Box<D>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn alloc::boxed::Box<D>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn alloc::boxed::Box<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn alloc::boxed::Box<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn alloc::boxed::Box<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn alloc::boxed::Box<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
 pub type zencodec_media::policy::PolicyDecoder<D, R>::Error = zencodec_media::policy::Error
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
-pub fn zencodec_media::policy::PolicyDecoder<D, R>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
+pub fn zencodec_media::policy::PolicyDecoder<D, R>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 impl<D: zencodec_media::session::VideoDecoder> zencodec_media::session::VideoDecoder for zencodec_media::session::FusedDecoder<D>
 pub type zencodec_media::session::FusedDecoder<D>::Error = <D as zencodec_media::session::VideoDecoder>::Error
-pub fn zencodec_media::session::FusedDecoder<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn zencodec_media::session::FusedDecoder<D>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
-pub fn zencodec_media::session::FusedDecoder<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
+pub fn zencodec_media::session::FusedDecoder<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn zencodec_media::session::FusedDecoder<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 impl<D: zencodec_media::session::VideoDecoder> zencodec_media::session::VideoDecoder for zencodec_media::session::VideoDecoderShim<D>
 pub type zencodec_media::session::VideoDecoderShim<D>::Error = zencodec::traits::incremental::ErasedError
-pub fn zencodec_media::session::VideoDecoderShim<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoDecoderShim<D>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoDecoderShim<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoDecoderShim<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoDecoderShim<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 pub trait zencodec_media::session::VideoEncoder
 pub type zencodec_media::session::VideoEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec_media::session::VideoEncoder::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::session::VideoEncoder::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn zencodec_media::session::VideoEncoder::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn zencodec_media::session::VideoEncoder::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<Self::Error>>
-pub fn zencodec_media::session::VideoEncoder::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::session::VideoEncoder::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::session::VideoEncoder::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<Self::Error>>
 impl<E: zencodec_media::session::VideoEncoder + ?core::marker::Sized> zencodec_media::session::VideoEncoder for alloc::boxed::Box<E>
 pub type alloc::boxed::Box<E>::Error = <E as zencodec_media::session::VideoEncoder>::Error
 pub fn alloc::boxed::Box<E>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 pub fn alloc::boxed::Box<E>::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn alloc::boxed::Box<E>::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn alloc::boxed::Box<E>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
-pub fn alloc::boxed::Box<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn alloc::boxed::Box<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn alloc::boxed::Box<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 impl<E: zencodec_media::session::VideoEncoder> zencodec_media::session::VideoEncoder for zencodec_media::session::FusedEncoder<E>
 pub type zencodec_media::session::FusedEncoder<E>::Error = <E as zencodec_media::session::VideoEncoder>::Error
 pub fn zencodec_media::session::FusedEncoder<E>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 pub fn zencodec_media::session::FusedEncoder<E>::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn zencodec_media::session::FusedEncoder<E>::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn zencodec_media::session::FusedEncoder<E>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
-pub fn zencodec_media::session::FusedEncoder<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn zencodec_media::session::FusedEncoder<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
+pub fn zencodec_media::session::FusedEncoder<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>>
 impl<E: zencodec_media::session::VideoEncoder> zencodec_media::session::VideoEncoder for zencodec_media::session::VideoEncoderShim<E>
 pub type zencodec_media::session::VideoEncoderShim<E>::Error = zencodec::traits::incremental::ErasedError
 pub fn zencodec_media::session::VideoEncoderShim<E>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoEncoderShim<E>::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
 pub fn zencodec_media::session::VideoEncoderShim<E>::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
-pub fn zencodec_media::session::VideoEncoderShim<E>::receive(&mut self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::VideoEncoderShim<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
-pub fn zencodec_media::session::drain_decoder<D, F, E2>(dec: &mut D, pulse: &dyn how_far::pulse::Pulse, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>, E2>> where D: zencodec_media::session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
-pub fn zencodec_media::session::drain_encoder<E, F, E2>(enc: &mut E, pulse: &dyn how_far::pulse::Pulse, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>, E2>> where E: zencodec_media::session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec_media::packet::Packet) -> core::result::Result<(), E2>
+pub fn zencodec_media::session::VideoEncoderShim<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::VideoEncoderShim<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::session::drain_decoder<D, F, E2>(dec: &mut D, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>, E2>> where D: zencodec_media::session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
+pub fn zencodec_media::session::drain_encoder<E, F, E2>(enc: &mut E, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>, E2>> where E: zencodec_media::session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec_media::packet::Packet) -> core::result::Result<(), E2>
 pub fn zencodec_media::session::erase_video_decoder<D: zencodec_media::session::VideoDecoder + core::marker::Send + 'static>(d: D) -> alloc::boxed::Box<zencodec_media::session::DynVideoDecoder>
 pub fn zencodec_media::session::erase_video_encoder<E: zencodec_media::session::VideoEncoder + core::marker::Send + 'static>(e: E) -> alloc::boxed::Box<zencodec_media::session::DynVideoEncoder>
-pub fn zencodec_media::session::send_frame_until_accepted<E, F, E2>(enc: &mut E, frame: &zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>, E2>> where E: zencodec_media::session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec_media::packet::Packet) -> core::result::Result<(), E2>
-pub fn zencodec_media::session::send_packet_until_accepted<D, F, E2>(dec: &mut D, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>, E2>> where D: zencodec_media::session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
+pub fn zencodec_media::session::send_frame_until_accepted<E, F, E2>(enc: &mut E, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<E as zencodec_media::session::VideoEncoder>::Error>, E2>> where E: zencodec_media::session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec_media::packet::Packet) -> core::result::Result<(), E2>
+pub fn zencodec_media::session::send_packet_until_accepted<D, F, E2>(dec: &mut D, packet: &mut zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, on_output: F) -> core::result::Result<(), zencodec_media::session::PumpError<zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>, E2>> where D: zencodec_media::session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
 pub type zencodec_media::session::DynVideoDecoder = (dyn zencodec_media::session::VideoDecoder<Error = zencodec::traits::incremental::ErasedError> + core::marker::Send)
 pub type zencodec_media::session::DynVideoEncoder = (dyn zencodec_media::session::VideoEncoder<Error = zencodec::traits::incremental::ErasedError> + core::marker::Send)
 pub mod zencodec_media::staged
@@ -590,14 +590,14 @@ impl core::fmt::Display for zencodec_media::staged::Failure
 pub fn zencodec_media::staged::Failure::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct zencodec_media::staged::StagedEncode<E, M, D, R>
 impl<E: zencodec_media::session::VideoEncoder, M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy> zencodec_media::staged::StagedEncode<E, M, D, R>
-pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::finish(self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::staged::Completed, whereat::at::At<zencodec_media::staged::Failure>>
+pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::staged::Completed, whereat::at::At<zencodec_media::staged::Failure>>
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::is_failed(&self) -> bool
-pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::new(encoder: E, mux: M, destination: D, resolver: R, storage: zencodec::storage::StorageBudget, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, whereat::at::At<zencodec_media::staged::Failure>>
-pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::push(&mut self, input: zencodec::frame_storage::Frame, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), whereat::at::At<zencodec_media::staged::Failure>>
-pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::push_converted(&mut self, input: zencodec::frame_storage::Frame, target: &zencodec::frame::FrameInterpretation, conversion: zencodec::operation::transition::FrameConversionOffer, execute: impl core::ops::function::FnOnce(zencodec::frame_storage::Frame) -> core::result::Result<zencodec::frame_storage::Frame, zencodec_media::staged::Cause>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), whereat::at::At<zencodec_media::staged::Failure>>
+pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::new(encoder: E, mux: M, destination: D, resolver: R, storage: zencodec::storage::StorageBudget, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, whereat::at::At<zencodec_media::staged::Failure>>
+pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::push(&mut self, input: zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), whereat::at::At<zencodec_media::staged::Failure>>
+pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::push_converted(&mut self, input: zencodec::frame_storage::Frame, target: &zencodec::frame::FrameInterpretation, conversion: zencodec::operation::transition::FrameConversionOffer, execute: impl core::ops::function::FnOnce(zencodec::frame_storage::Frame) -> core::result::Result<zencodec::frame_storage::Frame, zencodec_media::staged::Cause>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), whereat::at::At<zencodec_media::staged::Failure>>
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
-pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::with_staging(encoder: E, mux: M, destination: D, resolver: R, staging: zencodec_media::staging::Staging, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, whereat::at::At<zencodec_media::staged::Failure>>
+pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::with_staging(encoder: E, mux: M, destination: D, resolver: R, staging: zencodec_media::staging::Staging, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, whereat::at::At<zencodec_media::staged::Failure>>
 pub type zencodec_media::staged::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
 pub mod zencodec_media::staging
 #[non_exhaustive] pub enum zencodec_media::staging::Refusal

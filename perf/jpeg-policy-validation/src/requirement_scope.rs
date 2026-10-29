@@ -72,7 +72,7 @@ fn select(
         requirements,
         context,
         resolver,
-        &NoPulse,
+        Some(&NoPulse),
     )?)
 }
 
@@ -155,7 +155,12 @@ impl<'a> DeferredRewrite<'a> {
         Ok(self)
     }
 
-    fn write(self, current: Context, writer: &mut impl Write, stop: &dyn zencodec::Pulse) -> Result<()> {
+    fn write(
+        self,
+        current: Context,
+        writer: &mut impl Write,
+        stop: &dyn zencodec::Pulse,
+    ) -> Result<()> {
         stop.check()
             .map_err(zencodec::metadata_rewrite::Error::Stopped)?;
         self.pending.finish(current)?;
@@ -191,9 +196,7 @@ fn pending_native_rewrite_never_publishes_before_inspection_or_after_source_chan
             context()
         };
         let mut output = Vec::new();
-        let error = pending
-            .write(current, &mut output, &NoPulse)
-            .unwrap_err();
+        let error = pending.write(current, &mut output, &NoPulse).unwrap_err();
         assert_eq!(
             *error.downcast_ref::<At<PlanError>>().unwrap().error(),
             if inspected {
@@ -400,9 +403,7 @@ fn admitted_native_rewrite_still_honors_cancellation_and_preserves_partial_write
         cancel: None,
         fail_after: Some(3),
     };
-    let error = prepare()
-        .write(context(), &mut sink, &NoPulse)
-        .unwrap_err();
+    let error = prepare().write(context(), &mut sink, &NoPulse).unwrap_err();
     let original = error.downcast_ref::<io::Error>().unwrap();
     assert_eq!(original.kind(), io::ErrorKind::BrokenPipe);
     assert_eq!(original.to_string(), "scope writer failed");

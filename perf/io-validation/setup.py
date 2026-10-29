@@ -10,9 +10,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent / "vendor"
 PINS = [
-    ("imazen/zenavif", "b25f7604fbb71ead6517ec27fa52646770e3606a", ["zenmp4"]),
-    ("imazen/zenextras", "1af38ae83024830a141744fb3a565503bdc61af3", ["zenivf", "zenwebm"]),
-    ("imazen/zenbitmaps", "866b088487bacffe6b443df06e7b2344b84ed3e1", [""]),
+    ("imazen/zenavif", "94116d266299f347cfd10a75d440a5bc3b598d2c", ["zenmp4"]),
+    ("imazen/zenextras", "403d46b9973a58b212def0602f4dd8cdee9560dc", ["zenivf", "zenwebm"]),
+    ("imazen/zenbitmaps", "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c", [""]),
 ]
 
 

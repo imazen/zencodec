@@ -49,6 +49,7 @@ mod automatic {
         // ANCHOR: checked_default
         let output = TranscodeRequest::new(ImageFormat::Png).transcode(codecs, bytes)?;
         // END: checked_default
+        // The built-in policy selects a permitted route without a custom callback.
         // Default retention can refuse when the target cannot preserve a reported field.
         // No file or HTTP body has been written by this operation.
         Ok(output)
@@ -237,6 +238,7 @@ mod cancellation {
     }
     // Keep the application's signalling handle so it can cancel during work.
     // Passing SharedPulse preserves progress reporting and phase planning too.
+    // Borrowed per-call controls accept None; retained job controls still apply.
     // Adapt a legacy Stop at the application boundary with StopOnly when needed.
     // END EXAMPLE: checked_registry_pulse
 }

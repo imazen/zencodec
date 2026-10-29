@@ -94,7 +94,7 @@ impl<E: core::error::Error + Send + Sync + 'static> super::incremental::Incremen
         &mut self,
         _input: super::incremental::Input<'_>,
         _sink: &mut dyn crate::DecodeRowSink,
-        _pulse: &dyn crate::Pulse,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<super::incremental::Progress, super::incremental::StepError<E>> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }

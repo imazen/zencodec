@@ -28,6 +28,11 @@ not bound native codec/CMS workspace. Rendering currently reconstructs the full
 selection and copies geometry even for identity. Planar video, resizing and HDR
 display mapping remain unqualified.
 
+`render`, `render_with_preset` and `geometry::project` accept
+`Option<&dyn Pulse>`. `None` adds no per-call control; policy and storage
+requirements still apply. Selected rendering continues to use the collection's
+retained control.
+
 This is an unpublished review crate requiring Rust 1.89 and the converter revision
 pinned in Cargo.toml. It is isolated from the root workspace while those converter
 APIs are unreleased. Applications consuming it by path must use the same root

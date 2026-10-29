@@ -1,0 +1,185 @@
+{
+  "date": "2026-10-29",
+  "scope": "Optional borrowed Pulse in the shared workspace, standalone renderer, guide and selected native controls; no performance claim",
+  "runtime_source": "670b3d804af566d9d3cfce49d1c4e6b00405b7bd",
+  "remaining_gates_source": "2a1087cba99de3c1f11c84add4b13e377f582ccb",
+  "gates": {
+    "all_feature_all_target_check": "PASS (core05)",
+    "workspace_runtime": "PASS (core08 retry, including new None/Some controls)",
+    "workspace_doctests": "PASS (core09)",
+    "workspace_strict_clippy": "PASS (core09)",
+    "renderer_no_default_clippy_tests_doctest": "PASS (core09)",
+    "workspace_no_default": "PASS (core09)",
+    "core_coroutine_wasm32_unknown_unknown": "PASS (core09)",
+    "generated_api_snapshots_catalog_rustdoc": "PASS (reference, source a7c2a6ca)"
+  },
+  "receipts": [
+    "run-heavy: done rc=101 21s | peak-RSS 0.47GiB | min-avail 14613MiB | peak-load 1.44",
+    "run-heavy: done rc=0 20s | peak-RSS 0.39GiB | min-avail 14652MiB | peak-load 1.32",
+    "run-heavy: done rc=0 20s | peak-RSS 0.27GiB | min-avail 14722MiB | peak-load 0.69"
+  ],
+  "retained_failures": [
+    "core01/core02/core03/core04: incomplete source migration diagnostics",
+    "core05: new fixture expected wrapped share() call; SharedPulse clones existing owner instead",
+    "core06: new successful media fixture lacked required presentation timestamp",
+    "core07: fixture used external non-exhaustive FrameTiming literal; corrected via public fields",
+    "core08 first attempt: cargo test rejects --keep-going; resumed with --no-fail-fast",
+    "core08 retry aggregate failure: runtime passed, one stale required-Pulse doctest failed; fixed in core09"
+  ],
+  "not_qualified": [
+    "all native codecs/adapters against optional signatures",
+    "complete native Windows/macOS/i686 coverage",
+    "latency, memory and throughput performance"
+  ],
+  "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained.",
+  "site_optional": {
+    "source": "f4b9fdc1e03fde5748ac2098dd8eef856403e534",
+    "reference": "pass",
+    "source_checks": "24/24 pass",
+    "browser": "pass; original responsive/source-copy assertions retained",
+    "wrapper": "rc0 46s peak-RSS0.30GiB min-avail14242MiB peak-load0.74"
+  },
+  "native_portable": {
+    "core": "feb09f9fd25e90e49a30d7161db8f3b558dfb2a6",
+    "pixels": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+    "wrapper": "run-heavy: done rc=1 373s | peak-RSS 0.81GiB | min-avail 13902MiB | peak-load 2.45",
+    "zenbitmaps": {
+      "source": "54f98180d183fbeed6110642ee65c7274e13dba0",
+      "runtime": "26 passed across pulse_controls, qoi_sansio, sansio_bitmaps",
+      "clippy": "FAIL: inventory-only HeaderTrace/header_trace compiled without inventory",
+      "repair": "769e65471445f7560076826012b0dc403738a5c1; unrun"
+    },
+    "zenwebp": {
+      "source": "6cba688ff2898dfcb3350845372756dacdf431f6",
+      "runtime": "20 passed across pulse_calls, pulse_polls, sansio",
+      "clippy": "PASS for library and same targets"
+    },
+    "zenjpeg": {
+      "source": "265a04479b752a70a86391a39da627adbf2553c0",
+      "runtime": "50 passed, 1 inherited ignored across native_hardening, controlled_decode, metadata_rewrite, row_planning",
+      "clippy": "PASS for library and same targets"
+    },
+    "graph": "Incrementally resolved committed locks outside workspace patches. Initial audit FAIL retained; explicit source review explains required PNG, zenflate, rustix, archmage family, lz4_flex and identical-source metric revision changes. No remaining unreviewed deltas in checked roots.",
+    "limitations": "Selected Linux native controls only. Nested consumer graphs and full feature/platform coverage remain open."
+  },
+  "png_portable": {
+    "source": "4b75d4d5495debd2b19dd211cf3500ef1763a0c3",
+    "landed_head": "7b6d1436db5d771fc43226c146847fc76305afde",
+    "merge": "a5f2a58834d41cbace94368ca19eeb374f6b9873",
+    "gates": "root resolution/graph, native tests, strict Clippy, no-default, fuzz bins PASS",
+    "wrapper": "rc0 44s peak-RSS0.58GiB min-avail14538MiB peak-load1.47"
+  },
+  "native_followup": {
+    "sources": {
+      "zenbitmaps": "7d89635c966231ab4034a4e8cbc7f30ab7cf5c2a",
+      "zenwebp": "fb4388e280895a268ef5231ebccdccbff1e0fefc",
+      "zenjpeg": "31b789f37de97cf410d23226e50d4e8c02ade555"
+    },
+    "wrapper": "run-heavy: done rc=1 62s | peak-RSS 0.62GiB | min-avail 14490MiB | peak-load 0.99",
+    "steps": [
+      "bitmap-clippy\t0",
+      "bitmap-inventory-lib\t0",
+      "bitmap-resolve\t101",
+      "webp-resolve\t0",
+      "webp-audit\t0",
+      "webp-check\t0",
+      "jpeg-resolve\t101",
+      "recompress-resolve\t0",
+      "recompress-audit\t0",
+      "recompress-check\t0",
+      "jpeg-api-generate\t0",
+      "jpeg-api-check\t0"
+    ],
+    "remaining": "JPEG and bitmap fuzz locks retain 0.2.16; targeted updates required before compilation. Existing JPEG rustdoc ambiguous-link warnings retained.",
+    "webp_merge": "d5893295cc7562002017980b44753bf3237a89f3",
+    "webp_merged_head": "0a3d7fbd2f1de755cdb8e5ca67b68f4d52906635"
+  },
+  "fuzz_followup": {
+    "sources": {
+      "zenbitmaps": "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c",
+      "zenjpeg": "e0bb92b4d0751526b64269ca6dcf25240e91d8bc"
+    },
+    "initial_wrapper": "rc1 10s peak-RSS0.25GiB min-avail14626MiB peak-load0.62",
+    "bitmap": "paired resolution, portable audit, all fuzz bins PASS",
+    "jpeg_initial": "audit refused lz4_flex upgrade; no compile before review",
+    "jpeg_review": "complete 0.13.1 -> 0.14.0 entries identical to previously reviewed native bitmap-root transition; required by converter 0.2.17",
+    "jpeg_compile": "all fuzz bins PASS; inherited deprecated inventory policy call still warns",
+    "jpeg_wrapper": "rc0 7s peak-RSS0.58GiB min-avail14766MiB peak-load0.50",
+    "landed": {
+      "zenjpeg": {
+        "head": "487c0b96430b3bf0c13b9f7ce2944726b2197dca",
+        "merge": "26cbe9b8c73c975762363c314ebbf7e888caa2db"
+      },
+      "zenbitmaps": {
+        "head": "428971aacddc1e20013d6e9be04817b284f31d25",
+        "merge": "595949e02e76ae85eff433f5fbe9d2e7b11751e4"
+      }
+    }
+  },
+  "native_media": {
+    "source": "cfd8734b715b376e688c74e9284b3668582a8259",
+    "pins": {
+      "avif_mp4": "94116d266299f347cfd10a75d440a5bc3b598d2c",
+      "ivf_webm": "403d46b9973a58b212def0602f4dd8cdee9560dc",
+      "ultrahdr": "7e9d296c9e037e626234c9f0e8673d48278f83f0"
+    },
+    "graph": "I/O lock unchanged. AV1 lock changes exactly six explicit source pins; all package versions and dependency lists unchanged. One shared core/pixel family; no unreviewed transitive changes. Initial automatic AV1 audit refusal retained before explicit review.",
+    "tests": {
+      "guide": 87,
+      "native_av1": 47,
+      "native_containers": 61,
+      "ignored": 0
+    },
+    "clippy": "PASS for exact guide targets, AV1 all-targets, and all three container all-targets",
+    "independent": "54 planar presentations pass float and deliberate-clipping controls; Gamma22 verification passes; exact transport model CSV unchanged",
+    "receipts": [
+      "run-heavy: done rc=1 10s | peak-RSS 0.28GiB | min-avail 15153MiB | peak-load 0.17",
+      "run-heavy: done rc=0 87s | peak-RSS 1.04GiB | min-avail 13772MiB | peak-load 0.96",
+      "run-heavy: done rc=0 7s | peak-RSS 0.30GiB | min-avail 14827MiB | peak-load 0.76"
+    ],
+    "scope": "Linux harness and container controls; native AVIF repository-specific optional-control regressions, full features/platforms and zenpipe application still require qualification."
+  },
+  "standalone_native": {
+    "avif_source": "dee1a361a9902beea3fd1b84df64f6e80666c080",
+    "serializer_fixture": "e5760d1c",
+    "pushed_receipt": "d8454a6f",
+    "avif": "21 media_session + 3 sansio PASS; strict Clippy PASS",
+    "serializer": "initial100/101 with resource-budget fixture failure; corrected101/101 and strict Clippy PASS; assertions/dimensions/oracles retained",
+    "imi_source": "6ab547aa3a5c8a6cb0d4702c340182fcef839d47",
+    "imi": "retained13 + codec_encode9 + codec_rows16 + pulse_one_shot1 PASS; strict library Clippy PASS; tested lock/receipt pushed as daa9c13d157ffd96fb252626ab075eef75c80a59",
+    "wrappers": {
+      "avif02-wrapper.log": "run-heavy: done rc=1 140s | peak-RSS 1.18GiB | min-avail 13699MiB | peak-load 1.93",
+      "avif02-remaining-wrapper.log": "run-heavy: done rc=101 43s | peak-RSS 0.86GiB | min-avail 14353MiB | peak-load 1.40",
+      "avif03-wrapper.log": "run-heavy: done rc=0 14s | peak-RSS 0.46GiB | min-avail 14613MiB | peak-load 0.78",
+      "imi-wrapper.log": "run-heavy: done rc=0 53s | peak-RSS 1.71GiB | min-avail 13670MiB | peak-load 1.15"
+    },
+    "scope": "Focused Linux contract qualification, not full features/platforms or memory bounds; all initial failures preserved."
+  },
+  "site_navigation_followup": {
+    "source": "7a26c718b096dfbbaf8ec9ea70751453f7b40161",
+    "reference": "eight-crate Rustdoc PASS",
+    "guide": "24 source tests and complete browser suite PASS",
+    "change": "wait for exact skip-link fragment before unchanged destination assertion",
+    "wrapper": "run-heavy: done rc=0 46s | peak-RSS 0.32GiB | min-avail 14258MiB | peak-load 1.18"
+  },
+  "jpeg_consumer_followthrough": {
+    "source": "47db53ed",
+    "consumer": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+    "graph": "PASS: exactly six intended source transitions, versions/dependency lists identical; actual metadata passes CI framework validator; all four shared crates from isolated export",
+    "graph_verifier_controls": "PASS",
+    "native": "48 passed; independent djpeg readback retained; strict all-target Clippy PASS",
+    "preflight": "5 passed; feature-enabled strict all-target Clippy PASS",
+    "receipts": [
+      "run-heavy: done rc=1 24s | peak-RSS 0.71GiB | min-avail 14432MiB | peak-load 0.79",
+      "run-heavy: done rc=0 2s | peak-RSS 0.32GiB | min-avail 15172MiB | peak-load 0.40"
+    ],
+    "failures_retained": "Native tests and Clippy passed; disk-floor guard stopped before preflight. An initial cleanup attempt preserved an unfamiliar compiler text diagnostic and refused a temporary metadata directory; first preflight launch also refused its disk floor. Confirmed inactive Cargo outputs were then deleted without archiving binaries. Same frozen source/lock passed remaining preflight gate.",
+    "limitations": "Focused Linux contract/oracle qualification; no throughput, total-memory or compile-time comparison claim. Wider HEIC/RAW, API and browser application profile remains separate."
+  },
+  "zenpipe_consumer_followthrough": {
+    "review": "https://github.com/imazen/zenpipe/pull/108",
+    "source": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+    "status": "draft; focused pipeline/native/checked-publication qualification passed; full profile still pending",
+    "receipt": "https://github.com/imazen/zenpipe/blob/e5cd3f9a8b849fc46ba7505fe73797ab0707bcab/benchmarks/optional_pipeline_pulse_2026-10-29.md"
+  }
+}

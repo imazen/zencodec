@@ -11,10 +11,16 @@ types (metadata, limits, format detection, color emission) at the root.
 
 ## Quick start
 
-```toml
-[dependencies]
-zencodec = "0.1.27"
-```
+This checkout prepares the unpublished 0.2 API. The examples below use that
+API, including Pulse. Use the repository's pinned example workspaces while the
+paired codec and zenpixels releases are being qualified; their root manifests
+keep one copy of the shared types. For the published API, see
+[the 0.1.27 documentation](https://docs.rs/zencodec/0.1.27/zencodec/).
+
+[Current generated reference](https://imazen.github.io/zencodec/reference.html)
+and [code-first examples](https://imazen.github.io/zencodec/code.html) show the
+repository signatures. [Release gates](docs/release-candidate.md) distinguish
+qualified paths from remaining integration work.
 
 zencodec defines the traits; a concrete codec crate (here `zenjpeg`) supplies the
 pixels. The three-layer `Config → Job → Encoder/Decoder` shape is identical across
@@ -134,11 +140,14 @@ Blanket impls generate the dyn API automatically — codec authors implement the
 
 ## Untrusted input: limits, cancellation, errors
 
-Two server-critical knobs — `ResourceLimits` and a cancellation `StopToken` — are
-attached to the **job**, not the config: `DecodeJob`/`EncodeJob` expose
-`.with_limits(limits)` and `.with_stop(token)` (both consume-and-return-`self`
-builders), so the per-request job carries them while the shared config stays
-immutable. Everything below is on the root: `use zencodec::{ResourceLimits, StopToken};`.
+Attach `ResourceLimits` and a `SharedPulse` to the **job** with
+`.with_limits(limits).with_pulse(pulse)`. The job retains its operation controls;
+the shared codec configuration stays unchanged. Pulse carries cancellation,
+progress and phase planning. Calls that only borrow the control accept
+`Option<&dyn Pulse>`: pass `None` unless you want additional per-call control.
+`None` never disables a job’s retained cancellation or mandatory limits. Jobs
+that retain controls use `SharedPulse`. The old `with_stop` method
+is a deprecated cancellation-only adapter.
 
 ### Constructing `ResourceLimits`
 
@@ -180,58 +189,66 @@ fallible `try_reserve` path on untrusted input, encoders the faster infallible `
 `for_untrusted_input()` presets `Fallible`. Override with
 `.with_prefer_fallible_allocations(AllocPreference::Fallible)`.
 
-### Constructing a cancellation `StopToken`
+### Start with cancellation, then add progress
 
-`StopToken` is re-exported from the [`almost-enough`](https://crates.io/crates/almost-enough)
-crate (`cargo add almost-enough`). Make a `Stopper` (cheap, `Clone`, 8 bytes), erase it
-into a `StopToken`, hold a clone of the `Stopper` to fire later from any thread:
+An existing cancellation source can participate through `StopOnly`. This example
+uses [`almost-enough`](https://crates.io/crates/almost-enough); keep the stopper to
+signal cancellation and give the job the owned pulse. A reporting pulse can later
+replace this adapter without changing the job call.
 
 ```rust,ignore
-use zencodec::StopToken;
+use zencodec::{SharedPulse, StopToken, how_far::StopOnly};
 
 let stopper = almost_enough::Stopper::new();
-let token = StopToken::new(stopper.clone()); // or: stopper.clone().into()
+let pulse = SharedPulse::new(StopOnly::new(StopToken::new(stopper.clone())));
 
 // Fire from a deadline / client-disconnect watcher — `cancel()` signals every clone:
 std::thread::spawn({
     let stopper = stopper.clone();
     move || { /* on timeout or disconnect: */ stopper.cancel(); }
 });
-// (For a no-op token when you don't need cancellation, use `zencodec::Unstoppable`.)
+// Use SharedPulse::default() for an owned no-op, or &zencodec::NoPulse for a call.
 ```
 
-### End-to-end: decode untrusted bytes with a limit + a stop token
+### End-to-end: decode with limits and Pulse
 
-`.with_limits()` and `.with_stop()` chain onto the job before you ask for the
-decoder. `probe()` (also on the job) is an O(header) parse — validate against the
-limits **before** the codec allocates pixels, then attach both to the real decode:
+`.with_limits()` and `.with_pulse()` chain onto the job before creating the
+decoder. A header probe lets the caller reject reported dimensions early; it does
+not establish complete metadata or a whole-operation memory bound. Attach the
+same controls to the probe and the decode:
 
 ```rust,ignore
 use std::borrow::Cow;
-use zencodec::{ResourceLimits, StopToken, CodecErrorExt};
+use zencodec::{ResourceLimits, SharedPulse, StopToken, how_far::StopOnly};
 use zencodec::decode::{DecoderConfig, DecodeJob, Decode};
 
 let limits = ResourceLimits::for_untrusted_input().with_max_memory(256 * 1024 * 1024);
 let stopper = almost_enough::Stopper::new();
-let token = StopToken::new(stopper.clone());
+let pulse = SharedPulse::new(StopOnly::new(StopToken::new(stopper.clone())));
 
-// 1. Probe the header and reject oversized inputs before any pixel allocation.
-let info = config.clone().job().probe(bytes)?;
+// 1. Reject reported dimensions before requesting decoded pixels.
+let info = config.clone().job()
+    .with_limits(limits)
+    .with_pulse(pulse.clone())
+    .probe(bytes)?;
 limits.check_image_info(&info)?; // -> Err(LimitExceeded) if too big
 
 // 2. Attach BOTH to the job, then decode. Order is free; `decoder()` consumes the job.
 let decoded = config.job()
     .with_limits(limits)
-    .with_stop(token)
+    .with_pulse(pulse)
     .decoder(Cow::Borrowed(bytes), &[])? // &[] = native pixel format
     .decode()?;
 let pixels = decoded.into_buffer();
 ```
 
-`.with_stop()` is honored only by codecs whose `DecodeCapabilities::stop()` is
-true; on others it is a silent no-op (the decode still completes correctly, just
-not interruptibly). `check_image_info` only sees what the header reports — keep
-the `max_memory_bytes` cap so a codec that under-reports still can't over-allocate.
+Cancellation remains cooperative: check the selected codec's qualified behavior
+and checkpoint granularity. Pulse retention alone does not establish progress
+reporting or a deadline bound. `check_image_info` checks reported facts, and
+`max_memory_bytes` requires codec enforcement; neither bounds arbitrary native,
+source or caller allocations. Checked operation policies refuse an unknown
+workspace bound when a hard bound is required. See [the Pulse migration](docs/pulse-migration.md)
+and [row-driver admission](docs/row-replay-driver.md).
 
 ### Classifying a codec's error for an HTTP response
 
@@ -267,10 +284,10 @@ use zencodec::{
 // use `e.error_category()` and match `Some(..)` / `None` instead. The origin-first
 // shape lets you route on the outer arm (`Image` / `Request` / `Resource` /
 // `Stopped`) and only destructure when a sub-kind changes the answer.
-let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]) {
+let http = match config.job().with_pulse(pulse).decoder(Cow::Borrowed(bytes), &[]) {
     Ok(_decoder) => { /* _decoder.decode()? */ 200 }
     Err(e) => match e.category() {
-        // Stopped via its Stop token.
+        // Stopped through the operation pulse.
         ErrorCategory::Stopped(StopReason::Cancelled) => 499, // client went away
         ErrorCategory::Stopped(StopReason::TimedOut)  => 504,
         // A configured resource cap was hit.
@@ -470,7 +487,20 @@ let no_thumb = decoded_meta.filtered(&policy);
 
 `MetadataFields` encapsulates EXIF in an `ExifPolicy` with twelve keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `time_offsets`, `camera`, `device_ids`, `camera_owner`, `image_unique_id`, `color`, `other` — and ICC retention through `IccRetention`. EXIF passes through byte-unchanged when no category is dropped and its orientation agrees with `Metadata::orientation`; filtering may otherwise rewrite it, including reconciling orientation. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8) and Orientation (`set_orientation`, insert-or-replace).
 
-**Privacy is an explicit choice — enforced at compile time.** Retention is a *transient* decision made when you hand metadata to the encoder, not a field stored on `Metadata`. The blessed path is `job.with_metadata_policy(meta, MetadataPolicy::Web)` (privacy-safe: strips camera/GPS, keeps orientation + rights) or `PreserveExact` (verbatim). The old unguarded `with_metadata(meta)` still works but is `#[deprecated]` — the compiler **warns** at every call site that picks no policy, so you can't propagate metadata without choosing retention by accident. It's a compile-time nudge, not a semver break: existing code keeps compiling, but the warning points you at the safe call. The filter runs *before* the codec sees the record, so a codec only ever receives exactly what the policy kept. The carried bytes stay untouched until then, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
+**Choose metadata retention explicitly.**
+`job.with_metadata_policy(meta, MetadataPolicy::Web)` filters the supplied metadata
+before passing it to the codec. `Web` drops XMP and disallowed EXIF fields while
+retaining attribution, orientation and color signaling. Attribution can contain
+names or contact details; retained ICC bytes are opaque. This is not a guarantee
+that a whole container contains no PII. `ColorAndRotation` removes attribution
+but still retains the color signaling needed to interpret pixels.
+
+The unfiltered `with_metadata` method is deprecated. Its compiler warning is a
+migration aid, not enforcement: callers can still invoke it. Likewise,
+`PreserveExact` asks the compatibility filter to keep metadata; this setter cannot
+prove the destination codec will carry every field. Required retention needs a
+checked executing adapter with suitable evidence, or an explicit refusal. See
+[metadata/transcoding policy](docs/policy-transcoding.md).
 
 To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).
 
@@ -495,14 +525,14 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 | Module | Contents |
 |--------|----------|
 | `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `AnimationFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, `best_encode_format`, dyn dispatch traits (`DynEncoderConfig`, `DynEncodeJob`, `DynEncoder`, `DynAnimationFrameEncoder`) |
-| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, sans-I/O `IncrementalDecode` (`Input`, `Request`, `Event`, `Progress`, `StepError`, `Fused`, `erase_incremental`, `DynIncrementalDecoder`), `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, sans-I/O `IncrementalDecode` (`Input`, `InputRequest`, `Event`, `Progress`, `StepError`, `Fused`, `erase_incremental`, `DynIncrementalDecoder`), `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
 | `zencodec::source` | `ReadAt` (random-access source: `read_at`, batched `read_many_at`, `as_slice`), object-safe `DynReadAt`, `SliceReadAt`, `ReadAtShim`, `SourceError`, `AccessPattern` |
 | `zencodec::estimate` | `ResourceEstimate` (predicted peak memory / wall + CPU time / core-scaling, all `Option`), `ComputeEnvironment` (cores, RAM, `SimdTier`), `ImageCharacteristics`, `SimdTier`, `ThreadingInformation` — codec-agnostic resource estimation, surfaced via `EncoderConfig::estimate_encode_resources` / `DecoderConfig::estimate_decode_resources` |
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
 | `zencodec::prelude` | One-import bundle of every encode/decode trait (generic + dyn) |
-| root | `CodecSet` / `CodecSetError` (multi-codec registry: registration-derived detection, format-keyed encode, shareable app-wide), `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
+| root | `CodecSet` / `CodecSetError` (multi-codec registry: registration-derived detection, format-keyed encode, shareable app-wide), `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `Pulse`, `SharedPulse`, `NoPulse` (legacy `StopToken` / `Unstoppable`) |
 
 The full API is always available. The only feature, `std`, lets
 `ErrorCategory::Io` carry a `std::io::ErrorKind`.

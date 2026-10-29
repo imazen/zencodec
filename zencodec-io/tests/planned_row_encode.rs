@@ -6,6 +6,7 @@ use std::{
     io,
     sync::{Arc, Mutex},
 };
+use zencodec::enough::Stop as _;
 use zencodec::{
     At, Cicp, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
     encode::{
@@ -26,6 +27,7 @@ fn event(events: &Events, name: &'static str) {
 #[derive(Clone)]
 struct Job {
     events: Events,
+    pulse: SharedPulse,
     plan: EncodePlan,
     drift: bool,
     fail_start: bool,
@@ -35,7 +37,8 @@ impl EncodeJob for Job {
     type Error = io::Error;
     type Enc = Enc;
     type AnimationFrameEnc = ();
-    fn with_pulse(self, _: SharedPulse) -> Self {
+    fn with_pulse(mut self, pulse: SharedPulse) -> Self {
+        self.pulse = pulse;
         self
     }
     fn with_limits(self, _: ResourceLimits) -> Self {
@@ -56,6 +59,7 @@ impl EncodeJob for Job {
         event(&self.events, "construct");
         Ok(Enc {
             events: self.events,
+            pulse: self.pulse,
             plan: self.plan,
             drift: self.drift,
             fail_start: self.fail_start,
@@ -99,14 +103,15 @@ fn run_job(
             writer,
             resolver,
             options,
-            pulse,
+            Some(pulse),
         )
     } else {
-        row_encode::encode_job(job, rows, writer, resolver, options, pulse)
+        row_encode::encode_job(job, rows, writer, resolver, options, Some(pulse))
     }
 }
 struct Enc {
     events: Events,
+    pulse: SharedPulse,
     plan: EncodePlan,
     drift: bool,
     fail_start: bool,
@@ -134,6 +139,9 @@ impl Encoder for Enc {
         &mut self,
         declaration: &EncodeDeclaration<'_>,
     ) -> Result<EncodePlan, Self::Error> {
+        self.pulse
+            .check()
+            .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "start");
         assert_eq!(
             declaration.color,
@@ -158,6 +166,9 @@ impl Encoder for Enc {
         self.pending.drain(..n);
     }
     fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Self::Error> {
+        self.pulse
+            .check()
+            .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "push");
         assert_eq!(
             pixels.color_context().map(Arc::as_ref),
@@ -185,6 +196,9 @@ impl Encoder for Enc {
         ))
     }
     fn finish(mut self) -> Result<EncodeOutput, Self::Error> {
+        self.pulse
+            .check()
+            .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "finish");
         self.pending.push(90);
         Ok(EncodeOutput::new(self.pending, ImageFormat::Unknown))
@@ -193,6 +207,7 @@ impl Encoder for Enc {
 struct Rows {
     events: Events,
     description: Arc<Mutex<Description>>,
+    require_absent_pulse: bool,
 }
 impl Source for Rows {
     type Error = io::Error;
@@ -203,8 +218,11 @@ impl Source for Rows {
         &mut self,
         _: u32,
         mut pixels: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
+        if self.require_absent_pulse {
+            assert!(pulse.is_none(), "source keeps the absent per-call control");
+        }
         event(&self.events, "read");
         for row in 0..pixels.rows() {
             pixels.row_mut(row).fill(7);
@@ -231,7 +249,7 @@ impl<F: FnMut()> PolicyResolver for Resolver<F> {
     type Error = std::convert::Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>> {
         (self.0)();
-        let Question::OutputSchedule { choices, .. } = question else {
+        let Question::EncodeRoute { choices, .. } = question else {
             panic!("unexpected question")
         };
         Ok(Decision::Choose(choices.first().unwrap().id()))
@@ -256,6 +274,7 @@ impl Setup {
     fn job(&self) -> Job {
         Job {
             events: self.events.clone(),
+            pulse: SharedPulse::default(),
             plan: EncodePlan::rows(OutputTiming::streaming(0)),
             drift: false,
             fail_start: false,
@@ -266,6 +285,7 @@ impl Setup {
         Rows {
             events: self.events.clone(),
             description: self.description.clone(),
+            require_absent_pulse: false,
         }
     }
     fn writer(&self) -> Writer {
@@ -276,6 +296,98 @@ impl Setup {
     }
     fn options(&self) -> Options {
         Options::new(StorageBudget::new(4096, 16), 4096)
+    }
+}
+
+#[test]
+fn no_per_call_pulse_keeps_retained_job_cancellation_on_typed_and_erased_routes() {
+    for erased in [false, true] {
+        for cancelled in [false, true] {
+            let s = Setup::new();
+            let stopper = almost_enough::Stopper::new();
+            let retained = SharedPulse::new(zencodec::how_far::StopOnly::new(
+                zencodec::StopToken::new(stopper.clone()),
+            ));
+            let job = s.job().with_pulse(retained);
+            let policy = BoundPolicy::new(
+                PolicySet::new(),
+                Resolver(|| {
+                    if cancelled {
+                        stopper.cancel();
+                    }
+                }),
+            );
+            let storage = StorageBudget::new(4096, 16);
+            let options = Options::new(storage.clone(), 4096);
+            let mut rows = s.rows();
+            rows.require_absent_pulse = true;
+            let result = if erased {
+                row_encode::encode_dyn_job(
+                    Config(job).dyn_job(),
+                    rows,
+                    s.writer(),
+                    policy,
+                    options,
+                    None,
+                )
+            } else {
+                row_encode::encode_job(job, rows, s.writer(), policy, options, None)
+            };
+            if cancelled {
+                let error = result.unwrap_err();
+                assert_eq!(error.error().stage, Stage::Start);
+                assert_eq!(error.error().emitted, 0);
+                assert_eq!(
+                    zencodec::find_cause::<zencodec::CodecError>(&error)
+                        .expect("retained cancellation keeps its typed cause")
+                        .category(),
+                    zencodec::ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
+                );
+                assert_eq!(*s.events.lock().unwrap(), ["plan", "construct"]);
+                assert!(s.bytes.lock().unwrap().is_empty());
+            } else {
+                assert_eq!(result.unwrap().emitted, 14);
+                assert_eq!(
+                    *s.bytes.lock().unwrap(),
+                    [80, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 90]
+                );
+            }
+            assert_eq!(storage.reserved_bytes(), 0);
+            assert_eq!(storage.reserved_objects(), 0);
+        }
+    }
+}
+
+#[test]
+fn no_per_call_pulse_keeps_strict_workspace_admission_before_planning() {
+    use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
+    for erased in [false, true] {
+        let s = Setup::new();
+        let policy = PolicySet::new().with_workspace_limit(0);
+        let result = if erased {
+            row_encode::encode_dyn_job(
+                Config(s.job()).dyn_job(),
+                s.rows(),
+                s.writer(),
+                policy,
+                s.options(),
+                None,
+            )
+        } else {
+            row_encode::encode_job(s.job(), s.rows(), s.writer(), policy, s.options(), None)
+        };
+        let error = result.unwrap_err();
+        assert_eq!(error.error().stage, Stage::Policy);
+        assert_eq!(error.error().emitted, 0);
+        assert!(s.events.lock().unwrap().is_empty());
+        assert!(s.bytes.lock().unwrap().is_empty());
+        assert_eq!(
+            zencodec::find_cause::<UnmetRequirements>(&error)
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+        );
     }
 }
 
@@ -477,7 +589,7 @@ fn erased_destination_preserves_negotiated_patches_and_forward_refusal() {
         s.writer(),
         PolicySet::new(),
         s.options(),
-        &zencodec::NoPulse,
+        Some(&zencodec::NoPulse),
     )
     .unwrap_err();
     assert_eq!(error.error().stage, Stage::Prepare);
@@ -495,7 +607,7 @@ fn erased_destination_preserves_negotiated_patches_and_forward_refusal() {
         zencodec_io::destination::SeekBack::new(&mut writer).unwrap(),
         PolicySet::new(),
         s.options(),
-        &zencodec::NoPulse,
+        Some(&zencodec::NoPulse),
     )
     .unwrap();
     assert_eq!(completed.emitted, 14);
@@ -522,7 +634,7 @@ fn registry_job_to_writer<W: io::Write>(
         writer,
         PolicySet::new(),
         Options::new(storage, 4096),
-        pulse,
+        Some(pulse),
     )?)
 }
 
@@ -554,3 +666,6 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
 // Additive draft controls: reuse the existing recording encoders and assertions.
 #[path = "planned_row_encode/exact_depth.rs"]
 mod exact_depth_tests;
+
+#[path = "planned_row_encode/replay.rs"]
+mod replay_tests;

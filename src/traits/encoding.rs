@@ -9,7 +9,9 @@ use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, Unsuppor
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use super::BoxedError;
-use super::dyn_encoding::{AnimationFrameEncoderShim, DynAnimationFrameEncoder, DynEncoder};
+use super::dyn_encoding::{
+    AnimationFrameEncoderShim, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
+};
 use super::encoder::{AnimationFrameEncoder, Encoder};
 
 // ===========================================================================
@@ -619,6 +621,30 @@ pub trait EncodeJob: Sized {
     fn animation_frame_encoder(self) -> Result<Self::AnimationFrameEnc, Self::Error>;
 
     // --- Type-erased convenience methods ---
+
+    /// Erase this configured job without cloning it or creating an encoder.
+    ///
+    /// Use this after codec-specific job settings (for example scratch storage)
+    /// and before passing the job to a codec-agnostic driver. Any retained plan
+    /// and job-owned resources move into the existing shared adapter unchanged.
+    /// Erasure performs no planning, validation or native startup; later calls
+    /// preserve their normal errors and admission requirements.
+    ///
+    /// The returned job can move to another thread. The job must own its data
+    /// and implement `Send`; borrowed or non-`Send` jobs can use typed drivers.
+    /// Codecs without animation use `AnimationFrameEnc = ()` as usual.
+    /// This allocates one adapter box and does not clone codec configuration.
+    ///
+    /// Unlike [`dyn_encoder`](Self::dyn_encoder), this leaves encoder creation
+    /// to the driver, after its admission checks.
+    fn into_dyn_job(self) -> Box<dyn DynEncodeJob + Send>
+    where
+        Self: Send + 'static,
+        Self::Enc: Encoder + Send,
+        Self::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        super::dyn_encoding::erase_send_job(self)
+    }
 
     /// Create a type-erased one-shot encoder.
     ///

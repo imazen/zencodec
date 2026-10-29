@@ -123,7 +123,8 @@ impl PackedImageOwner for Projected {
 }
 
 fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
-    pulse.check()
+    pulse
+        .check()
         .map_err(|reason| At::wrap(CodecError::new(None, reason.into())).into())
 }
 
@@ -134,12 +135,14 @@ fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
 /// Auxiliary registration must be explicitly established by its adapter;
 /// dimensions alone do not authorize projection. Other grids require their own
 /// geometry representation and resampling mechanism before they can be offered.
+/// `None` adds no per-call control; geometry and storage checks still apply.
 pub fn project(
     image: &ImageOutput,
     region: Option<Rect>,
     storage: &StorageBudget,
-    pulse: &dyn zencodec::Pulse,
+    pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<ImageOutput, Cause> {
+    let pulse = pulse.unwrap_or(&zencodec::NoPulse);
     check(pulse)?;
     let source = image.interpretation();
     if source.composition != Some(Composition::Composited) {

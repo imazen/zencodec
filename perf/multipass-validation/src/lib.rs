@@ -109,7 +109,7 @@ pub trait PassSource {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -132,7 +132,7 @@ impl PassSource for NoSource {
         &mut self,
         _: u32,
         _: PixelSliceMut<'_>,
-        _: &dyn zencodec::Pulse,
+        _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         match *self {}
     }
@@ -238,7 +238,7 @@ pub trait MultiPassEncoder: Sized {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, Self::Error>;
     /// Bytes ready to send, as `Encoder::pending_output`.
     fn pending_output(&self) -> &[u8];
@@ -287,7 +287,7 @@ impl<E: zencodec::encode::Encoder> MultiPassEncoder for E {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        pulse: &dyn zencodec::Pulse,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<PassProgress, E::Error> {
         zencodec::encode::Encoder::pull_rows(self, rows, pulse)
     }
@@ -677,7 +677,8 @@ struct Filler<'a, S: PassSource> {
     trace: Trace,
     failure: Option<(Stage, Cause)>,
     fills: u32,
-    stop: &'a dyn zencodec::Pulse,
+    stop: Option<&'a dyn zencodec::Pulse>,
+    control: &'a dyn zencodec::Pulse,
 }
 
 impl<S: PassSource> Filler<'_, S> {
@@ -733,7 +734,7 @@ impl<S: PassSource> Filler<'_, S> {
         if final_pass {
             // The pass count is resolved: the denominator is exact from here.
             let rows = u64::from(pass + 1) * u64::from(self.desc.height);
-            let _ = self.stop.set_total(Total::Exact(rows));
+            let _ = self.control.set_total(Total::Exact(rows));
         }
         Ok(())
     }
@@ -746,7 +747,7 @@ impl<S: PassSource> Filler<'_, S> {
             mut rows,
             ..
         } = req;
-        check(self.stop).map_err(|e| (Stage::Read, e))?;
+        check(self.control).map_err(|e| (Stage::Read, e))?;
         if self.pass != Some(pass) {
             self.begin_pass(pass, final_pass)?;
         } else if final_pass != self.final_started {
@@ -796,7 +797,7 @@ impl<S: PassSource> Filler<'_, S> {
             self.source
                 .read_rows(first, reborrow, self.stop)
                 .map_err(|e| (Stage::Read, Box::new(e) as Cause))?;
-            check(self.stop).map_err(|e| (Stage::Read, e))?;
+            check(self.control).map_err(|e| (Stage::Read, e))?;
             self.validate(pass).map_err(|e| (Stage::Read, e))?;
             self.trace.source_bytes += (self.row_bytes * count as usize) as u64;
             ReadFrom::Source
@@ -824,7 +825,7 @@ impl<S: PassSource> Filler<'_, S> {
                 (Staging::None, _) => {}
             }
             if let Some(exact) = self.desc.exact_depth {
-                check(self.stop).map_err(|e| (Stage::Read, e))?;
+                check(self.control).map_err(|e| (Stage::Read, e))?;
                 // Every supplied strip must satisfy the source declaration,
                 // including rows replayed from private staging. Keep the whole
                 // request unaccepted when any active sample contradicts it.
@@ -868,7 +869,7 @@ impl<S: PassSource> Filler<'_, S> {
             self.validate(pass).map_err(|e| (Stage::Read, e))?;
         }
         // Progress is rows supplied to the encoder, never a cancellation check.
-        self.stop.advance(u64::from(count));
+        self.control.advance(u64::from(count));
         self.next_row = first + count;
         self.trace.reads.push(ReadRecord {
             pass,
@@ -964,7 +965,7 @@ pub fn encode_passes<E, S, D, R, Q>(
     resolver: R,
     replay: Q,
     options: Options,
-    stop: &dyn zencodec::Pulse,
+    stop: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>>
 where
     E: MultiPassEncoder,
@@ -1001,7 +1002,7 @@ fn encode_inner<E, S, D, R, Q>(
     mut resolver: R,
     mut replay: Q,
     mut options: Options,
-    stop: &dyn zencodec::Pulse,
+    stop: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>>
 where
     E: MultiPassEncoder,
@@ -1010,6 +1011,7 @@ where
     R: OperationPolicy,
     Q: ReplayResolver,
 {
+    let local_stop = stop.unwrap_or(&zencodec::NoPulse);
     let mut boundary = Stage::Prepare;
     let mut pass = None;
     let mut route = None;
@@ -1018,7 +1020,7 @@ where
     let mut report = OperationReport::default();
     let mut trace = Trace::default();
     let run = || -> Result<OutputSchedule, Cause> {
-        check(stop)?;
+        check(local_stop)?;
         let desc = source.description();
         let kind = source.replay();
         if desc.width == 0 || desc.height == 0 {
@@ -1049,9 +1051,9 @@ where
         if plan.passes.min() == 0 || plan.passes.max().is_some_and(|max| max < plan.passes.min()) {
             return Err(Refusal::InvalidPlan.into());
         }
-        check(stop)?;
+        check(local_stop)?;
         // Rows supplied to the encoder: exact only when the pass count is.
-        let _ = stop.set_total(match plan.passes.max() {
+        let _ = local_stop.set_total(match plan.passes.max() {
             Some(max) if max == plan.passes.min() => {
                 Total::Exact(u64::from(max) * u64::from(desc.height))
             }
@@ -1237,12 +1239,13 @@ where
             failure: None,
             fills: 0,
             stop,
+            control: local_stop,
         };
         let mut staged = Vec::new();
         let mut produced = 0u64;
         let result = (|| -> Result<(), Cause> {
             loop {
-                check(stop)?;
+                check(local_stop)?;
                 boundary = Stage::Encode;
                 let pending = encoder.pending_output();
                 // A final-pass declaration is checked before any byte leaves
@@ -1259,7 +1262,7 @@ where
                 count_output(&mut produced, pending.len(), options.max_output_bytes)?;
                 if schedule == OutputSchedule::Live {
                     boundary = Stage::Write;
-                    write_all(&mut writer, pending, &mut emitted, stop)?;
+                    write_all(&mut writer, pending, &mut emitted, local_stop)?;
                 } else {
                     stage_output(pending, &options.storage, &mut staged)?;
                 }
@@ -1303,7 +1306,7 @@ where
                             return Err(cause);
                         }
                         // A native stop is reported as the caller's stop reason.
-                        check(stop)?;
+                        check(local_stop)?;
                         return Err(Box::new(e));
                     }
                 }
@@ -1331,9 +1334,9 @@ where
         drop(source);
         drop(desc);
         boundary = Stage::Finish;
-        check(stop)?;
+        check(local_stop)?;
         let finished = encoder.finish_output()?;
-        check(stop)?;
+        check(local_stop)?;
         finished.validate(produced)?;
         if !finished.patches.is_empty() && (!writer.can_patch() || !plan.timing.patches_at_finish())
         {
@@ -1344,23 +1347,23 @@ where
         count_output(&mut produced, tail.len(), options.max_output_bytes)?;
         boundary = Stage::Write;
         for bytes in staged.drain(..) {
-            write_all(&mut writer, bytes.as_slice(), &mut emitted, stop)?;
+            write_all(&mut writer, bytes.as_slice(), &mut emitted, local_stop)?;
         }
-        write_all(&mut writer, tail.data(), &mut emitted, stop)?;
+        write_all(&mut writer, tail.data(), &mut emitted, local_stop)?;
         if !patches.is_empty() {
             boundary = Stage::Patch;
             for patch in patches {
-                check(stop)?;
+                check(local_stop)?;
                 writer.position(patch.offset)?;
-                write_all(&mut writer, &patch.bytes, &mut patched_bytes, stop)?;
+                write_all(&mut writer, &patch.bytes, &mut patched_bytes, local_stop)?;
             }
-            check(stop)?;
+            check(local_stop)?;
             writer.position(produced)?;
         }
         boundary = Stage::Write;
-        check(stop)?;
+        check(local_stop)?;
         writer.flush()?;
-        check(stop)?;
+        check(local_stop)?;
         Ok(schedule)
     };
     match run() {

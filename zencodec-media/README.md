@@ -3,13 +3,18 @@
 Shared packets, tracks, frame ownership, codec sessions and sans-I/O container
 traits. `no_std + alloc` by default; this review crate is not yet published.
 
+Borrowed control arguments take `Option<&dyn zencodec::Pulse>`. Pass `None`
+to add no per-call control. Retained job controls, resource limits and required
+policy checks still apply. Forwarding adapters preserve the supplied option;
+`Some(pulse)` retains reporting, phases and sharing as well as cancellation.
+
 With `std`, `staged::StagedEncode::new(encoder, muxer, destination, resolver,
-storage, stop)` provides finite video encoding: push frames, then finish. It
+storage, pulse)` provides finite video encoding: push frames, then finish. It
 holds conversion through policy and stages compressed payloads, releasing the
 encoder before the first final-destination write. It retains decision history on success
 and failure. The managed payload budget excludes native workspace and
 caller-owned pictures; this is not a live streaming operation.
-Explicit `with_staging(..., Staging::disk(file, limits, replay_budget)?, stop)`
+Explicit `with_staging(..., Staging::disk(file, limits, replay_budget)?, pulse)`
 uses caller-owned private scratch with disk/index caps and admitted replay.
 Spool writes can block while the encoder is alive; policy sees the chosen store.
 The caller controls scratch permissions and deletion. Replay failures retain
@@ -17,7 +22,7 @@ confirmed destination appends, including when some output already escaped.
 
 For existing encoded packets, `output` provides checked synchronous output:
 
-- `Output::new(muxer, Forward(writer), tracks, stop)` prepares and publishes,
+- `Output::new(muxer, Forward(writer), tracks, pulse)` prepares and publishes,
   requiring exact packet timing. Send packets, then consume it with `finish`.
 - `PreparedOutput::new(...)` retains preparation without writing; `publish`
   consumes it after the caller's policy decision.

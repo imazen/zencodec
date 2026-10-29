@@ -148,7 +148,7 @@ fn execute_prepared<E: Encoder, R: zencodec::operation::OperationPolicy>(
             &mut self,
             first: u32,
             mut rows: zenpixels::PixelSliceMut<'_>,
-            _: &dyn zencodec::Pulse,
+            _: Option<&dyn zencodec::Pulse>,
         ) -> Result<(), Self::Error> {
             assert_eq!(first, self.calls.get());
             for y in 0..rows.rows() {
@@ -191,7 +191,7 @@ fn execute_prepared<E: Encoder, R: zencodec::operation::OperationPolicy>(
             zencodec::storage::StorageBudget::new(1 << 20, 1024),
             1 << 20,
         ),
-        &zencodec::how_far::NoPulse,
+        Some(&zencodec::how_far::NoPulse),
     )?;
     Ok((
         completed.emitted,

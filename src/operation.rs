@@ -19,6 +19,7 @@ mod binding;
 mod collection;
 mod conversion;
 mod decoding;
+mod encoding_route;
 mod frame;
 mod image;
 mod policy;
@@ -28,6 +29,10 @@ mod transition;
 pub use binding::{BoundPolicy, OperationPolicy};
 pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
 pub use conversion::{ImageConversionOffer, resolve_image_conversion};
+pub use encoding_route::{
+    EncodeEvidence, EncodeRouteFacts, EncodeRouteOffer, InputAcquisition, ReplayEvidence,
+    resolve_encode_route,
+};
 pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
 pub use image::{ImageFacts, resolve_image};
 pub use policy::{

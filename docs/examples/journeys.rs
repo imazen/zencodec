@@ -120,6 +120,7 @@ mod slice_example {
         let mut decoder = QoiDecoderConfig::new().job().dyn_incremental_decoder(&[])?;
         let mut sink = CollectSink::new();
         // ANCHOR: slice
+        // None adds no per-call control; the decoder retains its job control.
         drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)?;
         // END: slice
         Ok(sink)
@@ -140,6 +141,7 @@ mod positioned_example {
         let mut decoder = QoiDecoderConfig::new().job().dyn_incremental_decoder(&[])?;
         let mut sink = CollectSink::new();
         // ANCHOR: positioned
+        // Pass Some(pulse) to add a full borrowed reporting/cancellation control.
         drive_from_read_at(
             decoder.as_mut(),
             bytes,
@@ -377,6 +379,7 @@ mod codecset_incremental_example {
         let mut sink = CollectSink::new();
         // ANCHOR: codecset_incremental
         let mut decoder = codecs.incremental_decoder(&[]);
+        // None preserves any SharedPulse already configured on the set's jobs.
         drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)?;
         // END: codecset_incremental
         // Detection happens as the driver supplies the initial bytes.

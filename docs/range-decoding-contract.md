@@ -51,7 +51,7 @@ pub trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Take bytes from the front of `input` and advance by one event.
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: Option<&dyn Pulse>)
         -> Result<Progress, StepError<Self::Error>>;
 
     /// What the decoder needs, valid after a step returned `Event::Need`.

@@ -117,8 +117,9 @@ impl IncrementalDecode for Burst {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<Error>> {
+        let stop = stop.unwrap_or(&zencodec::NoPulse);
         stop.check().map_err(StepError::Cancelled)?;
         if !self.started {
             if input.bytes.is_empty() {

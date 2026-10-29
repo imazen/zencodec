@@ -1,0 +1,24 @@
+{
+  "source": "99fa6e0ea15c91f8f57e9e611523a04268a0d7d7",
+  "integration_revision": "e5cd3f9a8b849fc46ba7505fe73797ab0707bcab",
+  "command": "just docs-site-browser-check 3548",
+  "scope": "immutable export; unchanged source and browser assertions",
+  "result": "PASS",
+  "source_tests": 24,
+  "browser": "complete migration, checked API, code-first and main guide suites",
+  "run_heavy": {
+    "memory_cap": "3G",
+    "jobs": 2,
+    "timeout_seconds": 180,
+    "rc": 0,
+    "elapsed_seconds": 40,
+    "peak_rss_gib": 0.3,
+    "min_available_mib": 14247,
+    "peak_load": 1.05
+  },
+  "prior_failure": "Documentation CI 40814641931: integration API snapshot revision differed from compiled guide dependency; regenerated declarations were identical",
+  "limitations": [
+    "No new Rust execution: native JPEG guide tests previously qualified at 47db53ed/27889f3e.",
+    "Does not qualify full-feature zenpipe HEIC/RAW graph."
+  ]
+}

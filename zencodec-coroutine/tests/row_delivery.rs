@@ -123,7 +123,7 @@ fn large_native_batch_yields_one_strided_slot_per_step_even_while_finishing() {
                     .step(
                         Input::new(0, if next_y == 0 { &[] } else { &[1, 2] }),
                         &mut sink,
-                        &NoPulse,
+                        Some(&NoPulse),
                     )
                     .unwrap();
                 let Event::Rows { meta, rows } = progress.event else {
@@ -148,7 +148,7 @@ fn large_native_batch_yields_one_strided_slot_per_step_even_while_finishing() {
             }
             assert!(matches!(
                 decoder
-                    .step(Input::new(0, &[]), &mut sink, &NoPulse)
+                    .step(Input::new(0, &[]), &mut sink, Some(&NoPulse))
                     .unwrap()
                     .event,
                 Event::Done(_)
@@ -170,20 +170,20 @@ fn cancellation_between_partial_deliveries_is_terminal() {
         let mut decoder = decoder(false, finishing);
         let mut sink = OneSlot::new();
         decoder
-            .step(Input::new(0, &[]), &mut sink, &NoPulse)
+            .step(Input::new(0, &[]), &mut sink, Some(&NoPulse))
             .unwrap();
         sink.pending = false;
         assert!(matches!(
             decoder.step(
                 Input::new(0, &[]),
                 &mut sink,
-                &zencodec::how_far::StopOnly::new(Timeout)
+                Some(&zencodec::how_far::StopOnly::new(Timeout))
             ),
             Err(StepError::Cancelled(enough::StopReason::TimedOut))
         ));
         assert!(!sink.pending && !sink.finished);
         assert!(matches!(
-            decoder.step(Input::new(0, &[]), &mut sink, &NoPulse),
+            decoder.step(Input::new(0, &[]), &mut sink, Some(&NoPulse)),
             Err(StepError::Finished)
         ));
     }

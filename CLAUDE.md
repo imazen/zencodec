@@ -246,6 +246,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Guide browser CI on `3739a49a` failed an immediate URL assertion after the
+  focused skip link received Enter. The check now waits for the exact
+  `#journeys` fragment before retaining the original destination assertion.
+  Matching Rustdoc, all 24 guide source checks and the complete browser suite
+  pass on `7a26c718`; the original CI failure remains recorded.
+
 - Fixed in the multipass experiment (2026-10-28): a short source stride could
   consume input before subtraction panicked; malformed file requests could
   change destination samples before refusal. Source validation now precedes
@@ -652,3 +658,30 @@ refuse before any planning event or managed allocation and retain named
 The code-catalog generator also assumed every workspace used its local target
 folder. It now reads Cargo metadata's target directory, honoring configured
 and environment overrides. Regenerated catalogs and the site source checks pass.
+
+## Replay fixture portability (2026-10-28)
+
+CI on Windows x64/ARM64 found the new raw-disk replay fixture assumed `HOME`.
+It now also accepts `USERPROFILE` and closes its owned file before removal.
+The three raw-disk behavioral checks remain enabled with unchanged assertions.
+Windows runtime qualification awaits the CI rerun; Linux controls already passed.
+
+## Full Rustdoc reference links (2026-10-28)
+
+The new all-feature eight-crate HTML reference exposed seven unresolved short
+links in media output module documentation. They now use explicit
+`crate::output` targets; signatures and behavior are unchanged. Strict Rustdoc
+warnings remain enabled; final reference generation verifies the correction.
+
+## Fixed reference navigation overflow (2026-10-28)
+
+Adding the Rustdoc reference link exposed a 768 px header overflow. The main
+navigation now wraps at all widths and the header grows with its contents.
+The existing browser no-overflow assertions remain unchanged.
+
+## Known Bugs: integration guide identity (2026-10-29, fixed)
+
+Repinning the native JPEG harness to zenpipe e5cd3f9a without recapturing
+docs/integration-api.json made the guide build refuse its stale revision.
+Recapture from the pinned commit preserves the signatures and identity guard;
+the full source/browser gates pass. Receipt: benchmarks/guide_snapshot_2026-10-29.json.

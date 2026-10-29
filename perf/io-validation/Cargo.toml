@@ -10,7 +10,7 @@ exclude = ["vendor/zenbitmaps"]
 resolver = "3"
 
 [dependencies]
-zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
+zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["tokio"] }
 zencodec-media = { path = "../../zencodec-media" }
 zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
@@ -32,6 +32,10 @@ kamadak-exif = "0.6.1"
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
 zencodec = { path = "../.." }
+zencodec-io = { path = "../../zencodec-io" }
+zencodec-media = { path = "../../zencodec-media" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
+zenmeta = { path = "../../zenmeta" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

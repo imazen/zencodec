@@ -79,8 +79,9 @@ pub fn resolve_output_schedule<R: OperationPolicy + ?Sized>(
     offers: &[OutputScheduleOffer],
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     // A contradictory offer set is refused as a whole; index identity is kept.
     let offers = if offers
         .iter()
@@ -120,7 +121,7 @@ mod tests {
                 &[offer],
                 &mut { required },
                 required,
-                &crate::how_far::NoPulse,
+                Some(&crate::how_far::NoPulse),
             )
             .unwrap_err();
             assert_eq!(error.error().record().code, DecisionCode::Declined);
@@ -130,7 +131,7 @@ mod tests {
                 &[offer],
                 &mut { required },
                 required,
-                &crate::how_far::NoPulse,
+                Some(&crate::how_far::NoPulse),
             )
             .unwrap();
             assert_eq!(index, 0);
@@ -141,7 +142,7 @@ mod tests {
                     &[offer],
                     &mut { required },
                     required,
-                    &crate::how_far::NoPulse
+                    Some(&crate::how_far::NoPulse)
                 )
                 .is_err()
             );
@@ -159,7 +160,7 @@ mod tests {
             &offers,
             &mut { required },
             required,
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         assert_eq!(index, 1);
@@ -172,7 +173,7 @@ mod tests {
                 &offers[..1],
                 &mut { required },
                 required,
-                &crate::how_far::NoPulse
+                Some(&crate::how_far::NoPulse)
             )
             .is_err()
         );
@@ -192,7 +193,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert!(called);
@@ -213,7 +214,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap();
         let error = resolve_output_schedule(
@@ -223,7 +224,7 @@ mod tests {
                 Ok(Decision::Choose(token.unwrap()))
             },
             PolicySet::new(),
-            &crate::how_far::NoPulse,
+            Some(&crate::how_far::NoPulse),
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);

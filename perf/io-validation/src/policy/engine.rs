@@ -8,10 +8,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use zencodec::{
-    At,
-    enough::StopReason,
-};
+use zencodec::{At, enough::StopReason};
 
 static NEXT_QUESTION: AtomicUsize = AtomicUsize::new(1);
 pub(crate) const MAX_CHOICES: usize = 64;
@@ -258,9 +255,10 @@ impl Engine {
         requirements: Requirements,
         context: Context,
         resolver: &mut R,
-        stop: &dyn zencodec::Pulse,
+        stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<Selected, At<Failure<R::Error>>> {
-        self.resolve_inner(facts, entries, requirements, context, resolver, stop)
+        let local_stop = stop.unwrap_or(&zencodec::NoPulse);
+        self.resolve_inner(facts, entries, requirements, context, resolver, local_stop)
             .map_err(|e| e.map_error(|e| e.with_details(facts, requirements, entries)))
     }
 

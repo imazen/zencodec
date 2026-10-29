@@ -2,6 +2,14 @@
 
 ## Native image selection (unreleased experiment)
 
+### Added
+
+- `EncodeJob::into_dyn_job` moves an owned Send job into shared dispatch before
+  native startup, preserving codec-specific settings and retained preparation
+  without a configuration clone. Core ownership controls and the native public
+  replay-driver matrix pass, including strict Clippy; see
+  `benchmarks/replay_driver_2026-10-28.md`.
+
 ### Fixed
 
 - Refuse unknown strict workspace bounds before row-job planning, applying both
@@ -13,10 +21,32 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Borrowed operation controls use `Option<&dyn Pulse>` across core, I/O,
+  coroutine, media, rendering and metadata services. `None` adds no per-call
+  control and never disables retained job controls or mandatory admission.
+  Owned job controls remain `SharedPulse`; see `docs/optional-pulse.md`
+  (core `a9f166b5`, I/O `bf90a0ce`, media `d96bd3ce`).
+
+- Planned row drivers execute shared replay pulls with actual
+  retained raster borrows, private RAM snapshots, positional digests or a separate
+  raw disk store. Planned callbacks/records use the joint route. Core unknown-job
+  evidence construction, shared-driver controls and the native public-driver
+  matrix pass; full feature/platform and resource-cost qualification remain separate;
+  see `docs/row-replay-driver.md`.
+
+- Add joint `Question::EncodeRoute` admission over a borrowed retained plan,
+  input replay and output schedule. Source-pass caps, exact replay and raw RAM
+  staging restrictions join existing mandatory requirements; diagnostics use
+  widened masks. Exact replay needs no snapshot when the retained native plan
+  proves one pass. `EncodeEvidence` carries metadata/profile facts once per job;
+  invalid plans retain their original typed cause. Shared-driver and native retained-job/public-driver qualification pass;
+  see `benchmarks/replay_driver_2026-10-28.md` and the optional-Pulse receipt.
+
 - Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared
   `EncodeRows`, `RowDemand`, `RowFillError` and `PullProgress`. The experimental
   IMI adapter implements the shared typed protocol. Joint production policy,
-  retained native preparation and native erased parity remain separate gates.
+  retained native preparation and native erased parity pass their focused gates;
+  no native streaming-memory or throughput guarantee is implied.
 
 - Add `PolicySet::check_workspace` for adapter admission before native
   preparation, using the same typed requirement diagnostics as joint selection.
@@ -53,7 +83,8 @@
 - Add job-to-writer/destination row adapters that admit policy before driver
   allocation and native construction, bind current color at startup, and reject
   changed source/destination/plan facts before pixel reads or publication.
-  Whole-raster/replay execution and checked registry convenience remain open.
+  Whole-raster execution and checked registry convenience remain open; the replay
+  source candidate is described above.
 
 - Add explicit effective-job encode planning and declared startup, including
   current color, actual destination access, input acquisition, bounded source

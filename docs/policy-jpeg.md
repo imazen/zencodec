@@ -7,6 +7,15 @@ zencodec production source `4e3a6465`. Reproduce with
 This qualifies specific configurations and generated fixtures, not all JPEGs,
 ICC privacy, native video reconfiguration or whole-operation memory bounds.
 
+## Current optional-control qualification
+
+The 2026-10-29 paired consumer update passes all 48 native policy cases and five
+preflight scenarios, plus strict Clippy, with the independent `djpeg` oracle and
+all existing assertions retained. The exact sources, reviewed six-source lock
+transition and disk-floor interruption are recorded in the
+[optional-control receipt](../benchmarks/optional_pulse_2026-10-29.json).
+The dated measurements below retain their original sources and scope.
+
 ## Why JPEG is the primary integration
 
 The actual codec supplies progressive scans, split ICC, opaque XMP, orientation,

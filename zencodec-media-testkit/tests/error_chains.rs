@@ -51,13 +51,13 @@ fn configured() -> ToyDecoder {
         TimeBase::new(1, 1).unwrap(),
     )
     .with_video(VideoTrackInfo::new(2, 2));
-    decoder.configure(&config, &NoPulse).unwrap();
+    decoder.configure(&config, Some(&NoPulse)).unwrap();
     decoder
 }
 
 fn upstream<D: VideoDecoder + ?Sized>(decoder: &mut D) {
     let mut malformed = Packet::from_vec(vec![4, 0]).unwrap();
-    let failure = send_packet_until_accepted(decoder, &mut malformed, &NoPulse, |_| {
+    let failure = send_packet_until_accepted(decoder, &mut malformed, Some(&NoPulse), |_| {
         Ok::<(), core::convert::Infallible>(())
     })
     .unwrap_err();
@@ -67,7 +67,7 @@ fn upstream<D: VideoDecoder + ?Sized>(decoder: &mut D) {
         Some(ToyError::BadPayload)
     ));
     assert!(matches!(
-        decoder.receive(&NoPulse),
+        decoder.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
 }
@@ -81,8 +81,9 @@ fn pump_keeps_decoder_causes_after_erasure() {
 fn downstream<D: VideoDecoder + ?Sized>(decoder: &mut D) {
     let identity = Arc::new(());
     let mut packet = Packet::from_vec(toy_payload(&[&[1, 2, 3, 4]], false)).unwrap();
-    decoder.send(&mut packet, &NoPulse).unwrap();
-    let failure = drain_decoder(decoder, &NoPulse, |_| Err(traced(71, &identity))).unwrap_err();
+    decoder.send(&mut packet, Some(&NoPulse)).unwrap();
+    let failure =
+        drain_decoder(decoder, Some(&NoPulse), |_| Err(traced(71, &identity))).unwrap_err();
     assert!(matches!(failure, PumpError::Downstream(_)));
     assert_preserved(&failure, 71, &identity);
     let erased = ErasedError::new(Box::new(failure));

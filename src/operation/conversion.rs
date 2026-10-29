@@ -73,8 +73,9 @@ pub fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
     offers: &[ImageConversionOffer],
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn crate::Pulse,
+    pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
+    let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = ImageFacts::new(image);
     policy::choose(
         offers,

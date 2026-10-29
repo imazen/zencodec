@@ -52,3 +52,12 @@ Artifact root on r7900x:
 The packet is `attempt/packet.json.gz`; the measured runner and toolchain are
 retained alongside it. This does not close runtime, operation-memory, complete
 application compile-time or conversion-stack cost validation.
+
+## Runner identity correction (2026-10-28)
+
+The original core preparation recipe referenced the mutable checkout script,
+while this report expects `runner-measured.py` in the experiment directory.
+Preparation now freezes that file before creating the plan, matching the adapter
+experiment. Every case hashes the frozen runner and every arm executes it. This
+corrects future reproducibility; it neither changes nor upgrades the retained
+2026-10-27 observations. A new release-candidate timing run is still required.

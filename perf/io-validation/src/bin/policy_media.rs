@@ -49,7 +49,7 @@ fn read<D: Demuxer, S: ReadAt>(
     };
     loop {
         let step = cursor
-            .next(source, &mut DemuxStage(&mut demux), &NoPulse)
+            .next(source, &mut DemuxStage(&mut demux), Some(&NoPulse))
             .unwrap();
         let done = step.is_finished();
         match step.into_inner() {
@@ -69,7 +69,7 @@ fn read<D: Demuxer, S: ReadAt>(
                             1,
                             may_drop,
                             &mut resolver,
-                            &NoPulse,
+                            Some(&NoPulse),
                         )
                         .unwrap(),
                     );
@@ -212,20 +212,20 @@ mod tests {
             1,
             false,
             &mut callback,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         let mut decoder = ToyDecoder::new(2);
         let config = CodecConfig::new(codec, time).with_video(VideoTrackInfo::new(2, 2));
-        decoder.configure(&config, &NoPulse).unwrap();
-        decoder.send(&mut first, &NoPulse).unwrap();
+        decoder.configure(&config, Some(&NoPulse)).unwrap();
+        decoder.send(&mut first, Some(&NoPulse)).unwrap();
         decoder.end_input().unwrap();
-        let Receive::Ready(retained) = decoder.receive(&NoPulse).unwrap() else {
+        let Receive::Ready(retained) = decoder.receive(Some(&NoPulse)).unwrap() else {
             panic!()
         };
         decoder.reset().unwrap();
         decoder
-            .configure(&config.with_epoch(1), &NoPulse)
+            .configure(&config.with_epoch(1), Some(&NoPulse))
             .unwrap();
         let next = Packet::from_vec(toy_payload(&[&[4; 4]], false))
             .unwrap()
@@ -239,7 +239,7 @@ mod tests {
             1,
             false,
             &mut callback,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert!(next_selection.applies(1, &next));
@@ -277,7 +277,7 @@ mod tests {
             1,
             false,
             &mut callback,
-            &NoPulse,
+            Some(&NoPulse),
         )
         .unwrap();
         assert_eq!(selected.action, MediaAction::KeepTrack);
@@ -294,7 +294,7 @@ mod tests {
             1,
             false,
             &mut callback,
-            &zencodec::how_far::StopOnly::new(Cancel),
+            Some(&zencodec::how_far::StopOnly::new(Cancel)),
         )
         .unwrap_err();
         assert_eq!(error.error().code(), Code::Stopped);
