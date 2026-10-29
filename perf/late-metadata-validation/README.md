@@ -76,3 +76,31 @@ change is approved and its expectations are explicitly revised.
 Retained raw logs and immutable exports:
 `/home/lilith/tmp/zencodec-late-metadata-20261029` (before.log, after.log,
 narrow.log, orientation.log, existing-contract.log, final.log). No binary archive.
+
+## Current-main revalidation (2026-10-29)
+
+The candidate applies without fuzz to zenpipe main
+`b6e4f80125ef299e6b1c776437bb09f90e7afa3e`, preserving its current dependency
+locks. The baseline native discard witness still fails (rc101, 4s, peak RSS
+0.26 GiB). The candidate's 29 native integration controls, field-change unit
+control and strict Clippy pass (rc0, 5s, peak RSS 0.32 GiB).
+
+The orientation oracle is now stricter: on failure it requires the typed
+`LateMetadata` refusal and zero retained storage, rather than accepting any
+error. On success it still requires retained Rotate90 and exact independent
+pixel readback. This strengthened control and strict Clippy pass on the same
+candidate (rc0, 3s, peak RSS 0.27 GiB). No production behavior or established
+assertion was changed. The approval request concerns only the existing blanket
+EXIF/XMP rejection under explicit discard; interpretation and preservation
+checks remain required.
+
+Sources are frozen under `~/tmp/zencodec-late-current-b6e4f801/` and
+`~/tmp/zencodec-late-current-b6e4f801-strict/`. Rust source timestamps were
+refreshed before switching exports to prevent stale shared-target artifacts;
+source bytes and dependency locks remained frozen. These are validation
+resource receipts, not native memory bounds or performance measurements.
+
+The unchanged established blanket-rejection control still fails on the current
+candidate (rc101, 2s, peak RSS 0.32 GiB). Its failure is retained in
+`established-contract.log`; it has not been removed, ignored or reinterpreted.
+Production adoption remains pending explicit approval of that behavior change.

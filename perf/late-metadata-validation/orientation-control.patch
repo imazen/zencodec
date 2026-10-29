@@ -1,6 +1,6 @@
 --- a/zencodecs/tests/checked_transcode.rs
 +++ b/zencodecs/tests/checked_transcode.rs
-@@ -780,3 +780,68 @@
+@@ -780,3 +780,77 @@
      assert!(request(StorageBudget::new(512 * 1024, 16))
          .with_metadata(MetadataTransfer::PreserveReported).transcode(&codecs, &source).is_err());
  }
@@ -54,7 +54,16 @@
 +            });
 +        let budget = StorageBudget::new(512 * 1024, 16);
 +        let result = request(budget.clone()).transcode_with(&codecs, &source, &mut policy);
-+        let Ok(output) = result else { continue; }; // Explicit refusal is an allowed result.
++        let output = match result {
++            Ok(output) => output,
++            Err(error) => {
++                assert_eq!(zencodec::find_cause::<zencodecs::checked_transcode::Refusal>(&error),
++                    Some(&zencodecs::checked_transcode::Refusal::LateMetadata),
++                    "only an interpretation-change refusal satisfies this control: {error}");
++                assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
++                continue;
++            }
++        };
 +        assert_eq!(codecs.decode_job(ImageFormat::Png).unwrap().probe_full(output.data()).unwrap().orientation,
 +            zencodec::Orientation::Rotate90, "successful discard must not lose rendering orientation");
 +        let mut oracle = png::Decoder::new(Cursor::new(output.data()));
