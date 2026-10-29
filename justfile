@@ -1572,3 +1572,11 @@ decode-details-check:
     cargo clippy -p zencodec --lib --all-features --locked -- -D warnings
     cargo check -p zencodec --no-default-features --locked
     just jpeg-decode-admission-check
+
+# Optional terminal details: native ownership transport and protocol guards.
+terminal-details-check:
+    cargo test -p zencodec --lib --locked
+    cargo test -p zencodec-io --features tokio --locked
+    cargo clippy -p zencodec -p zencodec-io --lib --all-features --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked
+    just jpeg-decode-admission-check

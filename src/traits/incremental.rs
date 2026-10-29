@@ -447,6 +447,20 @@ pub trait IncrementalDecode {
     /// Image metadata, once the header has been parsed.
     fn info(&self) -> Option<&ImageInfo>;
 
+    /// Take the owned details of a successfully completed decode, at most once.
+    ///
+    /// Before `Done`, after failure/cancellation, after a previous take, or when
+    /// unsupported, return `None`. A decoder returning `Some` must include all
+    /// result details produced by this configured operation, including typed
+    /// extras and source-encoding details; a header snapshot is not a substitute.
+    /// This does not certify complete container inventory or absence of PII.
+    ///
+    /// Consumers requiring owned details must reject `None`, not manufacture an
+    /// empty result. The default preserves compatibility with existing decoders.
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        None
+    }
+
     /// Output pixel descriptor, once the header has been parsed.
     fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
         None
@@ -537,6 +551,10 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         (**self).info()
     }
 
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        (**self).take_details()
+    }
+
     fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
         (**self).output_descriptor()
     }
@@ -566,6 +584,10 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         (**self).info()
     }
 
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        (**self).take_details()
+    }
+
     fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
         (**self).output_descriptor()
     }
@@ -588,6 +610,7 @@ pub struct Fused<D> {
     state: FusedState,
     controlled: bool,
     interpretation: Option<InterpretationFacts>,
+    details_taken: bool,
 }
 
 #[derive(Debug)]
@@ -606,6 +629,7 @@ impl<D> Fused<D> {
             state: FusedState::Running,
             controlled: false,
             interpretation: None,
+            details_taken: false,
         }
     }
 
@@ -679,6 +703,15 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
 
     fn info(&self) -> Option<&ImageInfo> {
         self.inner.info()
+    }
+
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        if !matches!(self.state, FusedState::Done(_)) || self.details_taken {
+            return None;
+        }
+        // Mark before delegation, including a native panic or unavailable result.
+        self.details_taken = true;
+        self.inner.take_details()
     }
 
     fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
@@ -807,6 +840,10 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         self.0.info()
     }
 
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        self.0.take_details()
+    }
+
     fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
         self.0.output_descriptor()
     }
@@ -902,6 +939,100 @@ mod tests {
             d.step(Input::empty(), &mut NullSink, Some(&pulse)),
             Err(StepError::Finished)
         ));
+    }
+
+    struct DetailSource {
+        calls: alloc::sync::Arc<core::sync::atomic::AtomicUsize>,
+        fail: bool,
+    }
+    impl IncrementalDecode for DetailSource {
+        type Error = core::fmt::Error;
+        fn step(
+            &mut self,
+            _: Input<'_>,
+            _: &mut dyn DecodeRowSink,
+            _: Option<&dyn crate::Pulse>,
+        ) -> Result<Progress, StepError<Self::Error>> {
+            if self.fail {
+                return Err(StepError::Codec(core::fmt::Error));
+            }
+            Ok(Progress::new(
+                0,
+                Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::GRAY8_SRGB)),
+            ))
+        }
+        fn requested(&self) -> &[InputRequest] {
+            &[]
+        }
+        fn info(&self) -> Option<&ImageInfo> {
+            None
+        }
+        // Deliberately eager and repeatable: Fused must enforce the protocol.
+        fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+            self.calls
+                .fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+            Some(crate::decode::DecodeDetails::new(ImageInfo::new(
+                1,
+                1,
+                crate::ImageFormat::Jpeg,
+            )))
+        }
+    }
+
+    #[test]
+    fn fused_details_require_success_and_allow_one_take_through_erasure() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        let calls = alloc::sync::Arc::new(AtomicUsize::new(0));
+        let mut decoder = erase_incremental(DetailSource {
+            calls: calls.clone(),
+            fail: false,
+        });
+        assert!(decoder.take_details().is_none());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        decoder.step(Input::empty(), &mut NullSink, None).unwrap();
+        // Exercise Box forwarding, &mut forwarding, erasure and Fused together.
+        let mut borrowed = &mut decoder;
+        assert_eq!(
+            IncrementalDecode::take_details(&mut borrowed)
+                .unwrap()
+                .info
+                .width,
+            1
+        );
+        assert!(decoder.take_details().is_none());
+        decoder.step(Input::empty(), &mut NullSink, None).unwrap();
+        assert!(decoder.take_details().is_none());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fused_details_never_call_native_after_failure_or_cancellation() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        struct Cancel;
+        impl enough::Stop for Cancel {
+            fn check(&self) -> Result<(), StopReason> {
+                Err(StopReason::Cancelled)
+            }
+        }
+        for cancel in [false, true] {
+            let calls = alloc::sync::Arc::new(AtomicUsize::new(0));
+            let mut decoder = erase_incremental(DetailSource {
+                calls: calls.clone(),
+                fail: !cancel,
+            });
+            let pulse = how_far::StopOnly::borrowed(&Cancel);
+            assert!(
+                decoder
+                    .step(
+                        Input::empty(),
+                        &mut NullSink,
+                        cancel.then_some(&pulse as &dyn crate::Pulse)
+                    )
+                    .is_err()
+            );
+            assert!(decoder.take_details().is_none());
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+        }
     }
 
     #[test]

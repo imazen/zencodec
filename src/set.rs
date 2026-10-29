@@ -1121,6 +1121,10 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         self.inner.as_ref().and_then(|d| d.info())
     }
 
+    fn take_details(&mut self) -> Option<crate::decode::DecodeDetails> {
+        self.inner.as_mut().and_then(|d| d.take_details())
+    }
+
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
         self.inner.as_ref().and_then(|d| d.output_descriptor())
     }
