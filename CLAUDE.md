@@ -714,3 +714,10 @@ that boundary; explicit unknown bounds refuse. See docs/video-workspace-admissio
 which panicked when a representable usize exceeded Vec's capacity limit. It now
 checks row/total arithmetic and reserves fallibly before committing state.
 The regression covers refusal and successful reuse; this is not a RAM budget.
+
+## Coroutine finalization panic (2026-10-29, fixed on PR177)
+
+A panic in sink.finish could leave the coroutine resumable. Finalization now
+poisons state before sink callbacks; caught panic remains terminal. Pending owned
+completion details are discarded on failure/cancellation/unwind and cannot be
+retrieved. Native streaming detail production is still a separate qualification.

@@ -42,6 +42,7 @@ pub async fn zencodec_coroutine::CoroutineContext::read_exact(&mut self, out: &m
 pub fn zencodec_coroutine::CoroutineContext::read_exact_at<'a>(&'a mut self, offset: u64, out: &'a mut [u8]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec_coroutine::CoroutineError>> + 'a
 pub fn zencodec_coroutine::CoroutineContext::read_many_at<'a, 'b: 'a>(&'a mut self, reqs: &'a mut [(u64, &'b mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec_coroutine::CoroutineError>> + 'a
 pub fn zencodec_coroutine::CoroutineContext::seek(&mut self, offset: u64)
+pub fn zencodec_coroutine::CoroutineContext::set_details(&mut self, details: zencodec::output::DecodeDetails)
 pub fn zencodec_coroutine::CoroutineContext::set_info(&mut self, info: zencodec::info::ImageInfo)
 pub fn zencodec_coroutine::CoroutineContext::set_output_descriptor(&mut self, descriptor: zenpixels::descriptor::PixelDescriptor)
 pub fn zencodec_coroutine::CoroutineContext::write_rows<'a>(&'a mut self, meta: zencodec::traits::incremental::BatchMeta, rows: &zenpixels::buffer::PixelSlice<'_>) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec_coroutine::CoroutineError>> + 'a
@@ -65,6 +66,7 @@ pub fn zencodec_coroutine::CoroutineDecoder<F, E>::info(&self) -> core::option::
 pub fn zencodec_coroutine::CoroutineDecoder<F, E>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub fn zencodec_coroutine::CoroutineDecoder<F, E>::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
 pub fn zencodec_coroutine::CoroutineDecoder<F, E>::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<E>>
+pub fn zencodec_coroutine::CoroutineDecoder<F, E>::take_details(&mut self) -> core::option::Option<zencodec::output::DecodeDetails>
 pub const zencodec_coroutine::DEFAULT_INPUT_CAP: usize
 pub type zencodec_coroutine::BoxFuture<E> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static)>>
 pub type zencodec_coroutine::BoxedCoroutineDecoder<E> = zencodec_coroutine::CoroutineDecoder<zencodec_coroutine::BoxFuture<E>, E>
