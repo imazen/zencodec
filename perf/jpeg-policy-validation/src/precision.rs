@@ -37,7 +37,7 @@ fn native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples
                         &mut output,
                         policy,
                         options,
-                        &NoPulse,
+                        Some(&NoPulse),
                     ),
                     1 => row_encode::encode_job(
                         config.clone().job(),
@@ -45,7 +45,7 @@ fn native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples
                         &mut output,
                         policy,
                         options,
-                        &NoPulse,
+                        Some(&NoPulse),
                     ),
                     2 => row_encode::encode_dyn_job(
                         config.clone().dyn_job(),
@@ -53,7 +53,7 @@ fn native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples
                         &mut output,
                         policy,
                         options,
-                        &NoPulse,
+                        Some(&NoPulse),
                     ),
                     _ => unreachable!(),
                 }
