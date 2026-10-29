@@ -31,6 +31,10 @@
 
 ### Fixed
 
+- Shared media, coroutine, metadata and testkit pixel requirements now match
+  the core minimum, preventing registry 0.2.16 from crossing the paired pixel
+  boundary in downstream graphs with older development dependencies.
+
 - The native JPEG admission harness pins the RGBA float negotiation fix and
   verifies seven required layouts in baseline/progressive scans. Required
   descriptors still retain their final check; early allocation admission remains

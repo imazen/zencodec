@@ -20,7 +20,7 @@ xmp = ["dep:roxmltree"]
 
 [dependencies]
 zencodec = { path = "..", version = ">=0.2.0, <0.4.0", default-features = false }
-zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false, features = ["icc"] }
+zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false, features = ["icc"] }
 roxmltree = { version = "0.21.1", default-features = false, features = ["positions"], optional = true }
 
 [[test]]

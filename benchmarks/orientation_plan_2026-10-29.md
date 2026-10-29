@@ -39,3 +39,17 @@ Command: just docs-reference && just docs-site-browser-check 3547, isolated expo
 Serialized run-heavy 3G/jobs2 timeout900: rc0, 46s, peak RSS 0.33GiB,
 minimum available 10986MiB. OrientationPlan reference returned HTTP 200 after
 switching the preview to this qualified export.
+
+Portable consumer exposed a pixel graph split: zencodec-media admitted registry
+zenpixels 0.2.16 while core required >=0.2.17 and selected paired 0.3.1. Five
+animation adapter signatures/calls failed compilation. Shared metadata,
+coroutine, media and testkit floors now match core's >=0.2.17 floor. The old
+registry copy may remain in unrelated dev dependencies; it cannot satisfy these
+shared edges. No ceiling or behavioral assertion was relaxed.
+
+Isolated native root with these family path patches: eight native tests and
+strict library/test Clippy pass, including typed resource-limit categories,
+original limit payloads, exact-depth refusal and late ColorContext refusal.
+Native candidate c43a2064, core floor candidate f111cc9d. Wrapper rc0/38s,
+peak RSS 0.45GiB, minimum available 11287MiB. Actual git-pinned portable graph
+validation follows separately; this result establishes the source repair.
