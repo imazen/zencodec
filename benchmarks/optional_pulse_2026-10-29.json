@@ -32,5 +32,12 @@
     "latency, memory and throughput performance",
     "new site/browser"
   ],
-  "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained."
+  "assertion_changes": "Only newly introduced fixture expectations corrected; existing behavioral assertions retained.",
+  "site_optional": {
+    "source": "f4b9fdc1e03fde5748ac2098dd8eef856403e534",
+    "reference": "pass",
+    "source_checks": "24/24 pass",
+    "browser": "pass; original responsive/source-copy assertions retained",
+    "wrapper": "rc0 46s peak-RSS0.30GiB min-avail14242MiB peak-load0.74"
+  }
 }

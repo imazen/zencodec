@@ -48,8 +48,9 @@ controls, no-default checks and the core/coroutine WASM build also pass.
 source snapshots and preserves the earlier fixture and orchestration failures.
 This establishes the shared protocol, not every native codec's implementation.
 The eight-crate generated API catalog and Rustdoc reference also build cleanly.
-The guide browser and native adapters still require qualification against these
-optional signatures. Core CI on `feb09f9f` passes for the optional signatures. Its documentation
+The guide source checks (24/24) and browser checks pass on `f4b9fdc1`,
+including responsive roles, signatures, full-example copying and inline
+expansion. Native adapters still require qualification against these signatures. Core CI on `feb09f9f` passes for the optional signatures. Its documentation
 workflow fails in native integration: older container adapters and wrappers still
 use required references. Those gates remain required; native qualification is
 not inferred from the shared workspace checks.
@@ -71,3 +72,12 @@ subsequent optional-Pulse edits:
 Picture accounting covers requested native picture planes, not total process or
 operation workspace. The remaining native optional-control source changes must
 be paired with one core/pixel dependency graph and tested before landing.
+
+
+Native follow-up found a test-graph blocker: the bitmap, WebP and JPEG test roots
+still resolve native-only `zenpng 0.1.4`, which pulls in `zencodec 0.1.26`. Its
+fixed `DecodeOutput == 360` assertion does not admit the paired pixel buffer's
+new representation. All three builds stop before native tests. Keep that
+failure visible and align the PNG test dependencies; do not remove the tests or
+loosen the old assertion to disguise the split. The isolated IVF/WebM controls
+pass (27 tests, including explicit optional timeout-before-effects controls).
