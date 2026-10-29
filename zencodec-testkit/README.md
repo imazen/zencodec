@@ -141,3 +141,17 @@ sink effects and terminal state afterward, even for tiny inputs. Diagnostic
 Pulse controls in `tests/sansio_checks.rs` detect swallowed stops without
 asserting machine-dependent timing thresholds. Native checkpoint latency and
 progress completeness still require explicit workloads and expected-work oracles.
+
+### Retained output preparation
+
+`check_cross_path_pixel_equivalence` also exercises typed and erased
+`Decode::prepare_output` on the same owners subsequently decoded. Known facts
+must match the actual descriptor; both known and unknown facts must preserve
+ordinary pixels, attached color context and metadata. `check_all` reaches this check automatically.
+The reference codec supplies known facts; the minimal codec retains the default
+unknown path. Mutation controls reject false descriptors, changed samples,
+changed metadata/color context and preparation errors on the successful fixture.
+
+This does not measure preparation allocations, bound native workspace, test
+every output preference, or certify arbitrary late metadata. Those need native
+fixtures and allocation/progress diagnostics separately.

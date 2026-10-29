@@ -575,6 +575,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Cross-path conformance now exercises typed and erased output preparation,
+  preserving exact samples, descriptors, attached color context and metadata.
+  Known-fact and default-unknown controls plus native PNG parity cover the new path.
+
 - Incremental conformance now checks pre-cancellation and timeout reasons, zero
   sink effects and terminal state independently of input size. Diagnostic Pulse
   mutation controls detect swallowed stops; instrumentation is dev-only.

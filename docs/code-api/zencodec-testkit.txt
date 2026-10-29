@@ -46,6 +46,7 @@ pub struct zencodec_testkit::reference::RefDec<'a>
 impl zencodec::traits::decoder::Decode for zencodec_testkit::reference::RefDec<'_>
 pub type zencodec_testkit::reference::RefDec<'_>::Error = zencodec_testkit::reference::RefError
 pub fn zencodec_testkit::reference::RefDec<'_>::decode(self) -> core::result::Result<zencodec::output::DecodeOutput, zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefDec<'_>::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, zencodec_testkit::reference::RefError>
 pub struct zencodec_testkit::reference::RefDecodeJob
 impl<'a> zencodec::traits::decoding::DecodeJob<'a> for zencodec_testkit::reference::RefDecodeJob
 pub type zencodec_testkit::reference::RefDecodeJob::AnimationFrameDec = zencodec_testkit::reference::RefAnimDec

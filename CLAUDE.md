@@ -802,3 +802,13 @@ required-output admission returned a descriptor error before its post-call Pulse
 check. The check now precedes comparison, retaining Cancelled/TimedOut and native
 failure priority. The regression also checks no reconstruction and exact owner
 cleanup. See docs/decode-descriptor-admission.md for the boundary contract.
+
+## Retained preparation conformance gap (2026-10-29)
+
+The cross-path testkit did not invoke the new optional output preparation hook.
+It now checks typed and erased prepared owners against ordinary decoding for
+exact pixels/descriptors, attached color context and metadata. Known facts must
+match actual output; unknown facts do not excuse changed results. Reference
+known-fact and minimal unknown-fact paths, mutation controls and native PNG
+RGB/RGBA parity qualify this scope. Preparation allocations, all preferences and
+arbitrary late metadata remain separate; see zencodec-testkit/README.md.

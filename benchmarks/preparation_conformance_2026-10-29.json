@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-29",
+  "source": "cc31803cbc3bcda6a25e615657c8e7d76475ed48",
+  "base": "26d9e108d921874ba2bc46689d8512b359115d50",
+  "commands": [
+    "just testkit-preparation-check",
+    "cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib native_png_preserves_results_through_preparation",
+    "cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib --tests -- -D warnings",
+    "python3 docs/generate-code-catalog.py .",
+    "just docs-site-check"
+  ],
+  "testkit": {
+    "passed": 177,
+    "failed": 0,
+    "ignored": 0,
+    "mutation_controls": [
+      "false descriptor",
+      "changed samples after unknown facts",
+      "changed metadata after unknown facts",
+      "changed attached color context after unknown facts",
+      "preparation failure on successful fixture"
+    ],
+    "positive": [
+      "known reference facts",
+      "unknown minimal default"
+    ]
+  },
+  "native": {
+    "test_passed": 1,
+    "configurations": [
+      "PNG RGB8 97x65",
+      "PNG RGBA8 97x65"
+    ],
+    "pin": "7b6d1436db5d771fc43226c146847fc76305afde",
+    "scope": "same-native typed/erased preparation transparency plus existing lossless cross-path assertions; no new independent pixel oracle"
+  },
+  "final_wrapper": "rc=0 36s | peak-RSS 0.34GiB | min-avail 14286MiB | peak-load 1.21",
+  "prior_attempts": [
+    "Initial compile failed on missing ImageInfo test import (rc101); fixed without assertion changes.",
+    "Initial native RGB/RGBA gate passed before color-context comparison was added (rc0 78s, peak-RSS 0.68GiB); final gate repeats with context comparison."
+  ],
+  "cost_scope": "Conformance check adds two complete decodes per fixture (typed and erased prepared owners). This is harness work, not codec runtime overhead. No timing or allocation bound claimed.",
+  "limits": [
+    "No new caller API; existing cross-path/check_all consumers gain coverage.",
+    "No preparation allocation bound, all-output-preference matrix, opaque-details equivalence or arbitrary late-metadata certification.",
+    "Native PNG inherits unknown preparation; positive native known-fact JPEG adoption remains separate."
+  ],
+  "artifacts": "~/tmp/testkit-preparation-20261029/",
+  "source_sha256": {
+    "zencodec-testkit/src/lib.rs": "7ec4b47417830aac19c93afe630f957f63315767da7446f3cec2ebe0345dbaed",
+    "zencodec-testkit/src/preparation.rs": "d62e1aa89fa9810e13bff2f7d37ea7c116961795ab1b19ce85e4cc40d40a0ced",
+    "zencodec-testkit/src/reference.rs": "fdf6b19cac945541e6543b350f6326165b8fd639e039fe9a468e5aa854ddb778",
+    "perf/jpeg-policy-validation/src/pulse_diagnostics.rs": "ee8e8d3b1a7fdbba09fd6de6ba7c152b26c64c6bf29600f366b0ffdc06336efa"
+  },
+  "site": {
+    "source_tests": 26,
+    "wrapper": "rc=0 4s | peak-RSS 0.35GiB | min-avail 13578MiB | peak-load 1.33",
+    "scope": "isolated guide build and source tests; browser suite unchanged and not rerun for this testkit-only change"
+  }
+}

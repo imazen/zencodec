@@ -1727,3 +1727,8 @@ retained-decode-bench-clippy:
 
 retained-decode-bench:
     cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked -- --mode=confirm --workload-id=retained-jpeg-noise-patches-v1 --rounds=30 --processes=5 --margin=1 --cpu-policy=performance
+
+# Retained output preparation must preserve ordinary results through erasure.
+testkit-preparation-check:
+    cargo test -p zencodec-testkit --all-targets --locked
+    cargo clippy -p zencodec-testkit --all-targets --locked -- -D warnings
