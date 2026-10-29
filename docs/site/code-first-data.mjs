@@ -6,6 +6,10 @@ export const codeFlows = [
     {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
     {example:'checked_png_file',file:'docs/examples/checked_operations.rs',api:['operationRegistration','operationOutcome','encodedOutput'],external:['integration-api.json'],state:'Native JPEG/PNG cancellation and publication controls'},
   ]},
+  {id:'app-completion',role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Owned result → rows → final metadata',note:'Keep the whole result when possible. When consuming rows, take details only after the driver succeeds. None means unavailable; it is not proof of empty metadata. These executable native JPEG controls retain descriptive metadata and codec extras; privacy completeness and whole-operation memory bounds remain separate.',steps:[
+    {scope:'fn native_owned_result_split_preserves_pixels_metadata_and_all_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['decodedOutput'],state:'Move pixels and details without cloning their owners'},
+    {scope:'fn native_controlled_completion_retains_descriptive_metadata_and_extras()',file:'perf/jpeg-policy-validation/src/decode_admission.rs',api:['incremental'],state:'Real JPEG controlled producer, registry, row sink and one-time completion'},
+  ]},
   {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
     {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
     {example:'positioned',file:'docs/examples/journeys.rs',api:['positionedDriver']},
@@ -161,6 +165,10 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'app-completion': [
+    ['Separate pixels only when processing needs them', 'The application first decodes an owned image. into_parts moves the raster and all result details without cloning them. Keep both owners: dropping codec extras can discard information needed by a later transcode.'],
+    ['Recover final details after consuming rows', 'The application now processes rows through a sink. Drive the real JPEG decoder to successful completion, then take_details once. The test compares native metadata and every row. None means that details are unavailable; it never certifies that the file contains no private data.'],
+  ],
   'app-bound-policy': [
     ['Start with a preset', 'The gallery has a fixed output rule: do not wait on a destination without a qualified retained-memory bound. Pass PolicySet directly. This executable control checks that unknown evidence refuses and names OutputWait before work starts.'],
     ['Choose among admitted routes', 'The gallery later needs a situational choice. Add BoundPolicy::new(requirements, callback); required limits still filter the offers first. The callback selects using the current facts without repeating those checks.'],

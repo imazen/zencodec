@@ -67,14 +67,14 @@ getter. Older decoders default to `None`; this means unavailable, not empty.
 Box/reference adapters, CodecSet selection, checked decode and PolicyDecoder
 forward the hook. Consumers needing owned details must reject `None`.
 
-This is not yet a native streaming completion implementation. Native JPEG
-controlled decoding still does not produce these details. The transport witness
-moves an actual native one-shot result through a private row adapter and the
-public erased incremental interface. It compares delivered rows and retained
-metadata/source identity, but starts with a full decoded raster; it is not an
-early-admission or low-memory streaming witness. Coroutine producers now supply details with `CoroutineContext::set_details`;
-direct native streaming completion remains unimplemented. No HDR gain-map reconstruction
-parity is claimed by these fixtures.
+The earlier transport witness moves an actual native one-shot result through a
+private row adapter and public erasure; it still deliberately starts with a full
+raster. The pinned JPEG controlled producer now also supplies actual terminal
+details from its retained metadata scan. Baseline/progressive consumer controls
+compare descriptive metadata, native segment bytes, source-detail presence and
+every output row through DecodeRequest, CodecSet and PolicyDecoder. Native
+controls additionally retain late comments and exact embedded MPF JPEG bytes.
+This does not qualify HDR gain-map reconstruction or a whole-operation RAM bound.
 
 An empty details object is not proof that opaque metadata is absent. Privacy and
 retention requirements still need native evidence; no fallback may construct empty
@@ -128,6 +128,15 @@ This is a source property, not a measured throughput or total-memory claim.
 
 The producer tests found that sink.finish panic previously left a coroutine
 resumable. Finalization now poisons state before callbacks. All 42 coroutine
-tests, strict all-target Clippy and no-default-features build pass. Native JPEG
-must still obtain actual extras from its reader rather than manufacture them
-from a header snapshot; the current native transport witness remains one-shot.
+tests, strict all-target Clippy and no-default-features build pass.
+
+## Native completion qualification
+
+JPEG `7c5a9501` retains the metadata scan owner, rather than reconstructing empty
+extras from an early header or decoding pixels twice. Its 20 controlled tests,
+18 MPF bounds tests, strict Clippy and no-default-features controlled build pass.
+The shared harness passes seven admission/ownership tests and strict Clippy
+(rc0, 13s, peak RSS 0.70 GiB). The pin/lock audit changes only zenjpeg and zenyuv.
+Wrapper RSS measures build/test processes, not codec working memory. Encoded
+input, native progressive storage and metadata allocations retain their existing
+scope; this is not an early one-shot allocation-admission fix.
