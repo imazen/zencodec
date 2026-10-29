@@ -445,3 +445,12 @@ resolution and build verification: it is not a publication dry run. The
 serialized wrapper exited 0 with peak RSS 0.03 GiB; that is packaging resource
 usage, not codec memory. Full logs and file lists are retained under
 `~/tmp/zencodec-package-audit-20261029` on the qualification host.
+
+## Compile observation qualification follow-up
+
+The [owned-worker controls](../benchmarks/compile_observer_2026-10-29.md) exercise
+zenbench Confirm's in-flight observer. All 15 resident-worker invocations have
+clean admission observations, while all 15 short-lived-child invocations are
+invalidated (151 unclean during-work observations). No statistical or resource
+gate was relaxed. The current-main compile plan is portable and prepared, but
+full confirmation remains unqualified pending descendant-lifecycle accounting.

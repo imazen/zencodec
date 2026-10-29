@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 import subprocess
@@ -49,7 +50,7 @@ def prepare(root, main, ideal):
             project = root / name / feature
             (project / "src").mkdir(parents=True)
             (project / "src/lib.rs").write_text("pub use zencodec;\n")
-            dep = 'version = "=0.1.26"' if name == "published" else f'path = {json.dumps(str(root / f"{name}-source"))}'
+            dep = 'version = "=0.1.26"' if name == "published" else f'path = {json.dumps(os.path.relpath(root / f"{name}-source", project))}'
             if feature == "std":
                 dep += ', features = ["std"]'
             (project / "Cargo.toml").write_text(
@@ -64,26 +65,29 @@ def prepare(root, main, ideal):
     for profile, feature in [("dev", "default"), ("dev", "std"), ("release", "default")]:
         config = root / f"{profile}-{feature}.json"
         config.write_text(json.dumps({"profile": profile, "feature": feature}) + "\n")
-        inputs = {"configuration": str(config), "runner": str(script)}
+        inputs = {"configuration": config.name, "runner": script.name}
         for name in revisions:
-            inputs[f"{name}_lock"] = str(root / name / feature / "Cargo.lock")
+            inputs[f"{name}_lock"] = str(Path(name) / feature / "Cargo.lock")
         for name in ["main", "ideal"]:
-            inputs[f"{name}_archive"] = str(root / f"{name}.tar")
+            inputs[f"{name}_archive"] = f"{name}.tar"
         cases.append({"id": f"{profile}-{feature}", "inputs": inputs})
     arms = []
     for name, revision in revisions.items():
         arms.append({"id": name, "program": "/usr/bin/python3", "revision": revision,
-                     "args": [str(script), "build", str(root / name), "${configuration}", "${output}"],
+                     "args": ["${runner}", "build", name, "${configuration}", "${output}"],
                      "timeout_seconds": 120,
                      "env": {"CARGO_INCREMENTAL": "0", "CARGO_BUILD_JOBS": "2", "RUSTFLAGS": "",
                              "RUSTC_WRAPPER": None, "RUSTC_WORKSPACE_WRAPPER": None,
-                             "TMPDIR": str(Path.home() / "tmp")}})
+                             "TMPDIR": "${output}"}})
     plan = {"schema": 1, "baseline": arms[0], "candidates": arms[1:], "cases": cases,
             "metric": {"extract": {"kind": "prefix", "prefix": "compile_ms="},
                        "unit": "ms", "expected": 1, "divide_by": 1, "resolution": 10},
             "check": {"kind": "json", "prefix": "result=", "pointers": ["/compiled"]},
             "warmup": "Dependencies prefetched; empty unique target per invocation; warm OS file cache. Cargo wall time from /usr/bin/time, 0.01-second resolution. Two jobs, no incremental or compiler wrapper.",
-            "blocks": 5, "aa": True, "deadline_seconds": 1200}
+            "blocks": 5, "aa": True, "deadline_seconds": 1200,
+            "confirmation": {"margin_pct": 1.0, "control_margin_pct": 1.0,
+                             "family_confidence": 0.95, "scope": "cold-consumer-v1",
+                             "accept": "non_inferiority"}}
     (root / "plan.json").write_text(json.dumps(plan, indent=2) + "\n")
     with (root / "toolchain.txt").open("w") as output:
         for command in [["rustc", "-Vv"], ["cargo", "-V"], ["uname", "-a"]]:
@@ -116,7 +120,7 @@ def prepare_adapters(root, main, ideal):
                                        ("zencodec-media", source / "zencodec-media")]:
                 available = tomllib.loads((directory / "Cargo.toml").read_text()).get("features", {})
                 flags = ', features=["std"]' if feature == "std" and "std" in available else ''
-                manifest += f'{package} = {{ path={json.dumps(str(directory))}, default-features=false{flags} }}\n'
+                manifest += f'{package} = {{ path={json.dumps(os.path.relpath(directory, project))}, default-features=false{flags} }}\n'
             (project / "Cargo.toml").write_text(manifest + root_patches(source))
             run(["cargo", "generate-lockfile", "--manifest-path", str(project / "Cargo.toml")])
             run(["cargo", "fetch", "--locked", "--manifest-path", str(project / "Cargo.toml")])
@@ -126,23 +130,26 @@ def prepare_adapters(root, main, ideal):
     for profile, feature in [("dev", "default"), ("dev", "std"), ("release", "std")]:
         config = root / f"{profile}-{feature}.json"
         config.write_text(json.dumps({"profile": profile, "feature": feature}) + "\n")
-        inputs = {"configuration": str(config), "runner": str(runner)}
+        inputs = {"configuration": config.name, "runner": runner.name}
         for name in revisions:
-            inputs[f"{name}_lock"] = str(root / name / feature / "Cargo.lock")
-            inputs[f"{name}_archive"] = str(root / f"{name}.tar")
+            inputs[f"{name}_lock"] = str(Path(name) / feature / "Cargo.lock")
+            inputs[f"{name}_archive"] = f"{name}.tar"
         cases.append({"id": f"{profile}-{feature}", "inputs": inputs})
     arms = [{"id": name, "program": "/usr/bin/python3", "revision": revision,
-             "args": [str(runner), "build", str(root / name), "${configuration}", "${output}"],
+             "args": ["${runner}", "build", name, "${configuration}", "${output}"],
              "timeout_seconds": 120,
              "env": {"CARGO_INCREMENTAL": "0", "CARGO_BUILD_JOBS": "2", "RUSTFLAGS": "",
                      "RUSTC_WRAPPER": None, "RUSTC_WORKSPACE_WRAPPER": None,
-                     "TMPDIR": str(Path.home() / "tmp")}} for name, revision in revisions.items()]
+                     "TMPDIR": "${output}"}} for name, revision in revisions.items()]
     plan = {"schema": 1, "baseline": arms[0], "candidates": arms[1:], "cases": cases,
             "metric": {"extract": {"kind": "prefix", "prefix": "compile_ms="},
                        "unit": "ms", "expected": 1, "divide_by": 1, "resolution": 10},
             "check": {"kind": "json", "prefix": "result=", "pointers": ["/compiled"]},
             "warmup": "Prefetched dependencies; empty target; warm OS cache; io/media re-export consumer; two jobs.",
-            "blocks": 5, "aa": True, "deadline_seconds": 1200}
+            "blocks": 5, "aa": True, "deadline_seconds": 1200,
+            "confirmation": {"margin_pct": 1.0, "control_margin_pct": 1.0,
+                             "family_confidence": 0.95, "scope": "cold-consumer-v1",
+                             "accept": "non_inferiority"}}
     (root / "plan.json").write_text(json.dumps(plan, indent=2) + "\n")
     with (root / "toolchain.txt").open("w") as output:
         for command in [["rustc", "-Vv"], ["cargo", "-V"], ["uname", "-a"]]:

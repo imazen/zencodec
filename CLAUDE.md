@@ -812,3 +812,11 @@ match actual output; unknown facts do not excuse changed results. Reference
 known-fact and minimal unknown-fact paths, mutation controls and native PNG
 RGB/RGBA parity qualify this scope. Preparation allocations, all preferences and
 arbitrary late metadata remain separate; see zencodec-testkit/README.md.
+
+## Compile observer descendant lifetime limit (2026-10-29)
+
+Published zenbench 0.1.11 Confirm qualifies the resident CPU control but marks
+all 15 owned short-lived-child invocations invalid. Its live-descendant accounting
+cannot establish cleanliness for this Cargo-like workload. Preserve those flags;
+do not rerun the old Iterate plan and call it confirmation. The control, portable
+plans and exact counts live in benchmarks/compile_observer_2026-10-29.md.

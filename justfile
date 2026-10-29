@@ -1732,3 +1732,16 @@ retained-decode-bench:
 testkit-preparation-check:
     cargo test -p zencodec-testkit --all-targets --locked
     cargo clippy -p zencodec-testkit --all-targets --locked -- -D warnings
+
+# Strict in-flight resource observation; never reinterpret Iterate as Confirm.
+compile-time-confirm zenbench root:
+    "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --dry-run > "{{root}}/confirm-dry-run.json"
+    "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --output "{{root}}/confirm-attempt"
+
+# Qualify owned-process lifecycle observation before interpreting compile timings.
+compile-observer-prepare root:
+    python3 perf/compile-observer-control.py prepare "{{root}}"
+
+compile-observer-run zenbench root:
+    "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --dry-run > "{{root}}/dry-run.json"
+    "{{zenbench}}" pair "{{root}}/plan.json" --mode confirm --output "{{root}}/attempt"

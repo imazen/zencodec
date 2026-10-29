@@ -82,3 +82,8 @@ Next: use a frozen observer with worker-lifecycle-aware in-flight samples and
 qualify it with known owned/foreign workload controls before repeating for
 confirmation. Measure IO/media separately. These observations do not close
 runtime or memory qualification for the release contracts.
+
+The subsequent [owned-worker observer controls](compile_observer_2026-10-29.md)
+exercise published zenbench 0.1.11 Confirm. Resident work passes; short-lived owned
+children invalidate all 15 invocations. This narrows the remaining qualification
+problem to descendant-lifecycle accounting; the old Iterate data remains unchanged.
