@@ -186,6 +186,7 @@ dependencies = [
  "zenmeta",
  "zenpixels",
  "zenpixels-convert",
+ "zenpng",
 ]
 
 [[package]]

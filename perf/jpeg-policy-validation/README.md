@@ -171,3 +171,9 @@ fixtures. It retains how-far-really traces in the supplied directory. See
 [the receipt](../../benchmarks/native_pulse_diagnostics_2026-10-29.md) for scope:
 these fixtures have native cancellation checkpoints but only a completion-time
 progress report. Intermediate progress remains tracked separately.
+
+The diagnostic module also exercises PNG through a retained reporting-capable
+job. RGB8/RGBA8 cancellation controls pass; the pinned path emits no reports.
+Its standard incremental API is whole-file backed, distinct from controlled
+row streaming. The shared receipt records both paths without claiming they
+have equivalent memory behavior.

@@ -89,3 +89,12 @@ counts alone do not establish useful progress granularity. No latency bound or
 optimal polling frequency is inferred from these instrumented runs.
 
 See [native diagnostic evidence](../benchmarks/native_pulse_diagnostics_2026-10-29.md).
+
+The same native diagnostic gate now covers PNG RGB8/RGBA8 retained jobs. Both
+fixtures preserve the selected one-shot stops but emit zero progress reports
+(66 cancellation checks each). Their standard incremental factory uses
+WholeFileIncremental: passing those checks is not evidence of controlled
+row-streaming or bounded-memory decode. The direct and erased cancellation
+contracts remain useful even while progress delivery needs native work.
+PNG reporting propagation is tracked in
+[zenpng issue 49](https://github.com/imazen/zenpng/issues/49).

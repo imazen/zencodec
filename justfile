@@ -1693,7 +1693,7 @@ testkit-pulse-check:
     cargo test --locked -p zencodec-testkit --lib
     cargo clippy --locked -p zencodec-testkit --lib --test sansio_checks -- -D warnings
 
-# Actual JPEG checkpoints plus the shared incremental conformance suite.
+# Actual JPEG/PNG checkpoints plus shared incremental conformance.
 native-pulse-diagnostics-check artifacts="$HOME/tmp/zencodec-native-pulse":
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --locked --manifest-path perf/jpeg-policy-validation/Cargo.toml pulse_diagnostics:: -- --nocapture
     cargo clippy --locked --manifest-path perf/jpeg-policy-validation/Cargo.toml --tests -- -D warnings

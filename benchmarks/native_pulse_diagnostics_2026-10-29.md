@@ -52,3 +52,30 @@ checkpoints, not every mode, worker count or input. No claim about rendering,
 encoder buffering, video, TIFF/JXL or other codec responsiveness. The testkit's
 separate faulty-wrapper controls validate detection of swallowed stops and reason
 collapse; the native harness itself does not mutate native code.
+
+## PNG retained-job follow-through
+
+Base `f76fc2b8`, PNG `7b6d1436db5d771fc43226c146847fc76305afde`.
+The direct dev dependency exposes the already-pinned PNG package; the lock audit
+finds no package identity additions/removals/changes, only the harness dependency
+list gaining zenpng. The same command now runs three tests: the two JPEG controls
+and PNG RGB8/RGBA8 generated 97x65 fixtures. All pass; strict test Clippy passes.
+
+The PNG test passes `DiagnosticPulse::share()` into the retained decode job,
+checks original typed stop categories at the same three relative positions for
+Cancelled and TimedOut, and retains complete traces. Both successful fixtures
+record 66 cancellation checks, **zero reports and zero units**. Zero is retained
+as evidence, not treated as progress qualification. Current-main source review
+at `a5f2a588` also finds the retained Pulse coerced to `&dyn Stop` in decode_inner.
+
+Shared incremental checks pass, but that standard PNG factory wraps
+WholeFileIncremental. This does not qualify the distinct controlled row-streaming
+route, Adam7, APNG, 16-bit, palette, parallel decode or a memory bound.
+
+The PNG run retains 28 traces under `png-artifacts` (14 JPEG and 14 PNG), plus
+`png.log`, alongside the earlier separate artifacts. Wrapper rc=0, 84s, peak RSS
+0.68 GiB, min available 14032 MiB, peak load 1.42, on the same 3 GiB/two-job ARM64
+setup. No codec performance inference follows from build/test wrapper figures.
+
+Progress delivery is tracked in
+[zenpng issue 49](https://github.com/imazen/zenpng/issues/49).
