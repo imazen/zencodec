@@ -517,7 +517,9 @@ prepares an independently versioned 0.2.0.
 
 - Contains no codec logic — traits, types, and format detection only.
 - `ImageFormat` enum is not extensible at runtime (the `Custom` variant requires a `&'static` definition).
-- `no_std` + `alloc` by default; the optional `std` feature carries I/O error kinds.
+- `no_std` + `alloc` by default, including ICC parsing; checked on a freestanding
+  target. Portable gain-map metadata math uses `libm`. The optional `std` feature
+  enables I/O error kinds and preserves platform math.
 
 ## MSRV
 

@@ -309,8 +309,8 @@ allocation. Corrected region requests can reuse their image identity, while an
 observed stop or caught unwind finishes the opened operation. Native failures
 retain their original cause and their native terminal state. The bounded report
 keeps prior decisions without default logging of callback payloads. The shared wrapper uses alloc and a portable once cell; its native adapters
-currently use std. The full crate still has the freestanding build blocker in
-[issue 165](https://github.com/imazen/zencodec/issues/165). Publication does not
+currently use std. The five shared runtime packages pass the
+[freestanding compile gate](no-std.md). Publication does not
 establish preallocation admission or whole-container privacy. [Execution and failure scope](../perf/spatial-validation/README.md#selected-output-executes-the-configured-policy-automatically).
 
 ### Ordinary checked operations

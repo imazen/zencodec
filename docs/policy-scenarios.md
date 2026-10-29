@@ -148,13 +148,11 @@ after a successful callback, cancellation wins before selecting an operation.
 run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 18454MiB | peak-load 0.34
 ```
 
-**Full freestanding integration is blocked by existing code**, not qualified by
-the isolated check. The root zenpixels dependency enables its default std
-feature. Turning that edge off in a disposable export exposes 12 gain-map float
-operations that also fail on the freestanding target. Root production code was
-left unchanged; [issue 165](https://github.com/imazen/zencodec/issues/165) records
-the reproduction and required math/feature qualification. A successful WASM
-check with std available is not a std-free dependency-graph proof.
+The original full-crate check exposed implicit std dependencies and 12 gain-map
+float operations unavailable on the freestanding target. These were repaired
+and the five runtime packages now pass a genuinely freestanding compile gate;
+see [qualification and numeric scope](no-std.md). A successful WASM check with
+std available remains insufficient to prove a std-free dependency graph.
 
 Policy should centralize anticipated refusals. Corrupt input, transport failure,
 cancelled work, resource exhaustion and implementation defects remain distinct

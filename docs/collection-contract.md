@@ -322,8 +322,7 @@ all native layer configurations, reduced-level selection, broader snapshots,
 full workspace admission and complete carrier privacy remain separate work.
 
 Core source uses `alloc` and the cancellation latch has no `std` dependency.
-The full crate's freestanding build still fails on the existing
-[dependency/gain-map math issue 165](https://github.com/imazen/zencodec/issues/165).
-`just collection-api-bare-metal` preserves that reproducer. Passing WebAssembly
+The five runtime packages now pass `just collection-api-bare-metal`; see
+[freestanding qualification and numeric scope](no-std.md). Passing WebAssembly
 checks does not establish a std-free dependency graph. Timing measurements
 rejected by Zenbench are not performance evidence for these contracts.

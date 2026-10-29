@@ -475,13 +475,11 @@ CHANGELOGs. Full design context:
   scope: `docs/policy-jpeg.md`, `docs/policy-transcoding.md`. Public API and codec
   behavior remain unchanged; these need qualified completeness and barrier contracts.
 
-- Freestanding policy qualification (2026-10-25): the root zenpixels dependency
-  enables its default `std` feature. Disabling that edge in an export exposes
-  12 `powf`/`floor`/`round` calls in `src/gainmap.rs` that fail on
-  `thumbv7em-none-eabihf`. WASM compilation with std available does not certify
-  a std-free graph. Tracked in [issue 165](https://github.com/imazen/zencodec/issues/165).
-  `perf/policy-check` distinguishes full-crate WASM integration from the isolated
-  freestanding resolver check. Root production code is unchanged.
+- Fixed freestanding policy integration (2026-10-29): implicit zenpixels std
+  edges are disabled; private gain-map helpers use libm without std and preserve
+  platform math with explicit std. Five runtime packages pass the genuine
+  freestanding target, separately from WASM. Existing gain-map assertions remain
+  unchanged. Numeric scope and reproducible gates: [no-std](docs/no-std.md).
 
 - Fixed during IO contract qualification (2026-10-24): cursors refetched ranges
   already held in their active window and discarded batched ranges on sequential
