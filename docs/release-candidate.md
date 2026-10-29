@@ -197,3 +197,22 @@ those two package identities changed. Set `JPEG_POLICY_ARTIFACTS`, then run
 `cargo clippy --all-targets --all-features --locked -- -D warnings`
 from the harness directory. The full zenpipe feature graph, other native codecs
 and required-platform release checks remain unqualified for this pixel pair.
+
+### Full application graph: first retirement blocker
+
+The unchanged zenpipe `f0322466` full API profile fails compilation against the
+paired candidate at four `PixelBuffer::into_vec` calls in zengif `efb7e43b`
+(`src/codec.rs`: 1727, 1739, 1746, 1931). These are format negotiation and
+animation-buffer reuse. The replacement must distinguish active pixels from
+backing allocation: `into_parts()` preserves prefix, stride and trailing bytes;
+`into_contiguous()` packs rows but still preserves the initial offset. Blindly
+using `into_parts().data` is not a general packed-pixel replacement. Returning
+unchanged RGBA directly also avoids reconstructing its owner and color context.
+
+The isolated graph audit passes with exactly six planned identity changes:
+four core-family packages and two pixel packages. Both registry and git core
+edges need the same path bridge; the first audit correctly rejected the split
+when only registry edges were patched. The full-profile compile then stopped
+at GIF before broader qualification: rc101, 6 seconds, peak RSS 0.58 GiB.
+No feature was removed, no test expectation changed, and the candidate remains
+unqualified for this full application profile.
