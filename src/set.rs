@@ -44,7 +44,9 @@
 //! set on the concrete config before registration, and per-call fidelity goes
 //! through [`CodecSet::encode_with`], which clones the template internally.
 //! [`CodecSet`] is also [`Clone`], so a shared base set can be extended per
-//! tenant or per request.
+//! tenant or per request. Cloning copies the registration lists and shares
+//! immutable templates; it does not clone every native configuration. Creating
+//! an operation still clones its selected config into an independently owned job.
 //!
 //! # Format detection
 //!
@@ -80,7 +82,7 @@ use crate::{
 mod collection;
 
 // ===========================================================================
-// Internal entries — object-safe configs that can also clone themselves
+// Internal entries — shared templates with per-operation config cloning
 // ===========================================================================
 //
 // `DynDecoderConfig` / `DynEncoderConfig` are deliberately left untouched
@@ -90,7 +92,6 @@ mod collection;
 // — is still known.
 
 trait DecoderEntry: DynDecoderConfig {
-    fn clone_entry(&self) -> Box<dyn DecoderEntry>;
     fn as_dyn(&self) -> &dyn DynDecoderConfig;
 }
 
@@ -98,9 +99,6 @@ impl<C> DecoderEntry for C
 where
     C: DecoderConfig + 'static,
 {
-    fn clone_entry(&self) -> Box<dyn DecoderEntry> {
-        Box::new(self.clone())
-    }
     fn as_dyn(&self) -> &dyn DynDecoderConfig {
         self
     }
@@ -270,8 +268,8 @@ impl From<BoxedError> for CodecSetError {
 /// / [`encode_job`](Self::encode_job), which return the stamped job for
 /// further configuration.
 pub struct CodecSet {
-    decoders: Vec<Box<dyn DecoderEntry>>,
-    encoders: Vec<Box<dyn EncoderEntry>>,
+    decoders: Vec<Arc<dyn DecoderEntry>>,
+    encoders: Vec<Arc<dyn EncoderEntry>>,
     collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
     limits: Option<ResourceLimits>,
     pulse: Option<how_far::SharedPulse>,
@@ -302,7 +300,7 @@ impl CodecSet {
     /// If several registered decoders claim the same format, the first
     /// registered wins.
     pub fn with_decoder(mut self, config: impl DecoderConfig + 'static) -> Self {
-        self.decoders.push(Box::new(config));
+        self.decoders.push(Arc::new(config));
         self
     }
 
@@ -318,7 +316,7 @@ impl CodecSet {
         <C::Job as EncodeJob>::Enc: Encoder + Send,
         <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
     {
-        self.encoders.push(Box::new(config));
+        self.encoders.push(Arc::new(config));
         self
     }
 
@@ -334,7 +332,7 @@ impl CodecSet {
         <C::Job as EncodeJob>::Enc: Encoder + Send,
         <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
     {
-        self.encoders.push(Box::new(SendEncoderEntry(config)));
+        self.encoders.push(Arc::new(SendEncoderEntry(config)));
         self
     }
 
@@ -1029,8 +1027,8 @@ impl Default for CodecSet {
 impl Clone for CodecSet {
     fn clone(&self) -> Self {
         Self {
-            decoders: self.decoders.iter().map(|d| d.clone_entry()).collect(),
-            encoders: self.encoders.iter().map(|e| e.clone_entry()).collect(),
+            decoders: self.decoders.clone(),
+            encoders: self.encoders.clone(),
             collections: self.collections.clone(),
             limits: self.limits,
             pulse: self.pulse.clone(),

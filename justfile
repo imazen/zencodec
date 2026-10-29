@@ -1537,3 +1537,8 @@ jpeg-decode-admission-check:
 # Check pinned oracle download integrity and bounded transport fallback.
 av1-timing-source-check:
     python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py
+
+registry-sharing-check:
+    cargo test -p zencodec-testkit --locked --test registry_cloning --test codec_set --test operation_requests
+    cargo clippy -p zencodec -p zencodec-testkit --locked --all-targets -- -D warnings
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --lib control:: -- --test-threads=1

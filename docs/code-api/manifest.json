@@ -5,9 +5,9 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "532fa112b7d2112b6fe85da0f8ac9155af7356bf6200e4397729e6650ff6f96c",
+      "fingerprint": "22635ed66ae68fc2d23cdaed6c2f8585d7a7ce818b6ed321f1667baf03acaecc",
       "surface_sha256": "58eb70f42f137c3c0e55a175e37aa4b87958d1f14ac96d22a289bc97add5fa0a",
-      "details_sha256": "a508014e91b94f9a00db5af01113fa17db6c2f7529273defcfada10db8fb3d86"
+      "details_sha256": "f310af9cb7b2d8393a12e3aebae46b39ee05145212c0b7d00f1b9a7a7f99baff"
     },
     {
       "name": "zencodec-io",

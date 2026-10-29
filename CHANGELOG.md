@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- `CodecSet::clone` shares registered templates instead of deep-cloning every
+  codec configuration. Each operation still clones its selected config;
+  registration lists and per-set defaults remain independent.
+
 - Staged video workspace admission now precedes encoder configuration reads,
   track building and mux preparation. Unknown explicit bounds refuse early;
   default output and exact decoded samples remain unchanged.

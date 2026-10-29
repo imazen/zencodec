@@ -12,7 +12,9 @@ import timing_source as source
 
 class SourceTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(dir=os.path.expanduser('~/tmp'))
+        scratch = Path(os.path.expanduser('~/tmp'))
+        scratch.mkdir(parents=True, exist_ok=True)
+        self.directory = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.payload = b'controlled source archive'

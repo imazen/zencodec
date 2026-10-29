@@ -148,3 +148,12 @@ not change them or certify all native memory bounds.
 validate after decoding. Existing output prediction cannot safely substitute
 for negotiation-aware admission, and switching to a sink must preserve full
 metadata/extras. This remains a contract-design gate.
+
+## Registry reuse
+
+`CodecSet::clone()` now shares registered templates while copying registration
+lists and per-set defaults. Only the selected config is cloned for an operation,
+including controlled decode. Existing registration and job-isolation controls
+and native JPEG controlled decoding pass. See the
+[clone-count qualification](../benchmarks/registry_cloning_2026-10-29.md);
+this establishes removed config clones, not a measured throughput improvement.
