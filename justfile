@@ -1593,3 +1593,9 @@ encode-orientation-check:
     cargo test --locked -p zencodec --lib unsupported_orientation_refuses
     cargo check --locked -p zencodec --example orientation
     cargo clippy --locked -p zencodec --lib --example orientation -- -D warnings
+
+# Default-feature release surface, including media policy integration tests.
+release-workspace-check:
+    cargo test --workspace --all-targets --locked
+    cargo test --workspace --doc --locked
+    cargo clippy --workspace --all-targets --locked -- -D warnings

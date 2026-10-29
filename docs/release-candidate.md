@@ -259,3 +259,20 @@ This does not claim that every historical scenario witness is a passing modern
 regression: the old multipass gap witnesses retain their original assertions;
 only construction was adapted to the current protocol. Their compilation is
 covered by `just paired-harness-check`, not their historical runtime outcomes.
+
+## Checked orientation and merged-main validation
+
+PR179 merged as `dec7f375`; native AVIF PR77 merged as `7d9753f1`.
+Required stored/baked representation now reaches native jobs and retained plans.
+The native matrix includes all eight orientations, plan/start consistency,
+declaration refusals and typed resource-limit causes. Application PR108 adds
+`EncodeRequest::with_orientation_mode`; its explicit-mode AVIF control and full
+API generation pass. The two historical omitted-mode carrier assertions remain
+unresolved; default baking has not changed. See [the contract](encode-orientation.md).
+
+Merged-main CI, docs/native guide and fuzz workflows are green on `dec7f375`.
+The additional default workspace all-target gate exposed a missing std dev
+feature in media-testkit; enabling it for tests preserves the production default
+and lets every existing assertion run. All-target tests, doctests and strict
+Clippy pass after that repair. [Evidence](../benchmarks/release_workspace_2026-10-29.md).
+This is not crate-publication approval or completion of the full application goal.

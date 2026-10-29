@@ -721,3 +721,11 @@ A panic in sink.finish could leave the coroutine resumable. Finalization now
 poisons state before sink callbacks; caught panic remains terminal. Pending owned
 completion details are discarded on failure/cancellation/unwind and cannot be
 retrieved. Native streaming detail production is still a separate qualification.
+
+## Default media testkit build (2026-10-29)
+
+The default workspace all-target gate exposed std-only output/staged imports in
+`zencodec-media-testkit/tests/policy_completion_review.rs`. The testkit now enables
+media/std via its dev dependency, so default tests execute those controls without
+changing production defaults. No assertions or target coverage were removed.
+See `benchmarks/release_workspace_2026-10-29.md`.
