@@ -53,6 +53,32 @@ A failing-first synthetic 60-invocation control reproduces that error; the repor
 now reads retained timing files and still accepts historical target layouts. All
 five runner tests pass. Synthetic fixture values are not benchmark measurements.
 
-Next: diagnose the resource observations before seeking confirmation, and measure
-the IO/media consumer separately. These numbers do not close runtime or memory
-qualification for the release contracts.
+## Observation-window audit
+
+The retained packet contains exactly two boundary observations per invocation:
+
+| Position | Observations | CPU >5% | Heavy processes present |
+|---|---:|---:|---:|
+| Before build | 60 | 0 | 10 |
+| After build | 60 | 60 | 0 |
+| During build | 0 | — | — |
+
+Verified against the exact published zenbench 0.1.11 source, downloaded with
+`cargo read zenbench==0.1.11 --path-only`: Iterate does not run the during-worker
+observer. `pair.rs` records the post-exit snapshot using the same system monitor
+as the pre-build snapshot. `platform.rs` computes CPU usage from successive
+refreshes and cannot subtract exited workers. Consequently that post-build
+interval includes the measured build itself. The post-call `sample_duration_ns`
+is the duration of collecting the snapshot, not the entire CPU-counter interval.
+
+This explains why post-build CPU flags cannot establish unrelated CPU activity.
+It does **not** establish a quiet host, identify the ten pre-build heavy-process
+observations, or turn Iterate into Confirm. No flag or sample is waived, removed
+or corrected; every original measurement, quality flag and artifact hash remains
+unchanged in the updated receipt. The reporter now adds observation positions;
+seven runner/report controls pass, including mixed/unknown layout checks.
+
+Next: use a frozen observer with worker-lifecycle-aware in-flight samples and
+qualify it with known owned/foreign workload controls before repeating for
+confirmation. Measure IO/media separately. These observations do not close
+runtime or memory qualification for the release contracts.

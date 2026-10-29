@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import statistics
+from compile_observations import summarize
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("root", type=Path)
@@ -62,6 +63,7 @@ receipt = {"schema": 1, "source_main": plan["candidates"][0]["revision"],
            "artifact_directory": str(root), "packet": str(packet_path), "measurements": measurements,
            "quality": {"mode": "iterate", "confirmed": False, "invocations": 60,
                        "cpu_load_flags": cpu_flags, "heavy_process_flags": heavy_flags,
+                       "observation_positions": summarize(packet["invocations"]),
                        "placement": packet["placement"]["status"], "correctness_checked": True},
            "scope": "minimal consumer re-export; empty target each invocation; dependencies prefetched; OS file cache warm; two cargo jobs; incremental and compiler wrappers disabled; Rust 1.99.1 on Ryzen 9 7900X; no codec implementations, tests, site generation or CMS",
            "resource_wrapper": resource_line[0], "log": str(args.log),

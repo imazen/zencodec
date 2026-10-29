@@ -253,6 +253,15 @@
     "invocations": 60,
     "cpu_load_flags": 60,
     "heavy_process_flags": 10,
+    "observation_positions": {
+      "boundary_only_pairs": 60,
+      "other_layouts": 0,
+      "before_cpu_flags": 0,
+      "after_cpu_flags": 60,
+      "before_heavy_flags": 10,
+      "after_heavy_flags": 0,
+      "during_observations": 0
+    },
     "placement": "uniform_hardware",
     "correctness_checked": true
   },

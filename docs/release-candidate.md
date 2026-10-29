@@ -104,7 +104,11 @@ The [2026-10-29 core study](../benchmarks/compile_core_2026-10-29.md) completed
 60 fresh-target builds with A/A controls at candidate `e9f2f31d`. Median dev/default
 consumer time was 1.93s published versus 2.79s candidate; release/default was
 2.34s versus 3.83s. All observations remain exploratory: every invocation recorded
-CPU-load flags and 10 recorded heavy-process observations. Dependency graphs and
+CPU-load flags and 10 recorded heavy-process observations. The observation-window
+audit finds all CPU flags after builds, where Iterate's counter interval includes
+the build itself; none occur before builds. Ten pre-build heavy-process observations
+remain unexplained, and no in-flight samples exist. This is not clean-host evidence.
+Dependency graphs and
 API scope differ; these are not isolated costs of a single abstraction.
 
 The older [companion compile study](../benchmarks/compile_adapters_2026-10-27.md)

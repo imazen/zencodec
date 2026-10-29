@@ -13,6 +13,24 @@ spec = importlib.util.spec_from_file_location("compile_runner", Path(__file__).w
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
+class ObservationPlacement(unittest.TestCase):
+    def test_before_after_flags_are_not_reclassified_as_clean(self):
+        from compile_observations import summarize
+        observations = [{"phase": "boundary", "cpu_load": 0.0, "heavy_process_count": 1},
+                        {"phase": "boundary", "cpu_load": 0.08, "heavy_process_count": 0}]
+        result = summarize([{"observations": observations}])
+        self.assertEqual(result, {"boundary_only_pairs": 1, "other_layouts": 0,
+            "before_cpu_flags": 0, "after_cpu_flags": 1,
+            "before_heavy_flags": 1, "after_heavy_flags": 0, "during_observations": 0})
+        self.assertEqual(observations[1]["cpu_load"], 0.08)
+
+    def test_unknown_and_during_layouts_are_not_called_boundary_pairs(self):
+        from compile_observations import summarize
+        result = summarize([{"observations": []}, {"observations": [{"phase": "during"}]}])
+        self.assertEqual(result["boundary_only_pairs"], 0)
+        self.assertEqual(result["other_layouts"], 2)
+        self.assertEqual(result["during_observations"], 1)
+
 class Cleanup(unittest.TestCase):
     def exercise(self, failure=None):
         with tempfile.TemporaryDirectory(dir=Path.home() / "tmp") as scratch:
