@@ -616,6 +616,7 @@ pub fn zencodec::decode::IncrementalDecoderShim<D>::step_controlled(&mut self, i
 pub trait zencodec::decode::Decode: core::marker::Sized
 pub type zencodec::decode::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::decode::Decode::decode(self) -> core::result::Result<zencodec::decode::DecodeOutput, Self::Error>
+pub fn zencodec::decode::Decode::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, Self::Error>
 pub trait zencodec::decode::DecodeJob<'a>: core::marker::Sized
 pub type zencodec::decode::DecodeJob::AnimationFrameDec: zencodec::decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
 pub type zencodec::decode::DecodeJob::Dec: zencodec::decode::Decode<Error = Self::Error>
@@ -700,6 +701,7 @@ pub fn zencodec::decode::DynDecodeJob::set_stop(&mut self, pulse: almost_enough:
 pub fn zencodec::decode::DynDecodeJob::try_set_policy(&mut self, policy: zencodec::decode::DecodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::decode::DynDecoder
 pub fn zencodec::decode::DynDecoder::decode(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::decode::DecodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::decode::DynDecoder::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, zencodec::encode::BoxedError>
 pub trait zencodec::decode::DynDecoderConfig: core::marker::Send + core::marker::Sync
 pub fn zencodec::decode::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn zencodec::decode::DynDecoderConfig::capabilities(&self) -> &'static zencodec::decode::DecodeCapabilities
@@ -2564,6 +2566,7 @@ pub fn ()::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
 pub trait zencodec::prelude::Decode: core::marker::Sized
 pub type zencodec::prelude::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::prelude::Decode::decode(self) -> core::result::Result<zencodec::decode::DecodeOutput, Self::Error>
+pub fn zencodec::prelude::Decode::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, Self::Error>
 pub trait zencodec::prelude::DecodeJob<'a>: core::marker::Sized
 pub type zencodec::prelude::DecodeJob::AnimationFrameDec: zencodec::decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
 pub type zencodec::prelude::DecodeJob::Dec: zencodec::decode::Decode<Error = Self::Error>
@@ -2653,6 +2656,7 @@ pub fn zencodec::prelude::DynDecodeJob::set_stop(&mut self, pulse: almost_enough
 pub fn zencodec::prelude::DynDecodeJob::try_set_policy(&mut self, policy: zencodec::decode::DecodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::prelude::DynDecoder
 pub fn zencodec::prelude::DynDecoder::decode(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::decode::DecodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::prelude::DynDecoder::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, zencodec::encode::BoxedError>
 pub trait zencodec::prelude::DynDecoderConfig: core::marker::Send + core::marker::Sync
 pub fn zencodec::prelude::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn zencodec::prelude::DynDecoderConfig::capabilities(&self) -> &'static zencodec::decode::DecodeCapabilities

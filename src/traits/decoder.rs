@@ -14,6 +14,22 @@ pub trait Decode: Sized {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
+    /// Optionally establish the configured decoder's exact output descriptor.
+    ///
+    /// Called before decoding when an application requires a descriptor. `None`
+    /// means early facts are unavailable; decoding remains usable and its actual
+    /// output must still be checked. `Some` describes this retained decoder,
+    /// including bound preferences and metadata that affects sample interpretation.
+    /// It is not an unconfigured header prediction or a capability advertisement.
+    ///
+    /// Preparation may inspect input and retain metadata, but must not allocate
+    /// an output raster or perform pixel/coefficient reconstruction. This is not
+    /// a whole-operation memory bound. Native errors retain their original type;
+    /// retained cancellation controls apply. The default does no work.
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, Self::Error> {
+        Ok(None)
+    }
+
     /// Decode to owned pixels.
     ///
     /// Input data and format preferences were bound when the decoder

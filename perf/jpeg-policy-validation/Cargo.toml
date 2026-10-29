@@ -7,12 +7,16 @@ publish = false
 [workspace]
 
 [features]
+# Review-only native patch in perf/retained-decode-validation.
+retained-output = []
+retained-output-bench = ["retained-output", "dep:zenbench"]
 # The effective-job preflight scenarios: planning (`EncodeJob::plan_encode`)
 # against native startup (`Encoder::begin_declared`) on the pinned zenjpeg.
 # They began as a patch experiment and now run on zenjpeg's shared hooks.
 native-preflight = []
 
 [dependencies]
+zenbench = { version = "0.1.11", optional = true }
 zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }
 zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
@@ -57,3 +61,8 @@ kamadak-exif = "0.6.1"
 [profile.release]
 debug = 1
 lto = "thin"
+
+[[bench]]
+name = "retained_decode"
+harness = false
+required-features = ["retained-output-bench"]

@@ -1,0 +1,86 @@
+{
+  "status": "invalid confirmation; no runtime acceptance claim",
+  "source_revision": "c13592a1fc35c2a126f356d522aabd7c5271ae8e",
+  "benchmark_source_sha256": "eb75cd2fb6de28d3420fc1c90fb6522aae53000562e926ca57938c6edc56efba",
+  "execution": {
+    "protocol": "zenbench-process-v1",
+    "plan": {
+      "mode": "confirm",
+      "processes": 5,
+      "rounds": 30,
+      "margin_pct": 1.0,
+      "confidence": 0.95,
+      "workload_id": "retained-jpeg-noise-patches-v1",
+      "scope": null,
+      "timeout": {
+        "secs": 300,
+        "nanos": 0
+      }
+    },
+    "binary_sha256": "27ea588070f2193f2be0548c7bd8b4be906d969d7ed216f705534fd16c00ccf4",
+    "process_id": 1575629,
+    "independent_processes": true,
+    "timer_backend": "hardware_counter"
+  },
+  "testbed": {
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "arch": "x86_64",
+    "os": "linux",
+    "logical_cores": 24,
+    "physical_cores": 12
+  },
+  "unreliable": true,
+  "incomplete": false,
+  "gate_waits": 75,
+  "process_observations": [
+    {
+      "process": "0.json",
+      "gate_waits": 1,
+      "unreliable": true,
+      "incomplete": false,
+      "flagged_observations": {
+        "reason=Some(HeavyProcesses(1))": 1
+      }
+    },
+    {
+      "process": "1.json",
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false,
+      "flagged_observations": {}
+    },
+    {
+      "process": "2.json",
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false,
+      "flagged_observations": {}
+    },
+    {
+      "process": "3.json",
+      "gate_waits": 0,
+      "unreliable": false,
+      "incomplete": false,
+      "flagged_observations": {}
+    },
+    {
+      "process": "4.json",
+      "gate_waits": 74,
+      "unreliable": true,
+      "incomplete": false,
+      "flagged_observations": {
+        "reason=Some(HeavyProcesses(1))": 74
+      }
+    }
+  ],
+  "result_sha256": "183b1992810097a8d9af7aa3be05b1474d695169dc4255bf1e5ee586c5b045c3",
+  "raw_directory": "/home/lilith/tmp/zencodec-retained-decode-20261029/runtime-data",
+  "result_path": "/home/lilith/tmp/zencodec-retained-decode-20261029/runtime-result.json",
+  "wrapper": "rc2;33s;peak-RSS0.08GiB;min-avail14674MiB;peak-load0.96",
+  "measurement_boundary": "in-memory configured native decoder construction, optional preparation, decode, output drop; no fixture generation/file I/O/checksum; per-call preparation result assertion included",
+  "limitations": [
+    "No offending process identities in saved gate observations; later ps cannot attribute earlier interference.",
+    "Retain all five processes; do not select the three clean replicates.",
+    "Native runtime overhead remains unqualified."
+  ]
+}

@@ -1293,9 +1293,23 @@ first it can produce without lossy conversion. Pass `&[]` for native format.
 ```rust
 trait Decode: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
+    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, Self::Error>; // default None
     fn decode(self) -> Result<DecodeOutput, Self::Error>;
 }
 ```
+
+`DecodeRequest::with_output` uses this optional preparation automatically on the
+same configured decoder that will reconstruct the image. Callers need no separate
+capability query. `None` means the operation must decode and validate its actual
+result; it does not mean unsupported decoding. A proven mismatch can refuse before
+raster reconstruction, and successful output is still checked afterwards.
+
+Implementors may inspect input and retain metadata, but preparation must not
+reconstruct pixels or coefficients or allocate an output raster. Retained Pulse
+controls still apply. Native errors remain primary; after successful preparation,
+the operation checks cancellation before comparing descriptors. The default does
+no work. Native JPEG adoption and measured costs are scoped separately in
+[descriptor admission](decode-descriptor-admission.md).
 
 ### `StreamingDecode` (scanline-batch decode, pull iterator)
 
@@ -1562,6 +1576,7 @@ trait DynDecodeJob<'a> {
 }
 
 trait DynDecoder {
+    fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, BoxedError>; // default None
     fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError>;
 }
 

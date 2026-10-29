@@ -140,3 +140,181 @@ impl ControlledIncrementalDecode for CheckedDecoder {
             })
     }
 }
+
+/// Preparation and execution use the same owner. Final validation remains
+/// authoritative even when a native implementation supplies incorrect facts.
+pub(super) fn decode_owned(
+    mut decoder: Box<dyn DynDecoder + '_>,
+    required: Option<PixelDescriptor>,
+    pulse: &dyn crate::Pulse,
+) -> Result<crate::DecodeOutput, OperationError> {
+    pulse.check().map_err(OperationError::Stopped)?;
+    // Preserve native failures, then observe cancellation before interpreting
+    // successful facts (including facts that would reject the requested output).
+    let prepared = if required.is_some() {
+        decoder
+            .prepare_output()
+            .map_err(|e| OperationError::Codec(e.into()))?
+    } else {
+        None
+    };
+    pulse.check().map_err(OperationError::Stopped)?;
+    if let (Some(requested), Some(actual)) = (required, prepared)
+        && actual != requested
+    {
+        return Err(OperationError::OutputDescriptor { requested, actual });
+    }
+    let output = decoder
+        .decode()
+        .map_err(|e| OperationError::Codec(e.into()))?;
+    pulse.check().map_err(OperationError::Stopped)?;
+    if let Some(requested) = required {
+        let actual = output.pixels().descriptor();
+        if actual != requested {
+            return Err(OperationError::OutputDescriptor { requested, actual });
+        }
+    }
+    Ok(output)
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use crate::{DecodeOutput, ImageFormat, NoPulse};
+    use alloc::{rc::Rc, sync::Arc, vec};
+    use core::cell::Cell;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    use zenpixels::PixelBuffer;
+
+    struct Native {
+        prepared: Option<PixelDescriptor>,
+        fail: bool,
+        cancel: Option<Arc<AtomicBool>>,
+        preparations: Rc<Cell<usize>>,
+        executions: Rc<Cell<usize>>,
+        drops: Rc<Cell<usize>>,
+    }
+    impl Drop for Native {
+        fn drop(&mut self) {
+            self.drops.set(self.drops.get() + 1);
+        }
+    }
+    impl DynDecoder for Native {
+        fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, BoxedError> {
+            self.preparations.set(self.preparations.get() + 1);
+            if let Some(cancel) = &self.cancel {
+                cancel.store(true, Ordering::SeqCst);
+            }
+            if self.fail {
+                return Err(Box::new(core::fmt::Error));
+            }
+            Ok(self.prepared)
+        }
+        fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
+            self.executions.set(self.executions.get() + 1);
+            Ok(DecodeOutput::new(
+                PixelBuffer::from_vec(vec![1, 2, 3], 1, 1, PixelDescriptor::RGB8_SRGB).unwrap(),
+                ImageInfo::new(1, 1, ImageFormat::Jpeg),
+            ))
+        }
+    }
+    #[test]
+    fn preparation_is_optional_but_actual_output_is_always_checked() {
+        let rgb = PixelDescriptor::RGB8_SRGB;
+        let rgba = PixelDescriptor::RGBA8_SRGB;
+        for (required, prepared, fail, prepares, executes, succeeds) in [
+            (None, Some(rgba), true, 0, 1, true),
+            (Some(rgb), Some(rgb), false, 1, 1, true),
+            (Some(rgba), Some(rgb), false, 1, 0, false),
+            (Some(rgba), Some(rgba), false, 1, 1, false),
+            (Some(rgba), None, false, 1, 1, false),
+            (Some(rgb), None, false, 1, 1, true),
+            (Some(rgb), None, true, 1, 0, false),
+        ] {
+            let preparations = Rc::new(Cell::new(0));
+            let executions = Rc::new(Cell::new(0));
+            let drops = Rc::new(Cell::new(0));
+            let native = Native {
+                prepared,
+                fail,
+                cancel: None,
+                preparations: preparations.clone(),
+                executions: executions.clone(),
+                drops: drops.clone(),
+            };
+            let result = decode_owned(Box::new(native), required, &NoPulse);
+            assert_eq!(result.is_ok(), succeeds);
+            assert_eq!(preparations.get(), prepares);
+            assert_eq!(executions.get(), executes);
+            assert_eq!(drops.get(), 1);
+            if required.is_some() && fail {
+                assert!(
+                    crate::find_cause::<core::fmt::Error>(result.as_ref().unwrap_err()).is_some()
+                );
+            } else if !succeeds {
+                assert!(matches!(
+                    result,
+                    Err(OperationError::OutputDescriptor { .. })
+                ));
+            }
+        }
+    }
+    #[test]
+    fn cancellation_before_or_during_preparation_prevents_execution() {
+        struct Cancel(Arc<AtomicBool>, enough::StopReason);
+        impl enough::Stop for Cancel {
+            fn check(&self) -> Result<(), enough::StopReason> {
+                if self.0.load(Ordering::SeqCst) {
+                    Err(self.1)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        for reason in [enough::StopReason::Cancelled, enough::StopReason::TimedOut] {
+            for cancelled in [false, true] {
+                for prepared in [
+                    None,
+                    Some(PixelDescriptor::RGB8_SRGB),
+                    Some(PixelDescriptor::RGBA8_SRGB),
+                ] {
+                    for fail in [false, true] {
+                        let flag = Arc::new(AtomicBool::new(cancelled));
+                        let preparations = Rc::new(Cell::new(0));
+                        let executions = Rc::new(Cell::new(0));
+                        let drops = Rc::new(Cell::new(0));
+                        let native = Native {
+                            prepared,
+                            fail,
+                            cancel: Some(flag.clone()),
+                            preparations: preparations.clone(),
+                            executions: executions.clone(),
+                            drops: drops.clone(),
+                        };
+                        let pulse = crate::how_far::StopOnly::new(Cancel(flag, reason));
+                        let result = decode_owned(
+                            Box::new(native),
+                            Some(PixelDescriptor::RGB8_SRGB),
+                            &pulse,
+                        );
+                        if fail && !cancelled {
+                            // Native failure remains primary even when it also raises a stop.
+                            assert!(
+                                crate::find_cause::<core::fmt::Error>(result.as_ref().unwrap_err())
+                                    .is_some()
+                            );
+                        } else {
+                            assert!(
+                                matches!(result, Err(OperationError::Stopped(actual)) if actual == reason),
+                                "successful preparation must preserve {reason:?}, prepared={prepared:?}"
+                            );
+                        }
+                        assert_eq!(preparations.get(), usize::from(!cancelled));
+                        assert_eq!(executions.get(), 0);
+                        assert_eq!(drops.get(), 1);
+                    }
+                }
+            }
+        }
+    }
+}

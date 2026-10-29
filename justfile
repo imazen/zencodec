@@ -1705,3 +1705,25 @@ retained-metadata-reuse-apply export:
 # Equal-length plain/required mode names; executable supplied from the frozen graph.
 decode-required-output-profile executable output revision profile="release":
     python3 perf/jpeg-policy-validation/profile-decode-admission.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --compare-required --profile-label "{{profile}}"
+
+# Retained one-shot output facts never bypass actual-result validation.
+decode-output-admission-check:
+    cargo test -p zencodec --all-features --locked --lib operation::decoding::admission_tests
+    cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings
+
+# Review native output preparation; source export and patch identities are retained.
+retained-decode-prepare core_revision jpeg_repository output:
+    python3 perf/retained-decode-validation/prepare.py "{{justfile_directory()}}" "{{core_revision}}" "{{jpeg_repository}}" "{{output}}"
+
+retained-decode-native-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --lib
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output --locked --all-targets -- -D warnings
+
+retained-decode-bench-build:
+    cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked --no-run
+
+retained-decode-bench-clippy:
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --locked --all-targets -- -D warnings
+
+retained-decode-bench:
+    cargo bench --manifest-path perf/jpeg-policy-validation/Cargo.toml --features retained-output-bench --bench retained_decode --locked -- --mode=confirm --workload-id=retained-jpeg-noise-patches-v1 --rounds=30 --processes=5 --margin=1 --cpu-policy=performance

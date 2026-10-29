@@ -4,6 +4,13 @@
 
 ### Added
 
+- Review candidate: optional `Decode::prepare_output` and erased forwarding
+  allow required-output decoding to reject known mismatches before raster
+  reconstruction. Unknown facts retain final-result validation. The retained
+  JPEG experiment records both refusal savings and successful-path costs.
+  Successful preparation observes cancellation before descriptor rejection;
+  native errors remain primary and execution never starts after a stop.
+
 - Retained `EncodePlan::orientation` and callback spatial facts distinguish
   sample transforms from output orientation; contradictory compositions refuse
   before route selection. Unknown remains explicit.

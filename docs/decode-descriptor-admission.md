@@ -170,8 +170,8 @@ CMYK qualification or HDR reconstruction qualification are claimed here.
 
 ## Retained-output review candidate and runtime qualification
 
-[PR 183](https://github.com/imazen/zencodec/pull/183) proposes optional
-`Decode::prepare_output` on the retained configured decoder. It is not on main.
+[PR 183](https://github.com/imazen/zencodec/pull/183) introduces optional
+`Decode::prepare_output` on the retained configured decoder.
 Ordinary decode does not perform the extra preparation; required-output calls
 can reject known mismatches before reconstruction and still validate the actual
 output. Unknown output remains executable. The native JPEG implementation is
@@ -275,3 +275,21 @@ for each measured fixture. Pixel checksums and inputs match. The fixed-margin
 runtime confirmation remains inconclusive in three cases; the large progressive
 case is equivalent. This is evidence for reviewing the native cache, not a
 whole-operation memory bound or a claim of no performance regression.
+
+### Cancellation after successful preparation
+
+Preparation can signal cancellation while returning usable output facts. The
+operation polls Pulse after a successful preparation and before comparing those
+facts to the required descriptor. This preserves `Cancelled` and `TimedOut`
+instead of replacing them with a descriptor mismatch. A native preparation
+error remains primary; pre-existing cancellation prevents preparation entirely.
+The retained decoder is dropped exactly once and reconstruction does not start.
+
+The regression exercises unknown, matching and mismatching facts, both stop
+reasons, cancellation before/during preparation and native preparation failure.
+This checks boundary ordering; it cannot preempt a native call that never polls.
+
+The [ARM regression receipt](../benchmarks/preparation_stop_2026-10-29.json)
+records the failing-first mismatch, all 682 core library tests passing, and
+strict all-target Clippy. Earlier missing-lock and toolchain/lint failures are
+retained separately; no behavioral assertion was weakened.

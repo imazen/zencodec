@@ -794,3 +794,11 @@ Mutation controls catch ignored stops, early sink effects and reason collapse;
 how-far-really diagnostics also detect a swallowed stop. This is testkit coverage,
 not proof of native in-flight responsiveness. See
 `benchmarks/testkit_precancellation_2026-10-29.md` and `just testkit-pulse-check`.
+
+## Retained preparation cancellation precedence (PR183)
+
+A successful `prepare_output` could signal a stop and return mismatching facts;
+required-output admission returned a descriptor error before its post-call Pulse
+check. The check now precedes comparison, retaining Cancelled/TimedOut and native
+failure priority. The regression also checks no reconstruction and exact owner
+cleanup. See docs/decode-descriptor-admission.md for the boundary contract.
