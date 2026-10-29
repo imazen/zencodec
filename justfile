@@ -1575,6 +1575,8 @@ decode-details-check:
 
 # Optional terminal details: native ownership transport and protocol guards.
 terminal-details-check:
+    cargo test -p zencodec-coroutine --locked
+    cargo clippy -p zencodec-coroutine --all-targets --locked -- -D warnings
     cargo test -p zencodec --lib --locked
     cargo test -p zencodec-io --features tokio --locked
     cargo clippy -p zencodec -p zencodec-io --lib --all-features --locked -- -D warnings

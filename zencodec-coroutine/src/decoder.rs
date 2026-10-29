@@ -57,12 +57,25 @@ pub struct CoroutineDecoder<F, E> {
     access: AccessPattern,
     need: Vec<InputRequest>,
     cached_info: Option<ImageInfo>,
+    details: Option<zencodec::decode::DecodeDetails>,
     cached_info_generation: u64,
     /// A native batch may exceed the sink's capacity for one progress event.
     /// Keep its allocation until all strips have been delivered; do not poll
     /// the producer while any of its rows remain unpublished.
     pending_rows: Option<(crate::context::PendingRows, u32)>,
     _err: PhantomData<fn() -> E>,
+}
+
+// Stack-only cleanup: no extra Arc clone or lock on a successful step.
+struct DetailsCleanup<'a, F, E>(&'a mut CoroutineDecoder<F, E>);
+impl<F, E> Drop for DetailsCleanup<'_, F, E> {
+    fn drop(&mut self) {
+        if matches!(self.0.state, State::Failed) {
+            let pending = self.0.shared.lock().details.take();
+            drop(pending);
+            self.0.details = None;
+        }
+    }
 }
 
 impl<F, E> CoroutineDecoder<F, E>
@@ -133,6 +146,7 @@ where
             access,
             need: Vec::new(),
             cached_info: None,
+            details: None,
             cached_info_generation: 0,
             pending_rows: None,
             _err: PhantomData,
@@ -266,6 +280,11 @@ where
     F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
     E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
 {
+    fn with_details_cleanup<T>(&mut self, work: impl FnOnce(&mut Self) -> T) -> T {
+        let guard = DetailsCleanup(self);
+        work(&mut *guard.0)
+    }
+
     fn advance(
         &mut self,
         input: Input<'_>,
@@ -438,21 +457,23 @@ where
         sink: &mut dyn DecodeRowSink,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Progress, StepError<E>> {
-        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        if matches!(self.state, State::Failed) {
-            return Err(StepError::Finished);
-        }
-        if self.shared.lock().controlled {
-            self.state = State::Failed;
-            return Err(StepError::Control(ControlError::UnhandledBoundary));
-        }
-        match self.advance(input, sink, pulse)? {
-            ControlledProgress::Decode(progress) => Ok(progress),
-            ControlledProgress::Suspended { .. } => {
-                self.state = State::Failed;
-                Err(StepError::Control(ControlError::UnhandledBoundary))
+        self.with_details_cleanup(|this| {
+            let pulse = pulse.unwrap_or(&zencodec::NoPulse);
+            if matches!(this.state, State::Failed) {
+                return Err(StepError::Finished);
             }
-        }
+            if this.shared.lock().controlled {
+                this.state = State::Failed;
+                return Err(StepError::Control(ControlError::UnhandledBoundary));
+            }
+            match this.advance(input, sink, pulse)? {
+                ControlledProgress::Decode(progress) => Ok(progress),
+                ControlledProgress::Suspended { .. } => {
+                    this.state = State::Failed;
+                    Err(StepError::Control(ControlError::UnhandledBoundary))
+                }
+            }
+        })
     }
 
     fn requested(&self) -> &[InputRequest] {
@@ -463,7 +484,21 @@ where
     }
 
     fn info(&self) -> Option<&ImageInfo> {
-        self.cached_info.as_ref()
+        self.details
+            .as_ref()
+            .map(|d| &d.info)
+            .or(self.cached_info.as_ref())
+    }
+
+    fn take_details(&mut self) -> Option<zencodec::decode::DecodeDetails> {
+        if !matches!(self.state, State::Done(_)) {
+            return None;
+        }
+        let details = self.details.take();
+        if details.is_some() {
+            self.cached_info = None;
+        }
+        details
     }
 
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
@@ -486,15 +521,17 @@ where
         sink: &mut dyn DecodeRowSink,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<ControlledProgress, StepError<E>> {
-        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        if matches!(self.state, State::Failed) {
-            return Err(StepError::Finished);
-        }
-        if !self.shared.lock().controlled {
-            self.state = State::Failed;
-            return Err(StepError::Control(ControlError::NotControlled));
-        }
-        self.advance(input, sink, pulse)
+        self.with_details_cleanup(|this| {
+            let pulse = pulse.unwrap_or(&zencodec::NoPulse);
+            if matches!(this.state, State::Failed) {
+                return Err(StepError::Finished);
+            }
+            if !this.shared.lock().controlled {
+                this.state = State::Failed;
+                return Err(StepError::Control(ControlError::NotControlled));
+            }
+            this.advance(input, sink, pulse)
+        })
     }
 
     fn resume(
@@ -503,40 +540,42 @@ where
         action: BoundaryAction,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), StepError<E>> {
-        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
-        let state = core::mem::replace(&mut self.state, State::Failed);
-        if !matches!(state, State::Running) {
-            return Err(StepError::Finished);
-        }
-        pulse.check()?;
-        let mut shared = self.shared.lock();
-        if !shared.controlled {
-            return Err(StepError::Control(ControlError::NotControlled));
-        }
-        if let Some(error) = shared.control_failure {
-            return Err(StepError::Control(error));
-        }
-        let Some(boundary) = shared.boundary.take() else {
-            return Err(StepError::Control(ControlError::InvalidReply));
-        };
-        if boundary.id() != id || !action.permits(boundary.facts()) || shared.reply.is_some() {
-            return Err(StepError::Control(ControlError::InvalidReply));
-        }
-        let facts = boundary.facts();
-        if facts.descriptor != shared.descriptor
-            || shared
-                .info
-                .as_ref()
-                .is_none_or(|info| info.width != facts.width || info.height != facts.height)
-        {
-            return Err(StepError::Control(ControlError::InconsistentFacts));
-        }
-        if action == BoundaryAction::AdoptInterpretation {
-            shared.adopted = Some(facts);
-        }
-        shared.reply = Some((id, action));
-        self.state = State::Running;
-        Ok(())
+        self.with_details_cleanup(|this| {
+            let pulse = pulse.unwrap_or(&zencodec::NoPulse);
+            let state = core::mem::replace(&mut this.state, State::Failed);
+            if !matches!(state, State::Running) {
+                return Err(StepError::Finished);
+            }
+            pulse.check()?;
+            let mut shared = this.shared.lock();
+            if !shared.controlled {
+                return Err(StepError::Control(ControlError::NotControlled));
+            }
+            if let Some(error) = shared.control_failure {
+                return Err(StepError::Control(error));
+            }
+            let Some(boundary) = shared.boundary.take() else {
+                return Err(StepError::Control(ControlError::InvalidReply));
+            };
+            if boundary.id() != id || !action.permits(boundary.facts()) || shared.reply.is_some() {
+                return Err(StepError::Control(ControlError::InvalidReply));
+            }
+            let facts = boundary.facts();
+            if facts.descriptor != shared.descriptor
+                || shared
+                    .info
+                    .as_ref()
+                    .is_none_or(|info| info.width != facts.width || info.height != facts.height)
+            {
+                return Err(StepError::Control(ControlError::InconsistentFacts));
+            }
+            if action == BoundaryAction::AdoptInterpretation {
+                shared.adopted = Some(facts);
+            }
+            shared.reply = Some((id, action));
+            this.state = State::Running;
+            Ok(())
+        })
     }
 }
 
@@ -636,14 +675,25 @@ where
         info: OutputInfo,
         consumed: usize,
     ) -> Result<Progress, StepError<E>> {
+        // Final sink callbacks may unwind. A caught panic must never resume a
+        // completed future or expose its pending details as successful output.
+        self.state = State::Failed;
         let inconsistent = {
             let shared = self.shared.lock();
-            shared.controlled
+            shared.details.as_ref().is_some_and(|details| {
+                details.info.width != info.width
+                    || details.info.height != info.height
+                    || (shared.adopted.is_some()
+                        && shared.info.as_ref().is_some_and(|old| {
+                            old.orientation != details.info.orientation
+                                || old.source_color != details.info.source_color
+                        }))
+            }) || (shared.controlled
                 && shared.adopted.is_some_and(|facts| {
                     facts.width != info.width
                         || facts.height != info.height
                         || facts.descriptor != Some(info.native_format)
-                })
+                }))
         };
         if inconsistent {
             self.state = State::Failed;
@@ -664,6 +714,12 @@ where
         let mut shared = self.shared.lock();
         shared.input.clear();
         shared.spare = Default::default();
+        self.details = shared.details.take();
+        if self.details.is_some() {
+            // The owned final result supersedes earlier metadata snapshots.
+            self.cached_info = None;
+            shared.info = None;
+        }
         Ok(Progress::new(consumed, Event::Done(info)))
     }
 }
