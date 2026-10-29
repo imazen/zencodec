@@ -56,7 +56,7 @@ explicit carrier-release refinement passed in29s/peakRSS0.71GiB. These are build
 and validation resources, not decoder memory measurements. Full logs remain
 at `~/tmp/retained-reuse-20261029/{check,check2,check3}.log`.
 
-**Runtime non-inferiority is not established; allocation costs remain unmeasured.** The inline cached
+**Runtime non-inferiority is not established. Matched allocation costs are below.** The inline cached
 owner changes decoder layout; retaining full metadata between preparation and
 execution can change peak memory. Early release is not a numeric bound. Before
 native adoption, repeat matched heap profiles and the unchanged five-process,
@@ -84,3 +84,38 @@ lifetime in this candidate. Uniform ARM CPU placement is enforced; frequency
 is unverified. No x86, whole-application or memory claim follows. Wrapper rc2,
 25s, peak RSS0.02GiB, minimum available14823MiB, load1.74; build separately
 passed in198s/peakRSS0.72GiB. Raw results remain in the run directory above.
+
+## Matched ARM allocation comparison
+
+The same release probe, compiler, native pins and fixtures ran against the
+original PR183 preparation and the reuse candidate. Each profile replays every
+heaptrack allocation/free event and checks its peak against heaptrack_print.
+The executable pathname is identical; plain/required mode names and fixture
+pathnames have equal lengths. Source hashes and all pixel checksums match.
+The baseline package was explicitly cleaned and compilation logs identify its
+original source paths; this is not a reused candidate executable.
+
+| Fixture / call | Original peak heap bytes / allocations | Reuse peak heap bytes / allocations |
+|---|---:|---:|
+| Baseline ordinary | 2,820,122 / 73 | 2,820,226 / 73 |
+| Baseline required | 2,820,127 / 78 | 2,820,231 / 74 |
+| Progressive ordinary | 5,323,424 / 119 | 5,323,528 / 119 |
+| Progressive required | 5,323,429 / 124 | 5,323,533 / 120 |
+
+Reuse removes four successful-preparation allocations while increasing peak live
+heap by 104 bytes on every measured path, including ordinary decode. Within the
+reuse candidate, required output costs one allocation and five peak-live bytes
+more than ordinary output on these fixtures. These are full-process measured
+values, not a universal decoder bound. They do not cover large ICC/EXIF, every
+native configuration or stack/compile-time cost. Do not attribute the 104 bytes
+to a specific allocation site without further inspection.
+
+[Exact receipt](../../benchmarks/retained_reuse_heap_2026-10-29.json) includes
+binary/input hashes and all eight cells. `decode-required-output-profile` adds
+a paired mode to the existing profiler without removing its ten-path defaults.
+Both profile batches and strict binary Clippy pass. Reuse wrapper rc0/77s,
+peakRSS0.56GiB/minavail14172MiB; original wrapper rc0/76s,
+peakRSS0.73GiB/minavail13976MiB, each 3GiB/two jobs/timeout900. Those wrapper
+figures are separate from the heaptrack allocation values above. Raw captures,
+interpreter output and logs remain under `~/tmp/retained-reuse-20261029` in
+`heap-profiles` and `base-profiles`. Regenerable executables are not archived.

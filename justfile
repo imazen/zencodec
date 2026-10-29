@@ -1701,3 +1701,7 @@ native-pulse-diagnostics-check artifacts="$HOME/tmp/zencodec-native-pulse":
 # Source-only application to a hash-verified PR183 prepared export; no checkout edits.
 retained-metadata-reuse-apply export:
     python3 perf/retained-metadata-reuse/apply.py "{{export}}"
+
+# Equal-length plain/required mode names; executable supplied from the frozen graph.
+decode-required-output-profile executable output revision profile="release":
+    python3 perf/jpeg-policy-validation/profile-decode-admission.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --compare-required --profile-label "{{profile}}"

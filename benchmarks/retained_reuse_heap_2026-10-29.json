@@ -1,0 +1,118 @@
+{
+  "baseline": {
+    "source_revision": "PR183-9efb2107-original-preparation",
+    "binary_sha256": "57c076bdcf5e5a3a517b81f9deada3acadc0dca360a4875200ff833660bacd2a",
+    "native_revision": "7c5a9501270210d6ef534c23221ff2660508b7cf",
+    "dimensions": [
+      1024,
+      768
+    ],
+    "profile": "release; full-process heap allocations; not throughput or workspace bound",
+    "started": "2026-10-29T22:54:48.111643+00:00",
+    "cells": [
+      {
+        "configuration": "baseline",
+        "mode": "one-shot-plain",
+        "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+        "peak_heap_bytes": 2820122,
+        "allocation_calls": 73,
+        "live_bytes_at_exit": 544
+      },
+      {
+        "configuration": "baseline",
+        "mode": "one-shot-ready",
+        "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+        "peak_heap_bytes": 2820127,
+        "allocation_calls": 78,
+        "live_bytes_at_exit": 544
+      },
+      {
+        "configuration": "progressive",
+        "mode": "one-shot-plain",
+        "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+        "peak_heap_bytes": 5323424,
+        "allocation_calls": 119,
+        "live_bytes_at_exit": 2754
+      },
+      {
+        "configuration": "progressive",
+        "mode": "one-shot-ready",
+        "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+        "peak_heap_bytes": 5323429,
+        "allocation_calls": 124,
+        "live_bytes_at_exit": 2754
+      }
+    ],
+    "stage": "complete",
+    "completed": "2026-10-29T22:54:48.876903+00:00"
+  },
+  "reuse": {
+    "source_revision": "PR183+91db6bf3",
+    "binary_sha256": "9b91a057c96e9e610fe5c0f6d59728e6b497aff7037313029a94ead676d7f050",
+    "native_revision": "7c5a9501270210d6ef534c23221ff2660508b7cf",
+    "dimensions": [
+      1024,
+      768
+    ],
+    "profile": "release; full-process heap allocations; not throughput or workspace bound",
+    "started": "2026-10-29T22:52:11.730741+00:00",
+    "cells": [
+      {
+        "configuration": "baseline",
+        "mode": "one-shot-plain",
+        "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+        "peak_heap_bytes": 2820226,
+        "allocation_calls": 73,
+        "live_bytes_at_exit": 544
+      },
+      {
+        "configuration": "baseline",
+        "mode": "one-shot-ready",
+        "input_sha256": "43face4dffb0b4d32156b713fafbf41324d59056641fcbf68e3cde7077c7bdb2",
+        "peak_heap_bytes": 2820231,
+        "allocation_calls": 74,
+        "live_bytes_at_exit": 544
+      },
+      {
+        "configuration": "progressive",
+        "mode": "one-shot-plain",
+        "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+        "peak_heap_bytes": 5323528,
+        "allocation_calls": 119,
+        "live_bytes_at_exit": 2754
+      },
+      {
+        "configuration": "progressive",
+        "mode": "one-shot-ready",
+        "input_sha256": "9c5f5dade1ee0474d5929f69cbb83815f6d731832ccb029605ffd1bde30a93b2",
+        "peak_heap_bytes": 5323533,
+        "allocation_calls": 120,
+        "live_bytes_at_exit": 2754
+      }
+    ],
+    "stage": "complete",
+    "completed": "2026-10-29T22:52:12.498504+00:00"
+  },
+  "source": "91db6bf3; probe in enclosing commit",
+  "profile_scope": "matched ARM64 release full-process heaptrack; exact events cross-checked with heaptrack_print",
+  "same_executable_path": true,
+  "equal_length_mode_and_fixture_paths": true,
+  "output_checksums_identical": true,
+  "runtime_noninferiority": "not established",
+  "wrapper": {
+    "baseline": {
+      "rc": 0,
+      "seconds": 76,
+      "peak_rss_gib": 0.73,
+      "min_available_mib": 13976,
+      "peak_load": 1.58
+    },
+    "reuse": {
+      "rc": 0,
+      "seconds": 77,
+      "peak_rss_gib": 0.56,
+      "min_available_mib": 14172,
+      "peak_load": 1.47
+    }
+  }
+}

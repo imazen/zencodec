@@ -81,11 +81,16 @@ fn main() -> Result<(), Failure> {
     let input = std::fs::read(&args[3])?;
     let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
     let refused = args[1].ends_with("refuse");
-    let request = DecodeRequest::new().with_output(if refused {
-        PixelDescriptor::RGB16_SRGB
+    // Equal-length mode names keep argument allocation identical in paired profiles.
+    let request = if args[1] == "one-shot-plain" {
+        DecodeRequest::new()
     } else {
-        PixelDescriptor::RGB8_SRGB
-    });
+        DecodeRequest::new().with_output(if refused {
+            PixelDescriptor::RGB16_SRGB
+        } else {
+            PixelDescriptor::RGB8_SRGB
+        })
+    };
     if args[1].starts_with("one-shot-") {
         let result = request.decode(&codecs, &input);
         if refused {
@@ -94,6 +99,7 @@ fn main() -> Result<(), Failure> {
         } else {
             let result = result?;
             assert_eq!((result.width(), result.height()), (WIDTH, HEIGHT));
+            assert_eq!(result.pixels().descriptor(), PixelDescriptor::RGB8_SRGB);
             println!("pixels {:016x}", checksum(result.pixels()));
         }
         return Ok(());

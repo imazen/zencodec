@@ -15,6 +15,8 @@ def main():
     parser.add_argument('executable', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--source-revision', required=True)
+    parser.add_argument('--compare-required', action='store_true')
+    parser.add_argument('--profile-label', default='debug')
     args = parser.parse_args()
     tools = runpy.run_path(str(Path(__file__).with_name('profile-preparation.py')))
     run = tools['run']
@@ -24,7 +26,7 @@ def main():
     report = dict(source_revision=args.source_revision,
                   binary_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
                   native_revision=tools['native_revision'](), dimensions=[1024, 768],
-                  profile='debug; full-process heap allocations; not throughput or workspace bound',
+                  profile=f'{args.profile_label}; full-process heap allocations; not throughput or workspace bound',
                   started=datetime.now(timezone.utc).isoformat(), cells=[])
     def save():
         (output / 'progress.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -34,7 +36,9 @@ def main():
         run([str(executable), 'fixture', configuration, str(fixture)], output / f'{configuration}.fixture.log')
         source_hash = hashlib.sha256(fixture.read_bytes()).hexdigest()
         successful = []
-        for mode in ['one-shot-refuse', 'controlled-refuse', 'one-shot-ok', 'controlled-copy', 'controlled-own']:
+        modes = (['one-shot-plain', 'one-shot-ready'] if args.compare_required else
+                 ['one-shot-refuse', 'controlled-refuse', 'one-shot-ok', 'controlled-copy', 'controlled-own'])
+        for mode in modes:
             name = f'{configuration}-{mode}'
             report['stage'] = name
             save()
@@ -58,7 +62,7 @@ def main():
             report['cells'].append(dict(configuration=configuration, mode=mode,
                                         input_sha256=source_hash, **measured))
             save()
-        if len(successful) != 3 or len(set(successful)) != 1:
+        if len(successful) != (2 if args.compare_required else 3) or len(set(successful)) != 1:
             raise ValueError(f'Pixel paths disagree: {configuration}: {successful}')
     report['stage'] = 'complete'
     report['completed'] = datetime.now(timezone.utc).isoformat()

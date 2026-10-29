@@ -267,3 +267,11 @@ preparation and releases scanned carriers before reconstruction. The native
 matrix passes with exact extra-segment comparisons and eight post-preparation
 cancellation cases; strict Clippy passes. It remains an experiment: changed
 layout, retained memory and runtime need matched measurement before adoption.
+
+The follow-up [matched ARM heap profiles](../benchmarks/retained_reuse_heap_2026-10-29.json)
+quantify the reuse tradeoff: four fewer allocation calls on successful required
+output, and 104 additional peak-live bytes on both ordinary and required decode
+for each measured fixture. Pixel checksums and inputs match. The fixed-margin
+runtime confirmation remains inconclusive in three cases; the large progressive
+case is equivalent. This is evidence for reviewing the native cache, not a
+whole-operation memory bound or a claim of no performance regression.
