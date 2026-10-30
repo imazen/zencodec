@@ -1882,3 +1882,12 @@ track-timeline-check:
     cargo clippy --locked -p zencodec-media -p zencodec-media-testkit --all-targets -- -D warnings
     cargo check --locked -p zencodec-media --no-default-features --target wasm32-unknown-unknown
     cargo test --locked -p zencodec-media --doc
+
+# Emit native MP4 edit fixtures from a verified existing native IVF.
+presentation-files input output:
+    cargo run --locked --manifest-path perf/io-validation/Cargo.toml -p io-validation --example presentation_files -- "{{input}}" "{{output}}"
+    cargo clippy --locked --manifest-path perf/io-validation/Cargo.toml -p io-validation --example presentation_files -- -D warnings
+
+# Strict independent playback comparison; every mismatch remains a failure.
+presentation-playback files expected output:
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}"

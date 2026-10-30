@@ -165,3 +165,16 @@ that guarantee is required: it never silently falls back to the above route.
 The real IVF remux control lives in
 `perf/io-validation/tests/presentation_routes.rs`; packet bytes and timestamps
 are checked separately from any decoded-video claims.
+
+## Independent playback finding
+
+The [12-case native MP4 comparison](../benchmarks/presentation_playback_2026-10-30.md)
+passes 5 cases and disagrees with FFmpeg 8.0.1 in 7. Progressive identity, clipping,
+repetition and gaps agree; fragmented identity agrees. Fragmented edits, dwell
+and speed changes are not independently qualified. The oracle's source explains
+limitations in those paths, but this does not qualify universal playback.
+
+Before freezing, separate retaining edit declarations, executing them into
+output samples/timestamps, and meeting a selected playback target's constraints.
+Keep the failing controls intact. The current remux hook must not be treated as
+a certificate of arbitrary-player execution.
