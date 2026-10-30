@@ -41,7 +41,7 @@ pub struct zencodec_media::adapt::VideoAnimationDecoder<D, C, R>
 impl<D: zencodec_media::container::Demuxer, C: zencodec_media::session::VideoDecoder, R: zencodec_media::adapt::RenderFrame> zencodec_media::adapt::VideoAnimationDecoder<D, C, R>
 pub fn zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::demuxer(&self) -> &D
 pub fn zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::frames_decoded(&self) -> u64
-pub fn zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::new(bytes: alloc::sync::Arc<[u8]>, dem: D, dec: C, render: R, final_duration: zencodec::animation::FrameDuration, window: usize) -> Self
+pub fn zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::new(bytes: alloc::rcs::arc::Arc<[u8]>, dem: D, dec: C, render: R, final_duration: zencodec::animation::FrameDuration, window: usize) -> Self
 impl<D, C, R> zencodec::traits::decoder::AnimationFrameDecoder for zencodec_media::adapt::VideoAnimationDecoder<D, C, R> where D: zencodec_media::container::Demuxer + core::marker::Send, C: zencodec_media::session::VideoDecoder + core::marker::Send, R: zencodec_media::adapt::RenderFrame + core::marker::Send
 pub type zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::Error = zencodec_media::adapt::AdaptError<<D as zencodec_media::container::Demuxer>::Error, <C as zencodec_media::session::VideoDecoder>::Error>
 pub fn zencodec_media::adapt::VideoAnimationDecoder<D, C, R>::info(&self) -> &zencodec::info::ImageInfo
@@ -286,7 +286,7 @@ pub fn zencodec_media::packet::PacketError::fmt(&self, f: &mut core::fmt::Format
 pub zencodec_media::packet::PacketPayload::Accounted(zencodec::storage::SharedStorage<u8>)
 pub zencodec_media::packet::PacketPayload::Owned(alloc::vec::Vec<u8>)
 pub zencodec_media::packet::PacketPayload::Shared
-pub zencodec_media::packet::PacketPayload::Shared::bytes: alloc::sync::Arc<[u8]>
+pub zencodec_media::packet::PacketPayload::Shared::bytes: alloc::rcs::arc::Arc<[u8]>
 pub zencodec_media::packet::PacketPayload::Shared::len: usize
 pub zencodec_media::packet::PacketPayload::Shared::start: usize
 impl zencodec_media::packet::PacketPayload
@@ -315,7 +315,7 @@ pub fn zencodec_media::packet::Packet::discard(&self) -> core::option::Option<ze
 pub fn zencodec_media::packet::Packet::dts(&self) -> core::option::Option<zencodec::time::Timestamp>
 pub fn zencodec_media::packet::Packet::duration_ticks(&self) -> core::option::Option<u64>
 pub fn zencodec_media::packet::Packet::from_accounted(bytes: zencodec::storage::SharedStorage<u8>) -> core::result::Result<Self, zencodec_media::packet::PacketError>
-pub fn zencodec_media::packet::Packet::from_shared(bytes: alloc::sync::Arc<[u8]>, start: usize, len: usize) -> core::result::Result<Self, zencodec_media::packet::PacketError>
+pub fn zencodec_media::packet::Packet::from_shared(bytes: alloc::rcs::arc::Arc<[u8]>, start: usize, len: usize) -> core::result::Result<Self, zencodec_media::packet::PacketError>
 pub fn zencodec_media::packet::Packet::from_vec(bytes: alloc::vec::Vec<u8>) -> core::result::Result<Self, zencodec_media::packet::PacketError>
 pub fn zencodec_media::packet::Packet::input_offset(&self) -> core::option::Option<u64>
 pub fn zencodec_media::packet::Packet::is_empty(&self) -> bool
@@ -428,13 +428,13 @@ pub zencodec_media::session::UnsupportedMedia::Seek
 #[non_exhaustive] pub struct zencodec_media::session::CodecConfig
 pub zencodec_media::session::CodecConfig::codec: zencodec_media::track::CodecId
 pub zencodec_media::session::CodecConfig::epoch: u32
-pub zencodec_media::session::CodecConfig::private: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec_media::session::CodecConfig::private: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec_media::session::CodecConfig::time_base: zencodec::time::TimeBase
 pub zencodec_media::session::CodecConfig::video: core::option::Option<zencodec_media::track::VideoTrackInfo>
 impl zencodec_media::session::CodecConfig
 pub fn zencodec_media::session::CodecConfig::new(codec: zencodec_media::track::CodecId, time_base: zencodec::time::TimeBase) -> Self
 pub fn zencodec_media::session::CodecConfig::with_epoch(self, epoch: u32) -> Self
-pub fn zencodec_media::session::CodecConfig::with_private(self, private: alloc::sync::Arc<[u8]>) -> Self
+pub fn zencodec_media::session::CodecConfig::with_private(self, private: alloc::rcs::arc::Arc<[u8]>) -> Self
 pub fn zencodec_media::session::CodecConfig::with_video(self, video: zencodec_media::track::VideoTrackInfo) -> Self
 impl core::convert::From<&zencodec_media::track::TrackInfo> for zencodec_media::session::CodecConfig
 pub fn zencodec_media::session::CodecConfig::from(t: &zencodec_media::track::TrackInfo) -> Self
@@ -479,10 +479,10 @@ pub fn zencodec_media::session::VideoEncoderShim<E>::output_fidelity(&self) -> c
 pub fn zencodec_media::session::VideoEncoderShim<E>::receive(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::session::VideoEncoderShim<E>::send(&mut self, frame: &zencodec::frame_storage::Frame, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 #[non_exhaustive] pub struct zencodec_media::session::VideoStreamInfo
-pub zencodec_media::session::VideoStreamInfo::interpretation: alloc::sync::Arc<zencodec::frame::FrameInterpretation>
+pub zencodec_media::session::VideoStreamInfo::interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
 pub zencodec_media::session::VideoStreamInfo::reorder_depth: core::option::Option<u32>
 impl zencodec_media::session::VideoStreamInfo
-pub fn zencodec_media::session::VideoStreamInfo::new(interpretation: alloc::sync::Arc<zencodec::frame::FrameInterpretation>) -> Self
+pub fn zencodec_media::session::VideoStreamInfo::new(interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>) -> Self
 pub trait zencodec_media::session::VideoDecoder
 pub type zencodec_media::session::VideoDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec_media::session::VideoDecoder::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<Self::Error>>
@@ -645,7 +645,7 @@ impl core::error::Error for zencodec_media::timeline::TimelineError
 impl core::fmt::Display for zencodec_media::timeline::TimelineError
 pub fn zencodec_media::timeline::TimelineError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum zencodec_media::timeline::TrackTimeline
-pub zencodec_media::timeline::TrackTimeline::Edited(alloc::sync::Arc<zencodec_media::timeline::EditList>)
+pub zencodec_media::timeline::TrackTimeline::Edited(alloc::rcs::arc::Arc<zencodec_media::timeline::EditList>)
 pub zencodec_media::timeline::TrackTimeline::Unedited
 pub zencodec_media::timeline::TrackTimeline::Unknown
 pub struct zencodec_media::timeline::EditList
@@ -710,7 +710,7 @@ pub fn zencodec_media::track::TrackInfo::audio(index: u32, codec: zencodec_media
 pub fn zencodec_media::track::TrackInfo::audio_info(&self) -> core::option::Option<&zencodec_media::track::AudioTrackInfo>
 pub fn zencodec_media::track::TrackInfo::codec(&self) -> &zencodec_media::track::CodecId
 pub fn zencodec_media::track::TrackInfo::codec_delay(&self) -> core::option::Option<zencodec::animation::FrameDuration>
-pub fn zencodec_media::track::TrackInfo::codec_private(&self) -> core::option::Option<&alloc::sync::Arc<[u8]>>
+pub fn zencodec_media::track::TrackInfo::codec_private(&self) -> core::option::Option<&alloc::rcs::arc::Arc<[u8]>>
 pub fn zencodec_media::track::TrackInfo::config_epoch(&self) -> u32
 pub fn zencodec_media::track::TrackInfo::declared_duration_ticks(&self) -> core::option::Option<u64>
 pub fn zencodec_media::track::TrackInfo::declared_packets(&self) -> core::option::Option<u64>
@@ -729,7 +729,7 @@ pub struct zencodec_media::track::TrackInfoBuilder(_)
 impl zencodec_media::track::TrackInfoBuilder
 pub fn zencodec_media::track::TrackInfoBuilder::build(self) -> core::result::Result<zencodec_media::track::TrackInfo, zencodec_media::track::TrackError>
 pub fn zencodec_media::track::TrackInfoBuilder::with_codec_delay(self, d: zencodec::animation::FrameDuration) -> Self
-pub fn zencodec_media::track::TrackInfoBuilder::with_codec_private(self, bytes: alloc::sync::Arc<[u8]>) -> Self
+pub fn zencodec_media::track::TrackInfoBuilder::with_codec_private(self, bytes: alloc::rcs::arc::Arc<[u8]>) -> Self
 pub fn zencodec_media::track::TrackInfoBuilder::with_config_epoch(self, epoch: u32) -> Self
 pub fn zencodec_media::track::TrackInfoBuilder::with_declared_duration_ticks(self, n: u64) -> Self
 pub fn zencodec_media::track::TrackInfoBuilder::with_declared_packets(self, n: u64) -> Self

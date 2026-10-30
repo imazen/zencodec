@@ -55,3 +55,11 @@ on r7900x. Native outputs and independent probe/raw facts:
 /mnt/v/output/zencodec/presentation-playback-20261030/{pump-files,pump-oracle}.
 All wrappers exited. The helpers borrow the backend; callers must discard the
 session on terminal error. No preemption or rollback guarantee is added.
+
+The eight-crate compiler catalog was regenerated from the pushed production
+source: rc0, 17 seconds, peak RSS 0.33 GiB. The local nightly compiler
+(1.101.0-nightly, e9bbadf68) also renders several standard I/O re-exports using
+their core::io paths; these generated name changes are not source API edits.
+Catalog tests, site generation and all 26 site source tests pass: rc0,
+4 seconds, peak RSS 0.34 GiB. Browser interaction was not rerun for this
+signature/documentation-only update.
