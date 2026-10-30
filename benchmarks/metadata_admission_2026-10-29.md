@@ -121,3 +121,23 @@ allowances, matching their explicitly best-effort guide text. No checked call,
 assertion or behavior changed. Rustfmt and all 26 site source controls pass;
 the native guide Clippy rerun remains a CI gate. Original failed job:
 https://github.com/imazen/zencodec/actions/runs/40992267193/job/123857227055
+
+## Final core landing
+
+PR186 merged as `2f8720de6a26d9c68b0dceafd5b8e910c09c37c3`; remote main
+ancestry was verified. On `0705b277`, all reported CI checks passed, including
+the corrected guide examples, browser guide, native JPEG/AV1/TIFF/JXL,
+Linux ARM64/x64, Windows ARM64/x64, macOS ARM64, i686 and WASM.
+[Guide run](https://github.com/imazen/zencodec/actions/runs/40992767973) and
+[core run](https://github.com/imazen/zencodec/actions/runs/40992767828) retain
+the results. This is a source landing, not a crate publication.
+
+Native JPEG `67d5c27b880ceed2cc4e47d866eab09e2e86f011`, pinned to core
+`61fb96f1`, passed all 13 checked-metadata controls after a package clean and
+verified source compilation. ARM64 run-heavy receipt: rc0, 168s, peak RSS
+0.77 GiB, minimum available 13698 MiB, peak load 1.93. Strict all-target
+Clippy subsequently failed on the existing `examples/decode_wall.rs`
+`ptr_arg` lint: rc101, 22s, peak RSS 0.59 GiB, minimum available 14121 MiB,
+peak load 1.82. Logs are retained under `terra-jpeg-progress-67d5c27b`.
+Native landing remains gated on that repair; this does not qualify missing
+parallel worker progress or other codecs' checked metadata adoption.
