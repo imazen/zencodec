@@ -168,6 +168,14 @@ are checked separately from any decoded-video claims.
 
 ## Independent playback finding
 
+An executing alternative now has a native witness: decode AV1, project frame
+intervals, re-encode, and mux an explicitly unedited track. All twelve independent
+pixel/timing comparisons pass, including fragmented clipping, repeats, explicit
+black gaps, dwell and double speed. See
+[native execution evidence](../benchmarks/presentation_execution_2026-10-30.md).
+The fixture retains three decoded frames; it does not qualify a streaming driver,
+replay admission, operation-wide memory bounds or cancellation during execution.
+
 The [12-case native MP4 comparison](../benchmarks/presentation_playback_2026-10-30.md)
 passes 5 cases and disagrees with FFmpeg 8.0.1 in 7. Progressive identity, clipping,
 repetition and gaps agree; fragmented identity agrees. Fragmented edits, dwell

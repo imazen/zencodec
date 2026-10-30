@@ -6,13 +6,20 @@ The encoded input and raw reference originate from the native AV1 fixture.
 No external encoder or rewritten container is used.
 """
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import subprocess
-import sys
 from fractions import Fraction
 
-files, expected_raw, output = map(Path, sys.argv[1:])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('files', type=Path)
+parser.add_argument('expected_raw', type=Path)
+parser.add_argument('output', type=Path)
+parser.add_argument('--baked-black-gaps', action='store_true',
+                    help='Expect an explicit black frame for the leading gap')
+args = parser.parse_args()
+files, expected_raw, output = args.files, args.expected_raw, args.output
 output.mkdir(parents=True, exist_ok=False)
 expected = expected_raw.read_bytes()
 assert hashlib.sha256(expected).hexdigest() == '7894797ccaac0d7c4fb904f4e4bd1f182ab09070b0e1adc8975eea57254e8c12'
@@ -27,6 +34,9 @@ cases = {
     'dwell': ([1], [0], 80),
     'double': ([0, 1, 2], [0, 20, 40], 60),
 }
+if args.baked_black_gaps:
+    frames.append(bytes(frame_bytes))
+    cases['gap'] = ([3, 0, 1], [0, 40, 80], 120)
 versions = {}
 for tool in ['ffmpeg', 'ffprobe']:
     versions[tool] = subprocess.run([tool, '-version'], capture_output=True, text=True, check=True, timeout=10).stdout

@@ -1891,3 +1891,9 @@ presentation-files input output:
 # Strict independent playback comparison; every mismatch remains a failure.
 presentation-playback files expected output:
     python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}"
+
+# Execute the bounded native AV1 edit fixture, then inspect with an independent decoder.
+presentation-baked files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}"
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps

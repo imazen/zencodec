@@ -1240,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "zenmp4"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
+source = "git+https://github.com/imazen/zenavif?rev=0070de3f701edbd25c592bdf180f933927cfcdcd#0070de3f701edbd25c592bdf180f933927cfcdcd"
 dependencies = [
  "zencodec",
  "zencodec-media",
