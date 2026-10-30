@@ -177,13 +177,10 @@ mod cancellation_and_publication {
             std::env::var_os("JPEG_POLICY_ARTIFACTS")
                 .expect("the caller must select the native fixture output directory"),
         );
-        std::fs::create_dir_all(&artifacts).unwrap();
-        // Never reuse or remove an earlier run's artifacts. A collision fails.
-        let directory = artifacts.join(format!(
-            "checked-publication-{label}-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir(&directory).unwrap();
+        // Preserve earlier cases and runs even when their label or PID repeats.
+        let directory =
+            crate::artifact_directory::create(&artifacts, &format!("checked-publication-{label}"))
+                .unwrap();
         let absent = directory.join("new.png");
         let existing = directory.join("existing.png");
         std::fs::write(&existing, SENTINEL).unwrap();

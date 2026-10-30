@@ -6,18 +6,29 @@ codec family or every native mode qualified from this candidate's evidence.
 
 ## Open presentation contract gate
 
-Video presentation is not release-qualified by packet timestamp tests. Native
-MP4 controls reproduce loss of edit duration, later segments and playback rate;
-track-to-codec configuration also drops delay/pre-roll/edit fields. These can
-change the shared contracts and must be resolved before claiming the full
-codec-agnostic video objective. See [issue 187](https://github.com/imazen/zencodec/issues/187)
-and the [native receipt](../benchmarks/media_edits_2026-10-30.md).
+The full edited-video contract remains open. Shared timeline declarations and
+mux admission are implemented on [draft PR188](https://github.com/imazen/zencodec/pull/188);
+native MP4 retention is on [PR79](https://github.com/imazen/zenavif/pull/79), and
+IVF/WebM refusal of unsupported edits is on
+[PR56](https://github.com/imazen/zenextras/pull/56). These changes address the
+original losses recorded in [issue 187](https://github.com/imazen/zencodec/issues/187)
+and the [native receipt](../benchmarks/media_edits_2026-10-30.md); they are not
+all merged or release-qualified.
 
-The private [presentation-map experiment](../perf/presentation-map/README.md)
-qualifies exact interval mapping and explicit segment acquisition requests.
-It does not qualify native playback, seek/replay admission, delay/discard
-handling or independent player parity. Do not promote its signatures or declare
-this gate complete from its unit tests alone.
+| Contract | Current evidence | Remaining gate |
+| --- | --- | --- |
+| Retain container edits | Native MP4 ordered/rate/clock/open-end controls; shared typed/erased admission | Land the portable native graph and resolve native CI failures |
+| Execute edits into samples/timestamps | Twelve native AV1 encode/decode/MP4 cases pass independent FFmpeg pixel/timing comparison | Promote a caller-facing driver with retained ownership and policy |
+| Preserve edits for arbitrary playback | Original retained-edit oracle passes 5 of 12 cases | Seven player disagreements remain; retaining declarations is not universal playback certification |
+| Acquire replay bytes | File, conditional HTTP, bounded spool and eager admitted snapshot controls pass with native AV1 | Strategy selection, general seek/reopen, and keyframe seeking are not implemented by these probes |
+| Retain requirements | One BoundPolicy guards snapshot factory and native frame publication; unknown workspace refuses before reads | Late metadata completion and early clip termination must share explicit outstanding obligations |
+| Retain presentation identity | Native delayed old-epoch frames select their original maps | Bounded map ownership, presentation-only changes and replay-safe retirement remain unimplemented |
+
+The [timeline review](track-timeline-review.md) owns these distinctions. The
+[presentation experiment](../perf/presentation-map/README.md) remains private;
+its successful execution controls do not make its signatures the public API.
+Source storage accounting is not native workspace or whole-operation RAM.
+
 
 ## Freeze
 
@@ -492,5 +503,12 @@ early-refusal tests pass. JPEG candidate `67d5c27b` passes 13 checked-metadata
 controls on the merged core API; independent EXIF/ICC/XMP and sample controls
 are recorded in the [receipt](../benchmarks/metadata_admission_2026-10-29.md).
 JPEG PR252 subsequently merged as `13a8a23b`, after strict all-target Clippy
-passed on the identical native library and lock. PNG checked adoption remains open. The diagnostic witness still describes the unchanged
+passed on the identical native library and lock. PNG checked adoption merged in [PR50](https://github.com/imazen/zenpng/pull/50)
+as `a5eeaddb`, including the standalone fuzz graph repair. Its 12 checked-metadata
+controls, 85 tests across five complete integration targets, strict all-target
+Clippy and five fuzz-binary compilation checks passed. Broad library testing hit
+the 3 GiB scope limit; APNG comparison uses raw oracle subframes against composed
+native canvases, and corpus coverage remains incomplete. These are separate
+qualification gaps, not permission to accept wrong pixels or skip assertions.
+The diagnostic witness still describes the unchanged
 best-effort native paths; these are not silently upgraded by the deprecation.

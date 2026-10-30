@@ -569,7 +569,7 @@ fn epoch_route_policy_error_decline_stale_choice_unwind_and_storage_failure_are_
 
 #[test]
 fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration() {
-    use presentation_map_experiment::{Content, Cursor, Edit, Extent, Interval, Plan, Time};
+    use presentation_map_experiment::{Content, Edit, Extent, Interval, Plan, Time};
     use zencodec::time::FrameDuration;
     for threads in [1, 4] {
         let mut delayed = 0;
@@ -584,6 +584,7 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
         );
         // Each immutable map is retained through native draining. Identical
         // codec settings in epochs 10 and 11 still have distinct presentation.
+        let mut pool = presentation_map_experiment::retained::PlanPool::new(6);
         let plans: Vec<_> = (0..6)
             .map(|group| {
                 let clock = if group == 5 {
@@ -592,24 +593,23 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
                     TB
                 };
                 let ticks_per_frame = if group == 5 { 3600 } else { 40 };
-                Plan::new(
-                    Timestamp::new(group * 1000, TB),
-                    &[Edit {
-                        extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
-                        content: Content::Media {
-                            start: Timestamp::new(group * 3 * ticks_per_frame, clock),
-                            rate_num: 1,
-                            rate_den: 1,
-                        },
-                    }],
-                )
+                pool.prepare(|| {
+                    Plan::new(
+                        Timestamp::new(group * 1000, TB),
+                        &[Edit {
+                            extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
+                            content: Content::Media {
+                                start: Timestamp::new(group * 3 * ticks_per_frame, clock),
+                                rate_num: 1,
+                                rate_den: 1,
+                            },
+                        }],
+                    )
+                })
                 .unwrap()
             })
             .collect();
-        let mut cursors: Vec<_> = plans
-            .iter()
-            .map(|plan| Cursor::new(plan.segments()[0]).unwrap())
-            .collect();
+        let mut cursors: Vec<_> = plans.iter().map(|plan| plan.cursor(0).unwrap()).collect();
         for (index, frame) in frames.iter().enumerate() {
             let epoch = frame.interpretation().config_epoch;
             let group = usize::try_from(epoch.checked_sub(10).unwrap()).unwrap();
@@ -632,12 +632,20 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
             assert_eq!(output.end().on_clock(TB).unwrap().ticks(), expected + 40);
             if group != 5 {
                 assert_eq!(
-                    plans[5].segments()[0].project(interval).unwrap(),
+                    plans[5].plan().segments()[0].project(interval).unwrap(),
                     None,
                     "using only the latest plan loses an old-epoch presentation"
                 );
             }
         }
+        let replay_owner = plans[0].clone();
+        assert!(replay_owner.same_owner(cursors[0].owner()));
+        drop(plans);
+        assert_eq!(pool.live(), 6, "native cursors retain their maps");
+        assert!(matches!(
+            pool.prepare(|| panic!("full pool built a map")),
+            Err(presentation_map_experiment::retained::AdmissionError::Limit)
+        ));
         for (group, cursor) in cursors.iter_mut().enumerate() {
             let completed = cursor.finish().unwrap();
             assert_eq!(
@@ -649,5 +657,355 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
                 group as i64 * 1000 + 120
             );
         }
+        drop(cursors);
+        assert_eq!(pool.live(), 1, "draining does not retire replay ownership");
+        drop(replay_owner);
+        assert_eq!(pool.live(), 0);
+    }
+}
+
+#[test]
+fn presentation_maps_follow_owned_sessions_when_native_provenance_is_identical() {
+    use presentation_map_experiment::{
+        Content, Edit, Extent, Interval, Plan, Time,
+        retained::{PlanPool, RetainedCursor},
+    };
+    use zencodec::time::FrameDuration;
+    struct Pass {
+        decoder: Av1VideoDecoder,
+        cursor: RetainedCursor,
+        output: Vec<Frame>,
+    }
+    fn project(pass: &mut Pass, frame: Frame) {
+        let mut timing = frame.timing();
+        assert_eq!(frame.interpretation().config_epoch, 0);
+        assert_eq!(timing.packet_ordinal, Some(7));
+        assert_eq!(timing.input_offset, Some(1000));
+        let start = timing.pts.unwrap();
+        let end = Timestamp::new(
+            start.ticks() + timing.duration_ticks.unwrap() as i64,
+            start.base(),
+        );
+        let interval = Interval::new(Time::timestamp(start), Time::timestamp(end)).unwrap();
+        let mapped = pass.cursor.push(interval).unwrap().unwrap();
+        let mapped_start = mapped.start().on_clock(TB).unwrap();
+        let mapped_end = mapped.end().on_clock(TB).unwrap();
+        timing.pts = Some(mapped_start);
+        timing.duration_ticks = Some((mapped_end.ticks() - mapped_start.ticks()) as u64);
+        let projected = frame.represent(timing, zencodec_media::frame::Presentation::default());
+        assert!(projected.shares_picture(&frame));
+        pass.output.push(projected);
+    }
+    for threads in [1, 4] {
+        let settings = settings(8, Subsampling::Yuv444, true);
+        let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+        let (config, packets) = encode(settings, &original);
+        assert_eq!(config.epoch, 0);
+        let mut pool = PlanPool::new(2);
+        let mut passes: Vec<_> = [0, 1000]
+            .into_iter()
+            .map(|origin| {
+                let owner = pool
+                    .prepare(|| {
+                        Plan::new(
+                            Timestamp::new(origin, TB),
+                            &[Edit {
+                                extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
+                                content: Content::Media {
+                                    start: Timestamp::new(0, TB),
+                                    rate_num: 1,
+                                    rate_den: 1,
+                                },
+                            }],
+                        )
+                    })
+                    .unwrap();
+                let mut settings = rav1d_safe::Settings::default();
+                settings.threads = threads;
+                let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+                decoder.configure(&config, None).unwrap();
+                Pass {
+                    decoder,
+                    cursor: owner.cursor(0).unwrap(),
+                    output: Vec::new(),
+                }
+            })
+            .collect();
+        assert!(
+            !passes[0]
+                .cursor
+                .owner()
+                .same_owner(passes[1].cursor.owner())
+        );
+        assert_eq!(pool.live(), 2);
+        // Each session sees exactly the same source bytes, epoch, ordinal and offset.
+        // The owning session, rather than any of those values, selects its map.
+        for packet in &packets {
+            for pass in &mut passes {
+                let mut packet = packet.clone().with_ordinal(7).with_input_offset(1000);
+                while pass.decoder.send(&mut packet, None).unwrap() != SendStatus::Accepted {
+                    let Receive::Ready(frame) = pass.decoder.receive(None).unwrap() else {
+                        panic!("native decoder stalled")
+                    };
+                    project(pass, frame);
+                }
+            }
+        }
+        for pass in &mut passes {
+            pass.decoder.end_input().unwrap();
+        }
+        // Reverse draining order deliberately differs from map creation order.
+        for pass in passes.iter_mut().rev() {
+            loop {
+                match pass.decoder.receive(None).unwrap() {
+                    Receive::Ready(frame) => project(pass, frame),
+                    Receive::EndOfStream => break,
+                    other => panic!("native decoder did not drain: {other:?}"),
+                }
+            }
+            pass.cursor.finish().unwrap();
+        }
+        for (index, pass) in passes.iter().enumerate() {
+            assert_eq!(pass.output.len(), original.len());
+            for (i, (actual, expected)) in pass.output.iter().zip(&original).enumerate() {
+                assert_eq!(samples(actual), samples(expected));
+                assert_eq!(
+                    actual.timing().pts.unwrap().ticks(),
+                    index as i64 * 1000 + i as i64 * 40
+                );
+                assert_eq!(actual.timing().duration_ticks, Some(40));
+            }
+        }
+        drop(passes);
+        assert_eq!(pool.live(), 0);
+    }
+}
+
+#[test]
+fn presentation_maps_follow_pump_progress_through_clipping_and_terminal_failure() {
+    use crate::presentation_driver::{Pass, ProjectionError};
+    use presentation_map_experiment::{
+        Content, Edit, Error as MapError, Extent, Plan, retained::PlanPool,
+    };
+    use zencodec::time::FrameDuration;
+    use zencodec_media::session::{PumpError, SessionError};
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &original);
+    for case in 0..5 {
+        let mut pool = PlanPool::new(1);
+        let owner = pool
+            .prepare(|| {
+                Plan::new(
+                    Timestamp::new(1000, TB),
+                    &[Edit {
+                        extent: Extent::Finite(
+                            FrameDuration::new(if case == 2 { 120 } else { 80 }, 1000).unwrap(),
+                        ),
+                        content: Content::Media {
+                            start: Timestamp::new(40, TB),
+                            rate_num: 1,
+                            rate_den: 1,
+                        },
+                    }],
+                )
+            })
+            .unwrap();
+        let mut settings = rav1d_safe::Settings::default();
+        settings.threads = 1;
+        let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+        decoder.configure(&config, None).unwrap();
+        let mut pass = Pass::new(decoder, owner.cursor(0).unwrap(), TB);
+        drop(owner);
+        let stop = StopAt {
+            stopped: AtomicBool::new(case == 3),
+            reason: StopReason::TimedOut,
+        };
+        let control = zencodec::how_far::StopOnly::borrowed(&stop);
+        let pulse = if case == 0 || case == 2 {
+            None
+        } else {
+            Some(&control as &dyn zencodec::Pulse)
+        };
+        let mut actual = Vec::new();
+        let mut output = |frame| -> Result<(), std::io::Error> {
+            if case == 1 {
+                stop.stopped.store(true, Ordering::SeqCst);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "output witness",
+                ));
+            }
+            actual.push(frame);
+            if case == 4 {
+                stop.stopped.store(true, Ordering::SeqCst);
+            }
+            Ok(())
+        };
+        let mut result = Ok(());
+        for packet in &packets {
+            result = pass.send(&mut packet.clone(), pulse, &mut output);
+            if result.is_err() {
+                break;
+            }
+        }
+        let result = result.and_then(|()| pass.finish(pulse, &mut output).map(|_| ()));
+        match case {
+            0 => {
+                result.unwrap();
+                assert_eq!(actual.len(), 2);
+                for (i, frame) in actual.iter().enumerate() {
+                    assert_eq!(samples(frame), samples(&original[i + 1]));
+                    assert_eq!(frame.timing().pts.unwrap().ticks(), 1000 + i as i64 * 40);
+                    assert_eq!(frame.timing().duration_ticks, Some(40));
+                }
+            }
+            1 => {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    zencodec::find_cause::<std::io::Error>(&error)
+                        .unwrap()
+                        .kind(),
+                    std::io::ErrorKind::BrokenPipe
+                );
+                assert!(actual.is_empty());
+            }
+            2 => assert!(matches!(
+                result,
+                Err(PumpError::Downstream(ProjectionError::Mapping(
+                    MapError::MissingCoverage
+                )))
+            )),
+            _ => {
+                assert!(matches!(
+                    result,
+                    Err(PumpError::Upstream(SessionError::Cancelled(
+                        StopReason::TimedOut
+                    )))
+                ));
+                assert_eq!(actual.len(), usize::from(case == 4));
+            }
+        }
+        assert_eq!(
+            pool.live(),
+            0,
+            "driver must release its owner on completion or failure"
+        );
+        assert!(matches!(
+            pass.finish(None, |_| Ok::<_, std::io::Error>(())),
+            Err(PumpError::Upstream(SessionError::Finished))
+        ));
+    }
+}
+
+#[test]
+fn presentation_maps_follow_projected_policy_before_encoder_publication() {
+    use crate::presentation_driver::{Pass, Publication, PublicationError};
+    use presentation_map_experiment::{Content, Edit, Extent, Plan, retained::PlanPool};
+    use zencodec::{
+        At,
+        operation::{BoundPolicy, MetadataTransfer, PolicySet},
+        time::FrameDuration,
+    };
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &original);
+    for case in 0..4 {
+        let decisions = Cell::new(0);
+        let requirements = if case == 2 {
+            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive)
+        } else {
+            PolicySet::new()
+        };
+        let policy = BoundPolicy::new(
+            requirements,
+            |question: Question<'_>| -> Result<Decision, At<std::io::Error>> {
+                let Question::Frame {
+                    timing, choices, ..
+                } = question
+                else {
+                    panic!("unexpected question")
+                };
+                assert_eq!(
+                    timing.pts.unwrap().ticks(),
+                    1000,
+                    "policy must inspect projected time"
+                );
+                decisions.set(decisions.get() + 1);
+                match case {
+                    1 => Ok(Decision::decline(Decline::ApplicationRule)),
+                    3 => Err(At::wrap(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "tenant witness",
+                    ))
+                    .at()),
+                    _ => Ok(Decision::choose(choices.first().unwrap())),
+                }
+            },
+        );
+        let mut publication = Publication::new(policy).unwrap();
+        let mut pool = PlanPool::new(1);
+        let map = pool
+            .prepare(|| {
+                Plan::new(
+                    Timestamp::new(1000, TB),
+                    &[Edit {
+                        extent: Extent::Finite(FrameDuration::new(40, 1000).unwrap()),
+                        content: Content::Media {
+                            start: Timestamp::new(40, TB),
+                            rate_num: 1,
+                            rate_den: 1,
+                        },
+                    }],
+                )
+            })
+            .unwrap();
+        let mut settings = rav1d_safe::Settings::default();
+        settings.threads = 1;
+        let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+        decoder.configure(&config, None).unwrap();
+        let mut pass = Pass::new(decoder, map.cursor(0).unwrap(), TB);
+        drop(map);
+        let mut output = Vec::new();
+        let mut emit = |frame| {
+            publication.publish(frame, None, |frame| {
+                output.push(frame);
+                Ok::<_, Infallible>(())
+            })
+        };
+        let mut result = Ok(());
+        for packet in &packets {
+            result = pass.send(&mut packet.clone(), None, &mut emit);
+            if result.is_err() {
+                break;
+            }
+        }
+        let result = result.and_then(|()| pass.finish(None, &mut emit).map(|_| ()));
+        if case == 0 {
+            result.unwrap();
+            assert_eq!(output.len(), 1);
+            assert_eq!(samples(&output[0]), samples(&original[1]));
+        } else {
+            let error = result.unwrap_err();
+            assert!(output.is_empty());
+            if case == 3 {
+                assert_eq!(
+                    zencodec::find_cause::<std::io::Error>(&error)
+                        .unwrap()
+                        .kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+            }
+            assert!(matches!(
+                publication.publish(original[0].clone(), None, |_| Ok::<_, Infallible>(())),
+                Err(PublicationError::Finished)
+            ));
+        }
+        assert_eq!(decisions.get(), usize::from(case != 2));
+        assert_eq!(pool.live(), 0);
+        let _report = publication.report();
+    }
+    for cap in [0, u64::MAX] {
+        assert!(Publication::new(PolicySet::new().with_workspace_limit(cap)).is_err());
     }
 }

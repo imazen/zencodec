@@ -509,3 +509,143 @@ fn a_panicking_stop_poisoned_decoder_reopens_only_after_reset() {
         Ok(Receive::NeedInput)
     ));
 }
+
+// Deliberately ignores per-call Pulse, including a stop raised during receive.
+struct BoundaryCodec {
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+    calls: usize,
+    cancel_receive: bool,
+    fail_receive: bool,
+}
+impl BoundaryCodec {
+    fn receive_boundary(&mut self) -> Result<(), SessionError<std::io::Error>> {
+        self.calls += 1;
+        if self.cancel_receive {
+            self.stopped.store(true, Ordering::SeqCst);
+        }
+        if self.fail_receive {
+            return Err(SessionError::Codec(std::io::Error::other("native receive")));
+        }
+        Ok(())
+    }
+}
+impl VideoEncoder for BoundaryCodec {
+    type Error = std::io::Error;
+    fn send(
+        &mut self,
+        _: &Frame,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<SendStatus, SessionError<Self::Error>> {
+        self.calls += 1;
+        Ok(SendStatus::Accepted)
+    }
+    fn receive(
+        &mut self,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Receive<Packet>, SessionError<Self::Error>> {
+        self.receive_boundary()?;
+        Ok(Receive::Ready(Packet::from_vec(vec![1]).unwrap()))
+    }
+    fn end_input(&mut self) -> Result<(), SessionError<Self::Error>> {
+        self.calls += 1;
+        Ok(())
+    }
+    fn output_config(&self) -> Option<&CodecConfig> {
+        None
+    }
+}
+impl VideoDecoder for BoundaryCodec {
+    type Error = std::io::Error;
+    fn configure(
+        &mut self,
+        _: &CodecConfig,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Self::Error>> {
+        Ok(())
+    }
+    fn send(
+        &mut self,
+        _: &mut Packet,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<SendStatus, SessionError<Self::Error>> {
+        self.calls += 1;
+        Ok(SendStatus::Accepted)
+    }
+    fn receive(
+        &mut self,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Receive<Frame>, SessionError<Self::Error>> {
+        self.receive_boundary()?;
+        Ok(Receive::Ready(frame()))
+    }
+    fn end_input(&mut self) -> Result<(), SessionError<Self::Error>> {
+        self.calls += 1;
+        Ok(())
+    }
+    fn reset(&mut self) -> Result<(), SessionError<Self::Error>> {
+        Ok(())
+    }
+    fn stream_info(&self) -> Option<&zencodec_media::session::VideoStreamInfo> {
+        None
+    }
+}
+
+#[test]
+fn pumps_guard_native_and_publication_boundaries_independently() {
+    use zencodec::how_far::StopOnly;
+    use zencodec_media::session::{drain_decoder, send_packet_until_accepted};
+    for method in 0..4 {
+        // Pre-cancel, stop inside receive, stop in successful downstream,
+        // and a native failure simultaneous with cancellation.
+        for scenario in 0..4 {
+            let stopped = Arc::new(std::sync::atomic::AtomicBool::new(scenario == 0));
+            let pulse = StopOnly::new(JobStop(stopped.clone()));
+            let mut codec = BoundaryCodec {
+                stopped: stopped.clone(),
+                calls: 0,
+                cancel_receive: scenario == 1 || scenario == 3,
+                fail_receive: scenario == 3,
+            };
+            let mut published = 0;
+            let mut deliver = || {
+                published += 1;
+                stopped.store(true, Ordering::SeqCst);
+                // Bound a broken pump without spinning forever.
+                if published > 1 {
+                    Err("published twice")
+                } else {
+                    Ok(())
+                }
+            };
+            let result = match method {
+                0 => send_frame_until_accepted(&mut codec, &frame(), Some(&pulse), |_| deliver()),
+                1 => drain_encoder(&mut codec, Some(&pulse), |_| deliver()),
+                2 => send_packet_until_accepted(
+                    &mut codec,
+                    &mut Packet::from_vec(vec![1]).unwrap(),
+                    Some(&pulse),
+                    |_| deliver(),
+                ),
+                _ => drain_decoder(&mut codec, Some(&pulse), |_| deliver()),
+            };
+            if scenario == 3 {
+                assert!(matches!(
+                    result,
+                    Err(PumpError::Upstream(SessionError::Codec(_)))
+                ));
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(PumpError::Upstream(SessionError::Cancelled(
+                            StopReason::TimedOut
+                        )))
+                    ),
+                    "method={method} scenario={scenario}: {result:?}"
+                );
+            }
+            assert_eq!(published, usize::from(scenario == 2));
+            assert_eq!(codec.calls, if scenario == 0 { 0 } else { 2 });
+        }
+    }
+}

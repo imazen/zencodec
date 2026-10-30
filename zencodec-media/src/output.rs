@@ -133,6 +133,35 @@ impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
         Output::prepare_unpublished(mux, destination, tracks, pulse, true, M::begin_exact_timing)
             .map(Self)
     }
+    /// Require complete presentation preservation, including refusal of every
+    /// unknown track timeline, before native preparation or header publication.
+    /// This does not certify a workspace bound or execute the presentation.
+    pub fn preserving_presentation(
+        mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Self, Failure> {
+        let pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        Output::prepare_unpublished(
+            mux,
+            destination,
+            tracks,
+            pulse,
+            true,
+            |mux, tracks, hint| {
+                if tracks.iter().any(|track| {
+                    matches!(track.timeline(), crate::timeline::TrackTimeline::Unknown)
+                }) {
+                    return Err(SessionError::Unsupported(
+                        UnsupportedMedia::PresentationTimeline,
+                    ));
+                }
+                mux.begin_exact_presentation(tracks, hint)
+            },
+        )
+        .map(Self)
+    }
     /// Timing/layout of the retained muxer. Streaming bytes do not certify safe
     /// backpressure against an upstream encoder's raw-buffer ownership.
     pub const fn timing(&self) -> MuxTiming {
@@ -194,7 +223,9 @@ fn write_all(
 
 impl<M: Muxer, D: Destination> Output<M, D> {
     /// Explicitly allow the muxer's ordinary timing behavior, then publish.
-    /// This does not guarantee exact packet durations. Prefer [`Output::new`](crate::output::Output::new).
+    /// This does not guarantee exact packet durations. All-`Unedited` tracks
+    /// can use native timing; edited programs and mixed known/unknown timelines
+    /// refuse. Prefer [`Output::new`](crate::output::Output::new) for exact timing.
     pub fn with_container_timing(
         mux: M,
         destination: D,
@@ -212,6 +243,18 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Self, Failure> {
         Self::prepare(mux, destination, tracks, pulse, true, M::begin_exact_timing)
+    }
+
+    /// Require complete declared presentation preservation before publishing.
+    /// Unknown timelines refuse; use [`PreparedOutput::preserving_presentation`]
+    /// when publication must remain under a later policy decision.
+    pub fn preserving_presentation(
+        mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<Self, Failure> {
+        PreparedOutput::preserving_presentation(mux, destination, tracks, pulse)?.publish(pulse)
     }
 
     fn prepare(
@@ -248,7 +291,27 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             } else {
                 MuxHint::forward_only()
             };
-            let timing = begin(&mut mux, tracks, hint)?;
+            let declared = tracks
+                .iter()
+                .any(|t| !matches!(t.timeline(), crate::timeline::TrackTimeline::Unknown));
+            let ordinary_unedited = !exact_timing
+                && tracks.iter().all(|track| {
+                    matches!(track.timeline(), crate::timeline::TrackTimeline::Unedited)
+                });
+            let timing = if declared && !ordinary_unedited {
+                if !exact_timing
+                    || tracks
+                        .iter()
+                        .any(|t| matches!(t.timeline(), crate::timeline::TrackTimeline::Unknown))
+                {
+                    return Err(Box::new(SessionError::<ErasedError>::Unsupported(
+                        UnsupportedMedia::PresentationTimeline,
+                    )));
+                }
+                mux.begin_exact_presentation(tracks, hint)?
+            } else {
+                begin(&mut mux, tracks, hint)?
+            };
             if timing.patches_at_finish() && !destination.can_patch() {
                 return Err(Box::new(SessionError::<ErasedError>::Unsupported(
                     UnsupportedMedia::ForwardOnlyLayout,

@@ -126,9 +126,13 @@ Each frame selects its original map using its retained configuration epoch;
 selecting the latest map instead loses earlier presentations. Source packet
 ordinals deliberately repeat, so they cannot substitute for map identity.
 
-This is a bounded fixture with six retained plans, not an implemented public map
-registry. Production needs an admission limit, a reliable retirement boundary,
-and an explicit rule for presentation-only changes. A codec epoch must not be
+The private `retained::PlanPool` now admits a maximum count before invoking a
+plan builder. `RetainedCursor` holds a cloned immutable owner; replay holds the
+same owner independently. The native control drops the original lookup list,
+finishes all cursors, and verifies that the replay reference still occupies its
+slot. Only the last owner dropping frees that slot. This is not a public map
+registry or a byte/workspace limit. Production still needs descriptor-byte
+admission and an explicit rule for presentation-only changes. A codec epoch must not be
 silently reused for a different map while frames from its previous meaning may
 still be pending. Unknown epochs must refuse before publishing that frame.
 Source replay can return an old epoch again, so draining the codec alone does
@@ -138,3 +142,197 @@ not prove that the corresponding map can be forgotten for the whole operation.
 with native harness strict Clippy. See the same qualification receipt for the
 frozen source and resource record. This does not qualify mux preservation or
 presentation-only epoch changes that the adapter has not explicitly declared.
+
+## Native compressed replay witness
+
+`just presentation-replay FILES EXPECTED_RAW RESULTS` runs the same twelve native
+AV1/MP4 cases without retaining a decoded-frame vector in the execution driver.
+Each media segment reacquires a fresh native decoder over an explicitly retained
+compressed packet snapshot. A decoded frame goes directly to the encoder; its
+projected presentation shares the same picture. Weak-reference controls require
+all decoded picture owners to disappear after native session cleanup.
+
+`Cursor::coverage_complete` permits finite presentation completion before source
+EOF. It is not evidence that metadata inspection is complete. Only this generated
+fixture's known source contract permits early decoder disposal; a production
+route must discharge pending inspection/privacy obligations separately. Open-ended
+segments still need a confirmed endpoint.
+
+All twelve replay outputs are byte-identical to the buffered route and pass the
+independent pixel/timing oracle. This is ownership and behavior evidence, not a
+whole-operation RAM bound: native references, encoder storage, compressed input
+and compressed output remain outside a decoded-frame-vector guarantee. Reopening
+network/file sources, replay admission, seek-to-keyframe and asynchronous scheduling
+remain unqualified. See [the receipt](../../benchmarks/presentation_replay_2026-10-30.md).
+
+The companion `just presentation-replay-sources ARTIFACTS PORT` reuses the real
+local HTTP fault simulator and its strict conditional `ReadAt` implementation.
+It validates an admitted immutable compressed snapshot before constructing native
+replay packets. File/HTTP parity, budget ownership, typed source failures and
+cancellation controls are described in
+[the source receipt](../../benchmarks/replay_sources_2026-10-30.md).
+
+Unknown-length streams are also qualified through the existing capped spool:
+confirm EOF, copy into admitted immutable storage, drop the spool, then replay.
+The test retains the exact-cap/one-byte-over behavior and original timeout cause.
+There is a real temporary overlap between spool payload and snapshot payload;
+a future owner-transfer convenience must preserve admission rather than conceal
+that cost. No zero-copy or whole-memory claim is made for this composition.
+
+The source witness also qualifies eager reservation directly into OwnedStorage,
+followed by freeze and a prefix view. It avoids the spool/copy overlap without
+new public types, and verifies pointer preservation and retained full-cap charging.
+Its tradeoff is initializing/reserving the chosen maximum before reading. The
+private loop handles exact EOF, overflow, zero-cap input, failed admission and
+cancellation between Interrupted retries. This is an alternative route to expose
+to an operation policy, not an implicit promise that all replay uses little RAM.
+
+### Bind policy before replay acquisition
+
+The native replay-source test also exercises this existing boundary:
+
+```rust,ignore
+let decoder = PolicyDecoder::try_new(
+    || { /* admit and freeze source storage, then construct native decoder */ },
+    BoundPolicy::new(requirements, callback),
+    pulse,
+)?;
+```
+
+Unknown required workspace refuses before the factory runs. Default requirements
+permit native decoding; the same bound requirements still filter every frame
+before the callback. Frame facts cannot prove descriptive metadata removal, so
+that requirement refuses publication rather than disappearing after acquisition.
+Snapshot ownership remains with the caller in this witness. The workspace limit
+is additional codec/conversion workspace, not source storage or total RAM.
+Choosing among acquisition strategies remains an open contract; this factory
+boundary does not offer such choices. See the retained-policy section of
+[the source receipt](../../benchmarks/replay_sources_2026-10-30.md).
+
+
+### Map lifetime prototype
+
+```rust,ignore
+let mut pool = PlanPool::new(max_retained_maps);
+let map = pool.prepare(|| Plan::new(origin, &edits))?;
+let replay_owner = map.clone();
+let mut cursor = map.cursor(segment)?;
+drop(map); // Cursor and replay still retain this immutable map.
+```
+
+Admission refuses before the builder runs, so a full pool cannot construct the
+next descriptor list. Clones share one slot, and the pool itself holds only weak
+references. Dropping the pool does not invalidate existing owners. Failed plan
+construction leaves no occupied slot. Arc control-block allocation follows the
+ordinary allocator; descriptor bytes and bookkeeping capacity are not included
+in the count. A raw copied Segment is not an owned cursor and carries no lease.
+
+This prototype changes no released codec trait or frame representation. The
+native test still uses configuration epochs to select its six known maps; it
+does not establish how a demuxer announces a presentation-only change. See
+[qualification and remaining scope](../../benchmarks/presentation_owners_2026-10-30.md).
+
+
+### Presentation identity can belong to the session
+
+The second native owner control binds one immutable cursor to each decoder
+session. Two sessions receive identical AV1 bytes, CodecConfig (epoch zero),
+packet ordinal and source offset. Their maps have different presentation origins.
+Input is interleaved, output drains in reverse session order, and each decoded
+frame is projected only by the cursor retained beside its actual decoder.
+Both native thread configurations preserve exact samples and picture sharing.
+
+For replay or an independently started presentation, this avoids adding a map ID
+to every codec: `Pass { decoder, cursor }` is the identity boundary. A map stays
+immutable for that pass. Codec configuration epochs still describe codec facts;
+packet ordinals and offsets still describe source provenance. They are not
+repurposed as presentation IDs.
+
+This does not authorize changing the cursor while that decoder has delayed output.
+A live presentation-only update still needs a drain/new-session boundary or an
+explicit, qualified native association protocol. New-session replay must start
+from suitable source state and satisfy source/native resource admission. The
+control retains both native contexts and output frames; it makes no low-memory
+claim. See the [owner receipt](../../benchmarks/presentation_owners_2026-10-30.md).
+
+
+### Drive native progress, then filter presentation
+
+The reusable private `av1-policy-validation/src/presentation_driver.rs` owns a
+native decoder and RetainedCursor for one segment:
+
+```rust,ignore
+let mut pass = Pass::new(admitted_configured_decoder, map.cursor(segment)?, output_clock);
+for mut packet in source_packets {
+    pass.send(&mut packet, pulse, |frame| consume(frame))?;
+}
+pass.finish(pulse, |frame| consume(frame))?;
+```
+
+It uses the existing native send/drain pumps, projecting frames inside their
+output callback. This is deliberately not a VideoDecoder wrapper: discarding
+frames for a clip must not turn a native ReceivePending promise into a caller
+receive that produces no output. Native progress and visible presentation output
+are distinct. No driver frame queue or pixel copy is introduced.
+
+Every operation temporarily takes ownership of its native decoder and cursor.
+Errors and unwinding drop both and leave the pass terminal. Completion also
+retires them. Original native and downstream errors retain their typed causes;
+projection failure is typed, and Pulse is checked by the existing pumps before
+and after raw-frame callbacks, including skipped frames. Completion requires
+native EOF and cursor coverage. Earlier delivered frames are not rolled back if
+later coverage fails. Metadata completeness still requires separate evidence.
+
+Native controls cover an initial skipped frame, exact clipped pixels/timing,
+incomplete coverage, typed BrokenPipe winning over simultaneous timeout,
+pre-cancellation, cancellation after one publication, owner release and terminal
+re-entry. Admission of decoder construction remains outside this constructor;
+full multi-segment orchestration, gap policy and final interpretation policy
+remain integration work. The driver is private and is not a released API.
+
+
+### Complete programs through owned passes
+
+`just presentation-owned FILES EXPECTED_RAW RESULTS` exercises the reusable Pass
+inside the AV1-to-MP4 example. One admitted immutable program spans the operation;
+each media segment acquires a fresh native decoder and cursor. Repeats reuse the
+same compressed source. The application explicitly fills gaps with black. Every
+pass drains native EOF and validates coverage before the next segment starts.
+
+All twelve progressive/fragmented identity, clip, repeat, gap, dwell and double
+speed files match the buffered reference byte for byte and pass independent
+FFmpeg pixel/timing inspection. Program and picture cleanup controls pass. This
+is full-program fixture integration, not a general acquisition API: input and
+output packets remain retained, reverse rates still refuse, and final operation
+policy, metadata completion and resource admission remain unqualified here.
+See [the program receipt](../../benchmarks/presentation_owners_2026-10-30.md#owned-passes-across-a-complete-program).
+
+
+### One policy owner after projection
+
+```rust,ignore
+let mut publication = Publication::new(operation_policy)?; // Before native preparation.
+pass.send(&mut packet, pulse, |frame| {
+    publication.publish(frame, pulse, |frame| encoder_output(frame))
+})?;
+```
+
+The private Publication owner retains the same OperationPolicy and bounded report
+across every segment and explicitly filled gap. It uses shared resolve_frame on
+the projected frame; callback timing is output presentation time, not the source
+packet time. Bound requirements filter before selection. Unknown required
+workspace refuses at construction, before the example builds plans or native
+contexts. This is still unknown evidence, not an estimated bound.
+
+Policy refusal or application failure prevents the downstream encoder callback.
+Failures/unwinding poison publication; native Pass error handling then drops its
+session/cursor. Original application errors remain in source(), while default
+error formatting avoids arbitrary payload text. The report records admitted or
+refused frame decisions. Prior delivered frames cannot be rolled back.
+
+The native test checks projected timing, success, explicit decline, retained
+metadata requirements and a typed application error. The complete program's
+default path, including black gaps, passes the unchanged independent oracle.
+This is publication of the held frame only: no new acquisition/gap question or
+metadata completion certificate is implied. Strict metadata removal still refuses
+without evidence; it cannot be approved merely because pixels look correct.

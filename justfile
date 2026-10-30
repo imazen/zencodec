@@ -1178,8 +1178,8 @@ docs-migration-baseline:
 
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test presentation_routes --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test presentation_routes --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings
 
 # Sequential documentation-learning study: preserve submissions and native results.
 guide-learning-capture url output revision:
@@ -1871,6 +1871,51 @@ presentation-native-check:
 
 # Real delayed native frames retain their original presentation program.
 presentation-epoch-check:
+    just presentation-map-check
     just av1-policy-setup
-    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Complete track timeline storage and default-refusing mux admission.
+track-timeline-check:
+    cargo test --locked -p zencodec-media --lib
+    cargo test --locked -p zencodec-media-testkit --all-targets
+    cargo clippy --locked -p zencodec-media -p zencodec-media-testkit --all-targets -- -D warnings
+    cargo check --locked -p zencodec-media --no-default-features --target wasm32-unknown-unknown
+    cargo test --locked -p zencodec-media --doc
+
+# Emit native MP4 edit fixtures from a verified existing native IVF.
+presentation-files input output:
+    cargo run --locked --manifest-path perf/io-validation/Cargo.toml -p io-validation --example presentation_files -- "{{input}}" "{{output}}"
+    cargo clippy --locked --manifest-path perf/io-validation/Cargo.toml -p io-validation --example presentation_files -- -D warnings
+
+# Strict independent playback comparison; every mismatch remains a failure.
+presentation-playback files expected output:
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}"
+
+# Execute the bounded native AV1 edit fixture, then inspect with an independent decoder.
+presentation-baked files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}"
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps
+
+# Replay retained compressed packets, releasing decoded driver frames per callback.
+presentation-replay files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}" --replay-source
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    cargo test --locked --manifest-path perf/presentation-map/Cargo.toml
+    cargo clippy --locked --manifest-path perf/presentation-map/Cargo.toml --all-targets -- -D warnings
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps
+
+# Real local HTTP fault simulation and file-backed native AV1 replay admission.
+presentation-replay-sources artifacts port="3586":
+    python3 perf/spatial-validation/http_snapshot.py --scope "Native AV1 replay snapshots over local HTTP/1.1; no WAN/TLS/performance claim" "{{artifacts}}" "{{port}}" -- cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- --nocapture
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- -D warnings
+    python3 perf/spatial-validation/http_snapshot_test.py
+
+# Reusable owned passes across repeats, gaps, dwell, clipping and rate changes.
+presentation-owned files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}" --owned-driver
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    just presentation-epoch-check
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps

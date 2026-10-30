@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 extern crate alloc;
 use alloc::vec::Vec;
+pub mod retained;
 use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +22,13 @@ pub enum Error {
     OverlappingCoverage,
     Terminal,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "presentation mapping: {self:?}")
+    }
+}
+impl core::error::Error for Error {}
 
 /// Exact seconds; never implicitly rounds onto a destination clock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +229,12 @@ pub struct Cursor {
     terminal: bool,
 }
 impl Cursor {
+    /// Complete finite presentation coverage, not source EOF or metadata
+    /// completeness. A driver may stop acquiring frames only after separately
+    /// discharging any remaining source-inspection obligations.
+    pub fn coverage_complete(&self) -> bool {
+        !self.terminal && self.supplied && self.segment.output.end == Some(self.next)
+    }
     pub fn new(segment: Segment) -> Result<Self, Error> {
         if segment.is_gap() {
             return Err(Error::GapRequiresDecision);
@@ -251,8 +265,8 @@ impl Cursor {
         self.terminal = false;
         Ok(output)
     }
-    /// Close at the native source's confirmed endpoint. Finite segments require
-    /// full coverage; an open-ended segment derives its end from actual frames.
+    /// Close after finite coverage or at the native source's confirmed endpoint.
+    /// An open-ended segment derives its end from actual frames.
     /// Calling this on temporary input starvation would falsely assert EOF.
     pub fn finish(&mut self) -> Result<Interval, Error> {
         if self.terminal {
@@ -555,10 +569,14 @@ mod tests {
         let plan = Plan::new(stamp(0, 1), &[edit(2, 1, 1, 1, 1)]).unwrap();
         let segment = plan.segments()[0];
         let mut cursor = Cursor::new(segment).unwrap();
+        assert!(!cursor.coverage_complete());
         assert_eq!(cursor.push(span(0, 1, 1)), Ok(None));
         assert_eq!(cursor.push(span(1, 2, 1)), Ok(Some(span(0, 1, 1))));
+        assert!(!cursor.coverage_complete());
         assert_eq!(cursor.push(span(2, 4, 1)), Ok(Some(span(1, 2, 1))));
+        assert!(cursor.coverage_complete());
         assert_eq!(cursor.finish(), Ok(span(0, 2, 1)));
+        assert!(!cursor.coverage_complete());
         assert_eq!(cursor.finish(), Err(Error::Terminal));
         assert_eq!(cursor.push(span(4, 5, 1)), Err(Error::Terminal));
 
@@ -596,6 +614,7 @@ mod tests {
         let plan = Plan::new(stamp(7, 1), &[open]).unwrap();
         let mut cursor = Cursor::new(plan.segments()[0]).unwrap();
         assert_eq!(cursor.push(span(2, 6, 1)), Ok(Some(span(7, 9, 1))));
+        assert!(!cursor.coverage_complete());
         assert_eq!(cursor.finish(), Ok(span(7, 9, 1)));
         let mut empty = Cursor::new(plan.segments()[0]).unwrap();
         assert_eq!(empty.finish(), Err(Error::MissingCoverage));

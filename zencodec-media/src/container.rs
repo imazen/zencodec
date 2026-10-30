@@ -300,6 +300,25 @@ pub trait Muxer {
         Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
     }
 
+    /// Bind preservation of complete declared track timelines in addition to
+    /// exact packet timing. Refuse unknown timelines, unsupported edit programs,
+    /// priming or pre-roll before making output available. Success applies to
+    /// this retained muxer, not a hypothetical alternate layout.
+    ///
+    /// Future packet discard/timing facts must also be preserved or refused
+    /// before affecting pending output. Native validation is still required;
+    /// this default refuses without calling legacy preparation.
+    fn begin_exact_presentation(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Self::Error>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline,
+        ))
+    }
+
     /// Write one packet. Takes the packet so its payload can be reused
     /// without a copy.
     fn write_packet(
@@ -328,6 +347,17 @@ pub trait Muxer {
 
 /// Object-safe muxer (`finish` by box), the `DynAnimationFrameEncoder` pattern.
 pub trait DynMuxer {
+    /// See [`Muxer::begin_exact_presentation`]. Default refuses before effects.
+    fn begin_exact_presentation(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline,
+        ))
+    }
     /// See [`Muxer::begin_exact_timing`]. Default refuses without calling `begin`.
     fn begin_exact_timing(
         &mut self,
@@ -367,6 +397,15 @@ pub trait DynMuxer {
 pub struct MuxerShim<M>(pub M);
 
 impl<M: Muxer> DynMuxer for MuxerShim<M> {
+    fn begin_exact_presentation(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        self.0
+            .begin_exact_presentation(tracks, hint)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
     fn begin_exact_timing(
         &mut self,
         tracks: &[TrackInfo],
