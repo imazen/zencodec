@@ -428,7 +428,10 @@ pub trait EncodeJob: Sized {
     /// Unlike the best-effort setter, success obligates every encode path to
     /// retain the policy-filtered record, including HDR fields. Opaque retained
     /// blobs are byte-exact after the policy's documented EXIF reconciliation;
-    /// typed values must remain equivalent without unrequested rounding.
+    /// typed values must remain equivalent without unrequested rounding. An
+    /// explicitly requested orientation bake may normalize orientation to
+    /// identity and reconcile its EXIF tag, but must actually transform pixels.
+    /// Retention alone never authorizes baking or changing pixel interpretation.
     /// Discarded fields must not survive from a previous configuration.
     ///
     /// Conditions depending on later pixels, color conversion or configuration

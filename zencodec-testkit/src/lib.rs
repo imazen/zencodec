@@ -108,10 +108,12 @@ use zenpixels::{
 
 mod adversarial;
 mod contracts;
+mod metadata_retention;
 pub use adversarial::{
     ExpectedError, PrefixCase, PrefixOutcome, TimingCase, check_animation_cases,
     check_decode_prefix_cases,
 };
+pub use metadata_retention::check_metadata_retained;
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
 /// tests, so it is compiled only with them.

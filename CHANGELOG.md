@@ -4,6 +4,9 @@
 
 ### Added
 
+- Testkit `check_metadata_retained` compares required resolved metadata against
+  completed output inspection, without capability exemptions or payload logging.
+
 - Review candidate: checked metadata retention on typed/erased encode jobs and
   ordinary/Send operation preparation. Defaults refuse even empty clearing;
   native retention qualification remains required.

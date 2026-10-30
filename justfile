@@ -1810,3 +1810,8 @@ metadata-admission-docs:
     python3 docs/generate-code-catalog.py .
     just docs-reference
     just docs-site-check
+
+# Exact required metadata readback, independent of capability declarations.
+metadata-retention-conformance-check:
+    cargo test --locked -p zencodec-testkit --lib metadata_retention
+    cargo clippy --locked -p zencodec-testkit --lib --tests -- -D warnings

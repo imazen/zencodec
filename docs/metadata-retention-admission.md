@@ -90,3 +90,9 @@ Implementation tracking: [checked encode metadata admission, issue184](https://g
 Core ownership/forwarding tests do not certify native retention. JPEG/PNG native
 adoption, declaration-conflict controls and independent positive readback remain
 required before deprecating the best-effort setter.
+
+An explicitly requested orientation bake may normalize the output orientation
+to identity and reconcile EXIF, provided pixels are actually transformed.
+Retention alone never authorizes that transform. Readback conformance compares
+the resolved output record, not the pre-bake input orientation. Other retained
+fields remain required; this exception does not authorize dropping opaque EXIF.

@@ -41,3 +41,23 @@ after generation because the archive lacked Git metadata and the runner omitted
 and the existing locked site dependencies repaired the runner; no assertion was
 changed. Browser interaction was not rerun: this changes signatures/catalogs,
 not layout or navigation. Native retention remains the blocking acceptance gate.
+
+## Shared readback oracle
+
+`check_metadata_retained` compares the resolved expected output record with
+completed native/independent readback. It never consults capability flags.
+Opaque bytes, CICP, CLL, mastering display, diffuse white and orientation are
+checked; extra metadata and privacy require separate conformance. Explicitly
+requested baking may normalize orientation/EXIF only with transformed pixels.
+
+Source `55baffbaf705ae58522b32a0e75f4ffa2c8d5d9b` passed the two focused controls
+(including each field's omission/substitution and payload-free diagnostics),
+testkit lib/tests strict Clippy, eight catalog generations and strict Rustdoc,
+and all 26 site source tests. Wrapper rc0, 71s, peak RSS 0.34 GiB,
+minimum available 14079 MiB, peak load 1.02. No native result is implied.
+
+Preserved fixture compilation failures: nonexistent root DiffuseWhite re-export
+(rc101, 25s, 0.36 GiB), corrected to zenpixels::hdr; incorrect CICP fixture field
+(rc101, 9s, 0.33 GiB), corrected to color_primaries. The intermediate helper also
+passed before stronger per-field substitution controls were added (rc0, 107s,
+0.35 GiB). No pre-existing expectation or native output was changed.
