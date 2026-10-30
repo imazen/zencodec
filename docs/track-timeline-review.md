@@ -286,3 +286,13 @@ completion. Last-owner drop releases the slot; decoder drain alone does not.
 This is a count limit, not a byte or native-workspace bound. Presentation-only
 identity routing remains open. The [native owner receipt](../benchmarks/presentation_owners_2026-10-30.md)
 records preserved controls, source identity and the fixture's pre-decoded scope.
+
+
+A separate native control also binds the map to the decoder session itself.
+Identical configuration epochs and source provenance across two sessions still
+produce their distinct presentation origins, with unchanged pixels and shared
+picture owners. This is a viable identity boundary for independent replay and
+avoids a codec-wide presentation-ID migration for that route. The map cannot be
+replaced while that session has pending output. Mid-session presentation updates
+and native/source resource admission remain separate contracts; see the same
+owner receipt for the interleaving and both native thread configurations.

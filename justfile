@@ -1873,7 +1873,7 @@ presentation-native-check:
 presentation-epoch-check:
     just presentation-map-check
     just av1-policy-setup
-    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 # Complete track timeline storage and default-refusing mux admission.

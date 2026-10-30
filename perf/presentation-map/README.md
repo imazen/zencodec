@@ -231,3 +231,26 @@ This prototype changes no released codec trait or frame representation. The
 native test still uses configuration epochs to select its six known maps; it
 does not establish how a demuxer announces a presentation-only change. See
 [qualification and remaining scope](../../benchmarks/presentation_owners_2026-10-30.md).
+
+
+### Presentation identity can belong to the session
+
+The second native owner control binds one immutable cursor to each decoder
+session. Two sessions receive identical AV1 bytes, CodecConfig (epoch zero),
+packet ordinal and source offset. Their maps have different presentation origins.
+Input is interleaved, output drains in reverse session order, and each decoded
+frame is projected only by the cursor retained beside its actual decoder.
+Both native thread configurations preserve exact samples and picture sharing.
+
+For replay or an independently started presentation, this avoids adding a map ID
+to every codec: `Pass { decoder, cursor }` is the identity boundary. A map stays
+immutable for that pass. Codec configuration epochs still describe codec facts;
+packet ordinals and offsets still describe source provenance. They are not
+repurposed as presentation IDs.
+
+This does not authorize changing the cursor while that decoder has delayed output.
+A live presentation-only update still needs a drain/new-session boundary or an
+explicit, qualified native association protocol. New-session replay must start
+from suitable source state and satisfy source/native resource admission. The
+control retains both native contexts and output frames; it makes no low-memory
+claim. See the [owner receipt](../../benchmarks/presentation_owners_2026-10-30.md).

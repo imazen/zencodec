@@ -40,3 +40,35 @@ uses ordinary allocator behavior. The native fixture collects its decoded frames
 before constructing maps; it proves map routing/lifetimes, not pre-decode resource
 admission. A demuxer-to-frame presentation-only identity protocol remains open.
 No automatic map retirement is inferred from decoder drain or finite coverage.
+
+
+## Session-bound presentation identity
+
+Source 6678866bcde9e6021cf50469227bc78ba10e7503 adds a second native control.
+Two AV1 decoders use identical configuration/epoch and compressed input. All
+packet ordinals equal 7 and offsets equal 1000; frame output confirms these
+values. Separate retained cursors project to origins 0 and 1000 ms. Interleaved
+input and reversed session drain order preserve exact samples, shared picture
+owners, three presentations per session and 40 ms durations. Both one- and
+four-thread decoder configurations execute. Dropping both sessions releases
+both map slots. The existing delayed-epoch control remains unchanged.
+
+This establishes session ownership as a usable presentation identity for
+independent replay operations, without adding a mandatory field to codecs.
+It does not establish mid-session map replacement, arbitrary random access,
+metadata completion, or resource admission for two simultaneous native contexts.
+The output collection retains frames in this fixture.
+
+Initial source 6fc95811 failed compilation because the test omitted the
+Presentation import. No native control ran on that source. The correction only
+qualifies that type path; assertions and dependency locks remain unchanged.
+Initial log: /home/lilith/tmp/zencodec-map-owner-20261030/sessions.log on r7900x;
+wrapper rc101, 6 seconds, peak RSS 0.39 GiB.
+
+Corrected isolated export: all 12 map tests, both selected native presentation
+owner controls and both strict all-target Clippy gates pass. Fifty other native
+harness tests are filtered and not claimed rerun. Explicit package clean ensures
+native harness compilation from the export. Wrapper rc0, 10 seconds, peak RSS
+0.39 GiB, minimum available 13510 MiB, peak load 0.51. Full log:
+/home/lilith/tmp/zencodec-map-owner-20261030/sessions-fixed.log on r7900x.
+`just presentation-epoch-check` now runs both native owner controls.

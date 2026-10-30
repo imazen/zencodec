@@ -663,3 +663,120 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
         assert_eq!(pool.live(), 0);
     }
 }
+
+#[test]
+fn presentation_maps_follow_owned_sessions_when_native_provenance_is_identical() {
+    use presentation_map_experiment::{
+        Content, Edit, Extent, Interval, Plan, Time,
+        retained::{PlanPool, RetainedCursor},
+    };
+    use zencodec::time::FrameDuration;
+    struct Pass {
+        decoder: Av1VideoDecoder,
+        cursor: RetainedCursor,
+        output: Vec<Frame>,
+    }
+    fn project(pass: &mut Pass, frame: Frame) {
+        let mut timing = frame.timing();
+        assert_eq!(frame.interpretation().config_epoch, 0);
+        assert_eq!(timing.packet_ordinal, Some(7));
+        assert_eq!(timing.input_offset, Some(1000));
+        let start = timing.pts.unwrap();
+        let end = Timestamp::new(
+            start.ticks() + timing.duration_ticks.unwrap() as i64,
+            start.base(),
+        );
+        let interval = Interval::new(Time::timestamp(start), Time::timestamp(end)).unwrap();
+        let mapped = pass.cursor.push(interval).unwrap().unwrap();
+        let mapped_start = mapped.start().on_clock(TB).unwrap();
+        let mapped_end = mapped.end().on_clock(TB).unwrap();
+        timing.pts = Some(mapped_start);
+        timing.duration_ticks = Some((mapped_end.ticks() - mapped_start.ticks()) as u64);
+        let projected = frame.represent(timing, zencodec_media::frame::Presentation::default());
+        assert!(projected.shares_picture(&frame));
+        pass.output.push(projected);
+    }
+    for threads in [1, 4] {
+        let settings = settings(8, Subsampling::Yuv444, true);
+        let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+        let (config, packets) = encode(settings, &original);
+        assert_eq!(config.epoch, 0);
+        let mut pool = PlanPool::new(2);
+        let mut passes: Vec<_> = [0, 1000]
+            .into_iter()
+            .map(|origin| {
+                let owner = pool
+                    .prepare(|| {
+                        Plan::new(
+                            Timestamp::new(origin, TB),
+                            &[Edit {
+                                extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
+                                content: Content::Media {
+                                    start: Timestamp::new(0, TB),
+                                    rate_num: 1,
+                                    rate_den: 1,
+                                },
+                            }],
+                        )
+                    })
+                    .unwrap();
+                let mut settings = rav1d_safe::Settings::default();
+                settings.threads = threads;
+                let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+                decoder.configure(&config, None).unwrap();
+                Pass {
+                    decoder,
+                    cursor: owner.cursor(0).unwrap(),
+                    output: Vec::new(),
+                }
+            })
+            .collect();
+        assert!(
+            !passes[0]
+                .cursor
+                .owner()
+                .same_owner(passes[1].cursor.owner())
+        );
+        assert_eq!(pool.live(), 2);
+        // Each session sees exactly the same source bytes, epoch, ordinal and offset.
+        // The owning session, rather than any of those values, selects its map.
+        for packet in &packets {
+            for pass in &mut passes {
+                let mut packet = packet.clone().with_ordinal(7).with_input_offset(1000);
+                while pass.decoder.send(&mut packet, None).unwrap() != SendStatus::Accepted {
+                    let Receive::Ready(frame) = pass.decoder.receive(None).unwrap() else {
+                        panic!("native decoder stalled")
+                    };
+                    project(pass, frame);
+                }
+            }
+        }
+        for pass in &mut passes {
+            pass.decoder.end_input().unwrap();
+        }
+        // Reverse draining order deliberately differs from map creation order.
+        for pass in passes.iter_mut().rev() {
+            loop {
+                match pass.decoder.receive(None).unwrap() {
+                    Receive::Ready(frame) => project(pass, frame),
+                    Receive::EndOfStream => break,
+                    other => panic!("native decoder did not drain: {other:?}"),
+                }
+            }
+            pass.cursor.finish().unwrap();
+        }
+        for (index, pass) in passes.iter().enumerate() {
+            assert_eq!(pass.output.len(), original.len());
+            for (i, (actual, expected)) in pass.output.iter().zip(&original).enumerate() {
+                assert_eq!(samples(actual), samples(expected));
+                assert_eq!(
+                    actual.timing().pts.unwrap().ticks(),
+                    index as i64 * 1000 + i as i64 * 40
+                );
+                assert_eq!(actual.timing().duration_ticks, Some(40));
+            }
+        }
+        drop(passes);
+        assert_eq!(pool.live(), 0);
+    }
+}
