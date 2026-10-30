@@ -160,3 +160,10 @@ whole-operation RAM bound: native references, encoder storage, compressed input
 and compressed output remain outside a decoded-frame-vector guarantee. Reopening
 network/file sources, replay admission, seek-to-keyframe and asynchronous scheduling
 remain unqualified. See [the receipt](../../benchmarks/presentation_replay_2026-10-30.md).
+
+The companion `just presentation-replay-sources ARTIFACTS PORT` reuses the real
+local HTTP fault simulator and its strict conditional `ReadAt` implementation.
+It validates an admitted immutable compressed snapshot before constructing native
+replay packets. File/HTTP parity, budget ownership, typed source failures and
+cancellation controls are described in
+[the source receipt](../../benchmarks/replay_sources_2026-10-30.md).

@@ -37,6 +37,7 @@ def run_command(command, environment, timeout=240):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scope", default="Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim")
     parser.add_argument("artifacts", type=Path)
     parser.add_argument("port", type=int)
     parser.add_argument("command", nargs=argparse.REMAINDER)
@@ -61,7 +62,7 @@ def main():
         def do_GET(self):
             parsed = urlsplit(self.path)
             parts = parsed.path.strip("/").split("/")
-            if len(parts) != 2 or parts[0] not in modes or not re.fullmatch(r"[a-zA-Z0-9_-]+\.tif", parts[1]):
+            if len(parts) != 2 or parts[0] not in modes or not re.fullmatch(r"[a-zA-Z0-9_-]+\.(?:tif|bin)", parts[1]):
                 self.send_error(404)
                 return
             mode, filename = parts
@@ -153,7 +154,7 @@ def main():
         raise SystemExit(completed.returncode)
     assert requests, "native tests performed no HTTP requests"
     assert all((r["if_match"] is None) == (r["call"] == 1) for r in requests), "conditional request omitted"
-    summary = {"scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+    summary = {"scope": args.scope,
                "requests": len(requests), "cases": len(counts),
                "statuses": {str(s): sum(r["status"] == s for r in requests)
                             for s in sorted({r["status"] for r in requests})},

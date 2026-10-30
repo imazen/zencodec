@@ -6,7 +6,11 @@ publish = false
 
 [workspace]
 
+[features]
+http = ["dep:ureq"]
+
 [dependencies]
+ureq = { version = "3.5.0", default-features = false, optional = true }
 zencodec-io = { path = "../../zencodec-io", version = "0.1.0", features = ["std"] }
 zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media", features = ["std"] }
@@ -42,3 +46,7 @@ lto = "thin"
 [dev-dependencies]
 zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.1.0" }
 presentation-map-experiment = { path = "../presentation-map" }
+
+[[test]]
+name = "replay_sources"
+required-features = ["http"]

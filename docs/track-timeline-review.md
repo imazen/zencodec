@@ -204,3 +204,23 @@ acquisition, then preserve pending inspection requirements through early clip
 completion. File/network reacquisition, keyframe seeking and operation-wide
 workspace evidence are still open. See
 [replay qualification](../benchmarks/presentation_replay_2026-10-30.md).
+
+### Source identity without another codec trait
+
+The native replay source controls use existing `ReadAt`, `StorageBudget`,
+`SharedStorage` and accounted packets. The source must maintain one coherent
+representation during snapshot creation; the frozen owner then preserves that
+representation across decoder instances. Creating a fresh source and accepting
+its new validator on every pass would not preserve the original operation.
+
+Known-length snapshot admission precedes body reads. Conditional HTTP failures
+retain the original source cause, and cancellation releases partial storage.
+File reads require caller-owned stable bytes during the copy: positional reads
+alone do not detect concurrent writes. After freezing, replacing the original
+file does not affect replay. Cloned packet views retain the snapshot's entire
+storage charge until the last owner is dropped.
+
+The native controls pass for stable files and HTTP, replacement and malformed
+responses, cap refusal and cancellation. This qualifies a full compressed
+snapshot route, not a general seek/reopen implementation or a whole-codec memory
+bound. See [source-admission evidence](../benchmarks/replay_sources_2026-10-30.md).

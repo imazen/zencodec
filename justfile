@@ -1905,3 +1905,9 @@ presentation-replay files expected output:
     cargo test --locked --manifest-path perf/presentation-map/Cargo.toml
     cargo clippy --locked --manifest-path perf/presentation-map/Cargo.toml --all-targets -- -D warnings
     python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps
+
+# Real local HTTP fault simulation and file-backed native AV1 replay admission.
+presentation-replay-sources artifacts port="3586":
+    python3 perf/spatial-validation/http_snapshot.py --scope "Native AV1 replay snapshots over local HTTP/1.1; no WAN/TLS/performance claim" "{{artifacts}}" "{{port}}" -- cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- --nocapture
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- -D warnings
+    python3 perf/spatial-validation/http_snapshot_test.py
