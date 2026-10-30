@@ -58,3 +58,19 @@ Native direct begin paths, MP4 parsing/writing, independent playback, bounded
 map retention, replay retirement and presentation-only epoch changes remain
 unqualified. Native backends must implement the new binding before a declared
 program can succeed through the checked driver.
+
+## Native compatibility projection follow-through
+
+The deprecated offset getter now derives the historical first-media-start minus
+leading-gaps projection from a retained full program. It explicitly omits later
+edits and rates; native writing uses the complete program, never this projection.
+The native MP4 snapshot `9cd12ba7` passed all 38 unit/integration controls against
+this core source, including unchanged signed-rounding compatibility assertions,
+full ordered edits, typed admission refusal and clean retry. Native library
+source remained identical in `89d23600`, whose strict all-target Clippy and
+no-default WASM checks pass after test-only lint repairs. This uses an isolated
+path bridge, not a qualified portable git graph or independent playback oracle.
+
+All eight compiler catalogs regenerated successfully: rc0, 29s, peak RSS
+0.32 GiB, minimum available 14427 MiB, peak load 1.18. Full receipts remain
+in the native repository's `benchmarks/mp4_timeline_2026-10-30.md`.

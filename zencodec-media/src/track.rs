@@ -326,9 +326,41 @@ impl TrackInfo {
     }
 
     /// The legacy scalar offset; it cannot describe an ordered edit program.
+    /// For a complete program, derives the first media start minus leading
+    /// gaps, rounded to the track clock with nearest ties upward. Later edits
+    /// and rates are omitted. Returns `None` if that projection is unavailable.
     #[deprecated(note = "use timeline(); a scalar cannot preserve full edit programs")]
     pub fn edit_delay_ticks(&self) -> Option<i64> {
-        self.edit_delay_ticks
+        if let Some(offset) = self.edit_delay_ticks {
+            return Some(offset);
+        }
+        use crate::timeline::{EditContent, EditExtent};
+        use zencodec::time::{Rounding, Timestamp};
+        let TrackTimeline::Edited(program) = &self.timeline else {
+            return None;
+        };
+        let mut at = program.origin();
+        for segment in program.segments() {
+            match segment.content() {
+                EditContent::Gap => {
+                    let EditExtent::Finite(duration) = segment.extent() else {
+                        return None;
+                    };
+                    at = at.checked_add(duration).ok()?;
+                }
+                EditContent::Media { start, .. } => {
+                    let shift = Timestamp::new(at.ticks().checked_neg()?, at.base())
+                        .rescale(self.time_base, Rounding::Nearest)
+                        .ok()?;
+                    return start
+                        .rescale(self.time_base, Rounding::Nearest)
+                        .ok()?
+                        .ticks()
+                        .checked_add(shift.ticks());
+                }
+            }
+        }
+        None
     }
 
     /// How many packets the container says the track has.
