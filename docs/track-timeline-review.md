@@ -239,3 +239,20 @@ This route temporarily retains the spool and snapshot payloads together. It is
 not a zero-copy owner transfer or a shared whole-operation memory allowance.
 The reader must provide cancellation while reading; `len()` cannot interrupt a
 stalled synchronous read on its own.
+
+A second qualified acquisition route avoids that payload overlap using existing
+storage ownership:
+
+```rust,ignore
+let mut storage = budget.bytes(max_bytes)?; // Admit the entire chosen cap first.
+// Read into storage with Pulse checks; reject excess input before replay.
+let snapshot = storage.freeze().slice(0..actual_length)?;
+```
+
+Native controls verify unchanged payload address across `freeze`, one managed
+object slot, exact replay and release after the last owner. A short input keeps
+the full cap charged; slicing does not shrink its backing allocation. This makes
+the policy tradeoff concrete: a growable spool plus copy versus eager reservation
+without a payload copy. Both require an explicit allowance; neither proves
+native workspace bounds. The private tested read loop also checks cancellation
+between Interrupted retries and distinguishes exact-cap EOF from excess input.

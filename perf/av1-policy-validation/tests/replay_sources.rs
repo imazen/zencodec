@@ -42,6 +42,66 @@ fn snapshot<S: ReadAt>(
     Ok(bytes.freeze())
 }
 
+// Alternative to spool-then-copy: one up-front admission, fixed capacity, no
+// payload relocation on freeze. Unused capacity stays charged to every view.
+fn snapshot_reserved<R: std::io::Read>(
+    reader: &mut R,
+    budget: &StorageBudget,
+    cap: usize,
+    pulse: Option<&dyn Pulse>,
+) -> Result<SharedStorage<u8>, Box<dyn Error>> {
+    let check = || -> Result<(), Box<dyn Error>> {
+        if let Some(pulse) = pulse {
+            pulse
+                .check()
+                .map_err(zencodec_media::session::SessionError::<std::io::Error>::Cancelled)?;
+        }
+        Ok(())
+    };
+    check()?;
+    let mut storage = budget.bytes(cap)?;
+    let pointer = storage.as_slice().as_ptr();
+    let mut used = 0;
+    loop {
+        check()?;
+        let mut probe = [0];
+        let out = if used < cap {
+            let end = used.saturating_add(256).min(cap);
+            &mut storage.as_mut_slice()[used..end]
+        } else {
+            &mut probe[..]
+        };
+        let n = match reader.read(out) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            other => other?,
+        };
+        if n > out.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "reader exceeded supplied buffer",
+            )
+            .into());
+        }
+        check()?;
+        if n == 0 {
+            break;
+        }
+        if used == cap {
+            return Err(zencodec::source::SourceError::BeyondLimit {
+                needed: u64::try_from(cap)?
+                    .checked_add(1)
+                    .ok_or("snapshot length overflow")?,
+                limit: cap as u64,
+            }
+            .into());
+        }
+        used += n;
+    }
+    let saved = storage.freeze().slice(0..used)?;
+    assert_eq!(saved.as_slice().as_ptr(), pointer, "freeze copied payload");
+    Ok(saved)
+}
+
 #[test]
 fn native_replay_uses_admitted_immutable_file_and_conditional_http_snapshots() {
     let root = PathBuf::from(std::env::var_os("SPATIAL_HTTP_ARTIFACTS").unwrap());
@@ -150,6 +210,38 @@ fn native_replay_uses_admitted_immutable_file_and_conditional_http_snapshots() {
     assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), 7);
     assert_eq!(budget.reserved_bytes(), 0);
     drop(cancelled); // A failed acquisition is never turned into a replay owner.
+
+    for cap in [bytes.len() - 1, bytes.len(), bytes.len() + 256] {
+        let budget = StorageBudget::new(cap, 1);
+        let consumed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut reader = ShortReader {
+            bytes: &bytes,
+            consumed: consumed.clone(),
+            stop_at: None,
+        };
+        let result = snapshot_reserved(&mut reader, &budget, cap, None);
+        if cap < bytes.len() {
+            assert!(matches!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<zencodec::source::SourceError>(),
+                Some(zencodec::source::SourceError::BeyondLimit { .. })
+            ));
+            assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), cap + 1);
+            assert_eq!(budget.reserved_bytes(), 0);
+        } else {
+            let saved = result.unwrap();
+            assert_eq!(saved.len(), bytes.len());
+            assert_eq!(saved.charged_bytes(), cap);
+            assert_eq!(
+                (budget.reserved_bytes(), budget.reserved_objects()),
+                (cap, 1)
+            );
+            verify(&saved);
+            drop(saved);
+            assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        }
+    }
 
     let mut http = http_source::HttpSource::open(format!("{url}/stable/replay.bin"), 256).unwrap();
     let attempts = http.attempts.get();
@@ -280,4 +372,53 @@ impl std::io::Read for ShortReader<'_> {
             .fetch_add(n, std::sync::atomic::Ordering::SeqCst);
         Ok(n)
     }
+}
+
+#[test]
+fn reserved_snapshot_refuses_before_reads_and_polls_between_interrupted_reads() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+    use zencodec::how_far::StopOnly;
+    let consumed = Arc::new(AtomicUsize::new(0));
+    let mut reader = ShortReader {
+        bytes: &[1, 2],
+        consumed: consumed.clone(),
+        stop_at: None,
+    };
+    assert!(snapshot_reserved(&mut reader, &StorageBudget::new(1, 1), 2, None).is_err());
+    assert!(snapshot_reserved(&mut reader, &StorageBudget::new(2, 0), 2, None).is_err());
+    assert_eq!(consumed.load(Ordering::SeqCst), 0);
+    let budget = StorageBudget::new(0, 1);
+    let empty = snapshot_reserved(&mut std::io::empty(), &budget, 0, None).unwrap();
+    assert!(empty.is_empty());
+    assert_eq!(budget.reserved_objects(), 1);
+    drop(empty);
+    assert_eq!(budget.reserved_objects(), 0);
+
+    struct Interrupts {
+        flag: Arc<AtomicBool>,
+        calls: usize,
+    }
+    impl std::io::Read for Interrupts {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            self.calls += 1;
+            self.flag.store(true, Ordering::SeqCst);
+            Err(std::io::ErrorKind::Interrupted.into())
+        }
+    }
+    let flag = Arc::new(AtomicBool::new(false));
+    let pulse = StopOnly::new(StopFlag(flag.clone()));
+    let mut reader = Interrupts { flag, calls: 0 };
+    let budget = StorageBudget::new(256, 1);
+    let error = snapshot_reserved(&mut reader, &budget, 256, Some(&pulse)).unwrap_err();
+    assert!(matches!(
+        error.downcast_ref::<zencodec_media::session::SessionError<std::io::Error>>(),
+        Some(zencodec_media::session::SessionError::Cancelled(
+            enough::StopReason::TimedOut
+        ))
+    ));
+    assert_eq!(reader.calls, 1, "interrupted reads spun past cancellation");
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 }

@@ -92,3 +92,35 @@ HTTP evidence: replay-source-http-unknown under the same artifact root.
 This supersedes the earlier unknown-length qualification gap only for the
 bounded full-spool-plus-copy route. It does not qualify streaming seek/reopen,
 zero-copy transfer, stalled-read preemption or whole-operation RAM admission.
+
+## Single-payload alternative
+
+Snapshot b27ceff8daea2f10988f4dee6e490e8bf7e26385 adds a private alternative:
+reserve the chosen cap with StorageBudget before the first read, fill its
+OwnedStorage directly, freeze it and return only the initialized input prefix.
+The payload pointer is asserted unchanged across freezing; one managed object
+remains charged. The small shared-owner header is outside that payload allowance.
+This is not a claim of one allocation for the entire operation.
+
+Native AV1 replay passes for exact and overprovisioned caps. The returned view
+has the actual input length, while charged_bytes and budget reservations retain
+the full chosen capacity. A one-byte-short cap refuses after its EOF probe and
+releases the reservation. Byte and object admission failures precede all input
+consumption. Empty input with zero byte allowance succeeds with one object slot.
+A reader returning Interrupted while raising cancellation is polled before retry:
+only one native read occurs, the typed timeout survives and storage is released.
+Malformed read counts refuse rather than indexing outside admitted storage.
+
+All three complete source tests and strict target Clippy pass. Original HTTP,
+file and spool controls remain enabled. Isolated export, same committed lock,
+explicit package clean. Wrapper rc0, 7 seconds, peak RSS 0.39 GiB,
+minimum available 13441 MiB, peak load 0.33. Log:
+/home/lilith/tmp/zencodec-replay-source-20261030/reserved.log on r7900x.
+HTTP evidence: replay-source-http-reserved under the same artifact root.
+
+This avoids the spool/snapshot payload overlap by choosing eager reservation,
+not by transferring or retrospectively charging an existing Vec. It reserves
+and initializes unused capacity and keeps that capacity charged until the last
+view drops. The source may have consumed a prefix on failure and must not be
+silently retried as a new object. A blocking read still needs transport/native
+cancellation support. No production API or whole-operation memory claim is added.

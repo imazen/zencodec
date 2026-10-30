@@ -174,3 +174,11 @@ The test retains the exact-cap/one-byte-over behavior and original timeout cause
 There is a real temporary overlap between spool payload and snapshot payload;
 a future owner-transfer convenience must preserve admission rather than conceal
 that cost. No zero-copy or whole-memory claim is made for this composition.
+
+The source witness also qualifies eager reservation directly into OwnedStorage,
+followed by freeze and a prefix view. It avoids the spool/copy overlap without
+new public types, and verifies pointer preservation and retained full-cap charging.
+Its tradeoff is initializing/reserving the chosen maximum before reading. The
+private loop handles exact EOF, overflow, zero-cap input, failed admission and
+cancellation between Interrupted retries. This is an alternative route to expose
+to an operation policy, not an implicit promise that all replay uses little RAM.
