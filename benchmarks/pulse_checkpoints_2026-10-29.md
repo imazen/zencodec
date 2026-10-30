@@ -44,3 +44,22 @@ Both graphs pass locked offline metadata resolution; no pre-existing package
 identity or codec pin changes. Native runtime CI requalification is separate.
 The historical io-validation workspace lock is an input to a recipe that
 explicitly resolves current core dependencies; it is not an unchanged-lock gate.
+
+## Native graph preflight
+
+A separate JPEG progress candidate failed compilation because its PNG dev
+edge selected zenpixels 0.2.16 alongside the core's 0.3.1. The new
+`scripts/check-codec-graph.py` reads resolved Cargo metadata and checks pixel
+source identity at core-family and converter interfaces. It reproduces that
+failure (7 interface consumers, 1 mismatch), accepts the repaired graph (7,
+zero mismatches), and accepts this repository's isolated JPEG harness (10,
+zero mismatches). Five Python controls cover a legacy unrelated pixel branch,
+native and converter splits, equal-version/different-source identity and missing
+resolved input. The JPEG CI/local recipe now invokes the gate before compilation.
+
+The gate does not infer every Rust type-sharing relationship. For example,
+zensim-regress consumes PNG output without depending directly on the core family;
+that boundary still needed source review and lock alignment. Use metadata from
+the actual selected features/target and retain compilation/runtime gates.
+Accepting a lock is not proof that a fresh unlocked resolution chooses the same
+compatible flexible edges. No pre-existing package versions were upgraded.

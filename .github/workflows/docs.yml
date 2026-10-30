@@ -71,6 +71,8 @@ jobs:
       - name: Test pinned JPEG configurations and metadata boundaries
         run: |
           cp perf/jpeg-policy-validation/dependencies.lock perf/jpeg-policy-validation/Cargo.lock
+          just codec-graph-controls
+          just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
           cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
       - name: Execute effective-job preflight implementation experiment

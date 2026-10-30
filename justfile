@@ -980,6 +980,7 @@ jpeg-policy-update-lock:
     cargo update --manifest-path perf/jpeg-policy-validation/Cargo.toml
 
 jpeg-policy-check artifacts="$HOME/tmp/zencodec-jpeg-oracles":
+    just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
@@ -1782,3 +1783,12 @@ pulse-checkpoints-qualification:
     python3 docs/generate-code-catalog.py .
     just docs-reference
     just docs-site-check
+
+# Resolve the chosen harness graph before spending CPU on native compilation.
+codec-graph-check manifest report="$HOME/tmp/zencodec-codec-graph.json":
+    mkdir -p "$(dirname "{{report}}")"
+    cargo metadata --manifest-path "{{manifest}}" --locked --format-version 1 > "{{report}}"
+    python3 scripts/check-codec-graph.py "{{report}}"
+
+codec-graph-controls:
+    python3 scripts/check-codec-graph.test.py
