@@ -51,3 +51,30 @@ retained as `source.incomplete.tar` locally and remotely. No build ran from that
 archive. After reclaiming inactive Rust intermediates, the complete replacement
 archive was checked locally, hash-matched remotely and extracted successfully
 before qualification. No source/test expectation changed to repair staging.
+
+
+## Native frame coverage cursor
+
+Source `8e97531e2c21e3a2f5f621046d1e6fb27275106f2` adds a per-segment
+execution cursor that refuses missing/overlapping coverage and becomes terminal
+on failure or completion. The cursor retains timing state, not decoded frames.
+Gaps require an explicit external decision; no implicit fill is implemented.
+
+All 11 model tests pass (no ignored or filtered tests), plus strict all-target
+Clippy. The native focused control passes (1 selected, 50 filtered), plus native
+harness strict all-target Clippy. It uses three real lossless AV1 frames with
+exact sample comparisons, double-rate clipping, replay and dwell. A deliberately
+omitted middle frame refuses instead of completing a shortened presentation.
+The fixture explicitly supplies its known 40 ms source durations and retains the
+three decoded frames; it does not qualify final-duration discovery, low-memory
+replay, MP4 edit parsing or independent player parity. No public API changed.
+
+The frozen archive SHA256 is
+`a7525548a5519a7d35eea5a6832a62e4706a8a6bf04d9ee3db9e57d29c854172`.
+The isolated lock adds only the private path experiment and harness edge; graph
+validation reports 13 interface consumers and zero mismatches. Tests used the
+resolved lock with no later resolution, a 3 GiB cap, two jobs and 900-second
+batch timeout. The recorded run-heavy receipt is rc0, 35s, peak RSS 0.40 GiB,
+minimum available 14326 MiB, peak load 1.34. This is test/build resource use,
+not a codec performance or retained-memory measurement. Recorded wrapper and
+Rust processes exited. Reproduce with `just presentation-native-check`.

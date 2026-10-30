@@ -605,3 +605,72 @@ fn native_mp4_track_facts_agree_across_input_drivers() {
         .unwrap();
     }
 }
+
+#[test]
+fn native_av1_presentation_cursor_clips_repeats_and_detects_missing_frames() {
+    use presentation_map_experiment::{Content, Cursor, Edit, Error, Extent, Interval, Plan, Time};
+    use zencodec::time::FrameDuration;
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let input: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &input);
+    let decoded = decode(&mut watched(1).0, &config, &packets, None).unwrap();
+    assert_eq!(decoded.len(), 3);
+    for (actual, expected) in decoded.iter().zip(&input) {
+        assert_eq!(samples(actual), samples(expected));
+    }
+    let finite = |duration, start, rate| Edit {
+        extent: Extent::Finite(FrameDuration::new(duration, 1000).unwrap()),
+        content: Content::Media {
+            start: Timestamp::new(start, TB),
+            rate_num: rate,
+            rate_den: 1,
+        },
+    };
+    let plan = Plan::new(
+        Timestamp::new(0, TB),
+        &[finite(40, 20, 2), finite(40, 0, 1), finite(30, 40, 0)],
+    )
+    .unwrap();
+    let interval = |frame: &Frame| {
+        let timing = frame.timing();
+        let start = timing.pts.unwrap();
+        // The test's demux-side fixture supplies the final duration explicitly;
+        // this is not a claim that the native decoder discovers final duration.
+        let end = Timestamp::new(start.ticks() + 40, TB);
+        Interval::new(Time::timestamp(start), Time::timestamp(end)).unwrap()
+    };
+    let mut visible = Vec::new();
+    for segment in plan.segments() {
+        let mut cursor = Cursor::new(*segment).unwrap();
+        for (index, frame) in decoded.iter().enumerate() {
+            if let Some(output) = cursor.push(interval(frame)).unwrap() {
+                visible.push((
+                    index,
+                    output.start().on_clock(TB).unwrap().ticks(),
+                    output.end().on_clock(TB).unwrap().ticks(),
+                ));
+                assert_eq!(samples(frame), samples(&input[index]));
+            }
+        }
+        cursor.finish().unwrap();
+    }
+    // Clip 20..100 ms at double rate, repeat the first frame, then dwell on
+    // frame 1. Pixel ownership stays with the decoded frame; only time changes.
+    assert_eq!(
+        visible,
+        [
+            (0, 0, 10),
+            (1, 10, 30),
+            (2, 30, 40),
+            (0, 40, 80),
+            (1, 80, 110)
+        ]
+    );
+    let mut missing = Cursor::new(plan.segments()[0]).unwrap();
+    missing.push(interval(&decoded[0])).unwrap();
+    assert_eq!(
+        missing.push(interval(&decoded[2])),
+        Err(Error::MissingCoverage)
+    );
+    assert_eq!(missing.finish(), Err(Error::Terminal));
+}

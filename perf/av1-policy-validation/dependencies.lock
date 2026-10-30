@@ -147,6 +147,7 @@ version = "0.0.0"
 dependencies = [
  "bytemuck",
  "enough",
+ "presentation-map-experiment",
  "rav1d-safe",
  "zenavif",
  "zencodec",
@@ -611,6 +612,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "presentation-map-experiment"
+version = "0.0.0"
+dependencies = [
+ "zencodec",
 ]
 
 [[package]]

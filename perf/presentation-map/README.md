@@ -89,3 +89,28 @@ source ranges, source seek/refusal before affected output, late configuration
 changes with delayed frames, final frame duration, and codec priming/discard.
 Preserving these data without executing them remains useful for remuxing, but
 must not be reported as a successful edited render.
+
+## Execution coverage cursor
+
+`Cursor::new(segment)` retains only the segment and its next output time. Pass
+ordered decoded frame intervals to `push`; each returned interval belongs to
+that exact frame's unchanged pixels. `finish` requires complete finite coverage,
+or derives an open segment's endpoint from observed frames. A missing span,
+overlap, arithmetic error or premature completion poisons the cursor. Further
+calls refuse. Already delivered frames remain delivered; this is not rollback.
+
+A gap returns `GapRequiresDecision`. The application must choose and admit a
+fill, omission or refusal rather than receive an invented black frame. This
+experiment has no policy callback yet. Repeated edits need separate cursors and
+source acquisition; cursor state never caches frames. A caller must distinguish
+confirmed source EOF from temporary starvation, and must supply reliable frame
+durations, especially for the final frame. Neither the cursor nor native PTS
+alone can establish that endpoint.
+
+`just presentation-native-check` exercises the cursor against real lossless AV1
+frames: double-rate clipping, replay of the first frame, dwell on the second,
+and a deliberately missing middle frame. The fixture retains all three decoded
+frames and supplies their known 40 ms durations. It is not a streaming-memory
+measurement, MP4 edit parser, replay-source implementation or independent player
+oracle. Native acquisition, epoch ownership and publication remain required
+before promotion to the shared API.

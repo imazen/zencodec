@@ -1856,3 +1856,10 @@ media-track-facts-check:
     just av1-policy-setup
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked native_mp4_track_facts_agree -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --locked --all-targets -- -D warnings
+
+# Presentation coverage plus real AV1 frame timing/pixel controls.
+presentation-native-check:
+    just presentation-map-check
+    just av1-policy-setup
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked native_av1_presentation_cursor -- --nocapture
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

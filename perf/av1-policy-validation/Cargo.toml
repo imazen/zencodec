@@ -41,3 +41,4 @@ lto = "thin"
 
 [dev-dependencies]
 zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.1.0" }
+presentation-map-experiment = { path = "../presentation-map" }

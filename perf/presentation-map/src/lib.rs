@@ -16,6 +16,10 @@ pub enum Error {
     Allocation,
     OpenEndedMustBeLast,
     UnsupportedExtent,
+    GapRequiresDecision,
+    MissingCoverage,
+    OverlappingCoverage,
+    Terminal,
 }
 
 /// Exact seconds; never implicitly rounds onto a destination clock.
@@ -202,6 +206,63 @@ impl Segment {
     }
     pub fn is_gap(&self) -> bool {
         self.source.is_none()
+    }
+}
+
+/// Executes one admitted media segment without retaining frames or pixels.
+/// The caller associates each returned interval with the supplied decoded frame.
+/// A gap needs an explicit fill/skip decision outside this cursor. Earlier output
+/// cannot be rolled back if a later frame or completion exposes missing coverage.
+#[derive(Debug)]
+pub struct Cursor {
+    segment: Segment,
+    next: Time,
+    supplied: bool,
+    terminal: bool,
+}
+impl Cursor {
+    pub fn new(segment: Segment) -> Result<Self, Error> {
+        if segment.is_gap() {
+            return Err(Error::GapRequiresDecision);
+        }
+        Ok(Self {
+            next: segment.output.start,
+            segment,
+            supplied: false,
+            terminal: false,
+        })
+    }
+    pub fn push(&mut self, frame: Interval) -> Result<Option<Interval>, Error> {
+        if self.terminal {
+            return Err(Error::Terminal);
+        }
+        // Every error poisons execution, including checked arithmetic failures.
+        self.terminal = true;
+        let output = self.segment.project(frame)?;
+        if let Some(output) = output {
+            match output.start.cmp(self.next)? {
+                core::cmp::Ordering::Greater => return Err(Error::MissingCoverage),
+                core::cmp::Ordering::Less => return Err(Error::OverlappingCoverage),
+                core::cmp::Ordering::Equal => {}
+            }
+            self.next = output.end;
+            self.supplied = true;
+        }
+        self.terminal = false;
+        Ok(output)
+    }
+    /// Close at the native source's confirmed endpoint. Finite segments require
+    /// full coverage; an open-ended segment derives its end from actual frames.
+    /// Calling this on temporary input starvation would falsely assert EOF.
+    pub fn finish(&mut self) -> Result<Interval, Error> {
+        if self.terminal {
+            return Err(Error::Terminal);
+        }
+        self.terminal = true;
+        if !self.supplied || self.segment.output.end.is_some_and(|end| end != self.next) {
+            return Err(Error::MissingCoverage);
+        }
+        Interval::new(self.segment.output.start, self.next)
     }
 }
 
@@ -488,5 +549,55 @@ mod tests {
             Plan::new(stamp(0, 1), &[dwell]),
             Err(Error::UnsupportedExtent)
         ));
+    }
+    #[test]
+    fn cursor_requires_complete_nonoverlapping_coverage_and_is_terminal() {
+        let plan = Plan::new(stamp(0, 1), &[edit(2, 1, 1, 1, 1)]).unwrap();
+        let segment = plan.segments()[0];
+        let mut cursor = Cursor::new(segment).unwrap();
+        assert_eq!(cursor.push(span(0, 1, 1)), Ok(None));
+        assert_eq!(cursor.push(span(1, 2, 1)), Ok(Some(span(0, 1, 1))));
+        assert_eq!(cursor.push(span(2, 4, 1)), Ok(Some(span(1, 2, 1))));
+        assert_eq!(cursor.finish(), Ok(span(0, 2, 1)));
+        assert_eq!(cursor.finish(), Err(Error::Terminal));
+        assert_eq!(cursor.push(span(4, 5, 1)), Err(Error::Terminal));
+
+        let mut short = Cursor::new(segment).unwrap();
+        short.push(span(1, 2, 1)).unwrap();
+        assert_eq!(short.finish(), Err(Error::MissingCoverage));
+        assert_eq!(short.finish(), Err(Error::Terminal));
+        let mut hole = Cursor::new(segment).unwrap();
+        assert_eq!(hole.push(span(2, 3, 1)), Err(Error::MissingCoverage));
+        assert_eq!(hole.push(span(1, 2, 1)), Err(Error::Terminal));
+        let mut overlap = Cursor::new(segment).unwrap();
+        overlap.push(span(1, 2, 1)).unwrap();
+        assert_eq!(overlap.push(span(1, 3, 1)), Err(Error::OverlappingCoverage));
+        assert_eq!(overlap.finish(), Err(Error::Terminal));
+    }
+    #[test]
+    fn cursor_open_end_uses_observed_coverage_and_gaps_require_decisions() {
+        let gap = Edit {
+            extent: Extent::Finite(FrameDuration::new(1, 1).unwrap()),
+            content: Content::Gap,
+        };
+        let plan = Plan::new(stamp(0, 1), &[gap]).unwrap();
+        assert!(matches!(
+            Cursor::new(plan.segments()[0]),
+            Err(Error::GapRequiresDecision)
+        ));
+        let open = Edit {
+            extent: Extent::Remaining,
+            content: Content::Media {
+                start: stamp(2, 1),
+                rate_num: 2,
+                rate_den: 1,
+            },
+        };
+        let plan = Plan::new(stamp(7, 1), &[open]).unwrap();
+        let mut cursor = Cursor::new(plan.segments()[0]).unwrap();
+        assert_eq!(cursor.push(span(2, 6, 1)), Ok(Some(span(7, 9, 1))));
+        assert_eq!(cursor.finish(), Ok(span(7, 9, 1)));
+        let mut empty = Cursor::new(plan.segments()[0]).unwrap();
+        assert_eq!(empty.finish(), Err(Error::MissingCoverage));
     }
 }
