@@ -1874,3 +1874,11 @@ presentation-epoch-check:
     just av1-policy-setup
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Complete track timeline storage and default-refusing mux admission.
+track-timeline-check:
+    cargo test --locked -p zencodec-media --lib
+    cargo test --locked -p zencodec-media-testkit --all-targets
+    cargo clippy --locked -p zencodec-media -p zencodec-media-testkit --all-targets -- -D warnings
+    cargo check --locked -p zencodec-media --no-default-features --target wasm32-unknown-unknown
+    cargo test --locked -p zencodec-media --doc

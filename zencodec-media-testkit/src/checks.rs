@@ -461,11 +461,13 @@ struct TrackFacts {
     codec_delay: Option<FrameDuration>,
     seek_preroll: Option<FrameDuration>,
     edit_delay_ticks: Option<i64>,
+    timeline: zencodec_media::timeline::TrackTimeline,
     declared_packets: Option<u64>,
     declared_duration_ticks: Option<u64>,
 }
 
 impl From<&TrackInfo> for TrackFacts {
+    #[allow(deprecated)] // Compare legacy declarations too until native migration is complete.
     fn from(track: &TrackInfo) -> Self {
         Self {
             index: track.index(),
@@ -479,6 +481,7 @@ impl From<&TrackInfo> for TrackFacts {
             codec_delay: track.codec_delay(),
             seek_preroll: track.seek_preroll(),
             edit_delay_ticks: track.edit_delay_ticks(),
+            timeline: track.timeline().clone(),
             declared_packets: track.declared_packets(),
             declared_duration_ticks: track.declared_duration_ticks(),
         }

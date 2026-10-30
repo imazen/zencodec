@@ -999,7 +999,20 @@ None.
   native validation errors. Callers deliberately using a backend's retryable
   validation contract can use the error-only `VideoEncoderShim` (`ffaddb6b`).
 
+#### Deprecated
+
+- Review draft: `TrackInfo::edit_delay_ticks` and the corresponding builder
+  setter; `timeline` / `with_timeline` retain complete ordered edit programs.
+  Combining known full and legacy declarations refuses at build.
+
 #### Added
+
+- Review draft: `timeline::{TrackTimeline, EditList, EditSegment, EditExtent,
+  EditContent, PlaybackRate}` distinguish unknown, unedited, explicit empty,
+  finite and open-ended presentations. Typed/erased muxers gain default-refusing
+  `begin_exact_presentation`; checked output requires this binding for declared
+  timelines. Native parsing/remuxing adoption remains a landing gate.
+
 
 - Add `std`-enabled checked output drivers: `output::PreparedOutput` retains
   the actual muxer/writer without publishing, and `output::Output` validates

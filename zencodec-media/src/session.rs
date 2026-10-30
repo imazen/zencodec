@@ -113,6 +113,8 @@ pub enum UnsupportedMedia {
     PixelFormat,
     /// Exact preservation of packet timestamps and explicit durations.
     ExactTiming,
+    /// Exact preservation of the complete declared track presentation program.
+    PresentationTimeline,
 }
 
 /// Every session error is terminal for the session except `Codec` errors a

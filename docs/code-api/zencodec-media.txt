@@ -111,6 +111,7 @@ pub const fn zencodec_media::container::MuxTiming::streams(&self) -> bool
 pub struct zencodec_media::container::MuxerShim<M>(pub M)
 impl<M: zencodec_media::container::Muxer> zencodec_media::container::DynMuxer for zencodec_media::container::MuxerShim<M>
 pub fn zencodec_media::container::MuxerShim<M>::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::begin_exact_presentation(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::consume_output(&mut self, n: usize)
 pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
@@ -140,6 +141,7 @@ pub fn zencodec_media::container::Demuxer::step(&mut self, input: zencodec::trai
 pub fn zencodec_media::container::Demuxer::tracks(&self) -> &[zencodec_media::track::TrackInfo]
 pub trait zencodec_media::container::DynMuxer
 pub fn zencodec_media::container::DynMuxer::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::DynMuxer::begin_exact_presentation(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::DynMuxer::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::DynMuxer::consume_output(&mut self, n: usize)
 pub fn zencodec_media::container::DynMuxer::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
@@ -148,6 +150,7 @@ pub fn zencodec_media::container::DynMuxer::take_output(&mut self, into: &mut al
 pub fn zencodec_media::container::DynMuxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 impl<M: zencodec_media::container::Muxer> zencodec_media::container::DynMuxer for zencodec_media::container::MuxerShim<M>
 pub fn zencodec_media::container::MuxerShim<M>::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn zencodec_media::container::MuxerShim<M>::begin_exact_presentation(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
 pub fn zencodec_media::container::MuxerShim<M>::consume_output(&mut self, n: usize)
 pub fn zencodec_media::container::MuxerShim<M>::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec::traits::incremental::ErasedError>>
@@ -157,6 +160,7 @@ pub fn zencodec_media::container::MuxerShim<M>::write_packet(&mut self, packet: 
 pub trait zencodec_media::container::Muxer
 pub type zencodec_media::container::Muxer::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec_media::container::Muxer::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<Self::Error>>
+pub fn zencodec_media::container::Muxer::begin_exact_presentation(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::Muxer::begin_exact_timing(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<Self::Error>>
 pub fn zencodec_media::container::Muxer::consume_output(&mut self, n: usize)
 pub fn zencodec_media::container::Muxer::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<Self::Error>> where Self: core::marker::Sized
@@ -255,6 +259,7 @@ pub fn zencodec_media::output::Output<M, D>::facts(&self) -> zencodec::operation
 pub fn zencodec_media::output::Output<M, D>::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::output::Stats, zencodec_media::output::Failure>
 pub fn zencodec_media::output::Output<M, D>::is_failed(&self) -> bool
 pub fn zencodec_media::output::Output<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
+pub fn zencodec_media::output::Output<M, D>::preserving_presentation(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
 pub fn zencodec_media::output::Output<M, D>::send(&mut self, packet: zencodec_media::packet::Packet, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_media::output::Failure>
 pub const fn zencodec_media::output::Output<M, D>::stats(&self) -> &zencodec_media::output::Stats
 pub fn zencodec_media::output::Output<M, D>::with_container_timing(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
@@ -262,6 +267,7 @@ pub struct zencodec_media::output::PreparedOutput<M, D>(_)
 impl<M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination> zencodec_media::output::PreparedOutput<M, D>
 pub fn zencodec_media::output::PreparedOutput<M, D>::facts(&self) -> zencodec::operation::transition::DestinationFacts
 pub fn zencodec_media::output::PreparedOutput<M, D>::new(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
+pub fn zencodec_media::output::PreparedOutput<M, D>::preserving_presentation(mux: M, destination: D, tracks: &[zencodec_media::track::TrackInfo], pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec_media::output::Failure>
 pub fn zencodec_media::output::PreparedOutput<M, D>::publish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec_media::output::Output<M, D>, zencodec_media::output::Failure>
 pub const fn zencodec_media::output::PreparedOutput<M, D>::timing(&self) -> zencodec_media::container::MuxTiming
 #[non_exhaustive] pub struct zencodec_media::output::Stats
@@ -417,6 +423,7 @@ pub zencodec_media::session::UnsupportedMedia::Container
 pub zencodec_media::session::UnsupportedMedia::ExactTiming
 pub zencodec_media::session::UnsupportedMedia::ForwardOnlyLayout
 pub zencodec_media::session::UnsupportedMedia::PixelFormat
+pub zencodec_media::session::UnsupportedMedia::PresentationTimeline
 pub zencodec_media::session::UnsupportedMedia::Seek
 #[non_exhaustive] pub struct zencodec_media::session::CodecConfig
 pub zencodec_media::session::CodecConfig::codec: zencodec_media::track::CodecId
@@ -622,6 +629,41 @@ impl zencodec_media::staging::Staging
 pub fn zencodec_media::staging::Staging::disk(file: std::fs::File, limits: zencodec_media::staging::DiskLimits, replay: zencodec::storage::StorageBudget) -> core::result::Result<Self, zencodec_media::staged::Cause>
 pub fn zencodec_media::staging::Staging::facts(&self) -> zencodec::operation::transition::StagingFacts
 pub fn zencodec_media::staging::Staging::memory(budget: zencodec::storage::StorageBudget) -> Self
+pub mod zencodec_media::timeline
+#[non_exhaustive] pub enum zencodec_media::timeline::EditContent
+pub zencodec_media::timeline::EditContent::Gap
+pub zencodec_media::timeline::EditContent::Media
+pub zencodec_media::timeline::EditContent::Media::rate: zencodec_media::timeline::PlaybackRate
+pub zencodec_media::timeline::EditContent::Media::start: zencodec::time::Timestamp
+#[non_exhaustive] pub enum zencodec_media::timeline::EditExtent
+pub zencodec_media::timeline::EditExtent::Finite(zencodec::animation::FrameDuration)
+pub zencodec_media::timeline::EditExtent::ToEnd
+#[non_exhaustive] pub enum zencodec_media::timeline::TimelineError
+pub zencodec_media::timeline::TimelineError::NonterminalOpenEnd
+pub zencodec_media::timeline::TimelineError::ZeroRateDenominator
+impl core::error::Error for zencodec_media::timeline::TimelineError
+impl core::fmt::Display for zencodec_media::timeline::TimelineError
+pub fn zencodec_media::timeline::TimelineError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec_media::timeline::TrackTimeline
+pub zencodec_media::timeline::TrackTimeline::Edited(alloc::sync::Arc<zencodec_media::timeline::EditList>)
+pub zencodec_media::timeline::TrackTimeline::Unedited
+pub zencodec_media::timeline::TrackTimeline::Unknown
+pub struct zencodec_media::timeline::EditList
+impl zencodec_media::timeline::EditList
+pub fn zencodec_media::timeline::EditList::new(origin: zencodec::time::Timestamp, segments: alloc::vec::Vec<zencodec_media::timeline::EditSegment>) -> core::result::Result<Self, zencodec_media::timeline::TimelineError>
+pub const fn zencodec_media::timeline::EditList::origin(&self) -> zencodec::time::Timestamp
+pub fn zencodec_media::timeline::EditList::segments(&self) -> &[zencodec_media::timeline::EditSegment]
+pub struct zencodec_media::timeline::EditSegment
+impl zencodec_media::timeline::EditSegment
+pub const fn zencodec_media::timeline::EditSegment::content(self) -> zencodec_media::timeline::EditContent
+pub const fn zencodec_media::timeline::EditSegment::extent(self) -> zencodec_media::timeline::EditExtent
+pub const fn zencodec_media::timeline::EditSegment::new(extent: zencodec_media::timeline::EditExtent, content: zencodec_media::timeline::EditContent) -> Self
+pub struct zencodec_media::timeline::PlaybackRate
+impl zencodec_media::timeline::PlaybackRate
+pub const zencodec_media::timeline::PlaybackRate::NORMAL: Self
+pub const fn zencodec_media::timeline::PlaybackRate::denominator(self) -> u32
+pub fn zencodec_media::timeline::PlaybackRate::new(numerator: i32, denominator: u32) -> core::result::Result<Self, zencodec_media::timeline::TimelineError>
+pub const fn zencodec_media::timeline::PlaybackRate::numerator(self) -> i32
 pub mod zencodec_media::track
 #[non_exhaustive] pub enum zencodec_media::track::CodecId
 pub zencodec_media::track::CodecId::Aac
@@ -635,6 +677,7 @@ pub zencodec_media::track::CodecId::Pcm
 pub zencodec_media::track::CodecId::Vp8
 pub zencodec_media::track::CodecId::Vp9
 #[non_exhaustive] pub enum zencodec_media::track::TrackError
+pub zencodec_media::track::TrackError::ConflictingTimeline
 pub zencodec_media::track::TrackError::NoChannels
 pub zencodec_media::track::TrackError::ZeroDimension
 pub zencodec_media::track::TrackError::ZeroSampleRate
@@ -677,6 +720,7 @@ pub fn zencodec_media::track::TrackInfo::kind(&self) -> zencodec_media::track::T
 pub fn zencodec_media::track::TrackInfo::other(index: u32, kind: zencodec_media::track::TrackKind, codec: zencodec_media::track::CodecId, time_base: zencodec::time::TimeBase) -> zencodec_media::track::TrackInfoBuilder
 pub fn zencodec_media::track::TrackInfo::seek_preroll(&self) -> core::option::Option<zencodec::animation::FrameDuration>
 pub fn zencodec_media::track::TrackInfo::time_base(&self) -> zencodec::time::TimeBase
+pub fn zencodec_media::track::TrackInfo::timeline(&self) -> &zencodec_media::timeline::TrackTimeline
 pub fn zencodec_media::track::TrackInfo::video(index: u32, codec: zencodec_media::track::CodecId, time_base: zencodec::time::TimeBase, video: zencodec_media::track::VideoTrackInfo) -> zencodec_media::track::TrackInfoBuilder
 pub fn zencodec_media::track::TrackInfo::video_info(&self) -> core::option::Option<&zencodec_media::track::VideoTrackInfo>
 impl core::convert::From<&zencodec_media::track::TrackInfo> for zencodec_media::session::CodecConfig
@@ -691,6 +735,7 @@ pub fn zencodec_media::track::TrackInfoBuilder::with_declared_duration_ticks(sel
 pub fn zencodec_media::track::TrackInfoBuilder::with_declared_packets(self, n: u64) -> Self
 pub fn zencodec_media::track::TrackInfoBuilder::with_edit_delay_ticks(self, ticks: i64) -> Self
 pub fn zencodec_media::track::TrackInfoBuilder::with_seek_preroll(self, d: zencodec::animation::FrameDuration) -> Self
+pub fn zencodec_media::track::TrackInfoBuilder::with_timeline(self, timeline: zencodec_media::timeline::TrackTimeline) -> Self
 #[non_exhaustive] pub struct zencodec_media::track::VideoTrackInfo
 pub zencodec_media::track::VideoTrackInfo::coded_height: u32
 pub zencodec_media::track::VideoTrackInfo::coded_width: u32

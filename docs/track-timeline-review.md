@@ -1,0 +1,123 @@
+# Complete track timelines — review draft
+
+This branch implements shared storage and mux admission. Native full edit-list
+parsing/remuxing and the presentation driver are not implemented by this change.
+Do not merge or publish it as full edited-video support before those gates pass.
+
+## Consumer: ordinary remuxing keeps one entry point
+
+```rust
+let prepared = PreparedOutput::preserving_presentation(mux, destination, &tracks, None)?;
+let mut output = prepared.publish(None)?;
+// Send the source packets through output.send(packet, None), then finish.
+```
+
+Demuxers supply `TrackInfo::timeline()`. The explicit preservation constructor
+rejects unknown evidence before native preparation. For convenient legacy
+operation, `PreparedOutput::new` keeps its existing all-unknown packet-timing
+path; that path does not certify the full presentation. A known timeline automatically requires
+`Muxer::begin_exact_presentation` before publication. Callers do not first query
+a capability and coordinate a second potentially different preparation. A
+native muxer either binds the actual request or refuses with
+`UnsupportedMedia::PresentationTimeline`.
+
+All-unknown legacy tracks retain their existing packet-timing path; this is
+explicitly not proof of presentation preservation. Mixing a known declaration
+with unknown track facts refuses before native preparation. The opt-in ordinary
+container-timing path cannot silently drop a known timeline.
+
+## Authoring an ordered program
+
+```rust
+use std::sync::Arc;
+use zencodec::time::{FrameDuration, TimeBase, Timestamp};
+use zencodec_media::timeline::{
+    EditContent, EditExtent, EditList, EditSegment, PlaybackRate, TrackTimeline,
+};
+
+let origin = Timestamp::new(0, TimeBase::MILLIS);
+let program = EditList::new(origin, vec![
+    EditSegment::new(
+        EditExtent::Finite(FrameDuration::new(1, 2)?),
+        EditContent::Gap,
+    ),
+    EditSegment::new(
+        EditExtent::ToEnd,
+        EditContent::Media {
+            start: Timestamp::new(9000, TimeBase::hz(90_000)?),
+            rate: PlaybackRate::NORMAL,
+        },
+    ),
+])?;
+let timeline = TrackTimeline::Edited(Arc::new(program));
+// Build the output track with builder.with_timeline(timeline).build()? .
+```
+
+The half-second gap does not choose black or silence. Rendering needs an
+explicit fill/omit/refuse decision. A remuxer can preserve the gap without
+rendering it. `ToEnd` preserves future fragments without inventing a duration.
+Finite zero duration remains distinct. An empty list means no presentation;
+`Unedited` means the inspected container has no edit program; `Unknown` is not
+an identity claim.
+
+Rate zero retains a dwell and negative rates retain reverse playback. A route
+may preserve these declarations while refusing to execute them. Rate fractions
+are reduced exactly, including the signed minimum; no floating point is used.
+Each media start carries its own clock. Segment duration and presentation origin
+are independent of those clocks.
+
+## Implementor: bind the retained muxer
+
+```rust
+fn begin_exact_presentation(
+    &mut self,
+    tracks: &[TrackInfo],
+    hint: MuxHint,
+) -> Result<MuxTiming, SessionError<Self::Error>>;
+```
+
+The provided implementation refuses without calling legacy `begin`. An override
+must validate all declared programs, priming and pre-roll before exposing any
+header. Success also binds exact packet timing. Later packet discard or timing
+facts must be preserved or refused before affecting pending output. The erasure
+shim forwards this call; a handwritten dyn implementation also defaults to
+refusal.
+
+This is deliberately stronger than `begin_exact_timing`, which certifies packet
+clocks/durations but not the container's full edit program. The MP4, WebM and IVF
+implementations require their own positive and refusal controls before adopting
+this hook. A successful synthetic dispatch test is not that qualification.
+
+## Ownership and migration
+
+`EditList::new` moves the caller's vector without allocating or cloning it.
+`TrackTimeline::Edited` shares an immutable list; cloning a track shares the
+same program. This is not a whole-operation memory bound. Admit descriptor
+storage before a parser constructs an untrusted list.
+
+The legacy scalar getter/setter are deprecated immediately. Supplying both a
+known full timeline and a scalar fails at `build`, regardless of setter order;
+zero is not treated as permission to discard one declaration. Legacy-only
+builders leave the complete timeline unknown.
+
+No zenpixels changes are required for these declarations. Native frames keep
+their pixel owners. The already-qualified private cursor maps temporal intervals
+without changing pixel samples, but it is not promoted into this API. Delayed
+frames and source replay must retain their original map; codec drain alone is
+not a map-retirement proof. A presentation-only change needs a distinct immutable
+identity even when the codec settings are unchanged.
+
+## Gates before landing
+
+- Native MP4 parse/remux/parse preserves ordered edits, rates, independent
+  clocks, explicit empty programs and fragmented open ends.
+- Unknown and unsupported native records refuse without a false identity claim.
+- Native mux admission binds a retained plan before header bytes; typed/erased
+  paths preserve causes and no-effect refusal. Direct native begin paths must
+  not silently ignore the new field.
+- Independent playback comparison covers repeats, gaps, dwell, clipping and
+  final duration. Native cursor tests alone do not qualify a container player.
+- Bounded map ownership, replay admission, late discovery and retirement rules
+  work with Pulse and operation policy. Optional evidence remains permissive;
+  an explicit preservation requirement cannot turn unknown into success.
+- Regenerate compiler catalogs and check the complete portable consumer graph.

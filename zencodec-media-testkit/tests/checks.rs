@@ -430,16 +430,20 @@ impl WindowDependentTracks {
         let clock = if field == 1 { TimeBase::MILLIS } else { tb() };
         let video = VideoTrackInfo::new(if field == 2 { W + 1 } else { W }, H);
         let mut builder = TrackInfo::video(0, codec, clock, video);
-        builder = match field {
-            3 => builder.with_codec_private(Arc::from([1u8, 2, 3])),
-            4 => builder.with_config_epoch(7),
-            5 => builder.with_codec_delay(FrameDuration::new(1, 48000).unwrap()),
-            6 => builder.with_seek_preroll(FrameDuration::new(80, 1000).unwrap()),
-            7 => builder.with_edit_delay_ticks(-17),
-            8 => builder.with_declared_packets(42),
-            9 => builder.with_declared_duration_ticks(1234),
-            _ => builder,
-        };
+        #[allow(deprecated)] // Keep the legacy-offset regression until native migration completes.
+        {
+            builder = match field {
+                3 => builder.with_codec_private(Arc::from([1u8, 2, 3])),
+                4 => builder.with_config_epoch(7),
+                5 => builder.with_codec_delay(FrameDuration::new(1, 48000).unwrap()),
+                6 => builder.with_seek_preroll(FrameDuration::new(80, 1000).unwrap()),
+                7 => builder.with_edit_delay_ticks(-17),
+                8 => builder.with_declared_packets(42),
+                9 => builder.with_declared_duration_ticks(1234),
+                10 => builder.with_timeline(zencodec_media::timeline::TrackTimeline::Unedited),
+                _ => builder,
+            };
+        }
         self.tracks = vec![builder.build().unwrap()];
     }
 }
@@ -486,7 +490,7 @@ impl Demuxer for WindowDependentTracks {
 fn demuxer_conformance_detects_track_facts_that_depend_on_input_window() {
     let file = toy_file(9, 3, false);
     for late in [false, true] {
-        for field in 0..10 {
+        for field in 0..11 {
             let error = check_demuxer_contract(
                 || WindowDependentTracks::new(file.len() / 2, field, late),
                 &file,

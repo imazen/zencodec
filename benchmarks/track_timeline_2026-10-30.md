@@ -1,0 +1,60 @@
+# Shared track timeline review — 2026-10-30
+
+This qualifies shared declarations and admission, not native edit parsing,
+remuxing or playback. The native gates in [the review](../docs/track-timeline-review.md)
+remain required before landing the API.
+
+## Frozen source and commands
+
+Source: `e2e120d74f2acaf715f076adacbec66ed4cf2537`.
+Archive SHA256: `d884a8b32af20e6771d07d6cfe64bbda8cbbb3cbad1be4ee88202c4c6fe81c34`.
+
+`just track-timeline-check` passes:
+
+- Three media unit tests cover reduced exact rates (zero/reverse/signed minimum),
+  unknown/unedited/empty/finite-zero/open distinctions, open-end ordering,
+  shared list ownership and order-independent legacy/full conflicts.
+- All 79 media-testkit tests pass, none ignored or filtered. Added controls cover
+  typed/erased default refusal, no known-program fallback to packet-only or
+  legacy output, mixed unknown refusal, supported synthetic dispatch, and a
+  strict preservation request refusing all-unknown evidence before native calls.
+  Conformance comparison now includes the full timeline; the existing ten
+  window-dependent metadata cases remain and an eleventh timeline case is added
+  at both headers and configuration changes.
+- Strict all-target Clippy passes for media and its testkit.
+- The media crate builds without default features for wasm32-unknown-unknown.
+- The doctest command succeeds with zero doctests; it is not executable
+  qualification of the new Markdown example.
+
+The final serialized batch also regenerated all eight compiler catalogs. It
+used an isolated export, locked root dependency graph, a 3 GiB cap, two jobs,
+900-second timeout, and explicit empty Rust flags for portable target selection.
+Run-heavy receipt: rc0, 52s, peak RSS 0.32 GiB, minimum available 14356 MiB,
+peak load 0.75. Source paths in the log identify the frozen export.
+
+All 26 site source checks pass (rc0, 4s, peak RSS 0.23 GiB, minimum available
+13715 MiB, peak load 0.63). Browser interaction tests were not rerun. These are
+build/test resource receipts, not playback performance or operation-memory
+bounds. No zenpixels API changes are needed by these declarations.
+
+## Retained earlier attempts
+
+The initial batch passed three media tests, 78 testkit tests and strict Clippy,
+then failed because the WASM target was absent (rc101, 29s, peak RSS 0.32 GiB).
+Installing that target and rerunning the unfinished gate passed, with warnings
+about an inherited host CPU flag. The final complete batch above explicitly
+cleared both Rust flag variables and passed without that target warning. The
+initial and rerun logs remain distinct; no assertions were relaxed.
+
+## Limits
+
+The synthetic header-only muxer refuses every packet. Its success proves driver
+and shim dispatch, not preservation by a real container. Existing all-unknown
+legacy tracks retain their prior packet-timing route; only the explicit
+preservation constructor certifies that unknown evidence cannot enter native
+preparation. Known timelines never silently use that legacy route.
+
+Native direct begin paths, MP4 parsing/writing, independent playback, bounded
+map retention, replay retirement and presentation-only epoch changes remain
+unqualified. Native backends must implement the new binding before a declared
+program can succeed through the checked driver.

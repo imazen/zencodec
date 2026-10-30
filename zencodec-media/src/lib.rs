@@ -46,4 +46,5 @@ pub mod staged;
 /// Explicit memory/disk compressed packet staging (requires `std`).
 #[cfg(feature = "std")]
 pub mod staging;
+pub mod timeline;
 pub mod track;

@@ -2654,30 +2654,42 @@ establish universal numerical, HDR or CMS guarantees; see the native AV1 README.
 
 ## Synchronous container output (`zencodec-media/std`)
 
-The sans-I/O `Muxer` remains unchanged. `zencodec_media::output` adds checked
-synchronous writer ownership as an opt-in adapter:
+`zencodec_media::output` provides checked synchronous writer ownership:
 
 ```rust
 impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
-    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: Option<&dyn Pulse>)
         -> Result<Self, Failure>;
     pub const fn timing(&self) -> MuxTiming;
-    pub fn publish(self, pulse: &dyn Pulse) -> Result<Output<M, D>, Failure>;
+    pub fn publish(self, pulse: Option<&dyn Pulse>) -> Result<Output<M, D>, Failure>;
 }
 impl<M: Muxer, D: Destination> Output<M, D> {
-    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: Option<&dyn Pulse>)
         -> Result<Self, Failure>;
-    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
+    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], pulse: Option<&dyn Pulse>)
         -> Result<Self, Failure>;
     pub const fn stats(&self) -> &Stats;
     pub fn is_failed(&self) -> bool;
-    pub fn send(&mut self, packet: Packet, pulse: &dyn Pulse) -> Result<(), Failure>;
-    pub fn finish(self, pulse: &dyn Pulse) -> Result<Stats, Failure>;
+    pub fn send(&mut self, packet: Packet, pulse: Option<&dyn Pulse>) -> Result<(), Failure>;
+    pub fn finish(self, pulse: Option<&dyn Pulse>) -> Result<Stats, Failure>;
 }
 ```
 
-Both `new` constructors require `begin_exact_timing`; only
-`with_container_timing` opts into ordinary native timing. Prepared output owns
+For legacy tracks whose timelines are all `Unknown`, both `new` constructors
+require `begin_exact_timing`; only `with_container_timing` opts into ordinary
+native timing. This legacy path does not certify full presentation preservation.
+
+In the timeline review draft, a declared timeline switches both `new`
+constructors to `begin_exact_presentation`. All tracks must then have qualified
+`Unedited` or `Edited` declarations; mixed unknown facts refuse before native
+preparation. `with_container_timing` refuses declared timelines rather than
+silently weakening their preservation. The new mux hook defaults to refusal
+and forwards through erasure. Native adoption is a separate required gate.
+`PreparedOutput::preserving_presentation` and `Output::preserving_presentation`
+take the same arguments as `new` and additionally require qualified timelines
+for every track, including when all declarations are unknown. They refuse before
+native preparation rather than asking callers to coordinate a capability query.
+See [the timeline review](track-timeline-review.md). Prepared output owns
 its muxer and destination but writes nothing until consumed by `publish`.
 `Forward<W: Write>` and `SeekBack<W: Write + Seek>` implement the sealed
 `Destination` interface. Seek-back offsets are relative to the initial position;
