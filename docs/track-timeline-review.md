@@ -314,3 +314,12 @@ black gaps; every media pass drains and validates coverage. This closes the
 fixture-level multi-segment execution gap. General acquisition/gap policy and
 final metadata obligations remain open. See
 [the program receipt](../benchmarks/presentation_owners_2026-10-30.md#owned-passes-across-a-complete-program).
+
+
+The same private program now retains one OperationPolicy/report across all
+projected media and gap frames. It invokes the shared Frame question after
+projection and before encoder output. Native controls preserve strict filtering,
+projected timestamps, typed application causes and zero output on refusal;
+all twelve default-path oracle cases remain green. This qualifies the held-frame
+publication boundary only. Container metadata completion and acquisition/gap
+strategy selection still require their own evidence and contract.

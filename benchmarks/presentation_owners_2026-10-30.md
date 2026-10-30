@@ -153,3 +153,38 @@ vectors; native construction/configuration admission is external to Pass::new.
 It has no situational gap/acquisition callback, no final metadata completeness
 proof, and no automatic live-session map replacement. No new published API or
 zenpixels change is introduced by this integration.
+
+
+## Policy after projection and before encoder output
+
+Source 593b11c1411691aa766ad1a302a6986478b50976 adds the private Publication<R>
+owner. It checks bound unknown workspace before the example prepares plans or
+native contexts, retains the same operation policy/report across all passes and
+gaps, and calls shared resolve_frame on the projected frame before downstream
+output. State is poisoned before policy/output callbacks and restored only after
+success and the post-output Pulse check. Default formatting is bounded; source()
+retains policy/application/downstream errors.
+
+A real AV1 clip control sees callback PTS 1000 ms rather than source PTS 40 ms.
+Default selection preserves exact samples. Explicit decline produces no output;
+DiscardDescriptive requirements refuse before callback invocation; an application
+PermissionDenied error remains recoverable through the full driver error chain.
+Every failure is terminal and releases the native pass's map slot. Zero and
+u64::MAX workspace limits both refuse unknown evidence. The report remains
+accessible after refusal; it records decisions, not a full output effect journal.
+
+All twelve owned-program MP4s still match the buffered reference byte for byte and
+pass the independent sample/timing oracle, including filled gaps. Complete map
+suite 12/12, four selected native owner/driver/policy controls, strict example and
+all-target Clippy pass. Fifty-one other native harness tests are not rerun.
+The isolated export explicitly rebuilt the harness; both locks remain unchanged.
+Wrapper rc0, 13 seconds, peak RSS 0.39 GiB, minimum available 13477 MiB,
+peak load 0.28. These are validation resources only. Full log:
+/home/lilith/tmp/zencodec-map-owner-20261030/policy.log on r7900x. Artifacts:
+owned-policy-files and owned-policy-oracle under the prior persistent artifact root.
+Reproduction remains just presentation-owned and presentation-epoch-check.
+
+This implements the existing frame-publication question after projection, not
+a new strategy resolver. It does not prove complete-container metadata removal,
+late metadata discharge, whole-operation resources, or automatic policy selection
+of gap/acquisition strategies. Failure cannot roll back frames already emitted.

@@ -127,3 +127,87 @@ fn project<E>(
     timing.duration_ticks = Some(duration);
     output(frame.represent(timing, frame.presentation())).map_err(ProjectionError::Output)
 }
+
+/// Private operation-wide publication owner, shared across media and gap passes.
+/// Construct before native/source preparation. No workspace bound is claimed.
+pub struct Publication<R> {
+    policy: R,
+    report: zencodec::operation::OperationReport,
+    failed: bool,
+}
+impl<R: zencodec::operation::OperationPolicy> Publication<R> {
+    pub fn new(policy: R) -> Result<Self, zencodec::operation::UnmetRequirements> {
+        if let Some(requirements) = policy.requirements() {
+            requirements.check_workspace(None)?;
+        }
+        Ok(Self {
+            policy,
+            report: Default::default(),
+            failed: false,
+        })
+    }
+    pub fn report(&self) -> &zencodec::operation::OperationReport {
+        &self.report
+    }
+    pub fn publish<E>(
+        &mut self,
+        frame: Frame,
+        pulse: Option<&dyn Pulse>,
+        output: impl FnOnce(Frame) -> Result<(), E>,
+    ) -> Result<(), PublicationError<E>> {
+        if self.failed {
+            return Err(PublicationError::Finished);
+        }
+        // Poison before either callback; caught unwinding cannot resume publication.
+        self.failed = true;
+        match zencodec::operation::resolve_frame(
+            frame.interpretation(),
+            frame.timing(),
+            &mut self.policy,
+            zencodec::operation::PolicySet::new(),
+            pulse,
+        ) {
+            Ok(record) => self.report.record(record),
+            Err(error) => {
+                self.report.record(error.error().record());
+                return Err(PublicationError::Policy(error));
+            }
+        }
+        output(frame).map_err(PublicationError::Output)?;
+        if let Some(pulse) = pulse {
+            pulse.check().map_err(PublicationError::Cancelled)?;
+        }
+        self.failed = false;
+        Ok(())
+    }
+}
+pub enum PublicationError<E> {
+    Policy(zencodec::At<zencodec::operation::PolicyFailure>),
+    Output(E),
+    Cancelled(enough::StopReason),
+    Finished,
+}
+impl<E> core::fmt::Debug for PublicationError<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(self, f)
+    }
+}
+impl<E> core::fmt::Display for PublicationError<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Policy(_) => f.write_str("presentation policy refused"),
+            Self::Output(_) => f.write_str("presentation output failed"),
+            Self::Cancelled(reason) => write!(f, "presentation cancelled: {reason:?}"),
+            Self::Finished => f.write_str("presentation publication is terminal"),
+        }
+    }
+}
+impl<E: core::error::Error + 'static> core::error::Error for PublicationError<E> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Policy(error) => Some(error),
+            Self::Output(error) => Some(error),
+            _ => None,
+        }
+    }
+}

@@ -897,3 +897,115 @@ fn presentation_maps_follow_pump_progress_through_clipping_and_terminal_failure(
         ));
     }
 }
+
+#[test]
+fn presentation_maps_follow_projected_policy_before_encoder_publication() {
+    use crate::presentation_driver::{Pass, Publication, PublicationError};
+    use presentation_map_experiment::{Content, Edit, Extent, Plan, retained::PlanPool};
+    use zencodec::{
+        At,
+        operation::{BoundPolicy, MetadataTransfer, PolicySet},
+        time::FrameDuration,
+    };
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &original);
+    for case in 0..4 {
+        let decisions = Cell::new(0);
+        let requirements = if case == 2 {
+            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive)
+        } else {
+            PolicySet::new()
+        };
+        let policy = BoundPolicy::new(
+            requirements,
+            |question: Question<'_>| -> Result<Decision, At<std::io::Error>> {
+                let Question::Frame {
+                    timing, choices, ..
+                } = question
+                else {
+                    panic!("unexpected question")
+                };
+                assert_eq!(
+                    timing.pts.unwrap().ticks(),
+                    1000,
+                    "policy must inspect projected time"
+                );
+                decisions.set(decisions.get() + 1);
+                match case {
+                    1 => Ok(Decision::decline(Decline::ApplicationRule)),
+                    3 => Err(At::wrap(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "tenant witness",
+                    ))
+                    .at()),
+                    _ => Ok(Decision::choose(choices.first().unwrap())),
+                }
+            },
+        );
+        let mut publication = Publication::new(policy).unwrap();
+        let mut pool = PlanPool::new(1);
+        let map = pool
+            .prepare(|| {
+                Plan::new(
+                    Timestamp::new(1000, TB),
+                    &[Edit {
+                        extent: Extent::Finite(FrameDuration::new(40, 1000).unwrap()),
+                        content: Content::Media {
+                            start: Timestamp::new(40, TB),
+                            rate_num: 1,
+                            rate_den: 1,
+                        },
+                    }],
+                )
+            })
+            .unwrap();
+        let mut settings = rav1d_safe::Settings::default();
+        settings.threads = 1;
+        let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+        decoder.configure(&config, None).unwrap();
+        let mut pass = Pass::new(decoder, map.cursor(0).unwrap(), TB);
+        drop(map);
+        let mut output = Vec::new();
+        let mut emit = |frame| {
+            publication.publish(frame, None, |frame| {
+                output.push(frame);
+                Ok::<_, Infallible>(())
+            })
+        };
+        let mut result = Ok(());
+        for packet in &packets {
+            result = pass.send(&mut packet.clone(), None, &mut emit);
+            if result.is_err() {
+                break;
+            }
+        }
+        let result = result.and_then(|()| pass.finish(None, &mut emit).map(|_| ()));
+        if case == 0 {
+            result.unwrap();
+            assert_eq!(output.len(), 1);
+            assert_eq!(samples(&output[0]), samples(&original[1]));
+        } else {
+            let error = result.unwrap_err();
+            assert!(output.is_empty());
+            if case == 3 {
+                assert_eq!(
+                    zencodec::find_cause::<std::io::Error>(&error)
+                        .unwrap()
+                        .kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+            }
+            assert!(matches!(
+                publication.publish(original[0].clone(), None, |_| Ok::<_, Infallible>(())),
+                Err(PublicationError::Finished)
+            ));
+        }
+        assert_eq!(decisions.get(), usize::from(case != 2));
+        assert_eq!(pool.live(), 0);
+        let _report = publication.report();
+    }
+    for cap in [0, u64::MAX] {
+        assert!(Publication::new(PolicySet::new().with_workspace_limit(cap)).is_err());
+    }
+}

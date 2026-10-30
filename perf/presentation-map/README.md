@@ -306,3 +306,33 @@ is full-program fixture integration, not a general acquisition API: input and
 output packets remain retained, reverse rates still refuse, and final operation
 policy, metadata completion and resource admission remain unqualified here.
 See [the program receipt](../../benchmarks/presentation_owners_2026-10-30.md#owned-passes-across-a-complete-program).
+
+
+### One policy owner after projection
+
+```rust,ignore
+let mut publication = Publication::new(operation_policy)?; // Before native preparation.
+pass.send(&mut packet, pulse, |frame| {
+    publication.publish(frame, pulse, |frame| encoder_output(frame))
+})?;
+```
+
+The private Publication owner retains the same OperationPolicy and bounded report
+across every segment and explicitly filled gap. It uses shared resolve_frame on
+the projected frame; callback timing is output presentation time, not the source
+packet time. Bound requirements filter before selection. Unknown required
+workspace refuses at construction, before the example builds plans or native
+contexts. This is still unknown evidence, not an estimated bound.
+
+Policy refusal or application failure prevents the downstream encoder callback.
+Failures/unwinding poison publication; native Pass error handling then drops its
+session/cursor. Original application errors remain in source(), while default
+error formatting avoids arbitrary payload text. The report records admitted or
+refused frame decisions. Prior delivered frames cannot be rolled back.
+
+The native test checks projected timing, success, explicit decline, retained
+metadata requirements and a typed application error. The complete program's
+default path, including black gaps, passes the unchanged independent oracle.
+This is publication of the held frame only: no new acquisition/gap question or
+metadata completion certificate is implied. Strict metadata removal still refuses
+without evidence; it cannot be approved merely because pixels look correct.

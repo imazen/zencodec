@@ -158,6 +158,8 @@ fn owned_encode(
     use zencodec_media::session::{
         VideoDecoder, VideoEncoder, drain_encoder, send_frame_until_accepted,
     };
+    let mut publication =
+        presentation_driver::Publication::new(zencodec::operation::PolicySet::new()).unwrap();
     let mut pool = PlanPool::new(1);
     let owner = pool
         .prepare(|| Plan::new(Timestamp::new(0, TB), edits))
@@ -169,17 +171,19 @@ fn owned_encode(
     let mut pictures = Vec::new();
     for (index, segment) in owner.plan().segments().iter().enumerate() {
         let mut emit = |frame: Frame| {
-            timings.push(frame.timing());
-            // Gap samples are application-owned and intentionally survive the pass.
-            if segment.acquisition() != Acquisition::Gap {
-                pictures.push(Arc::downgrade(frame.picture()));
-            }
-            send_frame_until_accepted(&mut encoder, &frame, None, |packet| {
-                packets.push(packet);
+            publication.publish(frame, None, |frame| {
+                timings.push(frame.timing());
+                // Gap samples are application-owned and intentionally survive the pass.
+                if segment.acquisition() != Acquisition::Gap {
+                    pictures.push(Arc::downgrade(frame.picture()));
+                }
+                send_frame_until_accepted(&mut encoder, &frame, None, |packet| {
+                    packets.push(packet);
+                    Ok::<(), core::convert::Infallible>(())
+                })
+                .unwrap();
                 Ok::<(), core::convert::Infallible>(())
             })
-            .unwrap();
-            Ok::<(), core::convert::Infallible>(())
         };
         if segment.acquisition() == Acquisition::Gap {
             let start = segment.output.start.on_clock(TB).unwrap();
@@ -214,6 +218,7 @@ fn owned_encode(
         assert_eq!(packet.duration_ticks(), timing.duration_ticks);
     }
     drop(owner);
+    let _report = publication.report();
     assert_eq!(pool.live(), 0);
     (config, packets)
 }
