@@ -541,3 +541,12 @@ The core README refresh required catalog regeneration. The regenerated guide
 and matching Rustdoc pass locally, including the complete browser suite;
 [the receipt](../benchmarks/core_package_2026-10-30.md) records the original CI
 failure and the field/method documentation fix found during review.
+
+### Final registry consumer check
+
+After the approved cohort is published, run `just release-registry-check NEW_OUTPUT`
+from the release checkout under the normal resource wrapper. It uses no source
+patches, rejects non-crates.io dependencies and runs the existing caller examples
+against the published packages. Before publication it correctly refuses the
+unavailable core 0.2.0; the [receipt](../benchmarks/release_cohort_2026-10-30.md)
+keeps that failure separate from successful patched-package qualification.

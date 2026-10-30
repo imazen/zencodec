@@ -57,3 +57,18 @@ This does not qualify registry availability, enable I/O publication, approve a
 release or qualify unfinished video presentation contracts. The release batch
 needs owner approval and required green platform CI. Core can publish first in
 that batch, followed by I/O and matching testkit before calling the rollout done.
+
+## Final registry-only gate
+
+`just release-registry-check NEW_OUTPUT` uses the same eleven caller examples
+without extracting archives or writing patches. It requires the exact candidate
+versions, one family identity each, and the crates.io source for every selected
+dependency (only the generated consumer itself may be a local package).
+The ordinary extracted-package mode still passes unchanged tests and strict
+Clippy: `rc=0 12s | peak-RSS 0.30GiB | min-avail 13428MiB | peak-load 0.31`.
+
+Before publication, registry mode fails as required at resolution: core 0.2.0
+is unavailable; Cargo lists 0.1.26 and earlier. Wrapper `rc=1 0s | peak-RSS
+0.03GiB | min-avail 13757MiB | peak-load 0.26`. No fallback ran and no registry
+success is claimed. The positive registry gate remains to run after explicit
+release approval, publication and index availability.

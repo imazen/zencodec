@@ -1888,3 +1888,7 @@ core-package-paired-check output:
 # Actual tarball interoperability, including the published-testkit split control.
 release-cohort-check archives output:
     python3 scripts/check-release-cohort.py "{{archives}}" "{{output}}"
+
+# After publication: no package extraction, source patches or fallback.
+release-registry-check output:
+    python3 scripts/check-release-cohort.py --registry "{{output}}"

@@ -8,9 +8,12 @@ import subprocess
 import tarfile
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("archives", type=Path)
+parser.add_argument("archives", type=Path, nargs="?")
+parser.add_argument("--registry", action="store_true", help="check published packages without extraction or patches")
 parser.add_argument("output", type=Path)
 args = parser.parse_args()
+if args.registry == (args.archives is not None):
+    parser.error("supply archives, or --registry without archives")
 root = Path(__file__).resolve().parents[1]
 output = args.output.resolve()
 if output.is_relative_to(root):
@@ -18,10 +21,11 @@ if output.is_relative_to(root):
 output.mkdir(parents=True, exist_ok=False)
 versions = {"zencodec": "0.2.0", "zencodec-io": "0.1.0", "zencodec-testkit": "0.2.0",
             "zenpixels": "0.3.1", "zenpixels-convert": "0.3.1"}
-for name, version in versions.items():
-    with tarfile.open(args.archives / f"{name}-{version}.crate") as archive:
-        archive.extractall(output, filter="data")
-for legacy in (True, False):
+if not args.registry:
+    for name, version in versions.items():
+        with tarfile.open(args.archives / f"{name}-{version}.crate") as archive:
+            archive.extractall(output, filter="data")
+for legacy in ((False,) if args.registry else (True, False)):
     project = output / ("published-testkit" if legacy else "candidate-testkit")
     (project / "src").mkdir(parents=True)
     (project / "src/lib.rs").write_text("// Package interoperability consumer.\n")
@@ -30,9 +34,10 @@ for legacy in (True, False):
         dependencies["zencodec-testkit"] = "0.1.0"
     manifest = '[package]\nname="release-cohort-consumer"\nversion="0.0.0"\nedition="2024"\n[dependencies]\n'
     manifest += "\n".join(f'{name} = "={version}"' for name, version in dependencies.items())
-    manifest += '\n[patch.crates-io]\n'
-    manifest += "\n".join(f'{name} = {{ path = {json.dumps(str(output / f"{name}-{version}"))} }}'
-                          for name, version in versions.items() if not (legacy and name == "zencodec-testkit"))
+    if not args.registry:
+        manifest += '\n[patch.crates-io]\n'
+        manifest += "\n".join(f'{name} = {{ path = {json.dumps(str(output / f"{name}-{version}"))} }}'
+                              for name, version in versions.items() if not (legacy and name == "zencodec-testkit"))
     (project / "Cargo.toml").write_text(manifest + "\n")
     metadata = subprocess.check_output(["cargo", "metadata", "--format-version", "1"], cwd=project)
     (project / "graph.json").write_bytes(metadata)
@@ -47,10 +52,17 @@ for legacy in (True, False):
         print("Published testkit reproduces two incompatible core/pixel identities.", flush=True)
     else:
         assert family == {name: [version] for name, version in versions.items()}, family
+        if args.registry:
+            for package in graph["packages"]:
+                if package["id"] in selected and package["id"] != graph["resolve"]["root"]:
+                    assert package["source"] == "registry+https://github.com/rust-lang/crates.io-index", package
         (project / "tests").mkdir()
         shutil.copyfile(root / "zencodec-testkit/tests/usage.rs", project / "tests/usage.rs")
         subprocess.run(["cargo", "test", "--locked", "--test", "usage"], cwd=project, check=True)
         subprocess.run(["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"], cwd=project, check=True)
+if args.registry:
+    print("Registry-only cohort passes with one crates.io identity per family member.", flush=True)
+    raise SystemExit(0)
 patches = output / "patches.toml"
 patches.write_text('[patch.crates-io]\n' + "\n".join(
     f'{name} = {{ path = {json.dumps(str(output / f"{name}-{version}"))} }}'
