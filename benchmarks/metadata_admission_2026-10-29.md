@@ -113,3 +113,11 @@ all-feature/all-target strict Clippy, all eight catalogs, strict Rustdoc and all
 14213 MiB, peak load 1.41. Debug symbols and incremental compilation were disabled
 for these capped validation runs; these are not compile-performance measurements.
 Native follow-through must use the final pinned core revision before landing.
+
+Guide CI on `61fb96f1` passed its runtime examples but rejected two remaining
+legacy metadata calls in `docs/examples/journeys.rs` under strict Clippy.
+The two QOI compatibility examples now have function-scoped deprecation
+allowances, matching their explicitly best-effort guide text. No checked call,
+assertion or behavior changed. Rustfmt and all 26 site source controls pass;
+the native guide Clippy rerun remains a CI gate. Original failed job:
+https://github.com/imazen/zencodec/actions/runs/40992267193/job/123857227055

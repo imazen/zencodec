@@ -95,6 +95,7 @@ mod metadata_example {
     use zencodec::encode::{EncodeJob, EncodeOutput, EncoderConfig};
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
+    #[allow(deprecated)] // This QOI example demonstrates best-effort metadata filtering.
     pub fn retained(image: &DecodeOutput) -> Result<EncodeOutput, Error> {
         let config = QoiEncoderConfig::new();
         // ANCHOR: metadata
@@ -353,6 +354,7 @@ mod codecset_job_example {
     use zencodec::{CodecSet, ImageFormat, MetadataPolicy};
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
+    #[allow(deprecated)] // Preserve the explicit QOI compatibility example.
     pub fn registered_derivative(
         codecs: &CodecSet,
         image: &DecodeOutput,
