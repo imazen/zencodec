@@ -362,3 +362,59 @@ fn sink_stop_prevents_completion_and_releases_details() {
         }
     }
 }
+
+#[test]
+fn native_error_remains_primary_when_poll_also_signals_stop() {
+    use std::sync::atomic::AtomicBool;
+    use zencodec::enough::{Stop, StopReason};
+    struct Signal(Arc<AtomicBool>, StopReason);
+    impl Stop for Signal {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(self.1)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    for reason in [StopReason::Cancelled, StopReason::TimedOut] {
+        let signal = Arc::new(AtomicBool::new(false));
+        let native_signal = signal.clone();
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = drops.clone();
+        let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
+            ctx.set_details(details(owner));
+            native_signal.store(true, Ordering::SeqCst);
+            Err::<OutputInfo, _>(CoroutineError::Source(
+                zencodec::source::SourceError::UnexpectedEof {
+                    offset: 17,
+                    len: 29,
+                    total: Some(19),
+                },
+            ))
+        });
+        let pulse = zencodec::how_far::StopOnly::new(Signal(signal, reason));
+        let mut sink = Sink::default();
+        let result = decoder.step(Input::empty(), &mut sink, Some(&pulse));
+        assert!(
+            matches!(
+                result,
+                Err(StepError::Codec(CoroutineError::Source(
+                    zencodec::source::SourceError::UnexpectedEof {
+                        offset: 17,
+                        len: 29,
+                        total: Some(19)
+                    }
+                )))
+            ),
+            "{result:?}"
+        );
+        assert!(!sink.finished);
+        assert!(decoder.take_details().is_none());
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            decoder.step(Input::empty(), &mut sink, None),
+            Err(StepError::Finished)
+        ));
+    }
+}
