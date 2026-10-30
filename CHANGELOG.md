@@ -4,6 +4,10 @@
 
 ### Added
 
+- Review candidate: checked metadata retention on typed/erased encode jobs and
+  ordinary/Send operation preparation. Defaults refuse even empty clearing;
+  native retention qualification remains required.
+
 - Review candidate: optional `Decode::prepare_output` and erased forwarding
   allow required-output decoding to reject known mismatches before raster
   reconstruction. Unknown facts retain final-result validation. The retained

@@ -648,3 +648,39 @@ fn adapters_retain_the_same_checked_jobs_without_running_a_resolver_or_encoder()
     );
     assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn required_metadata_refuses_before_execution_for_normal_and_send_jobs() {
+    let counts = Arc::new(Counts::default());
+    let set = CodecSet::new().with_send_encoder(Control {
+        counts: counts.clone(),
+        target: None,
+    });
+    for metadata in [
+        Metadata::none(),
+        Metadata::none().with_xmp(&b"required"[..]),
+    ] {
+        let request = EncodeRequest::new(ImageFormat::Pnm)
+            .with_metadata_policy(metadata, zencodec::MetadataPolicy::PreserveExact);
+        for error in [
+            request.prepare(&set).unwrap_err(),
+            request.prepare_send(&set).unwrap_err(),
+        ] {
+            let OperationError::NoEncodeRoute(rejections) = error.error() else {
+                panic!("expected admission refusal: {error:?}");
+            };
+            assert_eq!(rejections.len(), 1);
+            assert_eq!(
+                zencodec::find_cause::<UnsupportedOperation>(&rejections[0].cause),
+                Some(&UnsupportedOperation::MetadataRetention)
+            );
+        }
+    }
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
+    assert_eq!(counts.made.load(Ordering::SeqCst), 4);
+    assert_eq!(counts.dropped.load(Ordering::SeqCst), 4);
+    EncodeRequest::new(ImageFormat::Pnm)
+        .encode(&set, TestImage::rgb8_gradient(3, 2).as_slice())
+        .unwrap();
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
+}

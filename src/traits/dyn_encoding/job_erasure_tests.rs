@@ -136,3 +136,137 @@ fn unsupported_orientation_refuses_without_starting_or_losing_the_job() {
     assert_eq!(starts.load(Ordering::SeqCst), 1);
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn metadata_admission_default_refuses_even_clearing_without_losing_owner() {
+    let (mut job, drops, starts) = job();
+    for meta in [
+        Metadata::none(),
+        Metadata::none().with_xmp(&b"required"[..]),
+    ] {
+        let error = job
+            .try_set_metadata_policy(meta.clone(), crate::MetadataPolicy::PreserveExact)
+            .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::MetadataRetention)
+        );
+    }
+    let address = job.owned.as_ref() as *const Owned;
+    let mut erased = job.into_dyn_job();
+    for meta in [
+        Metadata::none(),
+        Metadata::none().with_xmp(&b"required"[..]),
+    ] {
+        let error = erased
+            .try_set_metadata_policy(meta, crate::MetadataPolicy::PreserveExact)
+            .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<UnsupportedOperation>(),
+            Some(&UnsupportedOperation::MetadataRetention)
+        );
+    }
+    assert_eq!(
+        erased
+            .extensions()
+            .unwrap()
+            .downcast_ref::<Owned>()
+            .unwrap() as *const Owned,
+        address
+    );
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(erased);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+struct CheckedMetadataJob {
+    inner: Job,
+    metadata: Metadata,
+}
+#[derive(Debug)]
+struct MetadataRefusal;
+impl core::fmt::Display for MetadataRefusal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("fixture metadata refusal")
+    }
+}
+impl core::error::Error for MetadataRefusal {}
+impl EncodeJob for CheckedMetadataJob {
+    type Error = UnsupportedOperation;
+    type Enc = Started;
+    type AnimationFrameEnc = ();
+    fn with_pulse(self, _: how_far::SharedPulse) -> Self {
+        self
+    }
+    fn with_limits(self, _: ResourceLimits) -> Self {
+        self
+    }
+    fn with_metadata(self, _: Metadata) -> Self {
+        panic!("checked path called best-effort setter")
+    }
+    fn try_set_metadata_policy(
+        &mut self,
+        meta: Metadata,
+        policy: crate::MetadataPolicy,
+    ) -> Result<(), BoxedError> {
+        if meta.content_light_level.is_some() {
+            return Err(Box::new(MetadataRefusal));
+        }
+        #[allow(deprecated)]
+        {
+            self.metadata = meta.filtered(&policy);
+        }
+        Ok(())
+    }
+    fn extensions(&self) -> Option<&dyn Any> {
+        Some(&self.metadata)
+    }
+    fn encoder(self) -> Result<Started, Self::Error> {
+        self.inner.encoder()
+    }
+    fn animation_frame_encoder(self) -> Result<(), Self::Error> {
+        Err(UnsupportedOperation::AnimationEncode)
+    }
+}
+
+#[test]
+fn metadata_checked_builder_and_erasure_retain_atomic_state_and_native_cause() {
+    let (inner, drops, starts) = job();
+    let expected = Metadata::none().with_xmp(&b"retain exactly"[..]);
+    let job = CheckedMetadataJob {
+        inner,
+        metadata: Metadata::none(),
+    }
+    .try_with_metadata_policy(expected.clone(), crate::MetadataPolicy::PreserveExact)
+    .unwrap();
+    let mut erased = job.into_dyn_job();
+    assert_eq!(
+        erased.extensions().unwrap().downcast_ref::<Metadata>(),
+        Some(&expected)
+    );
+    let mut rejected = Metadata::none();
+    rejected.content_light_level = Some(crate::ContentLightLevel {
+        max_content_light_level: 1000,
+        max_frame_average_light_level: 400,
+    });
+    let error = erased
+        .try_set_metadata_policy(rejected, crate::MetadataPolicy::PreserveExact)
+        .unwrap_err();
+    assert!(error.downcast_ref::<MetadataRefusal>().is_some());
+    assert_eq!(
+        erased.extensions().unwrap().downcast_ref::<Metadata>(),
+        Some(&expected)
+    );
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+    erased
+        .try_set_metadata_policy(Metadata::none(), crate::MetadataPolicy::PreserveExact)
+        .unwrap();
+    assert_eq!(
+        erased.extensions().unwrap().downcast_ref::<Metadata>(),
+        Some(&Metadata::none())
+    );
+    drop(erased.into_encoder().unwrap());
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}

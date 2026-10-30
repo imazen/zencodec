@@ -48,10 +48,13 @@ warns at any call site that hands a codec metadata without naming a retention
 policy. Implementing the method does not warn (Rust's `#[deprecated]` fires at
 call sites, not impl sites), so codecs implement it normally.
 
-`EncodeJob::with_metadata_policy(meta, policy)` is the blessed path and the one
-without a warning. It is a provided method: it calls `meta.filtered(&policy)` and
+`EncodeJob::with_metadata_policy(meta, policy)` is the legacy best-effort path. It is a provided method: it calls `meta.filtered(&policy)` and
 hands the result to `with_metadata`. Because the filter runs first, the codec
-only ever receives what the policy kept. A codec cannot leak what it never saw.
+receives the filtered record. This does not prove retention, clear prior native
+configuration, or inspect opaque blobs for PII. The executed JPEG/PNG witness
+shows successful omission of required HDR fields. The candidate checked setter
+retains obligations on the job and refuses by default; native adoption is still
+required. See [metadata admission](metadata-retention-admission.md).
 
 | Audience | Calls | Implements | Sees a warning? |
 |---|---|---|---|

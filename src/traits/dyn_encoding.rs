@@ -514,6 +514,19 @@ pub trait DynEncodeJob {
         Err(Box::new(crate::ResolutionError::Unsupported))
     }
 
+    /// Require policy-filtered metadata retention on the retained job.
+    /// Refusal leaves the job unchanged. The generated shim forwards to
+    /// [`EncodeJob::try_set_metadata_policy`](crate::encode::EncodeJob::try_set_metadata_policy),
+    /// preserving native causes and obligations through later configuration.
+    /// Manual implementations default to refusal, including empty metadata.
+    fn try_set_metadata_policy(
+        &mut self,
+        _meta: Metadata,
+        _policy: crate::MetadataPolicy,
+    ) -> Result<(), BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::MetadataRetention))
+    }
+
     /// Filter metadata before configuring best-effort embedding; mirrors
     /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy).
     /// This does not prove that the codec retains every supplied field.
@@ -659,6 +672,17 @@ where
         };
         job.try_set_orientation_mode(mode)
             .map_err(|error| Box::new(error) as BoxedError)
+    }
+
+    fn try_set_metadata_policy(
+        &mut self,
+        meta: Metadata,
+        policy: crate::MetadataPolicy,
+    ) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_mut() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_metadata_policy(meta, policy)
     }
 
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {

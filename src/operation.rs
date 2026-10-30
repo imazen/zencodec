@@ -386,6 +386,7 @@ pub struct EncodeRequest {
     preset: PolicySet,
     resolution: Option<crate::Resolution>,
     orientation_mode: Option<crate::encode::EncodeOrientation>,
+    metadata: Option<(crate::Metadata, crate::MetadataPolicy)>,
 }
 
 #[derive(Clone, Debug)]
@@ -406,7 +407,22 @@ impl EncodeRequest {
             preset: PolicySet::new(),
             resolution: None,
             orientation_mode: None,
+            metadata: None,
         }
+    }
+
+    /// Require retention of policy-filtered metadata instead of best-effort embedding.
+    /// Preparation calls the checked setter on each retained candidate job before
+    /// selection or pixel input. Unsupported candidates refuse; no capability
+    /// query or callback can waive this requirement. Omission inherits the
+    /// registered template's metadata configuration.
+    pub fn with_metadata_policy(
+        mut self,
+        metadata: crate::Metadata,
+        policy: crate::MetadataPolicy,
+    ) -> Self {
+        self.metadata = Some((metadata, policy));
+        self
     }
 
     /// Require this fidelity target; unsupported, substituted and unreported
@@ -495,6 +511,9 @@ impl EncodeRequest {
                 offer.fidelity,
                 self.effective_policy(codecs),
             )?;
+            if let Some((metadata, policy)) = &self.metadata {
+                job.try_set_metadata_policy(metadata.clone(), *policy)?;
+            }
             if let Some(mode) = self.orientation_mode {
                 job.try_set_orientation_mode(mode)?;
             }
@@ -519,6 +538,9 @@ impl EncodeRequest {
                 offer.fidelity,
                 self.effective_policy(codecs),
             )?;
+            if let Some((metadata, policy)) = &self.metadata {
+                job.try_set_metadata_policy(metadata.clone(), *policy)?;
+            }
             if let Some(mode) = self.orientation_mode {
                 job.try_set_orientation_mode(mode)?;
             }

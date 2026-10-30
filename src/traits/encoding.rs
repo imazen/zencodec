@@ -423,6 +423,43 @@ pub trait EncodeJob: Sized {
         Ok(self)
     }
 
+    /// Replace metadata under a required retention policy, or leave this job unchanged.
+    ///
+    /// Unlike the best-effort setter, success obligates every encode path to
+    /// retain the policy-filtered record, including HDR fields. Opaque retained
+    /// blobs are byte-exact after the policy's documented EXIF reconciliation;
+    /// typed values must remain equivalent without unrequested rounding.
+    /// Discarded fields must not survive from a previous configuration.
+    ///
+    /// Conditions depending on later pixels, color conversion or configuration
+    /// must be checked before affected output is published. Later setters cannot
+    /// silently erase this obligation. Native validation errors retain their
+    /// original cause. This does not certify unreported metadata or opaque blobs
+    /// as PII-free, nor require absence of format-mandated color signaling.
+    ///
+    /// The default refuses even an empty record: it cannot promise to clear
+    /// previously configured metadata. Static capabilities do not admit a request.
+    fn try_set_metadata_policy(
+        &mut self,
+        _meta: Metadata,
+        _policy: crate::MetadataPolicy,
+    ) -> Result<(), BoxedError> {
+        Err(alloc::boxed::Box::new(
+            UnsupportedOperation::MetadataRetention,
+        ))
+    }
+
+    /// Builder form of [`Self::try_set_metadata_policy`]. Rejection consumes it.
+    /// Use the mutable setter when the configured job must survive refusal.
+    fn try_with_metadata_policy(
+        mut self,
+        meta: Metadata,
+        policy: crate::MetadataPolicy,
+    ) -> Result<Self, BoxedError> {
+        self.try_set_metadata_policy(meta, policy)?;
+        Ok(self)
+    }
+
     /// Filter metadata by an explicit retention policy, then configure embedding.
     /// This setter is best-effort, not a checked output-retention guarantee.
     /// Metadata retention is a privacy decision, so the policy is

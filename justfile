@@ -1798,3 +1798,15 @@ pulse-native-check artifacts="$HOME/tmp/zencodec-native-pulse":
     just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked pulse_diagnostics:: -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Required metadata admission: defaults, retained owner, typed causes and operation integration.
+metadata-admission-check:
+    cargo test --locked -p zencodec --all-features --lib
+    cargo test --locked -p zencodec-testkit --test operation_policy
+    cargo clippy --locked -p zencodec --all-features --all-targets -- -D warnings
+
+# Generated signatures and the guide must describe the checked metadata candidate.
+metadata-admission-docs:
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check

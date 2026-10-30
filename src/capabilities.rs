@@ -64,6 +64,8 @@ pub enum UnsupportedOperation {
     EncodePlanning,
     /// Required stored-versus-baked orientation representation.
     EncodeOrientation,
+    /// Required retention of policy-filtered encode metadata.
+    MetadataRetention,
 }
 
 impl UnsupportedOperation {
@@ -87,6 +89,7 @@ impl UnsupportedOperation {
             Self::SeekableDecode => "seekable_decode",
             Self::EncodePlanning => "encode_planning",
             Self::EncodeOrientation => "encode_orientation",
+            Self::MetadataRetention => "metadata_retention",
         }
     }
 }
@@ -385,6 +388,7 @@ impl EncodeCapabilities {
             | UnsupportedOperation::DecodePolicy
             | UnsupportedOperation::EncodePolicy
             | UnsupportedOperation::EncodeOrientation
+            | UnsupportedOperation::MetadataRetention
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
@@ -850,6 +854,7 @@ impl DecodeCapabilities {
             | UnsupportedOperation::DecodePolicy
             | UnsupportedOperation::EncodePolicy
             | UnsupportedOperation::EncodeOrientation
+            | UnsupportedOperation::MetadataRetention
             | UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
             | UnsupportedOperation::AnimationEncode

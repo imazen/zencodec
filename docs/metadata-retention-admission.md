@@ -44,17 +44,21 @@ refuses to overwrite prior artifacts. CLL compares both values exactly; masterin
 display uses the testkit's existing fixed-point tolerances. No tolerance was
 loosened. No original conformance assertion or native implementation changed.
 
-## Replacement contract to implement and review
+## Checked replacement candidate
 
 ```rust,ignore
-// Proposed; these methods are not implemented yet.
+// Candidate API; native codec admission is not yet qualified.
 let job = config.job()
     .try_with_metadata_policy(metadata, MetadataPolicy::PreserveExact)?;
 let encoded = job.encoder()?.encode(pixels)?;
 ```
 
-Use one atomic checked setter in the typed job, a provided consuming builder,
-and dyn forwarding. Default implementations must refuse rather than infer
+The candidate adds one atomic checked setter in the typed job, a provided
+consuming builder, and dyn forwarding. `EncodeRequest::with_metadata_policy`
+calls it during both ordinary and Send preparation, before selection and pixels.
+The setter returns `BoxedError`, preserving codec-specific admission causes
+without requiring every native error type to implement another conversion.
+The default cause is `UnsupportedOperation::MetadataRetention`. Default implementations must refuse rather than infer
 retention from static capabilities. Rejection leaves an existing mutable job
 unchanged. A default cannot even promise to clear previously configured metadata.
 Names should mirror `try_set_policy` / `try_with_policy`; an independent
@@ -82,3 +86,7 @@ container metadata, or solve general deferred obligations. Those remain scoped
 requirements of the retained publication owner and issue166.
 
 Implementation tracking: [checked encode metadata admission, issue184](https://github.com/imazen/zencodec/issues/184).
+
+Core ownership/forwarding tests do not certify native retention. JPEG/PNG native
+adoption, declaration-conflict controls and independent positive readback remain
+required before deprecating the best-effort setter.
