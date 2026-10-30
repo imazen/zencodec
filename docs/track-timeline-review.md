@@ -305,3 +305,12 @@ frame. Native clipping, terminal cleanup, coverage refusal and cancellation
 controls pass; the [driver receipt](../benchmarks/presentation_owners_2026-10-30.md#owned-presentation-pump)
 records exact scope. This remains a driver candidate, not a new codec trait or
 proof of metadata completion. Multi-segment acquisition and final policy remain.
+
+
+Complete-program integration of the owned pass now passes all twelve native
+AV1/MP4 cases against both the buffered byte reference and the independent
+pixel/timing oracle. One program owner spans repeated source passes and explicit
+black gaps; every media pass drains and validates coverage. This closes the
+fixture-level multi-segment execution gap. General acquisition/gap policy and
+final metadata obligations remain open. See
+[the program receipt](../benchmarks/presentation_owners_2026-10-30.md#owned-passes-across-a-complete-program).

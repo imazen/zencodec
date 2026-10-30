@@ -29,6 +29,7 @@ impl<E: core::error::Error + 'static> core::error::Error for ProjectionError<E> 
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Output(error) => Some(error),
+            Self::Mapping(error) => Some(error),
             _ => None,
         }
     }

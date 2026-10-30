@@ -109,3 +109,47 @@ rather than using finite coverage as an early-completion signal. Source metadata
 obligations, whole-operation workspace, multi-segment acquisition and gap policy
 are not inferred from these results. Native calls and blocking downstream
 callbacks still require their own cooperative interruption.
+
+
+## Owned passes across a complete program
+
+Source d3d3424980689533ea58be39d22fd50fc89ea545 integrates the same private
+Pass<D> into baked_presentation's --owned-driver mode. Program admission precedes
+Plan construction, one immutable owner survives all media/gap segments, and a
+new native decoder/cursor handles each media segment. All source packets are
+replayed and native EOF is drained for each pass; there is no implicit early
+metadata completion. Black gap fill is explicit in the example, not a driver
+default. Weak picture controls require native pictures to be released after
+encoder disposal; the application-owned black frame is deliberately excluded.
+The last program owner releases its pool slot after all segments complete.
+
+The twelve generated MP4s are byte-identical to the earlier buffered pump-files
+reference. Independent FFmpeg decode/probe passes all twelve sample/timing
+comparisons for identity, clip, repeat, gap, dwell and double speed, each in
+progressive and fragmented MP4. Expected raw samples and the oracle assertions
+remain unchanged. The original retained-edit player disagreements are separate
+and remain failures; this route bakes edits into samples/timestamps.
+
+Initial source d0b26811 generated files, then strict example Clippy stopped on
+the private Mapping error field never being inspected outside tests. Rather than
+suppress it, the mapping error now implements core::error::Error and ProjectionError
+exposes it through source(), preserving typed diagnosis for consumers. The
+initial failure remains in program.log. Corrected program-fixed.log records:
+12 map tests, three native owner/driver controls, example and all-target strict
+Clippy, twelve independent playback cases and twelve byte-identity comparisons.
+Other native tests remain filtered. Both committed locks are unchanged.
+
+The isolated run explicitly cleaned/rebuilt the native harness. Wrapper rc0,
+13 seconds, peak RSS 0.39 GiB, minimum available 13524 MiB, peak load 0.54.
+These are validation resources, not a performance or whole-operation memory bound.
+Logs: /home/lilith/tmp/zencodec-map-owner-20261030/{program,program-fixed}.log
+on r7900x. Artifacts under the prior presentation-playback-20261030 root:
+owned-program-fixed-files and owned-program-fixed-oracle (results.json,
+versions.json, raw output, probe and decoder diagnostics). The initial
+owned-program-files directory is preserved. Reproduce with just presentation-owned.
+
+Remaining contract scope: the example still owns compressed source/output packet
+vectors; native construction/configuration admission is external to Pass::new.
+It has no situational gap/acquisition callback, no final metadata completeness
+proof, and no automatic live-session map replacement. No new published API or
+zenpixels change is introduced by this integration.

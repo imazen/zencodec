@@ -23,6 +23,13 @@ pub enum Error {
     Terminal,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "presentation mapping: {self:?}")
+    }
+}
+impl core::error::Error for Error {}
+
 /// Exact seconds; never implicitly rounds onto a destination clock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Time {

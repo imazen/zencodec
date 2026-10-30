@@ -1912,3 +1912,10 @@ presentation-replay-sources artifacts port="3586":
     python3 perf/spatial-validation/http_snapshot.py --scope "Native AV1 replay snapshots over local HTTP/1.1; no WAN/TLS/performance claim" "{{artifacts}}" "{{port}}" -- cargo test --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- --nocapture
     cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- -D warnings
     python3 perf/spatial-validation/http_snapshot_test.py
+
+# Reusable owned passes across repeats, gaps, dwell, clipping and rate changes.
+presentation-owned files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}" --owned-driver
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    just presentation-epoch-check
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps

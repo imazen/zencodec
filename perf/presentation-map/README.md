@@ -289,3 +289,20 @@ pre-cancellation, cancellation after one publication, owner release and terminal
 re-entry. Admission of decoder construction remains outside this constructor;
 full multi-segment orchestration, gap policy and final interpretation policy
 remain integration work. The driver is private and is not a released API.
+
+
+### Complete programs through owned passes
+
+`just presentation-owned FILES EXPECTED_RAW RESULTS` exercises the reusable Pass
+inside the AV1-to-MP4 example. One admitted immutable program spans the operation;
+each media segment acquires a fresh native decoder and cursor. Repeats reuse the
+same compressed source. The application explicitly fills gaps with black. Every
+pass drains native EOF and validates coverage before the next segment starts.
+
+All twelve progressive/fragmented identity, clip, repeat, gap, dwell and double
+speed files match the buffered reference byte for byte and pass independent
+FFmpeg pixel/timing inspection. Program and picture cleanup controls pass. This
+is full-program fixture integration, not a general acquisition API: input and
+output packets remain retained, reverse rates still refuse, and final operation
+policy, metadata completion and resource admission remain unqualified here.
+See [the program receipt](../../benchmarks/presentation_owners_2026-10-30.md#owned-passes-across-a-complete-program).

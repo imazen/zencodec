@@ -4,6 +4,8 @@
 #[allow(dead_code)]
 #[path = "../src/fixtures.rs"]
 mod fixtures;
+#[path = "../src/presentation_driver.rs"]
+mod presentation_driver;
 use fixtures::*;
 use presentation_map_experiment::{
     Acquisition, Content, Cursor, Edit, Extent, Interval, Plan, Time,
@@ -140,13 +142,90 @@ fn replay_encode(
     (output_config, packets)
 }
 
+// Exercise the reusable owned pump across the complete program. Gap fill remains
+// an explicit choice by this application; media segments replay stable packets.
+fn owned_encode(
+    settings: zenavif::media::Av1EncodeSettings,
+    source_config: &zencodec_media::session::CodecConfig,
+    source_packets: &[zencodec_media::packet::Packet],
+    edits: &[Edit],
+    black: &Frame,
+) -> (
+    zencodec_media::session::CodecConfig,
+    Vec<zencodec_media::packet::Packet>,
+) {
+    use presentation_map_experiment::retained::PlanPool;
+    use zencodec_media::session::{
+        VideoDecoder, VideoEncoder, drain_encoder, send_frame_until_accepted,
+    };
+    let mut pool = PlanPool::new(1);
+    let owner = pool
+        .prepare(|| Plan::new(Timestamp::new(0, TB), edits))
+        .unwrap();
+    let mut encoder = zenavif::media::Av1VideoEncoder::new(settings, TB).unwrap();
+    let config = encoder.output_config().unwrap().clone();
+    let mut packets = Vec::new();
+    let mut timings = Vec::new();
+    let mut pictures = Vec::new();
+    for (index, segment) in owner.plan().segments().iter().enumerate() {
+        let mut emit = |frame: Frame| {
+            timings.push(frame.timing());
+            // Gap samples are application-owned and intentionally survive the pass.
+            if segment.acquisition() != Acquisition::Gap {
+                pictures.push(Arc::downgrade(frame.picture()));
+            }
+            send_frame_until_accepted(&mut encoder, &frame, None, |packet| {
+                packets.push(packet);
+                Ok::<(), core::convert::Infallible>(())
+            })
+            .unwrap();
+            Ok::<(), core::convert::Infallible>(())
+        };
+        if segment.acquisition() == Acquisition::Gap {
+            let start = segment.output.start.on_clock(TB).unwrap();
+            let end = segment.output.end.unwrap().on_clock(TB).unwrap();
+            let timing = FrameTiming::at(start)
+                .with_duration_ticks((end.ticks() - start.ticks()).try_into().unwrap());
+            emit(black.represent(timing, black.presentation())).unwrap();
+        } else {
+            let mut settings = rav1d_safe::Settings::default();
+            settings.threads = 1;
+            let mut decoder = zenavif::media::Av1VideoDecoder::with_settings(settings).unwrap();
+            decoder.configure(source_config, None).unwrap();
+            let mut pass =
+                presentation_driver::Pass::new(decoder, owner.cursor(index).unwrap(), TB);
+            for packet in source_packets {
+                pass.send(&mut packet.clone(), None, &mut emit).unwrap();
+            }
+            pass.finish(None, &mut emit).unwrap();
+        }
+        assert_eq!(pool.live(), 1, "program owner survives segment completion");
+    }
+    drain_encoder(&mut encoder, None, |packet| {
+        packets.push(packet);
+        Ok::<(), core::convert::Infallible>(())
+    })
+    .unwrap();
+    drop(encoder);
+    assert!(pictures.iter().all(|picture| picture.upgrade().is_none()));
+    assert_eq!(packets.len(), timings.len());
+    for (packet, timing) in packets.iter().zip(timings) {
+        assert_eq!(packet.pts(), timing.pts);
+        assert_eq!(packet.duration_ticks(), timing.duration_ticks);
+    }
+    drop(owner);
+    assert_eq!(pool.live(), 0);
+    (config, packets)
+}
+
 fn main() {
     let output = PathBuf::from(
         std::env::args_os()
             .nth(1)
             .expect("NEW_OUTPUT_DIRECTORY required"),
     );
-    let replay = std::env::args().skip(2).any(|arg| arg == "--replay-source");
+    let owned = std::env::args().skip(2).any(|arg| arg == "--owned-driver");
+    let replay = owned || std::env::args().skip(2).any(|arg| arg == "--replay-source");
     std::fs::create_dir(&output).unwrap();
     let settings = settings(8, Subsampling::Yuv444, true);
     let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
@@ -212,10 +291,19 @@ fn main() {
         ("double", vec![media(60, 0, 2)]),
     ];
     for (name, edits) in programs {
-        let plan = Plan::new(Timestamp::new(0, TB), &edits).unwrap();
-        let (encoded_config, encoded) = if replay {
-            replay_encode(settings.clone(), &config, &packets, &plan, &black)
+        let plan = (!owned).then(|| Plan::new(Timestamp::new(0, TB), &edits).unwrap());
+        let (encoded_config, encoded) = if owned {
+            owned_encode(settings.clone(), &config, &packets, &edits, &black)
+        } else if replay {
+            replay_encode(
+                settings.clone(),
+                &config,
+                &packets,
+                plan.as_ref().unwrap(),
+                &black,
+            )
         } else {
+            let plan = plan.as_ref().unwrap();
             let decoded = decoded.as_ref().unwrap();
             let mut rendered = Vec::new();
             for segment in plan.segments() {
