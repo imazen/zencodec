@@ -35,3 +35,9 @@ mod float_processing;
 
 #[cfg(test)]
 mod coupled_route;
+
+#[cfg(test)]
+#[path = "../../plane-ablation/src/model.rs"]
+mod component_storage;
+#[cfg(test)]
+mod component_storage_native;

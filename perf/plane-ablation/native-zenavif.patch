@@ -1,0 +1,46 @@
+--- a/src/media.rs
++++ b/src/media.rs
+@@ -25,13 +25,14 @@
+ //!   rav1d holds output; `send` then answers `ReceivePending` until a
+ //!   `receive` makes room.
+ 
++use zenpixels::sample::SampleEncoding;
+ use std::sync::Arc;
+ 
+ use enough::Stop;
+ use zencodec::time::Timestamp;
+ use zencodec_media::frame::{
+     ChromaSiting, ColorClaim, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
+-    MappedPlanes, Picture, PlaneRole, PlaneSamples, PlaneView, Presentation, SampleEncoding,
++    MappedPlanes, Picture, PlaneRole, PlaneSamples, PlaneView, Presentation,
+     Subsampling,
+ };
+ use zencodec_media::packet::Packet;
+@@ -282,7 +283,7 @@
+         let config = &context.config;
+         let bits = f.bit_depth();
+         let encoding = match bits {
+-            8 => SampleEncoding::U8,
++            8 => SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+             10 | 12 => SampleEncoding::new(ChannelType::U16, bits, 0).expect("valid depth"),
+             b => return Err(SessionError::Codec(Av1SessionError::UnsupportedBitDepth(b))),
+         };
+@@ -558,7 +559,7 @@
+             v.width(),
+             v.height(),
+             v.stride(),
+-            SampleEncoding::U8,
++            SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+         )
+         .ok()
+     }
+@@ -742,7 +743,8 @@
+     use enough::Stop;
+     use num_traits::FromPrimitive;
+     use zencodec::time::{TimeBase, Timestamp};
+-    use zencodec_media::frame::{ChromaSiting, Frame, PlaneSamples, SampleEncoding, Subsampling};
++    use zencodec_media::frame::{ChromaSiting, Frame, PlaneSamples, Subsampling};
++    use zenpixels::sample::SampleEncoding;
+     use zencodec_media::packet::{Packet, RandomAccess};
+     use zencodec_media::session::{
+         CodecConfig, ProtocolViolation, Receive, SendStatus, SessionError, VideoEncoder,

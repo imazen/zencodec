@@ -54,3 +54,13 @@ full-plane copy can satisfy an interchange test. Exactness evidence describes
 current samples, not the source file's historical bit depth. Native AV1/JXL/TIFF
 adoption and codec-agnostic processing must compile against the same pixel types
 before this design gate closes.
+
+## Executed storage ablation
+
+The [private byte-backed model](../perf/plane-ablation/README.md) passes its
+scalar/stride/endianness controls and real AV1 mapping checks at 8/10/12 bits,
+4:2:0 and 4:4:4. It preserves every tested native row address and sample after
+decoder drop. This supports eliminating type-specific storage variants while
+keeping code interpretation separate. It does not yet justify promoting the
+private constructor, merging image/frame owners or claiming TIFF/JXL coverage.
+[Exact receipts and limits](../benchmarks/plane_model_2026-10-30.md).

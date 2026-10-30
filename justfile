@@ -1903,3 +1903,15 @@ frame-ablation-check:
     cargo test --locked -p zencodec --all-features --lib --test sample_encoding_compat --test packed_color_replacement
     cargo test --locked -p zencodec-media -p zencodec-media-testkit --all-features --lib --tests
     cargo clippy --locked -p zencodec -p zencodec-media -p zencodec-media-testkit --all-features --all-targets -- -D warnings
+
+# Private byte-backed component model; no production API promotion.
+plane-ablation-check:
+    cp perf/plane-ablation/dependencies.lock perf/plane-ablation/Cargo.lock
+    cargo test --manifest-path perf/plane-ablation/Cargo.toml --locked
+    cargo clippy --manifest-path perf/plane-ablation/Cargo.toml --all-targets --locked -- -D warnings
+    cargo check --manifest-path perf/plane-ablation/Cargo.toml --target wasm32-unknown-unknown --locked
+
+# After preparing the documented frozen native graph, retain the existing suite.
+plane-ablation-native-check:
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked component_storage -- --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
