@@ -1,4 +1,14 @@
 pub mod zencodec_testkit
+pub mod zencodec_testkit::pulse
+#[non_exhaustive] pub enum zencodec_testkit::pulse::Case
+pub zencodec_testkit::pulse::Case::StopAt
+pub zencodec_testkit::pulse::Case::StopAt::checkpoint: usize
+pub zencodec_testkit::pulse::Case::StopAt::reason: enough::reason::StopReason
+pub zencodec_testkit::pulse::Case::Uninterrupted
+pub struct zencodec_testkit::pulse::Limits
+pub zencodec_testkit::pulse::Limits::checkpoints: usize
+pub zencodec_testkit::pulse::Limits::trace_capacity: usize
+pub fn zencodec_testkit::pulse::check_checkpoints<E: core::fmt::Debug>(limits: zencodec_testkit::pulse::Limits, run: impl core::ops::function::FnMut(&dyn how_far::pulse::Pulse) -> core::result::Result<(), E>, classify: impl core::ops::function::Fn(&E) -> core::option::Option<enough::reason::StopReason>, inspect: impl core::ops::function::FnMut(zencodec_testkit::pulse::Case, &how_far_really::profile::Trace) -> zencodec_testkit::Conformance) -> zencodec_testkit::Conformance
 pub mod zencodec_testkit::reference
 pub enum zencodec_testkit::reference::RefError
 pub zencodec_testkit::reference::RefError::Cancelled(enough::reason::StopReason)

@@ -155,3 +155,35 @@ changed metadata/color context and preparation errors on the successful fixture.
 This does not measure preparation allocations, bound native workspace, test
 every output preference, or certify arbitrary late metadata. Those need native
 fixtures and allocation/progress diagnostics separately.
+
+### Check every observed Pulse checkpoint
+
+`pulse::check_checkpoints` runs a fresh synchronous operation once to discover
+its checks, then once per checkpoint for each of `Cancelled` and `TimedOut`.
+The injected stop is one-shot: polling again must not erase it. Supply explicit
+checkpoint and trace limits; excess or lost diagnostic evidence fails the check.
+
+```rust,ignore
+use zencodec_testkit::pulse::{check_checkpoints, Limits};
+
+check_checkpoints(
+    Limits { checkpoints: 4096, trace_capacity: 4096 },
+    |pulse| decoder.decode_with_pulse(&fixture, Some(pulse)).map(|_| ()),
+    |error| native_stop_reason(error), // extract the typed reason
+    |case, trace| {
+        // Retain JSON here, and assert this codec's expected phases/work units.
+        // This observer also receives traces for failed conformance cases.
+        inspect_native_trace(case, trace)
+    },
+)?;
+```
+
+The helper uses real `DiagnosticPulse`/`Profiler` instrumentation and checks the
+actual returned outcome. Its deliberately broken controls swallow a stop,
+collapse timeout into cancellation, omit checks and exhaust trace capacity.
+Each codec still owns its fixtures, pixel oracle and expected work. No particular
+phase shape is imposed. Run under an external timeout and join native workers
+before returning; this does not establish interrupt latency, complete progress,
+report-triggered cancellation, or native worker instrumentation. It is separate
+from `check_all`, because repeated native execution needs a caller-chosen fixture
+and explicit bounds.

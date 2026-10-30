@@ -1768,3 +1768,17 @@ metadata-retention-probe artifacts:
 
 metadata-retention-probe-check:
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --example metadata_retention --locked -- -D warnings
+
+# Shared deterministic one-shot Pulse oracle and its deliberately broken controls.
+pulse-checkpoints-check:
+    cargo test -p zencodec-testkit --test pulse_checkpoints --locked
+    cargo clippy -p zencodec-testkit --test pulse_checkpoints --locked -- -D warnings
+
+# Full testkit plus generated reference/site qualification for shared Pulse controls.
+pulse-checkpoints-qualification:
+    cargo test -p zencodec-testkit --all-targets --locked
+    cargo test -p zencodec-testkit --doc --locked
+    cargo clippy -p zencodec-testkit --all-targets --locked -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check

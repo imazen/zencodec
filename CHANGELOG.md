@@ -585,6 +585,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Added
+
+- Shared testkit Pulse checkpoint sweeps with bounded diagnostic observations and adversarial controls (runtime and documentation controls qualified; native adoption pending).
+
 - Cross-path conformance now exercises typed and erased output preparation,
   preserving exact samples, descriptors, attached color context and metadata.
   Known-fact and default-unknown controls plus native PNG parity cover the new path.
