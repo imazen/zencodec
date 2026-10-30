@@ -353,3 +353,34 @@ mod cancellation_and_publication {
         }
     }
 }
+
+#[test]
+fn checked_metadata_guide_retains_supplied_xmp_and_refuses_unsupported_hdr() {
+    use zencodec::{Metadata, UnsupportedOperation};
+    use zenjpeg::JpegDecoderConfig;
+    let codecs = guide::metadata_codecs();
+    let raw = fixtures::raw();
+    let expected = Metadata::none().with_xmp(b"<x xmlns='urn:example'>retained</x>".as_slice());
+    let encoded =
+        guide::with_required_metadata(&codecs, fixtures::pixels(&raw), expected.clone()).unwrap();
+    let info = JpegDecoderConfig::new()
+        .probe_full_metadata(encoded.data())
+        .unwrap();
+    zencodec_testkit::check_metadata_retained(&expected, &info.metadata()).unwrap();
+    // Independently inspect the standard APP1 payload bytes, not a decoder's interpretation.
+    let namespace = b"http://ns.adobe.com/xap/1.0/\0";
+    let payload = [namespace.as_slice(), expected.xmp.as_deref().unwrap()].concat();
+    assert!(
+        encoded
+            .data()
+            .windows(payload.len())
+            .any(|part| part == payload)
+    );
+    let hdr = Metadata::none()
+        .with_content_light_level(zenpixels::hdr::ContentLightLevel::new(1000, 400));
+    let error = guide::with_required_metadata(&codecs, fixtures::pixels(&raw), hdr).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<UnsupportedOperation>(&error),
+        Some(&UnsupportedOperation::MetadataRetention)
+    );
+}

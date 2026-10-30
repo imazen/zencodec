@@ -293,3 +293,33 @@ mod publication {
     // END EXAMPLE: checked_png_file
 }
 pub(crate) use publication::{publish_completed, transcode_to_file};
+
+mod retained_metadata {
+    // EXAMPLE: checked_metadata_retention
+    use zencodec::{
+        At, CodecSet, ImageFormat, Metadata, MetadataPolicy,
+        encode::EncodeOutput,
+        operation::{EncodeRequest, OperationError, Outcome},
+    };
+    use zenpixels::PixelSlice;
+
+    pub fn metadata_codecs() -> CodecSet {
+        CodecSet::new().with_send_encoder(zencodecs::JpegEncoderConfig::new())
+    }
+
+    pub fn with_required_metadata(
+        codecs: &CodecSet,
+        pixels: PixelSlice<'_>,
+        metadata: Metadata,
+    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
+        // ANCHOR: checked_metadata_retention
+        EncodeRequest::new(ImageFormat::Jpeg)
+            .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+            .encode(codecs, pixels)
+        // END: checked_metadata_retention
+        // Unsupported fields refuse before affected output; no capability query.
+        // This preserves supplied fields, not unreported container data.
+    }
+    // END EXAMPLE: checked_metadata_retention
+}
+pub(crate) use retained_metadata::{metadata_codecs, with_required_metadata};

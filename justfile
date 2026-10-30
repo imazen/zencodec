@@ -1831,3 +1831,8 @@ metadata-deprecation-followup:
     python3 docs/generate-code-catalog.py .
     just docs-reference
     just docs-site-check
+
+# Real JPEG retention through the caller recipe; native graph is locked.
+checked-metadata-guide-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked checked_metadata_guide -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --all-targets -- -D warnings

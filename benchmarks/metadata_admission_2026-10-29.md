@@ -151,3 +151,25 @@ identity; test differences are scoped legacy deprecation allowances. Two
 example lint repairs and newer viewer changes are separate. No runtime tests
 were rerun for this lint-only gate. Full log: `terra-jpeg-progress-faa3d261`.
 The final child updates only changelog and qualification documentation.
+
+## Caller guide integration
+
+The native harness now pins JPEG main `13a8a23b`. Isolated resolution changes
+only the JPEG and companion zenyuv source revisions; the graph checker reports
+10 interface consumers and zero identity mismatches. The caller recipe registers
+JPEG and uses `EncodeRequest::with_metadata_policy(PreserveExact)`. Its control
+requires XMP retention through the shared testkit and independently checks the
+standard APP1 payload, then requires a typed MetadataRetention refusal for CLL.
+
+The final source (`679dd338`, before this receipt) passes all 67 native harness
+library tests and strict all-target Clippy. ARM64 wrapper: rc0, 9s, peak RSS
+0.34 GiB, minimum available 14356 MiB, peak load 1.05. Full logs and encoded
+artifacts are retained in `checked-metadata-guide-20261030`; no performance or
+whole-codec memory bound is inferred. The first focused build passed the new
+control (58s, peak RSS 0.69 GiB); the final run also uses the displayed registry
+helper. No existing assertions changed.
+
+Site generation and all 26 source tests pass. The first site build correctly
+rejected a missing graduated explanation for the new card; the explanation was
+added without relaxing the guard. Browser qualification remains CI's separate
+gate. Reproduce the focused native gate with `just checked-metadata-guide-check`.
