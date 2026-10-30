@@ -536,3 +536,39 @@ fn required_presentation_refuses_unknown_before_native_preparation() {
         ))
     ));
 }
+
+#[test]
+fn ordinary_container_timing_accepts_explicitly_unedited_tracks() {
+    use zencodec_media::{
+        output::Output,
+        timeline::TrackTimeline,
+        track::{CodecId, VideoTrackInfo},
+    };
+    use zencodec_media_testkit::toy::ToyMuxer;
+    let track = TrackInfo::video(0, CodecId::Av1, TimeBase::MILLIS, VideoTrackInfo::new(2, 2))
+        .with_timeline(TrackTimeline::Unedited)
+        .build()
+        .unwrap();
+    let mut bytes = Vec::new();
+    let output = Output::with_container_timing(
+        ToyMuxer::new(false),
+        Forward(&mut bytes),
+        &[track.clone()],
+        None,
+    )
+    .expect("an explicit container-timing choice needs no edit execution");
+    output.finish(None).unwrap();
+    assert!(!bytes.is_empty());
+    // Accepting native timing never upgrades this route to exact presentation.
+    let mut strict_bytes = Vec::new();
+    assert!(
+        Output::preserving_presentation(
+            ToyMuxer::new(false),
+            Forward(&mut strict_bytes),
+            &[track],
+            None
+        )
+        .is_err()
+    );
+    assert!(strict_bytes.is_empty());
+}
