@@ -173,3 +173,30 @@ Site generation and all 26 source tests pass. The first site build correctly
 rejected a missing graduated explanation for the new card; the explanation was
 added without relaxing the guard. Browser qualification remains CI's separate
 gate. Reproduce the focused native gate with `just checked-metadata-guide-check`.
+
+## Native PNG landing — 2026-10-30
+
+PNG PR50 merged as `a5eeaddb3c5efc92c9ff6b3e08e3124b463f0c14`;
+GitHub comparison verifies reviewed head `117718bd` is its ancestor.
+Checked retention covers still, declared rows, shared pull-driver, APNG and
+ordinary/Send erasure paths. Native callback pull remains explicitly unsupported.
+
+Focused controls passed 12/12 on `f1f2cd62`. Equivalent lint-repaired `59c377f3`
+passed strict all-target Clippy and five complete serial test targets: integration
+66, orientation 3, row planning 7, shared contracts 4 and source color binding 5
+(85/85, no ignored or filtered tests). These include the focused controls; do not
+add the two counts. Selected-run receipt:
+`rc=0 7s | peak-RSS 0.12GiB | min-avail 14666MiB | peak-load 0.18`.
+The same-source artifacts were Fresh; their original compilation is recorded
+in the interrupted broad log. Standalone fuzz graph `ee36012e` subsequently
+compiled all five targets with one core/pixel interface graph:
+`rc=0 31s | peak-RSS 0.35GiB | min-avail 14166MiB | peak-load 0.79`.
+No fuzz campaign or speed benchmark is claimed.
+
+The broad library run was OOM-killed in its 3 GiB scope and has no final test
+result. Its zero peak-RSS report is invalid. Existing APNG tests compare raw
+reference subframes to native composed canvases and tolerate mismatch counts;
+missing-input returns also prevent a full corpus claim. These remain open in
+[PNG issue 51](https://github.com/imazen/zenpng/issues/51). The selected tests do
+not discharge those gates or publication requirements. Shared guide repinning
+to this landed PNG implementation remains a separate integration check.
