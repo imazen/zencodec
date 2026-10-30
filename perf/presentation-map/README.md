@@ -7,7 +7,7 @@ frames per segment and projects their exact presentation intervals:
 ```rust,ignore
 let plan = Plan::new(movie_origin, &edits)?;
 for segment in plan.segments() {
-    let acquisition = segment.acquisition(); // Gap, FrameAt, or Span
+    let acquisition = segment.acquisition(); // Gap, FrameAt, Span, or From
     // A gap needs the application's explicit visual/audio treatment.
     // A repeated segment needs a source seek/replay, not an unbounded cache.
     let visible = segment.project(decoded_frame_interval)?;
@@ -21,7 +21,7 @@ not implemented by this experiment. In particular it does not make the current
 `VideoAnimationDecoder` obey edits. These are integration requirements before
 promotion, not optional finishing work.
 
-The plan retains segment order, finite duration, media start, rational rate and
+The plan retains segment order, explicit extent, media start, rational rate and
 explicit gaps. The experiment also models a zero-rate dwell independently of
 what a particular container permits. It refuses reverse playback, invalid
 intervals and unrepresentable arithmetic instead of silently rounding. A frame
@@ -37,9 +37,9 @@ media clocks separately and demonstrates repeated media and speed changes:
 This is not an ISO conformance claim or an independent player comparison.
 
 Run `just presentation-map-check` from the repository root in an isolated export
-with the checked dependency lock. Seven tests and strict all-target Clippy pass;
+with the checked dependency lock. Nine tests and strict all-target Clippy pass;
 the [receipt](../../benchmarks/presentation_map_2026-10-30.md) records scope.
-Remaining design questions include open-ended streams, native unsupported edit
+Remaining design questions include native unsupported edit
 records, presentation-map epochs, decoder reordering, duration discovery,
 per-segment seek/replay admission, and avoiding double application of trim/delay.
 
@@ -50,3 +50,42 @@ available in the input description for remuxing, but cannot be admitted for
 execution. A failed plan produces no native calls or output; it can allocate
 edit descriptors before refusal, so a strict workspace policy needs admission
 before construction. `project` itself allocates nothing.
+
+## Open-ended media
+
+`Extent::Remaining` keeps future media open without guessing the final duration;
+`Acquisition::From(start)` tells the driver to acquire from that source time
+through its eventual end. It must be the final segment. Open-ended gaps and
+dwells refuse because neither supplies a media endpoint that can determine
+their presentation length. Finite zero duration remains distinct and rejected
+by this experiment.
+
+This distinction is required for fragmented MP4: the W3C byte-stream profile
+permits a single rate-one edit with duration zero to cover subsequent media.
+The native parser must lower that form to `Remaining`, not `Finite(0)`.
+[W3C ISO BMFF byte-stream format, initialization segments](https://w3c.github.io/mse-byte-stream-format-isobmff/#initialization-segments).
+The open-ended extension is separately qualified in the same receipt; the
+earlier seven-test run covers only finite segments.
+
+## Promotion must include both directions
+
+A new track field alone cannot establish edited playback or faithful remuxing.
+The current `CodecConfig::from` intentionally copies codec configuration facts,
+while the animation adapter does not retain track presentation facts. The
+presentation owner must keep the full map, associate delayed frames with its
+correct epoch, and apply it once after native decoding. Copying timing fields
+into a codec config without defining who consumes them risks double trimming.
+
+Likewise, an existing muxer can ignore a newly added field. Its successful
+packet-timing admission is not proof that it retained an edit program. Promotion
+requires checked container admission that either binds retention of the exact
+program or refuses before publishing a header. Identity tracks should keep the
+simple path. Missing/unknown discovery facts must not silently become identity;
+declared empty presentations must not silently become an unedited whole stream.
+
+Required native controls include parse/remux/parse preservation of ordered
+segments and open ends, independent player comparison, leading gaps, repeated
+source ranges, source seek/refusal before affected output, late configuration
+changes with delayed frames, final frame duration, and codec priming/discard.
+Preserving these data without executing them remains useful for remuxing, but
+must not be reported as a successful edited render.

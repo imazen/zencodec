@@ -29,3 +29,25 @@ independent playback, or caller resource policy was exercised. No API migration
 is justified by these tests alone. Next decisive gate: retain a native MP4 edit
 program without scalar loss, drive acquisition in segment order, and compare
 actual presentation against an independent player while preserving sample bits.
+
+## Open-ended extension
+
+Source `18fdd6faa9b6ad77febd2b346e759bd7796738db`, archive SHA-256
+`f44c54bee57f645dc2a7007fb99f91f7cc5192c1323fcd5ec68c895ced3eaf18`;
+dependency lock unchanged. The same locked test/Clippy commands passed 9/9
+tests, zero ignored/filtered, with strict all-target Clippy on the isolated
+ARM64 export. Source paths and terminal supervisor/Rust exits were verified.
+Receipt: `rc=0 6s | peak-RSS 0.31GiB | min-avail 14617MiB | peak-load 0.09`.
+Full local log: `~/tmp/presentation-open-20261030/full.log`.
+
+`Extent::Remaining` preserves an unknown eventual endpoint and produces an
+explicit `Acquisition::From` request. New controls exercise an offset across
+future fragments, clipping before the selected source start, and refusal of a
+following segment or an unbounded gap/dwell. Every previous finite assertion
+remains. This is still interval arithmetic, not native fragmented playback.
+
+An initial export failed because the local disk filled; the partial archive was
+retained as `source.incomplete.tar` locally and remotely. No build ran from that
+archive. After reclaiming inactive Rust intermediates, the complete replacement
+archive was checked locally, hash-matched remotely and extracted successfully
+before qualification. No source/test expectation changed to repair staging.

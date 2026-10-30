@@ -14,6 +14,8 @@ pub enum Error {
     InvalidInterval,
     UnsupportedRate,
     Allocation,
+    OpenEndedMustBeLast,
+    UnsupportedExtent,
 }
 
 /// Exact seconds; never implicitly rounds onto a destination clock.
@@ -128,15 +130,26 @@ pub enum Content {
         rate_den: u32,
     },
 }
+/// An explicit open-ended segment is different from a finite zero-length edit.
+#[derive(Clone, Copy, Debug)]
+pub enum Extent {
+    Finite(FrameDuration),
+    Remaining,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct Edit {
-    pub duration: FrameDuration,
+    pub extent: Extent,
     pub content: Content,
 }
 #[derive(Clone, Copy, Debug)]
+pub struct Window {
+    pub start: Time,
+    pub end: Option<Time>,
+}
+#[derive(Clone, Copy, Debug)]
 pub struct Segment {
-    pub output: Interval,
-    source: Option<(Time, Time, Time)>,
+    pub output: Window,
+    source: Option<(Time, Option<Time>, Time)>,
 }
 /// What the driver must obtain before projecting this segment. Repeated or
 /// backward ranges require admitted seek/replay; gaps do not request decoding.
@@ -145,13 +158,15 @@ pub enum Acquisition {
     Gap,
     FrameAt(Time),
     Span(Interval),
+    From(Time),
 }
 impl Segment {
     pub fn acquisition(&self) -> Acquisition {
         match self.source {
             None => Acquisition::Gap,
             Some((start, _, rate)) if rate.n == 0 => Acquisition::FrameAt(start),
-            Some((start, end, _)) => Acquisition::Span(Interval { start, end }),
+            Some((start, Some(end), _)) => Acquisition::Span(Interval { start, end }),
+            Some((start, None, _)) => Acquisition::From(start),
         }
     }
     /// A frame may contribute to several edits. Call per segment, in edit order;
@@ -161,17 +176,20 @@ impl Segment {
             return Ok(None);
         };
         if rate.n == 0 {
-            return Ok(frame.contains(start)?.then_some(self.output));
+            let end = self.output.end.ok_or(Error::UnsupportedExtent)?;
+            return Ok(frame.contains(start)?.then_some(Interval {
+                start: self.output.start,
+                end,
+            }));
         }
         let lo = if frame.start.cmp(start)?.is_lt() {
             start
         } else {
             frame.start
         };
-        let hi = if frame.end.cmp(end)?.is_gt() {
-            end
-        } else {
-            frame.end
+        let hi = match end {
+            Some(end) if frame.end.cmp(end)?.is_gt() => end,
+            _ => frame.end,
         };
         if !lo.cmp(hi)?.is_lt() {
             return Ok(None);
@@ -200,11 +218,32 @@ impl Plan {
             .try_reserve_exact(edits.len())
             .map_err(|_| Error::Allocation)?;
         let mut cursor = Time::timestamp(origin);
-        for edit in edits {
-            let duration = Time::duration(edit.duration);
-            let output = Interval::new(cursor, cursor.add(duration)?)?;
+        for (index, edit) in edits.iter().enumerate() {
+            let duration = match edit.extent {
+                Extent::Finite(duration) => {
+                    if duration.numerator() == 0 {
+                        return Err(Error::InvalidInterval);
+                    }
+                    Some(Time::duration(duration))
+                }
+                Extent::Remaining => {
+                    if index + 1 != edits.len() {
+                        return Err(Error::OpenEndedMustBeLast);
+                    }
+                    None
+                }
+            };
+            let output = Window {
+                start: cursor,
+                end: duration.map(|d| cursor.add(d)).transpose()?,
+            };
             let source = match edit.content {
-                Content::Gap => None,
+                Content::Gap => {
+                    if duration.is_none() {
+                        return Err(Error::UnsupportedExtent);
+                    }
+                    None
+                }
                 Content::Media {
                     start,
                     rate_num,
@@ -215,11 +254,20 @@ impl Plan {
                     }
                     let rate = Time::new(i128::from(rate_num), i128::from(rate_den))?;
                     let start = Time::timestamp(start);
-                    Some((start, start.add(duration.mul(rate)?)?, rate))
+                    if rate.n == 0 && duration.is_none() {
+                        return Err(Error::UnsupportedExtent);
+                    }
+                    Some((
+                        start,
+                        duration.map(|d| start.add(d.mul(rate)?)).transpose()?,
+                        rate,
+                    ))
                 }
             };
             segments.push(Segment { output, source });
-            cursor = output.end;
+            if let Some(end) = output.end {
+                cursor = end;
+            }
         }
         Ok(Self { segments })
     }
@@ -242,7 +290,7 @@ mod tests {
     }
     fn edit(duration: u64, hz: u32, start: i64, source_hz: u32, rate: i32) -> Edit {
         Edit {
-            duration: FrameDuration::new(duration, hz).unwrap(),
+            extent: Extent::Finite(FrameDuration::new(duration, hz).unwrap()),
             content: Content::Media {
                 start: stamp(start, source_hz),
                 rate_num: rate,
@@ -290,7 +338,7 @@ mod tests {
     #[test]
     fn gaps_and_dwell_are_explicit_and_half_open() {
         let gap = Edit {
-            duration: FrameDuration::new(1, 1).unwrap(),
+            extent: Extent::Finite(FrameDuration::new(1, 1).unwrap()),
             content: Content::Gap,
         };
         let p = Plan::new(stamp(0, 1), &[gap, edit(2, 1, 3, 1, 0)]).unwrap();
@@ -318,7 +366,7 @@ mod tests {
             Err(Error::InvalidInterval)
         ));
         let e = Edit {
-            duration: FrameDuration::new(1, 1).unwrap(),
+            extent: Extent::Finite(FrameDuration::new(1, 1).unwrap()),
             content: Content::Media {
                 start: stamp(0, 1),
                 rate_num: 1,
@@ -373,7 +421,7 @@ mod tests {
     #[test]
     fn fractional_rate_and_movie_clock_remain_exact() {
         let e = Edit {
-            duration: FrameDuration::new(2, 1).unwrap(),
+            extent: Extent::Finite(FrameDuration::new(2, 1).unwrap()),
             content: Content::Media {
                 start: stamp(0, 100),
                 rate_num: 3,
@@ -391,5 +439,54 @@ mod tests {
             stamp(1000, 600)
         );
         assert_eq!(actual.end().on_clock(TimeBase::MILLIS), Err(Error::Inexact));
+    }
+
+    #[test]
+    fn open_ended_offset_projects_future_fragments_without_guessing_end() {
+        let mut e = edit(1, 1, 200, 100, 1);
+        e.extent = Extent::Remaining;
+        let p = Plan::new(stamp(0, 600), &[e]).unwrap();
+        let s = &p.segments()[0];
+        assert_eq!(s.output.end, None);
+        assert_eq!(s.acquisition(), Acquisition::From(time(2, 1)));
+        assert_eq!(s.project(span(0, 200, 100)).unwrap(), None);
+        assert_eq!(
+            s.project(span(150, 250, 100)).unwrap(),
+            Some(span(0, 300, 600))
+        );
+        assert_eq!(
+            s.project(span(10000, 10100, 100)).unwrap(),
+            Some(span(58800, 59400, 600))
+        );
+    }
+
+    #[test]
+    fn open_end_requires_terminal_media_with_progressing_time() {
+        let mut e = edit(1, 1, 0, 1, 1);
+        e.extent = Extent::Remaining;
+        assert!(matches!(
+            Plan::new(stamp(0, 1), &[e, edit(1, 1, 0, 1, 1)]),
+            Err(Error::OpenEndedMustBeLast)
+        ));
+        let gap = Edit {
+            extent: Extent::Remaining,
+            content: Content::Gap,
+        };
+        assert!(matches!(
+            Plan::new(stamp(0, 1), &[gap]),
+            Err(Error::UnsupportedExtent)
+        ));
+        let dwell = Edit {
+            extent: Extent::Remaining,
+            content: Content::Media {
+                start: stamp(0, 1),
+                rate_num: 0,
+                rate_den: 1,
+            },
+        };
+        assert!(matches!(
+            Plan::new(stamp(0, 1), &[dwell]),
+            Err(Error::UnsupportedExtent)
+        ));
     }
 }
