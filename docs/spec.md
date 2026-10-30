@@ -2682,8 +2682,10 @@ native timing. This legacy path does not certify full presentation preservation.
 In the timeline review draft, a declared timeline switches both `new`
 constructors to `begin_exact_presentation`. All tracks must then have qualified
 `Unedited` or `Edited` declarations; mixed unknown facts refuse before native
-preparation. `with_container_timing` refuses declared timelines rather than
-silently weakening their preservation. The new mux hook defaults to refusal
+preparation. `with_container_timing` accepts all-`Unedited` tracks with the
+explicitly requested native timing behavior; edited programs and mixed
+known/unknown timelines still refuse. This opt-in does not certify exact
+presentation or packet timing. The new mux hook defaults to refusal
 and forwards through erasure. Native adoption is a separate required gate.
 `PreparedOutput::preserving_presentation` and `Output::preserving_presentation`
 take the same arguments as `new` and additionally require qualified timelines

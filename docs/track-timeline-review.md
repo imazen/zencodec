@@ -24,7 +24,8 @@ native muxer either binds the actual request or refuses with
 All-unknown legacy tracks retain their existing packet-timing path; this is
 explicitly not proof of presentation preservation. Mixing a known declaration
 with unknown track facts refuses before native preparation. The opt-in ordinary
-container-timing path cannot silently drop a known timeline.
+container-timing path accepts all-`Unedited` tracks, without certifying exact
+timing. It still refuses edited programs and mixed known/unknown tracks.
 
 ## Authoring an ordered program
 
@@ -145,3 +146,22 @@ WASM pass in the isolated consumer graph. IVF reports unedited input; WebM
 retains unknown until it can establish presentation completeness. Neither
 yet promises exact presentation preservation. This distinction must remain
 visible to ordinary callers as well as strict preservation callers.
+
+## Explicitly accept native timing for an unedited stream
+
+```rust,ignore
+let mut output = Output::with_container_timing(mux, Forward(writer), &tracks, None)?;
+for packet in packets {
+    output.send(packet, None)?;
+}
+output.finish(None)?;
+```
+
+This opt-in remains usable when a truthful demuxer reports every track as
+`Unedited`. It accepts the native container's timing rules; it does not promise
+exact packet durations or full presentation preservation. Edited programs and
+mixed known/unknown timelines still refuse. Use `preserving_presentation` when
+that guarantee is required: it never silently falls back to the above route.
+The real IVF remux control lives in
+`perf/io-validation/tests/presentation_routes.rs`; packet bytes and timestamps
+are checked separately from any decoded-video claims.

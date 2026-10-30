@@ -223,7 +223,9 @@ fn write_all(
 
 impl<M: Muxer, D: Destination> Output<M, D> {
     /// Explicitly allow the muxer's ordinary timing behavior, then publish.
-    /// This does not guarantee exact packet durations. Prefer [`Output::new`](crate::output::Output::new).
+    /// This does not guarantee exact packet durations. All-`Unedited` tracks
+    /// can use native timing; edited programs and mixed known/unknown timelines
+    /// refuse. Prefer [`Output::new`](crate::output::Output::new) for exact timing.
     pub fn with_container_timing(
         mux: M,
         destination: D,
@@ -292,7 +294,11 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             let declared = tracks
                 .iter()
                 .any(|t| !matches!(t.timeline(), crate::timeline::TrackTimeline::Unknown));
-            let timing = if declared {
+            let ordinary_unedited = !exact_timing
+                && tracks.iter().all(|track| {
+                    matches!(track.timeline(), crate::timeline::TrackTimeline::Unedited)
+                });
+            let timing = if declared && !ordinary_unedited {
                 if !exact_timing
                     || tracks
                         .iter()

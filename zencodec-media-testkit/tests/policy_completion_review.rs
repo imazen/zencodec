@@ -553,7 +553,7 @@ fn ordinary_container_timing_accepts_explicitly_unedited_tracks() {
     let output = Output::with_container_timing(
         ToyMuxer::new(false),
         Forward(&mut bytes),
-        &[track.clone()],
+        std::slice::from_ref(&track),
         None,
     )
     .expect("an explicit container-timing choice needs no edit execution");

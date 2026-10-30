@@ -1178,8 +1178,8 @@ docs-migration-baseline:
 
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test presentation_routes --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test presentation_routes --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings
 
 # Sequential documentation-learning study: preserve submissions and native results.
 guide-learning-capture url output revision:
