@@ -26,6 +26,8 @@ mod conversion;
 mod pixel_guide;
 
 #[cfg(test)]
+mod artifact_directory;
+#[cfg(test)]
 mod checked_examples;
 #[cfg(test)]
 #[path = "../../../docs/examples/checked_operations.rs"]

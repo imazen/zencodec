@@ -882,3 +882,12 @@ compares complete current track facts at both boundaries, with ten mutations
 in each phase. This is cross-driver consistency, not proof of native edit-list
 interpretation. New TrackInfo fields must join the private snapshot; use
 `just media-track-facts-check` and see `docs/testkit-release-audit.md`.
+
+## Guide publication fixture collisions (2026-10-30)
+
+The JPEG guide gate reused an artifact directory keyed only by label and PID.
+Its second baseline/progressive case failed with AlreadyExists before reaching
+publication assertions. Exclusive directory creation now adds a process-local
+ordinal and retries existing names, preserving all prior artifacts. The unchanged
+native suite plus a repeated-label control passes (69 tests); strict all-target
+Clippy passes. See benchmarks/guide_directories_2026-10-30.md.
