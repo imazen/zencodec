@@ -13,6 +13,10 @@ use zencodec::{
 use zencodec_media::session::VideoDecoder;
 
 fn native_stream(threads: u32) -> Vec<Frame> {
+    native_stream_observed(threads, |_, _| {})
+}
+
+fn native_stream_observed(threads: u32, mut observed: impl FnMut(&Frame, u32)) -> Vec<Frame> {
     let mut source = settings(8, Subsampling::Yuv420, false);
     let mut variants = vec![(source.clone(), TB), (source.clone(), TB)];
     source.width = 19;
@@ -48,6 +52,7 @@ fn native_stream(threads: u32) -> Vec<Frame> {
                 let Receive::Ready(frame) = decoder.receive(Some(&NoPulse)).unwrap() else {
                     panic!("native decoder progress promise")
                 };
+                observed(&frame, config.epoch);
                 actual.push(frame);
             }
         }
@@ -55,7 +60,10 @@ fn native_stream(threads: u32) -> Vec<Frame> {
     decoder.end_input().unwrap();
     loop {
         match decoder.receive(Some(&NoPulse)).unwrap() {
-            Receive::Ready(frame) => actual.push(frame),
+            Receive::Ready(frame) => {
+                observed(&frame, 15);
+                actual.push(frame);
+            }
             Receive::EndOfStream => break,
             other => panic!("native decoder failed to drain: {other:?}"),
         }
@@ -556,5 +564,90 @@ fn epoch_route_policy_error_decline_stale_choice_unwind_and_storage_failure_are_
             (storage.reserved_bytes(), storage.reserved_objects()),
             (0, 0)
         );
+    }
+}
+
+#[test]
+fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration() {
+    use presentation_map_experiment::{Content, Cursor, Edit, Extent, Interval, Plan, Time};
+    use zencodec::time::FrameDuration;
+    for threads in [1, 4] {
+        let mut delayed = 0;
+        let frames = native_stream_observed(threads, |frame, configured_epoch| {
+            if frame.interpretation().config_epoch != configured_epoch {
+                delayed += 1;
+            }
+        });
+        assert!(
+            delayed > 0,
+            "the control must actually deliver old-epoch frames after configuration advances"
+        );
+        // Each immutable map is retained through native draining. Identical
+        // codec settings in epochs 10 and 11 still have distinct presentation.
+        let plans: Vec<_> = (0..6)
+            .map(|group| {
+                let clock = if group == 5 {
+                    TimeBase::hz(90_000).unwrap()
+                } else {
+                    TB
+                };
+                let ticks_per_frame = if group == 5 { 3600 } else { 40 };
+                Plan::new(
+                    Timestamp::new(group * 1000, TB),
+                    &[Edit {
+                        extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
+                        content: Content::Media {
+                            start: Timestamp::new(group * 3 * ticks_per_frame, clock),
+                            rate_num: 1,
+                            rate_den: 1,
+                        },
+                    }],
+                )
+                .unwrap()
+            })
+            .collect();
+        let mut cursors: Vec<_> = plans
+            .iter()
+            .map(|plan| Cursor::new(plan.segments()[0]).unwrap())
+            .collect();
+        for (index, frame) in frames.iter().enumerate() {
+            let epoch = frame.interpretation().config_epoch;
+            let group = usize::try_from(epoch.checked_sub(10).unwrap()).unwrap();
+            let timing = frame.timing();
+            let start = timing.pts.unwrap();
+            let duration = if group == 5 { 3600 } else { 40 };
+            let interval = Interval::new(
+                Time::timestamp(start),
+                Time::timestamp(Timestamp::new(start.ticks() + duration, start.base())),
+            )
+            .unwrap();
+            let output = cursors
+                .get_mut(group)
+                .expect("unknown epoch must refuse")
+                .push(interval)
+                .unwrap()
+                .unwrap();
+            let expected = group as i64 * 1000 + (index % 3) as i64 * 40;
+            assert_eq!(output.start().on_clock(TB).unwrap().ticks(), expected);
+            assert_eq!(output.end().on_clock(TB).unwrap().ticks(), expected + 40);
+            if group != 5 {
+                assert_eq!(
+                    plans[5].segments()[0].project(interval).unwrap(),
+                    None,
+                    "using only the latest plan loses an old-epoch presentation"
+                );
+            }
+        }
+        for (group, cursor) in cursors.iter_mut().enumerate() {
+            let completed = cursor.finish().unwrap();
+            assert_eq!(
+                completed.start().on_clock(TB).unwrap().ticks(),
+                group as i64 * 1000
+            );
+            assert_eq!(
+                completed.end().on_clock(TB).unwrap().ticks(),
+                group as i64 * 1000 + 120
+            );
+        }
     }
 }

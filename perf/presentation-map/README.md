@@ -114,3 +114,27 @@ frames and supplies their known 40 ms durations. It is not a streaming-memory
 measurement, MP4 edit parser, replay-source implementation or independent player
 oracle. Native acquisition, epoch ownership and publication remain required
 before promotion to the shared API.
+
+
+## Retaining maps across decoder configurations
+
+The native epoch control uses six immutable maps while AV1 configuration changes
+shape, color, sample depth and clock. The first two configurations deliberately
+have identical codec settings but different maps. It observes the configuration
+active when each frame is returned and requires actual delayed old-epoch frames.
+Each frame selects its original map using its retained configuration epoch;
+selecting the latest map instead loses earlier presentations. Source packet
+ordinals deliberately repeat, so they cannot substitute for map identity.
+
+This is a bounded fixture with six retained plans, not an implemented public map
+registry. Production needs an admission limit, a reliable retirement boundary,
+and an explicit rule for presentation-only changes. A codec epoch must not be
+silently reused for a different map while frames from its previous meaning may
+still be pending. Unknown epochs must refuse before publishing that frame.
+Source replay can return an old epoch again, so draining the codec alone does
+not prove that the corresponding map can be forgotten for the whole operation.
+
+`just presentation-epoch-check` passes with both thread configurations, along
+with native harness strict Clippy. See the same qualification receipt for the
+frozen source and resource record. This does not qualify mux preservation or
+presentation-only epoch changes that the adapter has not explicitly declared.

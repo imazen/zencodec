@@ -29,9 +29,9 @@
       "name": "zencodec-media",
       "directory": "zencodec-media",
       "features": "all",
-      "fingerprint": "89a56b2861b5f1941eaf6272f6c70e1f662d139a0dfee29979f944380597906a",
+      "fingerprint": "18b9c0a64c33f455dfa9ab5e78393f140c3629c08e007fa71ccea2676bfa8065",
       "surface_sha256": "76f3c5e212008487f198448f3de83bf116930607bee54102f3ec3ac6e77bfa67",
-      "details_sha256": "4292a5e9b8d36e97db25d5a0ac51f20bac67b7507e24e0b48635c745add705d5"
+      "details_sha256": "5e24cfe6d9f18525f4bf3da3be45d84d0d7599c2bfc1f15aa3716ea1043b9a27"
     },
     {
       "name": "zencodec-testkit",

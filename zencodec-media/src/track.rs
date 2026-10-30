@@ -158,9 +158,11 @@ impl AudioTrackInfo {
 /// container declares about it. Built with [`TrackInfo::video`],
 /// [`TrackInfo::audio`] or [`TrackInfo::other`].
 ///
-/// Delays and edit offsets are carried untouched, so a stream copy preserves
-/// them. They are applied exactly once, by the decoder adapter configured
-/// from this track; the session never trims.
+/// Carries delay, pre-roll and a legacy scalar edit offset. Retaining these
+/// declarations does not certify that a muxer writes them or that a decoder
+/// adapter applies them. Exact packet-timing admission is a separate contract.
+/// The scalar cannot describe a complete multi-segment edit program; callers
+/// must not treat it as proof of faithful edited playback or remuxing.
 #[derive(Clone, Debug)]
 pub struct TrackInfo {
     index: u32,

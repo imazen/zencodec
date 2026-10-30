@@ -255,6 +255,8 @@ frame-policy-sync export:
     just operation-sync "{{export}}"
     cp zencodec-media/Cargo.toml "{{export}}/zencodec-media/"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
+    cp zencodec-media-testkit/Cargo.toml "{{export}}/zencodec-media-testkit/"
+    cp zencodec-media-testkit/src/*.rs "{{export}}/zencodec-media-testkit/src/"
     cp zencodec-media-testkit/tests/storage_ownership.rs zencodec-media-testkit/tests/frame_policy.rs zencodec-media-testkit/tests/image_output.rs "{{export}}/zencodec-media-testkit/tests/"
 
 frame-policy-check:
@@ -305,6 +307,9 @@ av1-policy-sync export:
     mkdir -p "{{export}}/perf/av1-policy-validation/src"
     cp perf/av1-policy-validation/Cargo.toml perf/av1-policy-validation/verify_gamma.py perf/av1-policy-validation/verify_gamma_test.py "{{export}}/perf/av1-policy-validation/"
     cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
+    mkdir -p "{{export}}/perf/presentation-map/src"
+    cp perf/presentation-map/Cargo.toml perf/presentation-map/dependencies.lock "{{export}}/perf/presentation-map/"
+    cp perf/presentation-map/src/*.rs "{{export}}/perf/presentation-map/src/"
     mkdir -p "{{export}}/perf/av1-policy-validation/examples"
     cp perf/av1-policy-validation/examples/*.rs "{{export}}/perf/av1-policy-validation/examples/"
     mkdir -p "{{export}}/docs/examples"
@@ -1862,4 +1867,10 @@ presentation-native-check:
     just presentation-map-check
     just av1-policy-setup
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked native_av1_presentation_cursor -- --nocapture
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Real delayed native frames retain their original presentation program.
+presentation-epoch-check:
+    just av1-policy-setup
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

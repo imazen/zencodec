@@ -78,3 +78,45 @@ batch timeout. The recorded run-heavy receipt is rc0, 35s, peak RSS 0.40 GiB,
 minimum available 14326 MiB, peak load 1.34. This is test/build resource use,
 not a codec performance or retained-memory measurement. Recorded wrapper and
 Rust processes exited. Reproduce with `just presentation-native-check`.
+
+
+## Native delayed-frame map ownership
+
+Source `765be4913a65efe73c862c2771033bc9465e3346` adds an observer to the existing native multi-configuration
+fixture without changing its assertions. The new test requires actual
+old-epoch frames to arrive after configuration has advanced, for both one and
+four decoder threads. Six immutable plans are retained through draining; each
+frame selects its original plan using its retained epoch. The first two epochs
+have identical codec settings but different presentations, and source packet
+ordinals deliberately repeat. Applying only the last map would lose the earlier
+presentations. Exact source samples, epoch, ordinal and offset assertions from
+the existing fixture remain active.
+
+The focused native test passes (1 selected, 51 filtered), as does strict
+all-target Clippy. The source compilation path is present in the full log.
+The locked graph has 13 interface consumers and zero mismatches, with no lock
+changes from the preceding cursor control. Archive SHA256:
+`220dc9f5edd60707c0ac8d7bc79039301eb31360bcc951e9e7541cc8bd8b8ff5`.
+
+The first launch stopped at the unchanged 2 GiB disk-floor guard before any
+Cargo command. Inactive Cargo output was reclaimed; the identical frozen source
+then ran under a 3 GiB cap, two jobs and a 900-second timeout. Receipt: rc0,
+101s, peak RSS 0.78 GiB, minimum available 13858 MiB, peak load 1.53. Recorded
+wrapper and Rust processes were verified exited. These are build/test resource
+receipts, not native playback performance or a memory bound.
+
+Reproduce with `just presentation-epoch-check`. This test retains all fixture
+frames and six plans; it does not implement a public registry, map retirement,
+replay admission, late map discovery, final-duration discovery or mux retention.
+Codec draining is insufficient to retire a map if a later replay may revisit
+its source epoch. Unknown epochs and reused epochs with different maps need
+explicit admission rules before publication.
+
+The eight compiler catalogs were regenerated after correcting the `TrackInfo`
+documentation (rc0, 52s, peak RSS 0.35 GiB, minimum available 14262 MiB, peak
+load 1.24). Public API surface hashes are unchanged. All 26 site source checks
+pass (rc0, 4s, peak RSS 0.23 GiB, minimum available 13750 MiB, peak load 0.15).
+Browser interaction tests were not rerun for this documentation-only change.
+The native export recipe now copies the private map dependency and current
+media-testkit sources; a real export synchronization matches all 32 inspected
+manifest/source files. No build is inferred from that identity check.
