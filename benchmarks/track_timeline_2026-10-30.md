@@ -74,3 +74,9 @@ path bridge, not a qualified portable git graph or independent playback oracle.
 All eight compiler catalogs regenerated successfully: rc0, 29s, peak RSS
 0.32 GiB, minimum available 14427 MiB, peak load 1.18. Full receipts remain
 in the native repository's `benchmarks/mp4_timeline_2026-10-30.md`.
+
+The updated compiler catalog also passes all 26 site source checks: rc0, 4s,
+peak RSS 0.34 GiB, minimum available 13483 MiB, peak load 0.34. Native
+[PR79](https://github.com/imazen/zenavif/pull/79) subsequently qualifies the
+portable core `41b1357e` graph (38 tests, Clippy, WASM), recorded in its receipt.
+Independent playback and broader consumer qualification remain open.

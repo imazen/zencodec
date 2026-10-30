@@ -121,3 +121,18 @@ identity even when the codec settings are unchanged.
   work with Pulse and operation policy. Optional evidence remains permissive;
   an explicit preservation requirement cannot turn unknown into success.
 - Regenerate compiler catalogs and check the complete portable consumer graph.
+
+## Native adoption status
+
+[MP4 adoption PR79](https://github.com/imazen/zenavif/pull/79) now retains
+and writes full edit programs and binds exact presentation before headers.
+Its portable core `41b1357e` graph passes 38 native tests, strict all-target
+Clippy and no-default WASM. Raw-record controls cover independent clocks,
+ordered edits, empty/unedited/open distinctions and refusal before output.
+These packet fixtures do not establish independent decoded playback.
+
+The deprecated scalar getter derives the old first-media-start minus leading
+gaps projection for compatibility. It omits later edits and rates; new
+applications must inspect `timeline()`. Native writing uses the complete
+program. WebM/IVF adoption, independent playback and the ownership/policy
+gates above remain required; this review is still draft.
