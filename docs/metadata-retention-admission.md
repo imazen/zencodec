@@ -32,9 +32,9 @@ configuration and samples. No capability flag suppresses a check.
 The PNG both-fields output is also byte-identical to its CLL-only output.
 All six encodes succeeded. The witness exits nonzero because five routes do not
 establish retention. It does not accept an arbitrary encoder error as a qualified
-unsupported result. The unchanged native graph is pinned by
-`perf/jpeg-policy-validation/dependencies.lock`: JPEG 7c5a9501, PNG 7b6d1436,
-pixels f23ac753. This does not characterize newer native revisions or every
+unsupported result. The historical witness used JPEG 7c5a9501, PNG 7b6d1436 and pixels f23ac753.
+The current harness lock has since advanced to the checked implementations;
+retain the original witness receipt when comparing behavior. This does not characterize newer native revisions or every
 metadata carrier. PNG's positive case is native readback, not an independent
 third-party decoder qualification. Identical-byte negative controls do not rely
 on decoder interpretation to establish that the supplied field changed no bytes.
@@ -90,8 +90,8 @@ requirements of the retained publication owner and issue166.
 Implementation tracking: [checked encode metadata admission, issue184](https://github.com/imazen/zencodec/issues/184).
 
 Core ownership/forwarding tests do not certify native retention. Each adapter
-needs declaration-conflict controls and independent positive readback. PNG
-checked adoption remains open; the JPEG candidate evidence is recorded below.
+needs declaration-conflict controls and independent positive readback. JPEG and
+PNG checked implementations have landed; their native evidence is recorded below.
 
 An explicitly requested orientation bake may normalize the output orientation
 to identity and reconcile EXIF, provided pixels are actually transformed.
@@ -112,3 +112,13 @@ warnings. Those were repaired without changing runtime assertions; all-target
 Clippy passed on `faa3d261`. [JPEG PR252](https://github.com/imazen/zenjpeg/pull/252)
 landed as `13a8a23b`, with the qualified library and lock unchanged. See the
 [qualification receipt](../benchmarks/metadata_admission_2026-10-29.md).
+
+
+PNG [PR50](https://github.com/imazen/zenpng/pull/50) landed as `a5eeaddb`.
+The checked route retains supported CLL and exactly representable mastering
+metadata with required color signaling; unsupported or contradictory records
+refuse. Native callback pull remains unsupported, while the shared planned row
+driver is exercised. Five complete selected targets pass 85/85, strict all-target
+Clippy passes, and the repaired standalone fuzz graph compiles. This does not
+qualify the interrupted library/corpus suite or the flawed APNG parity oracle;
+[PNG issue 51](https://github.com/imazen/zenpng/issues/51) tracks those limits.

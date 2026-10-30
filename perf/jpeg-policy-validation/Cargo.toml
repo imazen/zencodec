@@ -31,7 +31,7 @@ zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "f03224661f691222
 # Paired PNG requires the unpublished 0.4 DEFLATE family.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "13a8a23bb0062fe08f5c55dd4abe36aab9acc546" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "7b6d1436db5d771fc43226c146847fc76305afde" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "a5eeaddb3c5efc92c9ff6b3e08e3124b463f0c14" }
 zencodec = { path = "../.." }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-coroutine = { path = "../../zencodec-coroutine" }

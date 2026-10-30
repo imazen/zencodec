@@ -304,16 +304,19 @@ mod retained_metadata {
     use zenpixels::PixelSlice;
 
     pub fn metadata_codecs() -> CodecSet {
-        CodecSet::new().with_send_encoder(zencodecs::JpegEncoderConfig::new())
+        CodecSet::new()
+            .with_send_encoder(zencodecs::JpegEncoderConfig::new())
+            .with_send_encoder(zencodecs::PngEncoderConfig::new())
     }
 
     pub fn with_required_metadata(
         codecs: &CodecSet,
+        format: ImageFormat,
         pixels: PixelSlice<'_>,
         metadata: Metadata,
     ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
         // ANCHOR: checked_metadata_retention
-        EncodeRequest::new(ImageFormat::Jpeg)
+        EncodeRequest::new(format)
             .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
             .encode(codecs, pixels)
         // END: checked_metadata_retention

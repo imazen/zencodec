@@ -361,8 +361,13 @@ fn checked_metadata_guide_retains_supplied_xmp_and_refuses_unsupported_hdr() {
     let codecs = guide::metadata_codecs();
     let raw = fixtures::raw();
     let expected = Metadata::none().with_xmp(b"<x xmlns='urn:example'>retained</x>".as_slice());
-    let encoded =
-        guide::with_required_metadata(&codecs, fixtures::pixels(&raw), expected.clone()).unwrap();
+    let encoded = guide::with_required_metadata(
+        &codecs,
+        zencodec::ImageFormat::Jpeg,
+        fixtures::pixels(&raw),
+        expected.clone(),
+    )
+    .unwrap();
     let info = JpegDecoderConfig::new()
         .probe_full_metadata(encoded.data())
         .unwrap();
@@ -378,9 +383,37 @@ fn checked_metadata_guide_retains_supplied_xmp_and_refuses_unsupported_hdr() {
     );
     let hdr = Metadata::none()
         .with_content_light_level(zenpixels::hdr::ContentLightLevel::new(1000, 400));
-    let error = guide::with_required_metadata(&codecs, fixtures::pixels(&raw), hdr).unwrap_err();
+    let error = guide::with_required_metadata(
+        &codecs,
+        zencodec::ImageFormat::Jpeg,
+        fixtures::pixels(&raw),
+        hdr,
+    )
+    .unwrap_err();
     assert_eq!(
         zencodec::find_cause::<UnsupportedOperation>(&error),
         Some(&UnsupportedOperation::MetadataRetention)
     );
+}
+
+#[test]
+fn checked_metadata_guide_same_caller_retains_png_xmp_and_cll() {
+    use zencodec::{ImageFormat, Metadata, decode::DecoderConfig};
+    let codecs = guide::metadata_codecs();
+    let raw = fixtures::raw();
+    let expected = Metadata::none()
+        .with_xmp(b"<x xmlns='urn:example'>retained</x>".as_slice())
+        .with_content_light_level(zenpixels::hdr::ContentLightLevel::new(1000, 400));
+    let encoded = guide::with_required_metadata(
+        &codecs,
+        ImageFormat::Png,
+        fixtures::pixels(&raw),
+        expected.clone(),
+    )
+    .unwrap();
+    assert_eq!(&encoded.data()[..8], b"\x89PNG\r\n\x1a\n");
+    let decoded = zenpng::PngDecoderConfig::new()
+        .decode(encoded.data())
+        .unwrap();
+    zencodec_testkit::check_metadata_retained(&expected, &decoded.metadata()).unwrap();
 }

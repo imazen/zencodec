@@ -200,3 +200,31 @@ missing-input returns also prevent a full corpus claim. These remain open in
 [PNG issue 51](https://github.com/imazen/zenpng/issues/51). The selected tests do
 not discharge those gates or publication requirements. Shared guide repinning
 to this landed PNG implementation remains a separate integration check.
+
+## Same consumer recipe for landed JPEG and PNG — 2026-10-30
+
+`with_required_metadata` now accepts an `ImageFormat`; its registry contains
+both native encoders. The identical checked-request path preserves XMP on
+JPEG and PNG, retains supplied CLL on PNG, and returns the typed unsupported
+retention error for JPEG CLL. The code-first card displays this compiled source.
+The PNG control decodes through its native adapter and uses the shared retained
+metadata check; it is not an independent PNG parser oracle.
+
+Native source export `e84a1e1b306c15bdf34c7c3c5a3fdcaad047d754`, archive SHA-256
+`6de9b7a05a1794688e6cfa9478bb0f9c25563a399470788e3fadfde2a2f90dca`.
+Isolated resolution changed only zenpng 7b6d1436 → a5eeaddb; the resulting tracked
+lock SHA-256 is `81d7df8be85b96fb5083961c9fa7dbc4b295ef3531797fb12745fb0fd8aa1391`.
+The graph checker found 10 interface consumers and no mismatches. Full native
+harness: 68/68 tests, zero ignored/filtered; strict all-target Clippy passed.
+Receipt: `rc=0 80s | peak-RSS 0.69GiB | min-avail 13953MiB | peak-load 1.35`.
+Supervisor and Rust processes exited; lock/source identities were reverified.
+Full log retained at `~/tmp/jpeg-png-guide-20261030/full.log`. Reproduce with
+`just jpeg-policy-setup` and `just jpeg-policy-check ARTIFACT_DIRECTORY`.
+
+Site generation and 26/26 source tests passed. Full browser checks passed:
+15 chapters, 7 entry points, exact copied examples, independent expansion,
+code-first roles/search/context, keyboard and 390/768/1440 px layouts.
+Browser receipt: `rc=0 73s | peak-RSS 0.29GiB | min-avail 12851MiB | peak-load 1.00`.
+Afterward only the retention card's tracking link changed from the generic
+policy issue to issue184; the final site generation/source gate was rerun.
+No performance or whole-codec memory guarantee follows from these receipts.

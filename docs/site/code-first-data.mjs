@@ -6,8 +6,8 @@ export const codeFlows = [
     {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
     {example:'checked_png_file',file:'docs/examples/checked_operations.rs',api:['operationRegistration','operationOutcome','encodedOutput'],external:['integration-api.json'],state:'Native JPEG/PNG cancellation and publication controls'},
   ]},
-  {id:'app-retention',role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Require metadata → retain it or refuse',evidence:'docs/metadata-retention-admission.md',note:'JPEG implements checked EXIF/XMP/ICC retention. Unsupported supplied HDR fields refuse; PNG adoption is separate. This preserves supplied fields, not unreported or opaque container data.',steps:[
-    {example:'checked_metadata_retention',file:'docs/examples/checked_operations.rs',api:['operationEncode'],state:'Register the native encoder, then state required retention once'},
+  {id:'app-retention',issue:184,role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Require metadata → retain it or refuse',evidence:'docs/metadata-retention-admission.md',note:'JPEG and PNG implement checked retention. This recipe checks XMP on both, CLL retention on PNG, and typed HDR refusal on JPEG. This preserves supplied fields, not unreported or opaque container data.',steps:[
+    {example:'checked_metadata_retention',file:'docs/examples/checked_operations.rs',api:['operationEncode'],state:'Register native encoders, choose a format, and state required retention once'},
   ]},
   {id:'app-tokio',role:'consumer',evidence:'docs/tokio-execution.md',title:'Tokio → finish first → deliberate live output',note:'Start by completing encoding before awaiting a slow destination: this releases the encoder, but retains compressed output. Live output keeps decoder and encoder state alive during writer waits. These lower-level drivers do not enforce OperationPolicy; use checked operations when requirements must be admitted. The QOI examples illustrate wiring, not JPEG memory qualification.',steps:[
     {example:'async',file:'docs/examples/journeys.rs',api:['asyncDriver','compute'],state:'Async acquisition with Inline CPU execution; Inline still blocks the polling task'},
@@ -201,7 +201,7 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
-  'app-retention': [['Require the supplied record', 'Register JPEG once, then attach metadata to the checked request. Unsupported carriers return a typed error before affected output; callers need no capability-query coordination.']],
+  'app-retention': [['Require the supplied record', 'Register JPEG and PNG once, choose a format, then attach metadata to the same checked request. Unsupported carriers return a typed error before affected output; callers need no capability-query coordination.']],
   'adapter-worker-owner': [
     ['Make cancellation automatic at the request boundary', 'Wrap the operation once. The guard exists before the future is first polled; dropping it signals the operation-local Pulse, including Tokio task abort. Success disarms it and errors retain their original type while stopping remaining work. The cancel closure must be nonblocking and must not panic. This example helper is not yet a library convenience API.'],
     ['Keep capacity charged after the client leaves', 'Move the owned semaphore permit into the blocking closure. The request wrapper automatically signals its local Pulse when Tokio drops the task. The test keeps the native-call stand-in blocked, aborts its request, and proves no second permit becomes available until the worker exits. A real server additionally retains a supervisor receipt for failures after disconnect.'],
