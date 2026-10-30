@@ -138,3 +138,25 @@ not prove that the corresponding map can be forgotten for the whole operation.
 with native harness strict Clippy. See the same qualification receipt for the
 frozen source and resource record. This does not qualify mux preservation or
 presentation-only epoch changes that the adapter has not explicitly declared.
+
+## Native compressed replay witness
+
+`just presentation-replay FILES EXPECTED_RAW RESULTS` runs the same twelve native
+AV1/MP4 cases without retaining a decoded-frame vector in the execution driver.
+Each media segment reacquires a fresh native decoder over an explicitly retained
+compressed packet snapshot. A decoded frame goes directly to the encoder; its
+projected presentation shares the same picture. Weak-reference controls require
+all decoded picture owners to disappear after native session cleanup.
+
+`Cursor::coverage_complete` permits finite presentation completion before source
+EOF. It is not evidence that metadata inspection is complete. Only this generated
+fixture's known source contract permits early decoder disposal; a production
+route must discharge pending inspection/privacy obligations separately. Open-ended
+segments still need a confirmed endpoint.
+
+All twelve replay outputs are byte-identical to the buffered route and pass the
+independent pixel/timing oracle. This is ownership and behavior evidence, not a
+whole-operation RAM bound: native references, encoder storage, compressed input
+and compressed output remain outside a decoded-frame-vector guarantee. Reopening
+network/file sources, replay admission, seek-to-keyframe and asynchronous scheduling
+remain unqualified. See [the receipt](../../benchmarks/presentation_replay_2026-10-30.md).

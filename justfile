@@ -1897,3 +1897,11 @@ presentation-baked files expected output:
     cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}"
     cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
     python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps
+
+# Replay retained compressed packets, releasing decoded driver frames per callback.
+presentation-replay files expected output:
+    cargo run --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- "{{files}}" --replay-source
+    cargo clippy --locked --manifest-path perf/av1-policy-validation/Cargo.toml --example baked_presentation -- -D warnings
+    cargo test --locked --manifest-path perf/presentation-map/Cargo.toml
+    cargo clippy --locked --manifest-path perf/presentation-map/Cargo.toml --all-targets -- -D warnings
+    python3 perf/io-validation/presentation_oracle.py "{{files}}" "{{expected}}" "{{output}}" --baked-black-gaps

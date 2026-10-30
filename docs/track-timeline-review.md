@@ -186,3 +186,21 @@ Before freezing, separate retaining edit declarations, executing them into
 output samples/timestamps, and meeting a selected playback target's constraints.
 Keep the failing controls intact. The current remux hook must not be treated as
 a certificate of arbitrary-player execution.
+
+## Compressed replay and retirement
+
+A second executing witness now reacquires each media segment from retained
+compressed packets and feeds decoded frames directly to the encoder. It avoids
+a driver-owned decoded-frame vector and proves picture cleanup after native
+owners are dropped. All twelve output files match the buffered route byte for
+byte and pass the independent playback comparison.
+
+This separates presentation completion from source completion: a finite clip
+can have complete frame coverage before EOF, while privacy or late metadata
+inspection may still require reading further. The private cursor exposes only
+coverage; it does not discharge those obligations or authorize replay storage.
+A future source adapter must bind replay admission and source identity before
+acquisition, then preserve pending inspection requirements through early clip
+completion. File/network reacquisition, keyframe seeking and operation-wide
+workspace evidence are still open. See
+[replay qualification](../benchmarks/presentation_replay_2026-10-30.md).
