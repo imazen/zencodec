@@ -212,3 +212,34 @@ fn empty_and_overflow_geometry_never_address_unused_storage() {
         Err(Error::Layout)
     ));
 }
+
+#[test]
+fn window_preserves_interleaving_and_exact_borrow() {
+    let words = [1u16, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106];
+    let plane = Plane::new(
+        bytemuck::cast_slice(&words),
+        ChannelType::U16,
+        Order::Native,
+        3,
+        2,
+        12,
+        4,
+    )
+    .unwrap();
+    let cropped = plane.window(1, 1, 2, 1).unwrap();
+    assert_eq!(
+        cropped.row(0).unwrap().sample(0).unwrap().as_ptr(),
+        bytemuck::bytes_of(&words[8]).as_ptr()
+    );
+    let codes = cropped
+        .codes(SampleEncoding::new(ChannelType::U16, 16, 0).unwrap())
+        .unwrap();
+    assert_eq!(codes.code(0, 0), Ok(5));
+    assert_eq!(codes.code(1, 0), Ok(6));
+    assert!(matches!(
+        plane.window(usize::MAX, 0, 1, 1),
+        Err(Error::Bounds)
+    ));
+    assert!(matches!(plane.window(2, 0, 2, 1), Err(Error::Bounds)));
+    assert!(plane.window(3, 2, 0, 0).unwrap().bytes.is_empty());
+}

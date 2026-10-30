@@ -64,3 +64,20 @@ decoder drop. This supports eliminating type-specific storage variants while
 keeping code interpretation separate. It does not yet justify promoting the
 private constructor, merging image/frame owners or claiming TIFF/JXL coverage.
 [Exact receipts and limits](../benchmarks/plane_model_2026-10-30.md).
+
+## Executed grid ablation
+
+The private model now separates byte/sample strides from component registration.
+It records signed rational sample centers in stored-image coordinates. A crop
+changes the reference origin independently of the first borrowed component
+sample. For centered 4:2:0, cropping luma at x=1 while retaining chroma sample zero
+moves that sample's center from +0.5 to -0.5; resetting it to +0.5 is incorrect.
+Unknown registration stays unknown. No samples are implicitly clipped or
+resampled to make the descriptor look aligned.
+
+Exact composition and bounds controls pass, and the native AV1 matrix preserves
+all cropped sample values and center coordinates at 8/10/12 bits in 4:2:0/4:4:4.
+The view retains trailing samples rather than claiming a filter-halo selection
+policy. This strengthens the case for separate storage, encoding, registration
+and presentation facts; it does not yet qualify resize/affine registration or
+unified image/frame ownership. [Grid receipts](../benchmarks/plane_grid_2026-10-30.md).

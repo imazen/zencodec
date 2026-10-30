@@ -41,3 +41,7 @@ mod coupled_route;
 mod component_storage;
 #[cfg(test)]
 mod component_storage_native;
+
+#[cfg(test)]
+#[path = "../../plane-ablation/src/grid.rs"]
+mod component_grid;

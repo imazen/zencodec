@@ -75,6 +75,34 @@ impl<'a> Plane<'a> {
             step,
         })
     }
+    /// Borrow a rectangular sample window, retaining row and component strides.
+    pub(crate) fn window(
+        self,
+        x: usize,
+        y: usize,
+        width: usize,
+        height: usize,
+    ) -> Result<Self, Error> {
+        if x.checked_add(width).is_none_or(|end| end > self.width)
+            || y.checked_add(height).is_none_or(|end| end > self.height)
+        {
+            return Err(Error::Bounds);
+        }
+        let bytes = if width == 0 || height == 0 {
+            &self.bytes[..0]
+        } else {
+            &self.bytes[y * self.stride + x * self.step..]
+        };
+        Self::new(
+            bytes,
+            self.channel,
+            self.order,
+            width,
+            height,
+            self.stride,
+            self.step,
+        )
+    }
     pub(crate) fn row(self, y: usize) -> Result<Row<'a>, Error> {
         if y >= self.height {
             return Err(Error::Bounds);

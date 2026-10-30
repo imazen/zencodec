@@ -2,4 +2,5 @@
 #![forbid(unsafe_code)]
 #![no_std]
 #![allow(dead_code)]
+mod grid;
 mod model;

@@ -69,3 +69,37 @@ odd-crop chroma phase, mixed-channel color interpretation, signed placement,
 metadata policy, mutable views, decoder mapping failure or hardware mapping.
 TIFF/JXL native integration, performance and compile-time comparisons remain
 unmeasured. See [the release ablation matrix](../../docs/frame-plane-ablation.md).
+
+## Exact component grids (second experiment)
+
+`grid.rs` keeps registration separate from the storage view. The center of
+sample `i` is `(origin + i * step) / denominator` in stored-image reference
+coordinates, with reference sample zero centered at zero. Integer and fractional
+origins are signed; spacing is positive. Fractions normalize exactly and
+unrepresentable arithmetic refuses. `Grid::Unknown` never becomes an assumed
+centered grid just because dimensions match or a crop is applied.
+
+```rust
+// Centered 4:2:0: centers are 0.5, 2.5, 4.5, ... in luma coordinates.
+let chroma = Axis::new(1, 4, 2)?;
+// Luma crop starts at x=1, while the borrowed chroma starts at sample zero.
+let cropped = chroma.rebase(0, 1)?;
+assert_eq!(cropped.center(0)?, (-1, 2)); // -0.5, not a new +0.5 origin
+```
+
+`Plane::window` borrows sample rectangles without changing their row/component
+strides or values. Grid rebasing accounts independently for the chosen first
+component sample and the change in image reference origin. It does not select
+filter halos, resample, clip off-canvas data or apply orientation. Those are
+separate operations with their own requirements.
+
+All 12 standalone model controls pass, including exact crop composition,
+negative offsets, normalization, unknown preservation and arithmetic limits.
+The native AV1 matrix additionally checks every cropped sample and exact center
+coordinate after the odd luma crop (1,3), retaining all samples from the chosen
+component origin. The native focused gate runs 13 tests; its other 52 tests are
+not rerun. Both strict Clippy gates and standalone WASM pass.
+
+This chooses a coordinate convention, not a finished public grid API. Resize
+registration, arbitrary affine grids, independently oriented auxiliary planes,
+TIFF/JXL native adoption and a renderer using these grids remain unqualified.

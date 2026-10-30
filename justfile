@@ -1913,5 +1913,5 @@ plane-ablation-check:
 
 # After preparing the documented frozen native graph, retain the existing suite.
 plane-ablation-native-check:
-    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked component_storage -- --test-threads=1
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked component_ -- --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
