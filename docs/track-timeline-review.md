@@ -136,3 +136,12 @@ gaps projection for compatibility. It omits later edits and rates; new
 applications must inspect `timeline()`. Native writing uses the complete
 program. WebM/IVF adoption, independent playback and the ownership/policy
 gates above remain required; this review is still draft.
+
+[IVF/WebM adoption PR56](https://github.com/imazen/zenextras/pull/56) closes
+silent edit loss in direct writers. Both refuse full edit programs before
+output, including an empty presentation and zero-start dwell; both controls
+fail against the original writers. All 29 container tests, strict Clippy and
+WASM pass in the isolated consumer graph. IVF reports unedited input; WebM
+retains unknown until it can establish presentation completeness. Neither
+yet promises exact presentation preservation. This distinction must remain
+visible to ordinary callers as well as strict preservation callers.

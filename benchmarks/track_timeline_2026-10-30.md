@@ -80,3 +80,21 @@ peak RSS 0.34 GiB, minimum available 13483 MiB, peak load 0.34. Native
 [PR79](https://github.com/imazen/zenavif/pull/79) subsequently qualifies the
 portable core `41b1357e` graph (38 tests, Clippy, WASM), recorded in its receipt.
 Independent playback and broader consumer qualification remain open.
+
+## Native consumer and guide adoption
+
+IVF/WebM [PR56](https://github.com/imazen/zenextras/pull/56) refuses full
+edit programs before native writer output. Both new refusal controls fail
+against original production sources; all 29 container tests, strict Clippy
+and WASM pass on the corrected candidate. IVF reports unedited input; WebM
+retains unknown. Neither yet certifies exact presentation preservation.
+
+Guide setup now pins MP4 `0070de3f` and IVF/WebM `2ebeca7d`. Frozen core
+`c35638e2d283c481f4a4530209eeeba604000553` passes the unchanged
+`just docs-site-examples` commands: 77 tests across eight integration targets
+and two binaries, zero ignored/filtered, followed by strict Clippy. The
+committed harness lock remains byte-identical. Run receipt: rc0, 97s, peak
+RSS 0.40GiB, minimum available 14145MiB, peak load 1.59, 3G/jobs2/timeout900.
+Full log: `~/tmp/container-timeline-20261030/guide.log`. This corrects the
+old pinned containers' deprecated-scalar lint failure; it does not suppress
+warnings. Transport CSV execution and browser controls were not rerun here.
