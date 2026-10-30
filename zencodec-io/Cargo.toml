@@ -9,7 +9,8 @@ categories = ["multimedia::images"]
 keywords = ["image", "codec", "streaming", "sans-io"]
 repository = "https://github.com/imazen/zencodec"
 include = ["/src/**", "/README.md", "/LICENSE*"]
-publish = false
+# Publishing remains a manual, owner-approved release action.
+publish = ["crates-io"]
 
 [features]
 default = []
