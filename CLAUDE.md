@@ -882,3 +882,12 @@ compares complete current track facts at both boundaries, with ten mutations
 in each phase. This is cross-driver consistency, not proof of native edit-list
 interpretation. New TrackInfo fields must join the private snapshot; use
 `just media-track-facts-check` and see `docs/testkit-release-audit.md`.
+
+## Packaged policy example source (2026-10-30)
+
+The package included frame_policy_probe but omitted its shared perf source.
+The original unpacked crate fails compilation; the manifest now includes the
+single required source file. Actual unpacked all-target tests, doctests and
+strict Clippy pass with the paired dependency explicitly pinned. Use
+core-package-check for registry-only qualification after dependencies publish;
+core-package-paired-check proves contents only. See benchmarks/core_package_2026-10-30.md.

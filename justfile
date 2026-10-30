@@ -1874,3 +1874,13 @@ presentation-epoch-check:
     just av1-policy-setup
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Actual packaged core, with no workspace patches: requires published dependencies.
+core-package-check output:
+    cargo package -p zencodec --allow-dirty --no-verify --exclude-lockfile
+    python3 scripts/check-core-package.py "{{output}}"
+
+# Explicit pre-publication content qualification; does not prove registry availability.
+core-package-paired-check output:
+    cargo package -p zencodec --allow-dirty --no-verify --exclude-lockfile
+    python3 scripts/check-core-package.py "{{output}}" --paired-source

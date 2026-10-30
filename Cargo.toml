@@ -37,6 +37,8 @@ include = [
     "/src/**",
     "/tests/**",
     "/examples/**",
+    # Source shared by the packaged frame_policy_probe example.
+    "/perf/frame-policy-cost.rs",
     "/README.crates.md",
     "/CHANGELOG.md",
     "/LICENSE*",
