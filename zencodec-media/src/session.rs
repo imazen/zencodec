@@ -643,9 +643,36 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
     }
 }
 
+// The pump owns these effect boundaries even when a backend ignores Pulse.
+// Native/downstream errors remain primary; successful effects are checked again.
+fn pump_boundary<T, E, D>(
+    pulse: Option<&dyn zencodec::Pulse>,
+    operation: impl FnOnce() -> Result<T, PumpError<SessionError<E>, D>>,
+) -> Result<T, PumpError<SessionError<E>, D>> {
+    if let Some(pulse) = pulse {
+        pulse
+            .check()
+            .map_err(|reason| PumpError::Upstream(SessionError::Cancelled(reason)))?;
+    }
+    let value = operation()?;
+    if let Some(pulse) = pulse {
+        pulse
+            .check()
+            .map_err(|reason| PumpError::Upstream(SessionError::Cancelled(reason)))?;
+    }
+    Ok(value)
+}
+
 /// The backpressure loop every driver writes once: send, and while the codec
 /// says `ReceivePending`, receive output into `on_output` and retry; then
 /// deliver whatever output is ready.
+///
+/// With a Pulse, the pump checks before and after successful native calls and
+/// output callbacks, independently of backend cooperation. Cancellation prevents
+/// the next effect; it cannot undo an accepted input or published output, or
+/// interrupt a native call already running. Native and callback errors remain
+/// primary when they coincide with a stop. Discard the session after a terminal
+/// pump failure; this borrowed helper cannot release its caller-owned backend.
 ///
 /// # Errors
 ///
@@ -661,23 +688,31 @@ where
     F: FnMut(Frame) -> Result<(), E2>,
 {
     loop {
-        match dec.send(packet, pulse).map_err(PumpError::Upstream)? {
+        match pump_boundary(pulse, || {
+            dec.send(packet, pulse).map_err(PumpError::Upstream)
+        })? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match dec.receive(pulse).map_err(PumpError::Upstream)? {
-                Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
-                _ => {
-                    return Err(PumpError::Upstream(SessionError::Protocol(
-                        ProtocolViolation::ReceivePendingWithoutOutput,
-                    )));
+            SendStatus::ReceivePending => {
+                match pump_boundary(pulse, || dec.receive(pulse).map_err(PumpError::Upstream))? {
+                    Receive::Ready(f) => {
+                        pump_boundary(pulse, || on_output(f).map_err(PumpError::Downstream))?
+                    }
+                    _ => {
+                        return Err(PumpError::Upstream(SessionError::Protocol(
+                            ProtocolViolation::ReceivePendingWithoutOutput,
+                        )));
+                    }
                 }
-            },
+            }
         }
     }
     // Accepted: deliver whatever output is available now, so frames never
     // sit in the codec until the next backpressure event.
     loop {
-        match dec.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
+        match pump_boundary(pulse, || dec.receive(pulse).map_err(PumpError::Upstream))? {
+            Receive::Ready(f) => {
+                pump_boundary(pulse, || on_output(f).map_err(PumpError::Downstream))?
+            }
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -704,21 +739,29 @@ where
     F: FnMut(Packet) -> Result<(), E2>,
 {
     loop {
-        match enc.send(frame, pulse).map_err(PumpError::Upstream)? {
+        match pump_boundary(pulse, || {
+            enc.send(frame, pulse).map_err(PumpError::Upstream)
+        })? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match enc.receive(pulse).map_err(PumpError::Upstream)? {
-                Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
-                _ => {
-                    return Err(PumpError::Upstream(SessionError::Protocol(
-                        ProtocolViolation::ReceivePendingWithoutOutput,
-                    )));
+            SendStatus::ReceivePending => {
+                match pump_boundary(pulse, || enc.receive(pulse).map_err(PumpError::Upstream))? {
+                    Receive::Ready(p) => {
+                        pump_boundary(pulse, || on_output(p).map_err(PumpError::Downstream))?
+                    }
+                    _ => {
+                        return Err(PumpError::Upstream(SessionError::Protocol(
+                            ProtocolViolation::ReceivePendingWithoutOutput,
+                        )));
+                    }
                 }
-            },
+            }
         }
     }
     loop {
-        match enc.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
+        match pump_boundary(pulse, || enc.receive(pulse).map_err(PumpError::Upstream))? {
+            Receive::Ready(p) => {
+                pump_boundary(pulse, || on_output(p).map_err(PumpError::Downstream))?
+            }
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -731,6 +774,8 @@ where
 
 /// End input and drain: every `Ready` goes to `on_output` until
 /// `EndOfStream`.
+/// Uses the same cancellation boundaries as [`send_packet_until_accepted`],
+/// including a check before `end_input`.
 ///
 /// # Errors
 ///
@@ -744,10 +789,12 @@ where
     D: VideoDecoder + ?Sized,
     F: FnMut(Frame) -> Result<(), E2>,
 {
-    dec.end_input().map_err(PumpError::Upstream)?;
+    pump_boundary(pulse, || dec.end_input().map_err(PumpError::Upstream))?;
     loop {
-        match dec.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
+        match pump_boundary(pulse, || dec.receive(pulse).map_err(PumpError::Upstream))? {
+            Receive::Ready(f) => {
+                pump_boundary(pulse, || on_output(f).map_err(PumpError::Downstream))?
+            }
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -772,10 +819,12 @@ where
     E: VideoEncoder + ?Sized,
     F: FnMut(Packet) -> Result<(), E2>,
 {
-    enc.end_input().map_err(PumpError::Upstream)?;
+    pump_boundary(pulse, || enc.end_input().map_err(PumpError::Upstream))?;
     loop {
-        match enc.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
+        match pump_boundary(pulse, || enc.receive(pulse).map_err(PumpError::Upstream))? {
+            Receive::Ready(p) => {
+                pump_boundary(pulse, || on_output(p).map_err(PumpError::Downstream))?
+            }
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
                 return Err(PumpError::Upstream(SessionError::Protocol(

@@ -585,7 +585,7 @@ impl VideoDecoder for BoundaryCodec {
     fn reset(&mut self) -> Result<(), SessionError<Self::Error>> {
         Ok(())
     }
-    fn info(&self) -> Option<&zencodec_media::session::VideoStreamInfo> {
+    fn stream_info(&self) -> Option<&zencodec_media::session::VideoStreamInfo> {
         None
     }
 }

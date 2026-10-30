@@ -891,3 +891,13 @@ publication assertions. Exclusive directory creation now adds a process-local
 ordinal and retries existing names, preserving all prior artifacts. The unchanged
 native suite plus a repeated-label control passes (69 tests); strict all-target
 Clippy passes. See benchmarks/guide_directories_2026-10-30.md.
+
+## Fixed shared media pump cancellation boundaries (2026-10-30)
+
+The send/drain helpers previously relied entirely on backend Pulse polling and
+could deliver output after cancellation, including from an already-cancelled
+call. They now guard native calls, end_input and downstream delivery independently,
+retaining original native/downstream failures. Tests use an ignoring backend,
+verify no next effect and preserve typed timeout causes. A running native call
+is still cooperative and prior effects cannot be rolled back. See
+benchmarks/media_pump_cancellation_2026-10-30.md.

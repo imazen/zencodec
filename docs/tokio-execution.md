@@ -420,3 +420,17 @@ If a coroutine poll returns a native error while also signalling cancellation,
 the native error remains primary. Recorded protocol violations retain their
 existing priority. Post-poll cancellation still rejects successful or pending
 work; it must not replace a concrete failure with a generic interruption.
+
+## Synchronous video pump boundaries
+
+`send_packet_until_accepted`, `send_frame_until_accepted`, `drain_decoder` and
+`drain_encoder` check the optional Pulse before and after successful native calls
+and downstream callbacks. They also check before `end_input`. This prevents the
+next publication even if a backend returns successfully after signaling a stop.
+Native or downstream errors remain primary when they coincide with cancellation.
+
+These checks cannot preempt a native call or undo accepted input/written output.
+Discard the caller-owned session after a terminal pump error; the helpers borrow
+it and cannot release it themselves. `None` remains valid and adds no per-call
+control. Shared adversarial controls and native playback evidence are recorded in
+[media pump cancellation](../benchmarks/media_pump_cancellation_2026-10-30.md).

@@ -17,6 +17,32 @@ use zencodec_media::{
     track::TrackInfo,
 };
 
+fn encode(
+    settings: zenavif::media::Av1EncodeSettings,
+    frames: &[Frame],
+) -> (
+    zencodec_media::session::CodecConfig,
+    Vec<zencodec_media::packet::Packet>,
+) {
+    use zencodec_media::session::{VideoEncoder, drain_encoder, send_frame_until_accepted};
+    let mut encoder = zenavif::media::Av1VideoEncoder::new(settings, TB).unwrap();
+    let config = encoder.output_config().unwrap().clone();
+    let mut packets = Vec::new();
+    for frame in frames {
+        send_frame_until_accepted(&mut encoder, frame, None, |packet| {
+            packets.push(packet);
+            Ok::<(), core::convert::Infallible>(())
+        })
+        .unwrap();
+    }
+    drain_encoder(&mut encoder, None, |packet| {
+        packets.push(packet);
+        Ok::<(), core::convert::Infallible>(())
+    })
+    .unwrap();
+    (config, packets)
+}
+
 fn main() {
     let output = PathBuf::from(
         std::env::args_os()
