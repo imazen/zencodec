@@ -35,3 +35,12 @@ Native JPEG adoption and qualification are pending. This does not certify
 useful progress, parallel-worker spans, report/finish-triggered cancellation,
 async lifecycle, latency or all possible thread schedules. The synchronous
 closure must join workers before return; use a timeout around the test command.
+
+The first PR185 native-JPEG CI job refused its stale standalone lock before
+compilation. Regeneration in the isolated export adds only how-far-along and
+how-far-really edges to that lock's zencodec-testkit package. The API-usability
+harness also adds critical-section 1.2.0 and the two diagnostic packages 0.1.0.
+Both graphs pass locked offline metadata resolution; no pre-existing package
+identity or codec pin changes. Native runtime CI requalification is separate.
+The historical io-validation workspace lock is an input to a recipe that
+explicitly resolves current core dependencies; it is not an unchanged-lock gate.
