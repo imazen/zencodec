@@ -1,115 +1,71 @@
-//! Native checkpoint observations; no wall-clock performance assertions.
-use how_far_along::{Outcome, Phase, PulseTree, Total};
-use how_far_really::{
-    diagnostics::{DiagnosticPulse, Kind, Options},
-    profile::{Profiler, SpanKind, StdClock},
+//! Native checkpoint observations through the reusable testkit oracle.
+//! Work/phase assertions remain codec-specific; no wall-clock thresholds.
+use how_far_really::profile::Trace;
+use zencodec::enough::StopReason;
+use zencodec_testkit::{
+    Conformance,
+    pulse::{Case, Limits, check_checkpoints},
 };
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
-use zencodec::enough::{Stop, StopReason};
 
-struct StopAt {
-    calls: Arc<AtomicUsize>,
-    at: usize,
-    reason: StopReason,
-}
-impl Stop for StopAt {
-    fn check(&self) -> Result<(), StopReason> {
-        // A one-shot stop detects codecs which poll again and accidentally
-        // replace the first interruption with a later successful check.
-        if self.calls.fetch_add(1, Ordering::SeqCst) == self.at {
-            Err(self.reason)
-        } else {
-            Ok(())
+fn retain_trace(case: Case, trace: &Trace, prefix: &str, require_reports: bool) -> Conformance {
+    let (at, reason) = match case {
+        Case::Uninterrupted => {
+            // DiagnosticPulse records each delegated stop poll exactly once.
+            // Keep the existing requirement for distinct early/middle/last checks.
+            assert!(
+                trace
+                    .spans
+                    .iter()
+                    .map(|span| span.stats.checks)
+                    .sum::<u64>()
+                    > 2
+            );
+            if require_reports {
+                assert!(
+                    trace.spans.iter().any(|span| span.stats.reports > 0),
+                    "successful native decode must report progress"
+                );
+            }
+            (usize::MAX, StopReason::Cancelled)
         }
-    }
-}
-
-fn observed_decode(bytes: &[u8], progressive: bool, at: usize, reason: StopReason) -> usize {
-    let calls = Arc::new(AtomicUsize::new(0));
-    let profiler = Profiler::new(StdClock::new(), 4096);
-    let operation = profiler.span(None, "native JPEG decode", SpanKind::Work);
-    let pulse = DiagnosticPulse::new(
-        PulseTree::new(
-            Phase::new("decode", Total::Unknown),
-            StopAt {
-                calls: calls.clone(),
-                at,
-                reason,
-            },
-        ),
-        &profiler,
-    );
-    let observer = pulse.observer();
-    let result = zenjpeg::decoder::Decoder::new().decode_with_pulse(bytes, Some(&pulse));
-    let outcome = if at == usize::MAX {
-        assert!(result.is_ok(), "{result:?}");
-        Outcome::Succeeded
-    } else {
-        assert!(
-            matches!(result.as_ref().map_err(|e| e.kind()),
-            Err(zenjpeg::decoder::ErrorKind::Cancelled(actual)) if *actual == reason),
-            "checkpoint {at}, reason {reason:?}: {result:?}"
-        );
-        Outcome::Cancelled
+        Case::StopAt { checkpoint, reason } => (checkpoint, reason),
+        _ => panic!("new checkpoint case needs an explicit artifact label"),
     };
-    // Synchronous decoder call has returned; no spawned task is inferred done.
-    profiler.operation_returned();
-    pulse.finish(outcome).unwrap();
-    operation.finish(outcome);
-    let trace = profiler.snapshot().with_progress(observer.snapshot());
-    assert_eq!(trace.active_spans, 0);
-    assert_eq!(trace.dropped_spans, 0);
-    assert_eq!(trace.dropped_incidents, 0);
-    if at != usize::MAX {
-        assert!(
-            trace
-                .spans
-                .iter()
-                .any(|s| s.stats.stop_reason == Some(reason))
-        );
-    }
     let root = std::env::var_os("JPEG_POLICY_ARTIFACTS")
         .expect("set JPEG_POLICY_ARTIFACTS to retain diagnostic traces");
     let dir = std::path::PathBuf::from(root).join(format!("pulse-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut json = String::new();
     trace.write_json(&mut json).unwrap();
-    std::fs::write(
-        dir.join(format!("progressive-{progressive}-at-{at}-{reason:?}.json")),
-        json,
-    )
-    .unwrap();
-    if at == usize::MAX {
-        assert!(
-            trace.spans.iter().any(|s| s.stats.reports > 0),
-            "successful native decode must report progress through DiagnosticPulse"
-        );
+    std::fs::write(dir.join(format!("{prefix}-at-{at}-{reason:?}.json")), json).unwrap();
+    Ok(())
+}
+
+fn limits() -> Limits {
+    Limits {
+        checkpoints: 4096,
+        trace_capacity: 4096,
     }
-    let findings = trace.diagnose(&Options::default());
-    assert!(
-        !findings.iter().any(|f| f.kind == Kind::StopOutcomeMismatch),
-        "{findings:?}"
-    );
-    calls.load(Ordering::SeqCst)
 }
 
 #[test]
 fn native_jpeg_preserves_one_shot_stops_with_diagnostics() {
     for progressive in [false, true] {
         let bytes = crate::fixtures::base(progressive);
-        let checks = observed_decode(&bytes, progressive, usize::MAX, StopReason::Cancelled);
-        assert!(
-            checks > 2,
-            "need distinct early/middle/last native checkpoints"
-        );
-        for at in 0..checks {
-            for reason in [StopReason::Cancelled, StopReason::TimedOut] {
-                observed_decode(&bytes, progressive, at, reason);
-            }
-        }
+        check_checkpoints(
+            limits(),
+            |pulse| {
+                zenjpeg::decoder::Decoder::new()
+                    .decode_with_pulse(&bytes, Some(pulse))
+                    .map(|_| ())
+            },
+            |error| match error.kind() {
+                zenjpeg::decoder::ErrorKind::Cancelled(reason) => Some(*reason),
+                _ => None,
+            },
+            |case, trace| retain_trace(case, trace, &format!("progressive-{progressive}"), true),
+        )
+        .unwrap();
     }
 }
 
@@ -122,82 +78,13 @@ fn native_jpeg_meets_shared_incremental_contract() {
     }
 }
 
-fn observed_png(bytes: &[u8], alpha: bool, at: usize, reason: StopReason) -> usize {
-    use zencodec::{
-        CodecErrorExt, Pulse,
-        decode::{Decode, DecodeJob, DecoderConfig},
-    };
-    let calls = Arc::new(AtomicUsize::new(0));
-    let profiler = Profiler::new(StdClock::new(), 4096);
-    let operation = profiler.span(None, "PNG retained job decode", SpanKind::Work);
-    let pulse = DiagnosticPulse::new(
-        PulseTree::new(
-            Phase::new("decode", Total::Unknown),
-            StopAt {
-                calls: calls.clone(),
-                at,
-                reason,
-            },
-        ),
-        &profiler,
-    );
-    let observer = pulse.observer();
-    let result = zenpng::PngDecoderConfig::new()
-        .job()
-        .with_pulse(pulse.share().unwrap())
-        .decoder(std::borrow::Cow::Borrowed(bytes), &[])
-        .and_then(|decoder| decoder.decode());
-    let outcome = if at == usize::MAX {
-        assert!(result.is_ok(), "{result:?}");
-        Outcome::Succeeded
-    } else {
-        let error = result.expect_err("native PNG must preserve the one-shot stop");
-        assert_eq!(
-            error.error_category(),
-            Some(zencodec::ErrorCategory::Stopped(reason)),
-            "{error}"
-        );
-        Outcome::Cancelled
-    };
-    profiler.operation_returned();
-    pulse.finish(outcome).unwrap();
-    operation.finish(outcome);
-    let trace = profiler.snapshot().with_progress(observer.snapshot());
-    assert_eq!(trace.active_spans, 0);
-    assert_eq!(trace.dropped_spans, 0);
-    assert_eq!(trace.dropped_incidents, 0);
-    if at != usize::MAX {
-        assert!(
-            trace
-                .spans
-                .iter()
-                .any(|s| s.stats.stop_reason == Some(reason))
-        );
-    }
-    // Retain report counts even when zero: absence is evidence, not a skip or
-    // a false claim that a cancellation-capable path reports progress.
-    let root = std::env::var_os("JPEG_POLICY_ARTIFACTS")
-        .expect("set JPEG_POLICY_ARTIFACTS to retain diagnostic traces");
-    let dir = std::path::PathBuf::from(root).join(format!("pulse-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let mut json = String::new();
-    trace.write_json(&mut json).unwrap();
-    std::fs::write(
-        dir.join(format!("png-alpha-{alpha}-at-{at}-{reason:?}.json")),
-        json,
-    )
-    .unwrap();
-    let findings = trace.diagnose(&Options::default());
-    assert!(
-        !findings.iter().any(|f| f.kind == Kind::StopOutcomeMismatch),
-        "{findings:?}"
-    );
-    calls.load(Ordering::SeqCst)
-}
-
 #[test]
 fn native_png_retains_pulse_and_meets_incremental_contract() {
-    use zencodec::encode::EncoderConfig;
+    use zencodec::{
+        CodecErrorExt,
+        decode::{Decode, DecodeJob, DecoderConfig},
+        encode::EncoderConfig,
+    };
     for alpha in [false, true] {
         let pixels = if alpha {
             zencodec_testkit::TestImage::rgba8_gradient(97, 65)
@@ -208,17 +95,27 @@ fn native_png_retains_pulse_and_meets_incremental_contract() {
             .encode(pixels.as_slice())
             .unwrap();
         let bytes = encoded.data();
-        // At this pin the standard incremental API uses WholeFileIncremental;
-        // this does not qualify PNG's separate controlled row-streaming route.
+        // WholeFileIncremental here; controlled row streaming is qualified separately.
         zencodec_testkit::check_incremental_contract(zenpng::PngDecoderConfig::new(), bytes)
             .unwrap();
-        let checks = observed_png(bytes, alpha, usize::MAX, StopReason::Cancelled);
-        assert!(checks > 2);
-        for at in 0..checks {
-            for reason in [StopReason::Cancelled, StopReason::TimedOut] {
-                observed_png(bytes, alpha, at, reason);
-            }
-        }
+        check_checkpoints(
+            limits(),
+            |pulse| {
+                zenpng::PngDecoderConfig::new()
+                    .job()
+                    .with_pulse(pulse.share().unwrap())
+                    .decoder(std::borrow::Cow::Borrowed(bytes), &[])
+                    .and_then(|decoder| decoder.decode())
+                    .map(|_| ())
+            },
+            |error| match error.error_category() {
+                Some(zencodec::ErrorCategory::Stopped(reason)) => Some(reason),
+                _ => None,
+            },
+            // Retain zero report counts; this route does not promise useful progress.
+            |case, trace| retain_trace(case, trace, &format!("png-alpha-{alpha}"), false),
+        )
+        .unwrap();
     }
 }
 

@@ -63,3 +63,8 @@ that boundary still needed source review and lock alignment. Use metadata from
 the actual selected features/target and retain compilation/runtime gates.
 Accepting a lock is not proof that a fresh unlocked resolution chooses the same
 compatible flexible edges. No pre-existing package versions were upgraded.
+
+The first graph-preflight CI wiring failed before invoking the checker because
+that native JPEG job does not install `just` (rc127). The workflow now invokes
+the same Python controls, locked Cargo metadata and Python checker directly;
+the local convenience recipes remain. No assertion or graph gate was removed.
