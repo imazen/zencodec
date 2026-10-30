@@ -780,3 +780,120 @@ fn presentation_maps_follow_owned_sessions_when_native_provenance_is_identical()
         assert_eq!(pool.live(), 0);
     }
 }
+
+#[test]
+fn presentation_maps_follow_pump_progress_through_clipping_and_terminal_failure() {
+    use crate::presentation_driver::{Pass, ProjectionError};
+    use presentation_map_experiment::{
+        Content, Edit, Error as MapError, Extent, Plan, retained::PlanPool,
+    };
+    use zencodec::time::FrameDuration;
+    use zencodec_media::session::{PumpError, SessionError};
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let original: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &original);
+    for case in 0..5 {
+        let mut pool = PlanPool::new(1);
+        let owner = pool
+            .prepare(|| {
+                Plan::new(
+                    Timestamp::new(1000, TB),
+                    &[Edit {
+                        extent: Extent::Finite(
+                            FrameDuration::new(if case == 2 { 120 } else { 80 }, 1000).unwrap(),
+                        ),
+                        content: Content::Media {
+                            start: Timestamp::new(40, TB),
+                            rate_num: 1,
+                            rate_den: 1,
+                        },
+                    }],
+                )
+            })
+            .unwrap();
+        let mut settings = rav1d_safe::Settings::default();
+        settings.threads = 1;
+        let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+        decoder.configure(&config, None).unwrap();
+        let mut pass = Pass::new(decoder, owner.cursor(0).unwrap(), TB);
+        drop(owner);
+        let stop = StopAt {
+            stopped: AtomicBool::new(case == 3),
+            reason: StopReason::TimedOut,
+        };
+        let control = zencodec::how_far::StopOnly::borrowed(&stop);
+        let pulse = if case == 0 || case == 2 {
+            None
+        } else {
+            Some(&control as &dyn zencodec::Pulse)
+        };
+        let mut actual = Vec::new();
+        let mut output = |frame| -> Result<(), std::io::Error> {
+            if case == 1 {
+                stop.stopped.store(true, Ordering::SeqCst);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "output witness",
+                ));
+            }
+            actual.push(frame);
+            if case == 4 {
+                stop.stopped.store(true, Ordering::SeqCst);
+            }
+            Ok(())
+        };
+        let mut result = Ok(());
+        for packet in &packets {
+            result = pass.send(&mut packet.clone(), pulse, &mut output);
+            if result.is_err() {
+                break;
+            }
+        }
+        let result = result.and_then(|()| pass.finish(pulse, &mut output).map(|_| ()));
+        match case {
+            0 => {
+                result.unwrap();
+                assert_eq!(actual.len(), 2);
+                for (i, frame) in actual.iter().enumerate() {
+                    assert_eq!(samples(frame), samples(&original[i + 1]));
+                    assert_eq!(frame.timing().pts.unwrap().ticks(), 1000 + i as i64 * 40);
+                    assert_eq!(frame.timing().duration_ticks, Some(40));
+                }
+            }
+            1 => {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    zencodec::find_cause::<std::io::Error>(&error)
+                        .unwrap()
+                        .kind(),
+                    std::io::ErrorKind::BrokenPipe
+                );
+                assert!(actual.is_empty());
+            }
+            2 => assert!(matches!(
+                result,
+                Err(PumpError::Downstream(ProjectionError::Mapping(
+                    MapError::MissingCoverage
+                )))
+            )),
+            _ => {
+                assert!(matches!(
+                    result,
+                    Err(PumpError::Upstream(SessionError::Cancelled(
+                        StopReason::TimedOut
+                    )))
+                ));
+                assert_eq!(actual.len(), usize::from(case == 4));
+            }
+        }
+        assert_eq!(
+            pool.live(),
+            0,
+            "driver must release its owner on completion or failure"
+        );
+        assert!(matches!(
+            pass.finish(None, |_| Ok::<_, std::io::Error>(())),
+            Err(PumpError::Upstream(SessionError::Finished))
+        ));
+    }
+}

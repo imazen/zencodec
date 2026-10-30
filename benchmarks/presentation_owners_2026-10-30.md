@@ -72,3 +72,40 @@ native harness compilation from the export. Wrapper rc0, 10 seconds, peak RSS
 0.39 GiB, minimum available 13510 MiB, peak load 0.51. Full log:
 /home/lilith/tmp/zencodec-map-owner-20261030/sessions-fixed.log on r7900x.
 `just presentation-epoch-check` now runs both native owner controls.
+
+
+## Owned presentation pump
+
+Source 3f4e23e028bafc46811d8d850f9520b09c7a7033 adds the reusable private Pass<D>
+over the existing native send/drain pumps. Projection occurs inside their output
+callback, so dropping a frame does not break the native ReceivePending progress
+contract. State is taken before pumping and restored only after successful send;
+error/unwind and finish drop the decoder/cursor. No driver frame queue exists.
+The projection preserves frame presentation flags and packet provenance while
+changing only timestamps/duration and retaining the original picture owner.
+
+The new native test exercises five cases: successful clipping of the first frame,
+output BrokenPipe coincident with timeout, incomplete finite coverage,
+pre-cancellation, and timeout after the first output. Success checks exact native
+samples and presentation times. Errors retain typed causes; post-publication
+cancellation delivers exactly one frame, pre-cancellation none. Every case
+releases the map slot and refuses subsequent finish with Finished. Coverage
+failure can occur after earlier frames were delivered; no rollback is promised.
+
+Initial source 66575711 failed compilation due to the test's missing SessionError
+import; no native test ran. The corrected source adds that import and the two
+cancellation controls. Failed log: /home/lilith/tmp/zencodec-map-owner-20261030/driver.log.
+
+Isolated corrected run: 12 map tests and three selected native owner/driver tests
+pass, with 51 other native tests filtered. Both strict all-target Clippy gates
+pass. Native harness explicitly rebuilt from the export; committed locks
+unchanged. Wrapper rc0, 10 seconds, peak RSS 0.39 GiB, minimum available 13473 MiB,
+peak load 0.65. Full log: /home/lilith/tmp/zencodec-map-owner-20261030/driver-fixed.log
+on r7900x. Reproduction remains `just presentation-epoch-check`.
+
+This is single-segment execution, not the complete presentation API. The caller
+supplies an already admitted/configured decoder. The driver drains to native EOF
+rather than using finite coverage as an early-completion signal. Source metadata
+obligations, whole-operation workspace, multi-segment acquisition and gap policy
+are not inferred from these results. Native calls and blocking downstream
+callbacks still require their own cooperative interruption.

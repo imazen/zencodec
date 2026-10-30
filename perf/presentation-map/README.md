@@ -254,3 +254,38 @@ explicit, qualified native association protocol. New-session replay must start
 from suitable source state and satisfy source/native resource admission. The
 control retains both native contexts and output frames; it makes no low-memory
 claim. See the [owner receipt](../../benchmarks/presentation_owners_2026-10-30.md).
+
+
+### Drive native progress, then filter presentation
+
+The reusable private `av1-policy-validation/src/presentation_driver.rs` owns a
+native decoder and RetainedCursor for one segment:
+
+```rust,ignore
+let mut pass = Pass::new(admitted_configured_decoder, map.cursor(segment)?, output_clock);
+for mut packet in source_packets {
+    pass.send(&mut packet, pulse, |frame| consume(frame))?;
+}
+pass.finish(pulse, |frame| consume(frame))?;
+```
+
+It uses the existing native send/drain pumps, projecting frames inside their
+output callback. This is deliberately not a VideoDecoder wrapper: discarding
+frames for a clip must not turn a native ReceivePending promise into a caller
+receive that produces no output. Native progress and visible presentation output
+are distinct. No driver frame queue or pixel copy is introduced.
+
+Every operation temporarily takes ownership of its native decoder and cursor.
+Errors and unwinding drop both and leave the pass terminal. Completion also
+retires them. Original native and downstream errors retain their typed causes;
+projection failure is typed, and Pulse is checked by the existing pumps before
+and after raw-frame callbacks, including skipped frames. Completion requires
+native EOF and cursor coverage. Earlier delivered frames are not rolled back if
+later coverage fails. Metadata completeness still requires separate evidence.
+
+Native controls cover an initial skipped frame, exact clipped pixels/timing,
+incomplete coverage, typed BrokenPipe winning over simultaneous timeout,
+pre-cancellation, cancellation after one publication, owner release and terminal
+re-entry. Admission of decoder construction remains outside this constructor;
+full multi-segment orchestration, gap policy and final interpretation policy
+remain integration work. The driver is private and is not a released API.

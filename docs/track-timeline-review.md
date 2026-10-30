@@ -296,3 +296,12 @@ avoids a codec-wide presentation-ID migration for that route. The map cannot be
 replaced while that session has pending output. Mid-session presentation updates
 and native/source resource admission remain separate contracts; see the same
 owner receipt for the interleaving and both native thread configurations.
+
+
+The private single-segment Pass now composes owned maps with the existing native
+send/drain pumps. Filtering happens after native progress is observed, preserving
+the ReceivePending promise even when clipping drops every currently available
+frame. Native clipping, terminal cleanup, coverage refusal and cancellation
+controls pass; the [driver receipt](../benchmarks/presentation_owners_2026-10-30.md#owned-presentation-pump)
+records exact scope. This remains a driver candidate, not a new codec trait or
+proof of metadata completion. Multi-segment acquisition and final policy remain.
