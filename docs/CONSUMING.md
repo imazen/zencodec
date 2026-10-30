@@ -281,7 +281,8 @@ Policies use three-valued logic (`None` / `Some(true)` / `Some(false)`). `None` 
 
 ## Metadata Roundtrip
 
-Decode captures metadata. Pass it through to encode for lossless metadata roundtrip:
+Pass the metadata reported by decode to encode with an explicit filtering policy.
+This best-effort path does not guarantee complete discovery or output retention:
 
 ```rust
 // Decode
@@ -289,7 +290,8 @@ let dec_output = decoder.decode()?;
 let metadata = dec_output.metadata(); // returns Metadata (Arc-backed, cheap clone)
 
 // Re-encode, choosing a retention policy explicitly.
-// PreserveExact = verbatim roundtrip; MetadataPolicy::Web = strip camera/GPS,
+// PreserveExact keeps the supplied record; unsupported fields may be omitted.
+// MetadataPolicy::Web = strip camera/GPS,
 // keep orientation + rights (privacy-safe).
 let job = enc_config.job()
     .with_metadata_policy(metadata, MetadataPolicy::PreserveExact);
@@ -297,7 +299,7 @@ let encoder = job.encoder()?;
 let output = encoder.encode(dec_output.pixels())?;
 ```
 
-`Metadata` carries ICC profile, EXIF, XMP, CICP, orientation, and HDR metadata (content light level, mastering display). Retention is an explicit choice at embed time: `with_metadata_policy(meta, policy)` filters the record before the codec sees it. The plain `with_metadata(meta)` still works but is `#[deprecated]` — the compiler warns when no policy is chosen, so metadata can't propagate silently. The encoder then embeds what its format supports.
+`Metadata` carries ICC profile, EXIF, XMP, CICP, orientation, and HDR metadata (content light level, mastering display). Retention is an explicit choice at embed time: `with_metadata_policy(meta, policy)` filters the record before the codec sees it. The plain `with_metadata(meta)` still works but is `#[deprecated]` — the compiler warns when no policy is chosen, so metadata can't propagate silently. The encoder then embeds what its format supports. See [checked metadata admission](metadata-retention-admission.md) for measured omissions and the proposed replacement.
 
 Color management is not the codec's job. Decoders return native pixels with ICC/CICP metadata attached. Encoders accept pixels as-is and embed the provided metadata. If you need color space conversion, handle it between decode and encode using a CMS.
 

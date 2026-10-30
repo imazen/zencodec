@@ -241,10 +241,11 @@ impl DecodePolicy {
 ///   whole-channel only. Best-effort: the `with_policy` default is a no-op, so a
 ///   codec that does not implement it silently ignores this gate.
 ///
-/// Field-level metadata *retention* is a separate, reliable concern: choose a
+/// Field-level metadata filtering is separate: choose a
 /// [`MetadataPolicy`](crate::MetadataPolicy) and apply it at
 /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy),
-/// which filters the record *before* it reaches the codec. The coarse `embed_*`
+/// which filters the record *before* it reaches the codec. Filtering does not
+/// guarantee that every retained field is embedded. The coarse `embed_*`
 /// gates here are not a substitute — for privacy, set a policy.
 ///
 /// # Example
@@ -301,7 +302,7 @@ impl EncodePolicy {
     }
 
     /// Coarse, best-effort gate asking the codec to embed no metadata. For
-    /// *reliable* retention choose a [`MetadataPolicy`](crate::MetadataPolicy) at
+    /// explicit record filtering choose a [`MetadataPolicy`](crate::MetadataPolicy) at
     /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy);
     /// these `embed_*` flags only reach codecs that implement `with_policy`.
     pub const fn strip_all() -> Self {
@@ -315,7 +316,7 @@ impl EncodePolicy {
     }
 
     /// Coarse, best-effort gate asking the codec to embed all metadata (see
-    /// [`strip_all`](Self::strip_all) for the reliable path).
+    /// [`strip_all`](Self::strip_all) for explicit record filtering).
     pub const fn preserve_all() -> Self {
         Self {
             color: None,

@@ -47,3 +47,9 @@ existing artifact files are never overwritten. Logs and runners remain at
 `~/tmp/metadata-retention-20261029/`. No compiled executable was archived.
 
 [Contract and proposed replacement](../docs/metadata-retention-admission.md).
+
+Follow-through corrected the remaining record-filtering/output-retention wording
+in EncodePolicy and the consumer guide. Eight regenerated catalog fingerprints
+match local source; strict Rustdoc and all 26 site source checks pass. The
+serialized ARM64 gate returned rc0 in 88s, peak RSS 0.35 GiB, minimum available
+14218 MiB, peak load 1.39. No runtime API or behavioral assertion changed.

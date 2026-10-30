@@ -80,3 +80,5 @@ fix this contract.
 This design does not certify opaque ICC/XML as PII-free, preserve unreported
 container metadata, or solve general deferred obligations. Those remain scoped
 requirements of the retained publication owner and issue166.
+
+Implementation tracking: [checked encode metadata admission, issue184](https://github.com/imazen/zencodec/issues/184).
