@@ -3,10 +3,11 @@
 //! Exported through `crate::frame`. Mapping borrows the backend owner; neither
 //! this module nor its owners depend on media sessions or I/O drivers.
 
-use crate::frame::{FrameInterpretation, FrameTiming, SampleEncoding};
+use crate::frame::{FrameInterpretation, FrameTiming};
 use alloc::{boxed::Box, sync::Arc};
 use core::fmt;
 use zenpixels::ChannelType;
+use zenpixels::sample::SampleEncoding;
 
 /// Facts about one presentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -131,7 +132,7 @@ impl<'a> PlaneView<'a> {
         if samples.storage() != encoding.storage() {
             return Err(PlaneError::StorageMismatch);
         }
-        let bps = encoding.bytes_per_sample();
+        let bps = encoding.storage().byte_size();
         if !stride_bytes.is_multiple_of(bps) {
             return Err(PlaneError::MisalignedStride);
         }
@@ -169,7 +170,7 @@ impl<'a> PlaneView<'a> {
 
     /// Distance between rows, in bytes.
     pub fn stride_bytes(&self) -> usize {
-        self.stride_samples * self.encoding.bytes_per_sample()
+        self.stride_samples * self.encoding.storage().byte_size()
     }
 
     /// The sample encoding.
@@ -368,7 +369,14 @@ mod tests {
     #[test]
     fn strided_span_borrows_raw_storage_without_trailing_space() {
         let bytes = [1, 2, 231, 232, 3, 4, 233, 234];
-        let plane = PlaneView::new(PlaneSamples::U8(&bytes), 2, 2, 4, SampleEncoding::U8).unwrap();
+        let plane = PlaneView::new(
+            PlaneSamples::U8(&bytes),
+            2,
+            2,
+            4,
+            SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+        )
+        .unwrap();
         let PlaneSamples::U8(span) = plane.as_strided_samples() else {
             panic!("byte storage changed")
         };
@@ -397,7 +405,7 @@ mod tests {
                 width,
                 height,
                 stride,
-                SampleEncoding::U8,
+                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
             )
             .unwrap();
             assert!(plane.as_strided_samples().is_empty());
@@ -411,7 +419,7 @@ mod tests {
             0,
             usize::MAX,
             usize::MAX,
-            SampleEncoding::U8,
+            SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         )
         .unwrap();
         for y in [0, 1, 2, usize::MAX - 1] {

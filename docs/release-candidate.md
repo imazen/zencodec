@@ -4,6 +4,15 @@ The immediate deliverable is a reviewable zencodec release candidate. The larger
 codec-agnostic image/video/transcoding goal remains open. Do not label the entire
 codec family or every native mode qualified from this candidate's evidence.
 
+## Frame/plane release hold (2026-10-30)
+
+The owner requires frame/plane interchange structures and signatures to be settled
+before publication. Earlier package qualification below is historical evidence,
+not authorization to publish around these gaps. The first ablation removes the
+duplicate sample encoding; mixed-depth planes, floating-point/native component
+views, component strides and the image/frame ownership split remain open.
+See [the ablation matrix](frame-plane-ablation.md) and [sample migration](precision-admission.md#shared-sample-description-migration-boundary-2026-10-30).
+
 ## Core publication gate (2026-10-30)
 
 Core main has passed default workspace all-target tests/doctests/Clippy and

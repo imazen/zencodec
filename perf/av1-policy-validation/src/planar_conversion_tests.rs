@@ -6,11 +6,12 @@ use std::sync::Arc;
 use zenavif::{media::Av1VideoDecoder, yuv_convert::*};
 use zencodec::frame::{
     ChromaSiting, Crop, Frame, FrameInterpretation, FrameTiming, PlaneRole, PlaneSamples,
-    PlaneView, Presentation, SampleEncoding, Subsampling,
+    PlaneView, Presentation, Subsampling,
 };
 use zencodec::how_far::NoPulse;
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zencodec_media::session::VideoDecoder;
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{ChannelType, Cicp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -200,7 +201,7 @@ fn convert(
             let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v) else {
                 return Err(Refusal::Mapping);
             };
-            let [ys, us, vs] = planes.each_ref().map(|plane| plane.stride_bytes() / encoding.bytes_per_sample());
+            let [ys, us, vs] = planes.each_ref().map(|plane| plane.stride_bytes() / encoding.storage().byte_size());
             let mut scratch = Vec::new();
             scratch.try_reserve_exact(scratch_len).map_err(|_| Refusal::Allocation)?;
             scratch.resize(scratch_len, Default::default());
@@ -461,7 +462,9 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
         reinterpret(&centered, |i| {
             i.encoding = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap()
         }),
-        reinterpret(&centered, |i| i.encoding = SampleEncoding::U8),
+        reinterpret(&centered, |i| {
+            i.encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+        }),
     ] {
         let expected = if frame.interpretation().encoding.bit_shift() == 6 {
             Refusal::Encoding

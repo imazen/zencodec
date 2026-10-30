@@ -25,6 +25,7 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
+use zenpixels::sample::SampleEncoding;
 
 use zencodec::decode::{
     AnimationFrame, AnimationFrameDecoder, DecodeRowSink, OutputInfo, SinkError,
@@ -38,7 +39,7 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
     ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane,
-    OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+    OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
 };
 use crate::session::{
     CodecConfig, ProtocolViolation, PumpError, SessionError, VideoDecoder, VideoEncoder,
@@ -114,7 +115,9 @@ impl RenderFrame for Gray8 {
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
-        if interp.subsampling != Subsampling::Mono || interp.encoding != SampleEncoding::U8 {
+        if interp.subsampling != Subsampling::Mono
+            || interp.encoding != SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+        {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
         let mapped = frame.map()?;
@@ -158,7 +161,7 @@ impl CaptureFrame for Gray8 {
                     FrameGeometry::full(w, h),
                     Subsampling::Mono,
                     ChromaSiting::Unknown,
-                    SampleEncoding::U8,
+                    SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
                     vec![PlaneRole::Luma],
                 ));
                 self.interpretation = Some(Arc::clone(&i));
@@ -179,7 +182,7 @@ impl CaptureFrame for Gray8 {
                 height: hu,
                 stride_bytes: wu,
             }],
-            SampleEncoding::U8,
+            SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         )?;
         Ok(Frame::new(
             Arc::new(planes),

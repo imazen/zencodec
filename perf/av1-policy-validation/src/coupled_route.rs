@@ -13,7 +13,7 @@ use zencodec::{
     encode::Fidelity,
     frame::{
         ChromaSiting, ColorClaim, Frame, FrameGeometry, FrameInterpretation, PlaneRole,
-        PlaneSamples, SampleEncoding, Subsampling,
+        PlaneSamples, Subsampling,
     },
     operation::{
         Decision, DecisionCode, FrameConversionOffer, FrameFacts, OperationPolicy, PolicyFailure,
@@ -22,6 +22,7 @@ use zencodec::{
     storage::StorageBudget,
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{
     ChannelType, Cicp, PixelSliceMut,
     sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
@@ -89,11 +90,7 @@ pub(crate) fn push(
         return Err(std::io::Error::other("unqualified conversion interpretation").into());
     }
     let mapping = input.map()?;
-    let encoding = zenpixels::sample::SampleEncoding::new(
-        info.encoding.storage(),
-        info.encoding.code_bits(),
-        info.encoding.bit_shift(),
-    )?;
+    let encoding = info.encoding;
     let view = |i| -> Result<CodePlane<'_>, Cause> {
         let p = mapping
             .plane(i)

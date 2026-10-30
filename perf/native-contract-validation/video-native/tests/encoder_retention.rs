@@ -10,10 +10,11 @@ use zencodec_io::storage::StorageBudget;
 use zencodec_media::{
     frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, Presentation, SampleEncoding, Subsampling,
+        PlaneRole, Presentation, Subsampling,
     },
     session::{Receive, SendStatus, VideoEncoder},
 };
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{ChannelType, Cicp};
 
 const TB: TimeBase = TimeBase::MILLIS;

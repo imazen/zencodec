@@ -182,8 +182,6 @@ pub use zencodec_media::frame::PlaneRole
 pub use zencodec_media::frame::PlaneSamples
 pub use zencodec_media::frame::PlaneView
 pub use zencodec_media::frame::Presentation
-pub use zencodec_media::frame::SampleEncoding
-pub use zencodec_media::frame::SampleEncodingError
 pub use zencodec_media::frame::Subsampling
 pub enum zencodec_media::frame::PlaneData
 pub zencodec_media::frame::PlaneData::AccountedU16(zencodec::storage::SharedStorage<u16>)
@@ -197,7 +195,7 @@ pub zencodec_media::frame::OwnedPlane::stride_bytes: usize
 pub zencodec_media::frame::OwnedPlane::width: usize
 pub struct zencodec_media::frame::OwnedPlanes
 impl zencodec_media::frame::OwnedPlanes
-pub fn zencodec_media::frame::OwnedPlanes::new(planes: alloc::vec::Vec<zencodec_media::frame::OwnedPlane>, encoding: zencodec::frame::SampleEncoding) -> core::result::Result<Self, zencodec::frame_storage::PlaneError>
+pub fn zencodec_media::frame::OwnedPlanes::new(planes: alloc::vec::Vec<zencodec_media::frame::OwnedPlane>, encoding: zenpixels::sample::SampleEncoding) -> core::result::Result<Self, zencodec::frame_storage::PlaneError>
 impl zencodec::frame_storage::Picture for zencodec_media::frame::OwnedPlanes
 pub fn zencodec_media::frame::OwnedPlanes::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame_storage::MappedPlanes + '_)>, zencodec::frame_storage::MapError>
 pub mod zencodec_media::limits

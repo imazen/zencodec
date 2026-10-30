@@ -130,6 +130,10 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Frame ablation candidate: remove core/media `SampleEncoding` and its error;
+  signatures now use `zenpixels::sample::SampleEncoding` directly. Import from
+  zenpixels; use `storage().byte_size()` for word size.
+
 - Borrowed operation controls use `Option<&dyn Pulse>` across core, I/O,
   coroutine, media, rendering and metadata services. `None` adds no per-call
   control and never disables retained job controls or mandatory admission.

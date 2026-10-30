@@ -8,6 +8,7 @@ use zencodec_media::{
     frame::Subsampling,
     session::CodecConfig,
 };
+use zenpixels::sample::SampleEncoding;
 
 fn root() -> PathBuf {
     let root = PathBuf::from(

@@ -2,8 +2,7 @@
 use std::hint::black_box;
 use zencodec::{
     frame::{
-        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, SampleEncoding,
-        Subsampling,
+        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Subsampling,
     },
     operation::{
         DecisionContext, DecisionRecord, OperationReport, PolicySet, PublicationOffer, Selection,
@@ -11,6 +10,7 @@ use zencodec::{
     },
     time::{TimeBase, Timestamp},
 };
+use zenpixels::sample::SampleEncoding;
 
 pub struct Workload {
     interpretation: FrameInterpretation,

@@ -206,7 +206,7 @@ impl<'a> Prepared<'a> {
         let (output, descriptor, admitted_bytes) = match target {
             Target::Rgb16 => {
                 let scratch_bytes = (geometry.coded_width as usize)
-                    .checked_mul(3 * info.encoding.bytes_per_sample())
+                    .checked_mul(3 * info.encoding.storage().byte_size())
                     .ok_or_else(overflow)?;
                 let destination = pool
                     .prepare_filled(count, [0xdead; 3])
@@ -233,12 +233,7 @@ impl<'a> Prepared<'a> {
                     .prepare_filled(count, [f32::from_bits(0x7fc1_2345); 3])
                     .map_err(|e| failed(Stage::Prepare, &report, e))?;
                 let bytes = destination.reserved_bytes();
-                let encoding = zenpixels::sample::SampleEncoding::new(
-                    info.encoding.storage(),
-                    info.encoding.code_bits(),
-                    info.encoding.bit_shift(),
-                )
-                .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let encoding = info.encoding;
                 let view = |p: PlaneView<'a>| {
                     match p.as_strided_samples() {
                         PlaneSamples::U8(s) => {
@@ -354,7 +349,7 @@ impl<'a> Prepared<'a> {
                 let [y, u, v] = self.planes.each_ref().map(|p| p.as_strided_samples());
                 let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v)
                     else { return Err(failed(Stage::Execute, &report, Refusal::Mapping)); };
-                let [ys, us, vs] = self.planes.each_ref().map(|p| p.stride_bytes() / info.encoding.bytes_per_sample());
+                let [ys, us, vs] = self.planes.each_ref().map(|p| p.stride_bytes() / info.encoding.storage().byte_size());
                 let scratch = bytemuck::cast_slice_mut(scratch_bytes);
                 for row in 0..crop.height as usize {
                     check(stop, Stage::Execute, &report)?;

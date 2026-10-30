@@ -7,112 +7,11 @@
 pub use crate::frame_storage::{
     Frame, MapError, MappedPlanes, Picture, PlaneError, PlaneSamples, PlaneView, Presentation,
 };
+use zenpixels::sample::SampleEncoding;
 
 use crate::time::Timestamp;
 use alloc::vec::Vec;
-use core::fmt;
-use zenpixels::{ChannelType, Cicp};
-
-/// Storage word, significant code bits and their placement within the word.
-///
-/// Compatibility encoding from the existing unpublished media API. It mirrors
-/// `zenpixels::sample::SampleEncoding`; removing this duplicate requires the
-/// coordinated media migration to that type and its published dependency floor.
-/// A 10-bit sample in a
-/// 16-bit word is `new(U16, 10, 0)` (LSB-aligned) or `new(U16, 10, 6)`
-/// (MSB-aligned); it is never relabelled as a full-range 16-bit value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SampleEncoding {
-    storage: ChannelType,
-    code_bits: u8,
-    bit_shift: u8,
-}
-
-/// An impossible [`SampleEncoding`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum SampleEncodingError {
-    /// Only 8- and 16-bit unsigned words are supported.
-    UnsupportedStorage,
-    /// Code bits are zero or wider than the word.
-    InvalidBitDepth,
-    /// The code does not fit the word at that shift.
-    InvalidBitShift,
-}
-
-impl fmt::Display for SampleEncodingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::UnsupportedStorage => "sample storage must be an 8- or 16-bit word",
-            Self::InvalidBitDepth => "code bits must be between 1 and the word width",
-            Self::InvalidBitShift => "code bits do not fit the word at that shift",
-        })
-    }
-}
-
-impl core::error::Error for SampleEncodingError {}
-
-impl SampleEncoding {
-    /// Eight-bit codes in 8-bit words.
-    pub const U8: Self = Self {
-        storage: ChannelType::U8,
-        code_bits: 8,
-        bit_shift: 0,
-    };
-
-    /// `code_bits` significant bits, shifted left by `bit_shift`, in a
-    /// `storage` word.
-    ///
-    /// # Errors
-    ///
-    /// A [`SampleEncodingError`] for an unsupported word or a code that does
-    /// not fit.
-    pub const fn new(
-        storage: ChannelType,
-        code_bits: u8,
-        bit_shift: u8,
-    ) -> Result<Self, SampleEncodingError> {
-        let width = match storage {
-            ChannelType::U8 => 8,
-            ChannelType::U16 => 16,
-            _ => return Err(SampleEncodingError::UnsupportedStorage),
-        };
-        if code_bits == 0 || code_bits > width {
-            return Err(SampleEncodingError::InvalidBitDepth);
-        }
-        if bit_shift > width - code_bits {
-            return Err(SampleEncodingError::InvalidBitShift);
-        }
-        Ok(Self {
-            storage,
-            code_bits,
-            bit_shift,
-        })
-    }
-
-    /// The storage word.
-    pub const fn storage(self) -> ChannelType {
-        self.storage
-    }
-
-    /// Significant bits per code.
-    pub const fn code_bits(self) -> u8 {
-        self.code_bits
-    }
-
-    /// Left shift of the code within the word.
-    pub const fn bit_shift(self) -> u8 {
-        self.bit_shift
-    }
-
-    /// Bytes per stored sample.
-    pub const fn bytes_per_sample(self) -> usize {
-        match self.storage {
-            ChannelType::U8 => 1,
-            _ => 2,
-        }
-    }
-}
+use zenpixels::Cicp;
 
 /// Chroma subsampling of a planar picture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

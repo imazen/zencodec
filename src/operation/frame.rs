@@ -6,10 +6,10 @@ use super::{
 use crate::{
     At,
     frame::{
-        ChromaSiting, ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming, SampleEncoding,
-        Subsampling,
+        ChromaSiting, ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling,
     },
 };
+use zenpixels::sample::SampleEncoding;
 
 /// Bounded diagnostic facts about one native presentation. Full component roles
 /// remain borrowed in the question; this record contains no sample payloads.

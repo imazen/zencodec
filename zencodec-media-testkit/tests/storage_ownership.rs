@@ -4,10 +4,11 @@ use zencodec_io::storage::{StorageBudget, StorageError};
 use zencodec_media::{
     frame::{
         ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane,
-        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
     },
     packet::{Packet, PacketAddition, PacketPayload},
 };
+use zenpixels::sample::SampleEncoding;
 
 #[test]
 fn deferred_admission_blocks_competitors_and_transfers_the_same_charge() {
@@ -70,7 +71,7 @@ fn ten_gib_reservation_can_be_declined_without_materializing_pixels() {
 }
 
 fn frame(data: PlaneData, encoding: SampleEncoding, epoch: u32) -> Frame {
-    let words = encoding.bytes_per_sample();
+    let words = encoding.storage().byte_size();
     let picture = OwnedPlanes::new(
         vec![OwnedPlane {
             data,
@@ -130,14 +131,18 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
     let mut old = budget.bytes(8).unwrap();
     old.as_mut_slice()
         .copy_from_slice(&[1, 2, 3, 99, 4, 5, 6, 98]);
-    let old = frame(PlaneData::AccountedU8(old.freeze()), SampleEncoding::U8, 0);
+    let old = frame(
+        PlaneData::AccountedU8(old.freeze()),
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+        0,
+    );
     let retained = old.clone();
     let replay = old.represent(FrameTiming::default(), Presentation::default());
     assert!(old.shares_picture(&replay));
     drop(old); // decoder/queue released its handle
     let new = frame(
         PlaneData::AccountedU8(budget.bytes(8).unwrap().freeze()),
-        SampleEncoding::U8,
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         1,
     );
     assert_eq!(budget.reserved_bytes(), 16);

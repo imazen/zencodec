@@ -7,10 +7,11 @@
 use crate::At;
 use crate::frame::{
     Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, PlaneSamples,
-    PlaneView as CodePlane, Presentation, SampleEncoding,
+    PlaneView as CodePlane, Presentation,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = At<OutputError>;
 
