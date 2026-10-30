@@ -107,6 +107,8 @@ is a frozen native candidate, not a landed all-codec retention guarantee.
 The replacement and legacy deprecations landed through
 [PR186](https://github.com/imazen/zencodec/pull/186). JPEG candidate `67d5c27b`,
 pinned to the merged core API, passed all 13 checked-metadata controls after
-a fresh package rebuild. Its all-target lint gate found an existing example
-warning; native landing remains separate. See the
+a fresh package rebuild. Its all-target lint gate found existing example and compatibility-test
+warnings. Those were repaired without changing runtime assertions; all-target
+Clippy passed on `faa3d261`. [JPEG PR252](https://github.com/imazen/zenjpeg/pull/252)
+landed as `13a8a23b`, with the qualified library and lock unchanged. See the
 [qualification receipt](../benchmarks/metadata_admission_2026-10-29.md).

@@ -476,6 +476,6 @@ and deprecated the best-effort setters. Core ownership, cause-preservation and
 early-refusal tests pass. JPEG candidate `67d5c27b` passes 13 checked-metadata
 controls on the merged core API; independent EXIF/ICC/XMP and sample controls
 are recorded in the [receipt](../benchmarks/metadata_admission_2026-10-29.md).
-Its native landing remains gated on all-target lint qualification. PNG checked
-adoption remains open. The diagnostic witness still describes the unchanged
+JPEG PR252 subsequently merged as `13a8a23b`, after strict all-target Clippy
+passed on the identical native library and lock. PNG checked adoption remains open. The diagnostic witness still describes the unchanged
 best-effort native paths; these are not silently upgraded by the deprecation.

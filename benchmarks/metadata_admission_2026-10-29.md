@@ -141,3 +141,13 @@ Clippy subsequently failed on the existing `examples/decode_wall.rs`
 peak load 1.82. Logs are retained under `terra-jpeg-progress-67d5c27b`.
 Native landing remains gated on that repair; this does not qualify missing
 parallel worker progress or other codecs' checked metadata adoption.
+
+JPEG PR252 merged as `13a8a23bb0062fe08f5c55dd4abe36aab9acc546`; GitHub
+compare confirms its reviewed head `9dcd37a4` is an ancestor of main.
+Final strict all-target Clippy (`inventory,parallel`) passed at `faa3d261`: rc0,
+46s, peak RSS 0.83 GiB, minimum available 13692 MiB, peak load 1.07.
+Archive comparison with `67d5c27b` confirms native library, manifests and lock
+identity; test differences are scoped legacy deprecation allowances. Two
+example lint repairs and newer viewer changes are separate. No runtime tests
+were rerun for this lint-only gate. Full log: `terra-jpeg-progress-faa3d261`.
+The final child updates only changelog and qualification documentation.
