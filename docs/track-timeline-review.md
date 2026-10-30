@@ -275,3 +275,14 @@ does not release that separate owner. The
 [retained-policy controls](../benchmarks/replay_sources_2026-10-30.md#retained-policy-across-acquisition-and-native-frames)
 qualify these effects, not a whole-operation memory bound or late-metadata
 completion protocol.
+
+
+### Bounded retained-map prototype
+
+The private owner pool now admits map count before descriptor construction.
+Native delayed-frame controls use owned cursors and prove that dropping the
+lookup list cannot retire active maps, while replay retains its map after cursor
+completion. Last-owner drop releases the slot; decoder drain alone does not.
+This is a count limit, not a byte or native-workspace bound. Presentation-only
+identity routing remains open. The [native owner receipt](../benchmarks/presentation_owners_2026-10-30.md)
+records preserved controls, source identity and the fixture's pre-decoded scope.

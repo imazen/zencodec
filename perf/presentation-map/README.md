@@ -126,9 +126,13 @@ Each frame selects its original map using its retained configuration epoch;
 selecting the latest map instead loses earlier presentations. Source packet
 ordinals deliberately repeat, so they cannot substitute for map identity.
 
-This is a bounded fixture with six retained plans, not an implemented public map
-registry. Production needs an admission limit, a reliable retirement boundary,
-and an explicit rule for presentation-only changes. A codec epoch must not be
+The private `retained::PlanPool` now admits a maximum count before invoking a
+plan builder. `RetainedCursor` holds a cloned immutable owner; replay holds the
+same owner independently. The native control drops the original lookup list,
+finishes all cursors, and verifies that the replay reference still occupies its
+slot. Only the last owner dropping frees that slot. This is not a public map
+registry or a byte/workspace limit. Production still needs descriptor-byte
+admission and an explicit rule for presentation-only changes. A codec epoch must not be
 silently reused for a different map while frames from its previous meaning may
 still be pending. Unknown epochs must refuse before publishing that frame.
 Source replay can return an old epoch again, so draining the codec alone does
@@ -204,3 +208,26 @@ is additional codec/conversion workspace, not source storage or total RAM.
 Choosing among acquisition strategies remains an open contract; this factory
 boundary does not offer such choices. See the retained-policy section of
 [the source receipt](../../benchmarks/replay_sources_2026-10-30.md).
+
+
+### Map lifetime prototype
+
+```rust,ignore
+let mut pool = PlanPool::new(max_retained_maps);
+let map = pool.prepare(|| Plan::new(origin, &edits))?;
+let replay_owner = map.clone();
+let mut cursor = map.cursor(segment)?;
+drop(map); // Cursor and replay still retain this immutable map.
+```
+
+Admission refuses before the builder runs, so a full pool cannot construct the
+next descriptor list. Clones share one slot, and the pool itself holds only weak
+references. Dropping the pool does not invalidate existing owners. Failed plan
+construction leaves no occupied slot. Arc control-block allocation follows the
+ordinary allocator; descriptor bytes and bookkeeping capacity are not included
+in the count. A raw copied Segment is not an owned cursor and carries no lease.
+
+This prototype changes no released codec trait or frame representation. The
+native test still uses configuration epochs to select its six known maps; it
+does not establish how a demuxer announces a presentation-only change. See
+[qualification and remaining scope](../../benchmarks/presentation_owners_2026-10-30.md).

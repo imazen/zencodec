@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 extern crate alloc;
 use alloc::vec::Vec;
+pub mod retained;
 use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

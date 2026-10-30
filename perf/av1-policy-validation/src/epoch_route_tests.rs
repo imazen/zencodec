@@ -569,7 +569,7 @@ fn epoch_route_policy_error_decline_stale_choice_unwind_and_storage_failure_are_
 
 #[test]
 fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration() {
-    use presentation_map_experiment::{Content, Cursor, Edit, Extent, Interval, Plan, Time};
+    use presentation_map_experiment::{Content, Edit, Extent, Interval, Plan, Time};
     use zencodec::time::FrameDuration;
     for threads in [1, 4] {
         let mut delayed = 0;
@@ -584,6 +584,7 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
         );
         // Each immutable map is retained through native draining. Identical
         // codec settings in epochs 10 and 11 still have distinct presentation.
+        let mut pool = presentation_map_experiment::retained::PlanPool::new(6);
         let plans: Vec<_> = (0..6)
             .map(|group| {
                 let clock = if group == 5 {
@@ -592,24 +593,23 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
                     TB
                 };
                 let ticks_per_frame = if group == 5 { 3600 } else { 40 };
-                Plan::new(
-                    Timestamp::new(group * 1000, TB),
-                    &[Edit {
-                        extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
-                        content: Content::Media {
-                            start: Timestamp::new(group * 3 * ticks_per_frame, clock),
-                            rate_num: 1,
-                            rate_den: 1,
-                        },
-                    }],
-                )
+                pool.prepare(|| {
+                    Plan::new(
+                        Timestamp::new(group * 1000, TB),
+                        &[Edit {
+                            extent: Extent::Finite(FrameDuration::new(120, 1000).unwrap()),
+                            content: Content::Media {
+                                start: Timestamp::new(group * 3 * ticks_per_frame, clock),
+                                rate_num: 1,
+                                rate_den: 1,
+                            },
+                        }],
+                    )
+                })
                 .unwrap()
             })
             .collect();
-        let mut cursors: Vec<_> = plans
-            .iter()
-            .map(|plan| Cursor::new(plan.segments()[0]).unwrap())
-            .collect();
+        let mut cursors: Vec<_> = plans.iter().map(|plan| plan.cursor(0).unwrap()).collect();
         for (index, frame) in frames.iter().enumerate() {
             let epoch = frame.interpretation().config_epoch;
             let group = usize::try_from(epoch.checked_sub(10).unwrap()).unwrap();
@@ -632,12 +632,20 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
             assert_eq!(output.end().on_clock(TB).unwrap().ticks(), expected + 40);
             if group != 5 {
                 assert_eq!(
-                    plans[5].segments()[0].project(interval).unwrap(),
+                    plans[5].plan().segments()[0].project(interval).unwrap(),
                     None,
                     "using only the latest plan loses an old-epoch presentation"
                 );
             }
         }
+        let replay_owner = plans[0].clone();
+        assert!(replay_owner.same_owner(cursors[0].owner()));
+        drop(plans);
+        assert_eq!(pool.live(), 6, "native cursors retain their maps");
+        assert!(matches!(
+            pool.prepare(|| panic!("full pool built a map")),
+            Err(presentation_map_experiment::retained::AdmissionError::Limit)
+        ));
         for (group, cursor) in cursors.iter_mut().enumerate() {
             let completed = cursor.finish().unwrap();
             assert_eq!(
@@ -649,5 +657,9 @@ fn presentation_maps_follow_delayed_native_frame_epochs_not_latest_configuration
                 group as i64 * 1000 + 120
             );
         }
+        drop(cursors);
+        assert_eq!(pool.live(), 1, "draining does not retire replay ownership");
+        drop(replay_owner);
+        assert_eq!(pool.live(), 0);
     }
 }

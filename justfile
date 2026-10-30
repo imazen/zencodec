@@ -1871,6 +1871,7 @@ presentation-native-check:
 
 # Real delayed native frames retain their original presentation program.
 presentation-epoch-check:
+    just presentation-map-check
     just av1-policy-setup
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked presentation_maps_follow_delayed -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
