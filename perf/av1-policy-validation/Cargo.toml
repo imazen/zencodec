@@ -38,3 +38,6 @@ zenmeta = { path = "../../zenmeta" }
 [profile.release]
 debug = 1
 lto = "thin"
+
+[dev-dependencies]
+zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.1.0" }

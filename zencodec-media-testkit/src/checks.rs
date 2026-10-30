@@ -27,7 +27,7 @@ use zencodec_media::session::{
     CodecConfig, ProtocolViolation, Receive, SendStatus, SessionError, UnsupportedMedia,
     VideoDecoder, VideoEncoder, erase_video_decoder,
 };
-use zencodec_media::track::TrackInfo;
+use zencodec_media::track::{AudioTrackInfo, CodecId, TrackInfo, TrackKind, VideoTrackInfo};
 use zenpixels::PixelBuffer;
 
 /// A broken rule.
@@ -449,15 +449,52 @@ struct Demuxed {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Seen {
-    Headers(usize),
-    Packet(Demuxed),
-    Config(u32, u32),
+struct TrackFacts {
+    index: u32,
+    kind: TrackKind,
+    codec: CodecId,
+    clock: TimeBase,
+    private: Option<Arc<[u8]>>,
+    epoch: u32,
+    video: Option<VideoTrackInfo>,
+    audio: Option<AudioTrackInfo>,
+    codec_delay: Option<FrameDuration>,
+    seek_preroll: Option<FrameDuration>,
+    edit_delay_ticks: Option<i64>,
+    declared_packets: Option<u64>,
+    declared_duration_ticks: Option<u64>,
 }
 
-fn seen(ev: DemuxEvent, tracks: usize) -> Option<Seen> {
+impl From<&TrackInfo> for TrackFacts {
+    fn from(track: &TrackInfo) -> Self {
+        Self {
+            index: track.index(),
+            kind: track.kind(),
+            codec: track.codec().clone(),
+            clock: track.time_base(),
+            private: track.codec_private().cloned(),
+            epoch: track.config_epoch(),
+            video: track.video_info().copied(),
+            audio: track.audio_info().copied(),
+            codec_delay: track.codec_delay(),
+            seek_preroll: track.seek_preroll(),
+            edit_delay_ticks: track.edit_delay_ticks(),
+            declared_packets: track.declared_packets(),
+            declared_duration_ticks: track.declared_duration_ticks(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Seen {
+    Headers(Vec<TrackFacts>),
+    Packet(Demuxed),
+    Config(u32, u32, Vec<TrackFacts>),
+}
+
+fn seen(ev: DemuxEvent, tracks: &[TrackInfo]) -> Option<Seen> {
     match ev {
-        DemuxEvent::Headers => Some(Seen::Headers(tracks)),
+        DemuxEvent::Headers => Some(Seen::Headers(tracks.iter().map(TrackFacts::from).collect())),
         DemuxEvent::Packet(p) => Some(Seen::Packet(Demuxed {
             track: p.track(),
             bytes: p.bytes().to_vec(),
@@ -468,7 +505,11 @@ fn seen(ev: DemuxEvent, tracks: usize) -> Option<Seen> {
             random_access: p.random_access(),
             epoch: p.config_epoch(),
         })),
-        DemuxEvent::ConfigChanged { track, epoch } => Some(Seen::Config(track, epoch)),
+        DemuxEvent::ConfigChanged { track, epoch } => Some(Seen::Config(
+            track,
+            epoch,
+            tracks.iter().map(TrackFacts::from).collect(),
+        )),
         _ => None,
     }
 }
@@ -483,7 +524,7 @@ fn demux_all<D: Demuxer>(
     loop {
         let y = next(dem)?;
         let finished = y.is_finished();
-        if let Some(s) = seen(y.into_inner(), dem.tracks().len()) {
+        if let Some(s) = seen(y.into_inner(), dem.tracks()) {
             out.push(s);
         }
         if finished {
@@ -499,8 +540,12 @@ fn demux_all<D: Demuxer>(
 ///
 /// - The in-memory driver at windows of 1, 7 and 64 bytes and the whole
 ///   file, and the random-access driver at 64 bytes and 4 KiB, give the
-///   same events: headers, packets (bytes, track, timestamps, random-access
-///   evidence, epoch), configuration changes.
+///   same events: headers (all track declarations), packets (bytes, track,
+///   timestamps, random-access evidence, epoch), configuration changes and the
+///   track facts at each change. This includes codec configuration, shape,
+///   color, clock, delay, pre-roll, edit offset and declared duration/count.
+///   It checks cross-driver consistency, not native interpretation or playback
+///   correctness when every path reports the same incorrect facts.
 /// - Input at an offset the demuxer did not ask for is not consumed, and
 ///   `requested` is never empty after `Need`.
 /// - Every truncation (at 13 evenly spread cut points) either fails as the

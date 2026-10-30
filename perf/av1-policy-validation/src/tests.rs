@@ -566,3 +566,42 @@ fn native_factory_workspace_admission_precedes_rav1d_construction() {
         }
     }
 }
+
+#[test]
+fn native_mp4_track_facts_agree_across_input_drivers() {
+    use zencodec_media::{
+        container::{MuxHint, Muxer},
+        limits::MediaLimits,
+        track::TrackInfo,
+    };
+    let settings = settings(8, Subsampling::Yuv444, true);
+    let input: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &input);
+    let mut track = TrackInfo::video(
+        0,
+        config.codec.clone(),
+        config.time_base,
+        config.video.unwrap(),
+    )
+    .with_config_epoch(config.epoch);
+    if let Some(private) = config.private {
+        track = track.with_codec_private(private);
+    }
+    let track = track.build().unwrap();
+    for hint in [MuxHint::default(), MuxHint::forward_only()] {
+        let mut mux = zenmp4::Mp4Muxer::new();
+        mux.begin(core::slice::from_ref(&track), hint).unwrap();
+        let mut bytes = Vec::new();
+        mux.take_output(&mut bytes);
+        for packet in &packets {
+            mux.write_packet(packet.clone(), None).unwrap();
+            mux.take_output(&mut bytes);
+        }
+        mux.finish(None).unwrap().apply_to(&mut bytes).unwrap();
+        zencodec_media_testkit::check_demuxer_contract(
+            || zenmp4::Mp4Demuxer::new(MediaLimits::default()),
+            &bytes,
+        )
+        .unwrap();
+    }
+}

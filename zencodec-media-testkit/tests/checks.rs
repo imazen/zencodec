@@ -394,3 +394,108 @@ fn frames_are_send_and_sync_handles() {
     assert!(f.shares_picture(&g));
     assert_eq!(Arc::strong_count(f.picture()), 2);
 }
+
+/// Changes only advertised track facts when the driver offers the whole file.
+/// Packet bytes/timing and the number of tracks remain identical.
+struct WindowDependentTracks {
+    inner: ToyDemuxer,
+    tracks: Vec<TrackInfo>,
+    first_len: Option<usize>,
+    threshold: usize,
+    field: u8,
+    late: bool,
+    changed: bool,
+    pending: Option<zencodec_media::container::DemuxEvent>,
+}
+impl WindowDependentTracks {
+    fn new(threshold: usize, field: u8, late: bool) -> Self {
+        Self {
+            inner: ToyDemuxer::new(MediaLimits::default()),
+            tracks: Vec::new(),
+            first_len: None,
+            threshold,
+            field,
+            late,
+            changed: false,
+            pending: None,
+        }
+    }
+    fn publish_track(&mut self, mutate: bool) {
+        let field = if mutate { self.field } else { 255 };
+        let codec = if field == 0 {
+            CodecId::Av1
+        } else {
+            CodecId::Other(CodecTag::new("toy"))
+        };
+        let clock = if field == 1 { TimeBase::MILLIS } else { tb() };
+        let video = VideoTrackInfo::new(if field == 2 { W + 1 } else { W }, H);
+        let mut builder = TrackInfo::video(0, codec, clock, video);
+        builder = match field {
+            3 => builder.with_codec_private(Arc::from([1u8, 2, 3])),
+            4 => builder.with_config_epoch(7),
+            5 => builder.with_codec_delay(FrameDuration::new(1, 48000).unwrap()),
+            6 => builder.with_seek_preroll(FrameDuration::new(80, 1000).unwrap()),
+            7 => builder.with_edit_delay_ticks(-17),
+            8 => builder.with_declared_packets(42),
+            9 => builder.with_declared_duration_ticks(1234),
+            _ => builder,
+        };
+        self.tracks = vec![builder.build().unwrap()];
+    }
+}
+impl Demuxer for WindowDependentTracks {
+    type Error = ToyError;
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<DemuxProgress, SessionError<ToyError>> {
+        use zencodec_media::container::DemuxEvent;
+        if let Some(event) = self.pending.take() {
+            return Ok(DemuxProgress::new(0, event));
+        }
+        if self.first_len.is_none() && !input.bytes.is_empty() {
+            self.first_len = Some(input.bytes.len());
+        }
+        let p = self.inner.step(input, pulse)?;
+        let mutate = self.first_len.is_some_and(|n| n > self.threshold);
+        match &p.event {
+            DemuxEvent::Headers => self.publish_track(mutate && !self.late),
+            DemuxEvent::Packet(_) if self.late && !self.changed => {
+                self.changed = true;
+                self.publish_track(mutate);
+                self.pending = Some(p.event);
+                return Ok(DemuxProgress::new(
+                    p.consumed,
+                    DemuxEvent::ConfigChanged { track: 0, epoch: 0 },
+                ));
+            }
+            _ => {}
+        }
+        Ok(p)
+    }
+    fn requested(&self) -> &[InputRequest] {
+        self.inner.requested()
+    }
+    fn tracks(&self) -> &[TrackInfo] {
+        &self.tracks
+    }
+}
+
+#[test]
+fn demuxer_conformance_detects_track_facts_that_depend_on_input_window() {
+    let file = toy_file(9, 3, false);
+    for late in [false, true] {
+        for field in 0..10 {
+            let error = check_demuxer_contract(
+                || WindowDependentTracks::new(file.len() / 2, field, late),
+                &file,
+            )
+            .expect_err("changing track facts must not pass merely because track counts match");
+            assert!(
+                error.detail.contains("different events"),
+                "field {field}, late {late}: {error}"
+            );
+        }
+    }
+}

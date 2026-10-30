@@ -873,3 +873,12 @@ The first PR185 native JPEG CI job refused --locked before compilation. JPEG
 and API-usability tracked dependency locks now include the diagnostic edges;
 isolated locked metadata verifies the graphs without changing existing pins.
 See benchmarks/pulse_checkpoints_2026-10-29.md.
+
+## Demux conformance track-fact blind spot (2026-10-30)
+
+The media testkit compared header track counts and configuration event IDs,
+allowing input-window-dependent codec/timing declarations to pass. It now
+compares complete current track facts at both boundaries, with ten mutations
+in each phase. This is cross-driver consistency, not proof of native edit-list
+interpretation. New TrackInfo fields must join the private snapshot; use
+`just media-track-facts-check` and see `docs/testkit-release-audit.md`.

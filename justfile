@@ -1848,3 +1848,11 @@ presentation-map-check:
     cp perf/presentation-map/dependencies.lock perf/presentation-map/Cargo.lock
     cargo test --manifest-path perf/presentation-map/Cargo.toml --locked
     cargo clippy --manifest-path perf/presentation-map/Cargo.toml --all-targets --locked -- -D warnings
+
+# Track declarations must survive every supported input driver's event stream.
+media-track-facts-check:
+    cargo test --locked -p zencodec-media-testkit --all-targets
+    cargo clippy --locked -p zencodec-media-testkit --all-targets -- -D warnings
+    just av1-policy-setup
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked native_mp4_track_facts_agree -- --nocapture
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --locked --all-targets -- -D warnings

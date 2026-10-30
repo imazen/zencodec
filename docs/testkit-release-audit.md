@@ -107,3 +107,25 @@ four fixtures: 408 interrupted operations and four successful traces. These
 results do not establish Adam7/APNG/16-bit, encoding, worker-thread, browser,
 whole-operation memory or independent pixel-oracle qualification. Progress
 reporting gaps above remain open; successful cancellation does not repair them.
+
+## Demux track declarations
+
+The media testkit previously compared only the number of tracks at headers and
+only track/epoch identifiers at configuration changes. It now snapshots all
+current track declarations at both boundaries: codec/private bytes, clock,
+epoch, video/audio shape and color, delay, pre-roll, edit offset, and declared
+count/duration. Ten mutation cases at each boundary exercise input-window-dependent
+facts while keeping packet events identical. The pre-fix check accepted the
+mutant; the corrected full media testkit passes 77 tests and strict Clippy.
+
+This strengthens `check_demuxer_contract` without changing its signature. It
+checks consistency across slice/range drivers, not the truth of a decoder that
+reports the same incorrect metadata everywhere. Full edit-list retention and
+edited playback remain open in [issue 187](https://github.com/imazen/zencodec/issues/187). New track
+fields must be included in this private snapshot when the representation grows.
+Reproduce through `just media-track-facts-check`; the native MP4 part uses real
+AV1 packets in both progressive and fragmented layouts.
+
+The focused native progressive/fragmented MP4 control and harness strict Clippy
+pass. See [qualification receipts](../benchmarks/media_track_facts_2026-10-30.md);
+this does not establish edited playback or an independent player oracle.

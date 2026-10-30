@@ -152,6 +152,7 @@ dependencies = [
  "zencodec",
  "zencodec-io",
  "zencodec-media",
+ "zencodec-media-testkit",
  "zenivf",
  "zenmp4",
  "zenpixels",
@@ -1197,6 +1198,17 @@ dependencies = [
  "enough",
  "zencodec",
  "zencodec-io",
+ "zenpixels",
+]
+
+[[package]]
+name = "zencodec-media-testkit"
+version = "0.1.0"
+dependencies = [
+ "enough",
+ "zencodec",
+ "zencodec-io",
+ "zencodec-media",
  "zenpixels",
 ]
 

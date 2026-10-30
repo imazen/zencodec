@@ -45,9 +45,9 @@
       "name": "zencodec-media-testkit",
       "directory": "zencodec-media-testkit",
       "features": "all",
-      "fingerprint": "2c1a6ed46f879b990c57576750b80e227c18a5c3332358432fcee9d8e17ce89d",
+      "fingerprint": "b9f75974c0a3a4240bc1a388ce05452965df18028f5a175973bb1d4e24ed00a6",
       "surface_sha256": "ca215f9f717bef4ac207a9b564f078b1b11585341709b4900721e1cd07c2d5b2",
-      "details_sha256": "e6421b02a033f1a5964ca445c679456cd91b0ddcda12db5d57122d6773dcd311"
+      "details_sha256": "88626543ad4fdeb0052693742e5b179b7293ec22788972f16284979fb662691c"
     },
     {
       "name": "zenmeta",
