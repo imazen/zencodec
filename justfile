@@ -305,6 +305,8 @@ av1-policy-sync export:
     mkdir -p "{{export}}/perf/av1-policy-validation/src"
     cp perf/av1-policy-validation/Cargo.toml perf/av1-policy-validation/verify_gamma.py perf/av1-policy-validation/verify_gamma_test.py "{{export}}/perf/av1-policy-validation/"
     cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
+    mkdir -p "{{export}}/perf/av1-policy-validation/examples"
+    cp perf/av1-policy-validation/examples/*.rs "{{export}}/perf/av1-policy-validation/examples/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/checked_video.rs "{{export}}/docs/examples/"
 
@@ -313,6 +315,10 @@ av1-policy-resolve:
 
 av1-policy-setup:
     cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
+
+# Diagnostic: fails if distinct MP4 presentation programs lose information.
+media-edit-list-probe:
+    cargo run --manifest-path perf/av1-policy-validation/Cargo.toml --locked --example edit_list_probe
 
 av1-policy-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1

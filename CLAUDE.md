@@ -1,5 +1,15 @@
 # zencodec
 
+## Known Bugs: edited video presentation (2026-10-30)
+
+Native MP4 controls reproduce identical edit offsets for different segment
+durations, appended media segments and playback rates. `CodecConfig::from`
+also drops the track delay/pre-roll/edit fields, and the animation adapter does
+not retain a presentation map. Exact packet timestamps do not prove edited
+playback correctness. `just media-edit-list-probe` is an intentionally failing
+diagnostic; see `benchmarks/media_edits_2026-10-30.md` and issue 187. A richer
+presentation contract and independent playback controls remain required.
+
 Shared traits and types for zen* image codecs.
 
 ## Precision integration gates (2026-10-28)

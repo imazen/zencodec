@@ -76,9 +76,14 @@ are negative). Every lossy conversion names its `Rounding`; `Nearest` sends
 exact halves toward +infinity, which is what `TimingQuantizer` already does,
 so quantized durations and rescaled instants agree (tested over 300 NTSC
 frames). Missing timestamps are `Option`, never sentinels, and nothing derives
-a timestamp from a nominal frame rate. Delays, edit lists and padding are
-carried untouched on tracks and packets and applied once, by the decoder
-adapter. PR 129's own clock (ties to the earlier endpoint) is dropped.
+a timestamp from a nominal frame rate. Preserving delays, edit lists and padding
+and applying them once is the intended presentation contract, not completed
+behavior. Track-to-codec configuration currently drops the track timing fields;
+the MP4 reader also collapses distinct edit programs to one offset. Native
+controls reproduce loss of duration, later segments and playback rate. See
+[the qualification receipt](../benchmarks/media_edits_2026-10-30.md) and
+[issue 187](https://github.com/imazen/zencodec/issues/187).
+PR 129's own clock (ties to the earlier endpoint) is dropped.
 
 **Animation and video.** The animation traits stay the fused container-plus-
 codec path for GIF, APNG, WebP and the rest; they are published and

@@ -246,11 +246,16 @@ these publication checks from native allocation or conversion guarantees.
 - Instants are `zencodec::time::Timestamp` on the track's `TimeBase`; lengths
   are `FrameDuration`. Conversions are exact or name their `Rounding`;
   `Nearest` rounds halves toward +infinity, like `TimingQuantizer`.
-- Codec delay, seek pre-roll, edit-list offsets (on `TrackInfo`) and
-  discard padding (`Packet::discard`) are carried untouched by demuxers,
-  muxers and stream copies, and applied once, by the decoder adapter
-  configured from the track. A container that cannot record one refuses the
-  packet or track instead of dropping it.
+- Required contract: preserve codec delay, seek pre-roll, edit programs and
+  discard padding through remuxing; apply them exactly once for presentation.
+  A container that cannot represent them must refuse instead of dropping them.
+  **This is not fully implemented.** `CodecConfig::from(&TrackInfo)` does not
+  carry the track's delay, pre-roll or edit offset, and `VideoAnimationDecoder`
+  does not apply a retained presentation map. The pinned MP4 reader also reduces
+  edit lists to the first nonempty segment's offset, omitting its duration,
+  later segments and playback rate. Packet timestamp preservation alone does
+  not establish edited playback correctness. Track the replacement contract in
+  [issue 187](https://github.com/imazen/zencodec/issues/187).
 
 ## Animation over video
 

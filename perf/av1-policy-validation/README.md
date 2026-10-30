@@ -707,3 +707,16 @@ its checksum, and built FFprobe successfully. Log:
 `/home/lilith/tmp/zencodec-timing-download-repair-20261027/build.log` on r7900x.
 Resource receipt: `rc=0 41s | peak-RSS 0.75GiB | min-avail 12166MiB | peak-load 1.03`.
 This is build validation, not a codec performance measurement.
+
+## MP4 presentation diagnostic
+
+`just media-edit-list-probe` runs `examples/edit_list_probe.rs` against the
+pinned native MP4 muxer and demuxer. It authors only initialization boxes,
+checks an unedited and single-edit control, then compares finite duration,
+multiple media segments and playback rate. A failure listing lost presentation
+information is a contract witness, not a passing regression gate. It does not
+decode pixels, inspect playback with an independent player, or measure speed.
+The native run reproduced all three losses; baseline controls passed. See the
+[receipt](../../benchmarks/media_edits_2026-10-30.md) and
+[issue 187](https://github.com/imazen/zencodec/issues/187). No production fix is
+claimed by this diagnostic.
