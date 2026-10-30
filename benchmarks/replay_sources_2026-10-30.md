@@ -64,3 +64,31 @@ without a full compressed snapshot, keyframe seeking, whole-operation memory
 admission, and late-metadata obligations during early timeline completion.
 The private snapshot helper is evidence for composing existing abstractions,
 not a promoted production convenience API.
+
+## Unknown-length bounded spool follow-through
+
+Snapshot 52e661a6164b8ba4bf969036c4b41b29baf45d78 adds the existing
+BufferedReadAt + BufferPolicy::Spool to the native acquisition controls. The
+reader supplies seven-byte short reads. Zero and one-byte-short caps refuse;
+exact and larger caps confirm EOF and replay native AV1 samples twice unchanged.
+The cap failure consumes the documented one-byte EOF probe and then remains
+terminal without further reads. Snapshotting after EOF makes no additional
+underlying reads. A typed timeout from the reader survives the spool error chain;
+no replay snapshot is created from that failed acquisition.
+
+The passing controls observe both source.retained_bytes() and
+budget.reserved_bytes() equal to the input payload length during snapshot copy.
+They then drop the spool and prove the admitted snapshot still decodes correctly.
+This is a measured logical-retention overlap, not an RSS or allocator-capacity
+claim. The spool's private Vec cannot currently transfer directly into accounted
+SharedStorage. Removing that overlap needs an ownership/admission design, not a
+claim that two independently capped buffers share one operation allowance.
+
+Both full source tests and strict target Clippy pass with unchanged lock and
+HTTP cases. Wrapper rc0, 8 seconds, peak RSS 0.39 GiB, minimum available 13246 MiB,
+peak load 0.55. Original test assertions remain. Log on r7900x:
+/home/lilith/tmp/zencodec-replay-source-20261030/unknown.log.
+HTTP evidence: replay-source-http-unknown under the same artifact root.
+This supersedes the earlier unknown-length qualification gap only for the
+bounded full-spool-plus-copy route. It does not qualify streaming seek/reopen,
+zero-copy transfer, stalled-read preemption or whole-operation RAM admission.

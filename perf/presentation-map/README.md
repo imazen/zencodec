@@ -167,3 +167,10 @@ It validates an admitted immutable compressed snapshot before constructing nativ
 replay packets. File/HTTP parity, budget ownership, typed source failures and
 cancellation controls are described in
 [the source receipt](../../benchmarks/replay_sources_2026-10-30.md).
+
+Unknown-length streams are also qualified through the existing capped spool:
+confirm EOF, copy into admitted immutable storage, drop the spool, then replay.
+The test retains the exact-cap/one-byte-over behavior and original timeout cause.
+There is a real temporary overlap between spool payload and snapshot payload;
+a future owner-transfer convenience must preserve admission rather than conceal
+that cost. No zero-copy or whole-memory claim is made for this composition.

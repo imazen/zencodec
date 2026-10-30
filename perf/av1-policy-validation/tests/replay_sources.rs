@@ -91,6 +91,66 @@ fn native_replay_uses_admitted_immutable_file_and_conditional_http_snapshots() {
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
     std::fs::write(&path, &bytes).unwrap();
 
+    // Unknown length: the existing spool confirms EOF before snapshotting.
+    // Account for both retained owners during the copy; this is not a single
+    // allocation route and is not an operation-wide RAM guarantee.
+    for cap in [0, bytes.len() - 1, bytes.len(), bytes.len() + 1] {
+        let consumed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut source = zencodec_io::BufferedReadAt::new(
+            ShortReader {
+                bytes: &bytes,
+                consumed: consumed.clone(),
+                stop_at: None,
+            },
+            zencodec_io::BufferPolicy::Spool { max_bytes: cap },
+        );
+        assert_eq!(source.len_hint(), None);
+        if cap < bytes.len() {
+            let error = source.len().unwrap_err();
+            assert!(matches!(
+                zencodec::find_cause::<zencodec::source::SourceError>(&error),
+                Some(zencodec::source::SourceError::BeyondLimit { .. })
+            ));
+            assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), cap + 1);
+            assert_eq!(source.retained_bytes(), cap);
+            let before = consumed.load(std::sync::atomic::Ordering::SeqCst);
+            assert!(source.len().is_err());
+            assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), before);
+        } else {
+            assert_eq!(source.len().unwrap(), bytes.len() as u64);
+            let before = consumed.load(std::sync::atomic::Ordering::SeqCst);
+            let saved = snapshot(&mut source, &budget, None).unwrap();
+            assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), before);
+            assert_eq!(source.retained_bytes(), bytes.len());
+            assert_eq!(budget.reserved_bytes(), bytes.len());
+            drop(source);
+            verify(&saved);
+            drop(saved);
+            assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        }
+    }
+    let consumed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut cancelled = zencodec_io::BufferedReadAt::new(
+        ShortReader {
+            bytes: &bytes,
+            consumed: consumed.clone(),
+            stop_at: Some(7),
+        },
+        zencodec_io::BufferPolicy::Spool {
+            max_bytes: bytes.len(),
+        },
+    );
+    let error = cancelled.len().unwrap_err();
+    assert!(matches!(
+        zencodec::find_cause::<zencodec_media::session::SessionError<std::io::Error>>(&error),
+        Some(zencodec_media::session::SessionError::Cancelled(
+            enough::StopReason::TimedOut
+        ))
+    ));
+    assert_eq!(consumed.load(std::sync::atomic::Ordering::SeqCst), 7);
+    assert_eq!(budget.reserved_bytes(), 0);
+    drop(cancelled); // A failed acquisition is never turned into a replay owner.
+
     let mut http = http_source::HttpSource::open(format!("{url}/stable/replay.bin"), 256).unwrap();
     let attempts = http.attempts.get();
     let denied = snapshot(&mut http, &StorageBudget::new(bytes.len() - 1, 1), None).unwrap_err();
@@ -192,4 +252,32 @@ fn snapshot_cancellation_releases_admission_before_any_replay_owner_exists() {
     assert!(snapshot(&mut source, &budget, Some(&pulse)).is_err());
     assert_eq!(source.reads, 1);
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}
+
+// Real short std::io::Read chunks; a typed interruption is never ErrorKind::Interrupted,
+// which means retry to standard I/O adapters.
+struct ShortReader<'a> {
+    bytes: &'a [u8],
+    consumed: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    stop_at: Option<usize>,
+}
+impl std::io::Read for ShortReader<'_> {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        let position = self.consumed.load(std::sync::atomic::Ordering::SeqCst);
+        if self.stop_at.is_some_and(|limit| position >= limit) {
+            return Err(std::io::Error::other(
+                zencodec_media::session::SessionError::<std::io::Error>::Cancelled(
+                    enough::StopReason::TimedOut,
+                ),
+            ));
+        }
+        let n = out
+            .len()
+            .min(7)
+            .min(self.bytes.len().saturating_sub(position));
+        out[..n].copy_from_slice(&self.bytes[position..position + n]);
+        self.consumed
+            .fetch_add(n, std::sync::atomic::Ordering::SeqCst);
+        Ok(n)
+    }
 }

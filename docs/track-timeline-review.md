@@ -224,3 +224,18 @@ The native controls pass for stable files and HTTP, replacement and malformed
 responses, cap refusal and cancellation. This qualifies a full compressed
 snapshot route, not a general seek/reopen implementation or a whole-codec memory
 bound. See [source-admission evidence](../benchmarks/replay_sources_2026-10-30.md).
+
+For unknown-length sequential input, existing APIs also compose explicitly:
+
+```rust,ignore
+let mut source = BufferedReadAt::new(reader, BufferPolicy::Spool { max_bytes });
+let length = source.len()?; // Consume to confirmed EOF under the spool cap.
+```
+
+The native source controls then copy the completed spool into admitted immutable
+storage. Exact-cap EOF succeeds; one byte over refuses after a single-byte EOF
+probe. Both native replay and original typed reader errors are preserved.
+This route temporarily retains the spool and snapshot payloads together. It is
+not a zero-copy owner transfer or a shared whole-operation memory allowance.
+The reader must provide cancellation while reading; `len()` cannot interrupt a
+stalled synchronous read on its own.
