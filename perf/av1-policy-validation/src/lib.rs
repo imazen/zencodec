@@ -45,3 +45,8 @@ mod component_storage_native;
 #[cfg(test)]
 #[path = "../../plane-ablation/src/grid.rs"]
 mod component_grid;
+
+#[cfg(test)]
+mod component_owner;
+#[cfg(test)]
+mod component_owner_tests;

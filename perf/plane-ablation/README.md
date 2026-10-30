@@ -103,3 +103,53 @@ not rerun. Both strict Clippy gates and standalone WASM pass.
 This chooses a coordinate convention, not a finished public grid API. Resize
 registration, arbitrary affine grids, independently oriented auxiliary planes,
 TIFF/JXL native adoption and a renderer using these grids remain unqualified.
+
+## Unified owner/presentation experiment
+
+`../av1-policy-validation/src/component_owner.rs` implements one private owner
+and mapping contract for packed pixels and component planes. Frames add timing
+and presentation flags around that image; they do not define another plane API.
+
+```rust
+let mapping = frame.image.map(None)?; // Option<&dyn Pulse>
+for index in 0..mapping.plane_count() {
+    let plane = mapping.plane(index)?.expect("declared plane");
+    // plane.meaning is frozen; plane.samples is Packed or Component.
+}
+let replay = frame.represent(next_timing, Presentation::SHOW_EXISTING);
+```
+
+Frozen plane descriptions can be inspected before mapping. A native missing
+plane, changed dimensions/representation or backend error is a typed failure,
+not end-of-iteration. Errors and unwinds poison that mapping guard before a
+second backend call can occur. Backend causes remain downcastable while default
+Display/Debug omit arbitrary backend text. A new image mapping attempt is
+independent; the image itself is not permanently poisoned by a transient map
+failure. Returned samples borrow the mapping, which borrows the image owner.
+
+The real AV1 owner test retains decoded 8/10/12-bit pictures after decoder drop,
+re-presents them without changing sample ownership, verifies every component
+code and proves that the last presentation releases the native picture. Packed
+pixels use the same mapping interface. Optional Pulse is forwarded to native
+mapping hooks; wrapper checks precede effects and successful exposure. A stopped
+entry control uses a backend that panics if mapping is attempted.
+
+The final focused gate passes 18 tests and strict full-harness Clippy. This is
+not a completed replacement for ImageOutput/Picture. In particular:
+
+- The prototype omits full image color/geometry/composition/source metadata;
+  component storage facts do not replace those contracts.
+- It has one owner per image. Existing independent auxiliary retention must be
+  preserved, either through owner groups or a retention hook, before promotion.
+  Replacing color must not accidentally retain a large unrelated color allocation.
+- Its compatibility AV1 bridge adds a boxed mapping wrapper and constructs a grid
+  vector per map. These are experiment adapter costs, not the intended native
+  implementation; no allocation or speed equivalence is claimed.
+- Only entry cancellation is qualified. Persistent/one-shot cancellation,
+  reporting, stalled native mapping, and per-plane cancellation still need controls.
+- The experiment validates semantic representation, not fixed physical strides
+  across remapping. It does not authorize weakening existing production guards.
+
+The direction is one image mapping abstraction plus presentation, with complete
+metadata and independently retainable allocations. The exact private types and
+constructors above are not ready to become public signatures.

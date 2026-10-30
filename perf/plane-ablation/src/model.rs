@@ -75,6 +75,12 @@ impl<'a> Plane<'a> {
             step,
         })
     }
+    pub(crate) fn dimensions(self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+    pub(crate) fn channel(self) -> ChannelType {
+        self.channel
+    }
     /// Borrow a rectangular sample window, retaining row and component strides.
     pub(crate) fn window(
         self,

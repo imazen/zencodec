@@ -81,3 +81,19 @@ The view retains trailing samples rather than claiming a filter-halo selection
 policy. This strengthens the case for separate storage, encoding, registration
 and presentation facts; it does not yet qualify resize/affine registration or
 unified image/frame ownership. [Grid receipts](../benchmarks/plane_grid_2026-10-30.md).
+
+## Executed owner/presentation ablation
+
+A private unified owner now maps both packed pixels and component planes. Its
+frame is only an image plus timing/presentation flags. Native AV1 controls retain
+pictures after decoder drop and across repeated presentation, then release the
+picture after the final owner drops. Mapping failures retain typed causes and
+remain terminal, including after caught native panic. Entry control accepts
+`Option<&dyn Pulse>` and refuses before native mapping on timeout.
+
+This supports removing the parallel packed/native mapping interfaces, but not
+promoting the current private prototype unchanged. Complete image metadata and
+independent auxiliary retention must survive the consolidation; one flat owner
+is insufficient to guarantee releasing replaced color while keeping auxiliaries.
+The compatibility bridge also adds a map shim/grid vector, so no allocation or
+performance equivalence is claimed. [Owner receipts](../benchmarks/component_owner_2026-10-30.md).
