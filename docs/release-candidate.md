@@ -471,7 +471,11 @@ The existing setters filter a record before best-effort native embedding; they
 are not fallible retention admission. Keep PR158's preservation-gap review open.
 Do not waive required fields based on false/unknown capability flags. A checked
 replacement must retain obligations through declaration/planning and refuse
-before affected output if the configured codec cannot honor them. The follow-on candidate adds checked typed/dyn setters and ordinary/Send
-request preparation. Core ownership, cause-preservation and early-refusal tests
-pass; native adoption and retention readback remain unqualified. The diagnostic
-witness still describes the unchanged best-effort native paths.
+before affected output if the configured codec cannot honor them. PR186 landed checked typed/dyn setters and ordinary/Send request preparation,
+and deprecated the best-effort setters. Core ownership, cause-preservation and
+early-refusal tests pass. JPEG candidate `67d5c27b` passes 13 checked-metadata
+controls on the merged core API; independent EXIF/ICC/XMP and sample controls
+are recorded in the [receipt](../benchmarks/metadata_admission_2026-10-29.md).
+Its native landing remains gated on all-target lint qualification. PNG checked
+adoption remains open. The diagnostic witness still describes the unchanged
+best-effort native paths; these are not silently upgraded by the deprecation.
