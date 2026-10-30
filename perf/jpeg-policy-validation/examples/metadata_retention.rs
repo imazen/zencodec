@@ -29,6 +29,7 @@ fn mastering_matches(got: &MasteringDisplay, want: &MasteringDisplay) -> bool {
         && close(got.max_luminance, want.max_luminance)
         && close(got.min_luminance, want.min_luminance)
 }
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 fn encode<E>(config: &E, pixels: &TestImage, metadata: Metadata) -> Result<Vec<u8>, Failure>
 where
     E: EncoderConfig,

@@ -114,6 +114,7 @@ fn planning_is_repeatable_and_does_not_change_strided_encode_bytes() {
 }
 
 #[test]
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 fn invalid_input_limits_canvas_and_metadata_refuse_during_planning() {
     let config = JpegEncoderConfig::new();
     let declaration = |width, height| {
@@ -151,6 +152,7 @@ fn invalid_input_limits_canvas_and_metadata_refuse_during_planning() {
 }
 
 #[test]
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 fn current_color_context_is_checked_before_startup() {
     use zenpixels::{ColorContext, ColorPrimaries, TransferFunction};
     let profile = crate::fixtures::profile();
@@ -187,9 +189,9 @@ fn cancelled_planning_refuses_before_begin() {
     }
     let job = JpegEncoderConfig::new()
         .job()
-        .with_pulse(zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(
-            Cancel,
-        )));
+        .with_pulse(zencodec::SharedPulse::new(
+            zencodec::how_far::StopOnly::new(Cancel),
+        ));
     let declaration = EncodeDeclaration::new(32, 32, PixelDescriptor::RGB8_SRGB)
         .with_access(OutputAccess::Forward);
     assert!(job.plan_encode(&declaration).is_err());

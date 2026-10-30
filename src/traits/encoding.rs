@@ -477,6 +477,9 @@ pub trait EncodeJob: Sized {
     /// the embedded EXIF orientation tag — then hands the result to the codec's
     /// [`with_metadata`](Self::with_metadata). The codec embeds what its format
     /// supports and skips the rest.
+    #[deprecated(
+        note = "best-effort retention may omit supplied fields; use try_with_metadata_policy or try_set_metadata_policy"
+    )]
     #[must_use]
     #[allow(deprecated)] // Published provided method retains its no-zenmeta behavior.
     fn with_metadata_policy(self, meta: Metadata, policy: crate::MetadataPolicy) -> Self {
@@ -486,14 +489,14 @@ pub trait EncodeJob: Sized {
 
     /// Set metadata (ICC, EXIF, XMP) to embed in the output, **without choosing a
     /// retention policy**. Codecs implement this (store the bytes); callers should
-    /// prefer [`with_metadata_policy`](Self::with_metadata_policy) so the
+    /// prefer [`try_with_metadata_policy`](Self::try_with_metadata_policy) so the
     /// privacy/retention decision is explicit.
     ///
     /// Takes ownership — callers that need to reuse the metadata should `.clone()`
     /// first (the `Arc<[u8]>` fields make cloning a cheap ref-count bump). The
     /// codec embeds what the format supports and silently skips the rest.
     #[deprecated(note = "embeds metadata without an explicit retention policy; use \
-                with_metadata_policy(meta, policy) — e.g. MetadataPolicy::Web \
+                try_with_metadata_policy(meta, policy) — e.g. MetadataPolicy::Web \
                 (privacy-safe) or MetadataPolicy::PreserveExact")]
     fn with_metadata(self, meta: Metadata) -> Self;
 
@@ -543,7 +546,7 @@ pub trait EncodeJob: Sized {
     /// dimension) for a bad one; the override is itself the support signal (query
     /// [`EncodeCapabilities::gain_map`](crate::EncodeCapabilities::gain_map) to know in
     /// advance). `self` is consumed on success, so the chain reads
-    /// `config.job().with_gain_map_pixels(gm)?.with_metadata_policy(..)`.
+    /// `config.job().with_gain_map_pixels(gm)?.try_with_metadata_policy(..)?`.
     ///
     /// **Geometry** comes from [`gain_map.pixels`](crate::gainmap::DecodedGainMap::pixels)
     /// (use the [`width`](crate::gainmap::DecodedGainMap::width) /
@@ -732,7 +735,7 @@ pub trait EncodeJob: Sized {
     ///
     /// // Erase the codec type
     /// let encode = config.job()
-    ///     .with_metadata_policy(meta, MetadataPolicy::Web)
+    ///     .try_with_metadata_policy(meta, MetadataPolicy::Web)?
     ///     .dyn_encoder()?;
     ///
     /// // No generics from here on

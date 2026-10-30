@@ -43,6 +43,12 @@
   replay-driver matrix pass, including strict Clippy; see
   `benchmarks/replay_driver_2026-10-28.md`.
 
+### Deprecated
+
+- Best-effort `EncodeJob::with_metadata_policy` and
+  `DynEncodeJob::set_metadata_policy`; use the checked metadata setters.
+  Compatibility behavior remains unchanged and native support is explicit.
+
 ### Fixed
 
 - Coroutine polling preserves a native failure when cancellation is signalled

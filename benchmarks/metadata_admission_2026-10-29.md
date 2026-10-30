@@ -90,3 +90,26 @@ and labels the QOI example best-effort. All 26 site source controls pass. A
 first local preview refused a stale Rustdoc revision; the old generated preview
 was preserved and a fresh source-only preview built, without weakening the
 revision guard. Matching full Rustdoc had already passed above.
+
+## Deprecation and compatibility qualification
+
+After native independent readback passed, the old best-effort typed/dyn setters
+were deprecated. Compatibility controls retain their behavior with narrowly
+scoped allowances; checked calls are not suppressed. The orientation example
+still qualifies spatial representation, explicitly labeling metadata embedding
+as compatibility behavior until that adapter's checked retention is available.
+
+Source `80c3cf823b18e3817453340a995827eadf05528f` passed workspace all-feature
+all-target tests (1415 passed, 0 failed/ignored) and doctests (31 passed,
+39 existing ignores, 0 failed). Strict Clippy then rejected the orientation
+example's unsuppressed compatibility call: rc101, 195s, peak RSS 0.48 GiB,
+minimum available 14168 MiB, peak load 1.80. No runtime assertion changed.
+
+Source `3a29aa9527fc3117c9e1ab719d97bbc9b89159d3` adds scoped compatibility
+annotations to that example and the standalone historical/native witnesses;
+one existing expression was rustfmt-reflowed without semantic changes. Workspace
+all-feature/all-target strict Clippy, all eight catalogs, strict Rustdoc and all
+26 site source controls pass: rc0, 99s, peak RSS 0.39 GiB, minimum available
+14213 MiB, peak load 1.41. Debug symbols and incremental compilation were disabled
+for these capped validation runs; these are not compile-performance measurements.
+Native follow-through must use the final pinned core revision before landing.

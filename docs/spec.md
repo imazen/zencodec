@@ -79,7 +79,7 @@ Default implementations reject even empty clearing with
 `UnsupportedOperation::MetadataRetention`; static capability flags are not
 admission. Accepted obligations survive later configuration and must be checked
 before affected output. Native retention qualification is still pending; the
-legacy best-effort setter remains available during adoption. See
+legacy best-effort setter is deprecated but remains available during adoption. See
 [the native witness and contract](metadata-retention-admission.md).
 
 ### zenpixels: use but never re-export

@@ -210,6 +210,7 @@ fn native_trace(f: &Fixture, checksum: bool, access: Access) -> (EncodePlan, usi
 }
 
 #[test]
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 fn native_retained_jobs_match_in_place_bytes_across_public_routes_and_dispatches() {
     for descriptor in [PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGB16_SRGB] {
         let fixture = Fixture::new(descriptor);

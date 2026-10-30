@@ -77,9 +77,10 @@ HDR-pixel fixture from metadata admission. Keep supplied-metadata tests requirin
 verified retention or explicit unsupported/refusal, including false/unknown
 capability declarations and silent-success mutants. Native HDR pixel support is
 not a guarantee of CLL/MDCV carriers, and a false carrier flag is not permission
-to silently disregard a required field. Deprecate the old best-effort setters
-only when the tested replacement is available; a renamed filter alone would not
-fix this contract.
+to silently disregard a required field. The old best-effort setters are deprecated now that the checked primitive and
+a real JPEG implementation have passed retention controls. Their compatibility
+behavior remains unchanged; deprecation does not imply every codec implements
+the checked path. A renamed filter alone would not fix this contract.
 
 This design does not certify opaque ICC/XML as PII-free, preserve unreported
 container metadata, or solve general deferred obligations. Those remain scoped
@@ -89,10 +90,15 @@ Implementation tracking: [checked encode metadata admission, issue184](https://g
 
 Core ownership/forwarding tests do not certify native retention. JPEG/PNG native
 adoption, declaration-conflict controls and independent positive readback remain
-required before deprecating the best-effort setter.
+required for each native adapter before claiming its checked retention support.
 
 An explicitly requested orientation bake may normalize the output orientation
 to identity and reconcile EXIF, provided pixels are actually transformed.
 Retention alone never authorizes that transform. Readback conformance compares
 the resolved output record, not the pre-bake input orientation. Other retained
 fields remain required; this exception does not authorize dropping opaque EXIF.
+
+JPEG `7579c288` passed independent EXIF/ICC/XMP inspection and decoded-sample
+parity against its established Verbatim path. Its production source and lock
+match the previously qualified `92ce25dd` progress/cancellation/seed run. This
+is a frozen native candidate, not a landed all-codec retention guarantee.

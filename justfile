@@ -1815,3 +1815,19 @@ metadata-admission-docs:
 metadata-retention-conformance-check:
     cargo test --locked -p zencodec-testkit --lib metadata_retention
     cargo clippy --locked -p zencodec-testkit --lib --tests -- -D warnings
+
+# Warning migration preserves compatibility tests while exposing checked setters.
+metadata-deprecation-check:
+    cargo test --locked --workspace --all-features --all-targets
+    cargo test --locked --workspace --all-features --doc
+    cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check
+
+# Continue after compatibility-only annotations; runtime tests use the retained receipt.
+metadata-deprecation-followup:
+    cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check

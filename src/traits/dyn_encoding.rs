@@ -10,7 +10,7 @@
 //! ```rust,ignore
 //! fn save(config: &dyn DynEncoderConfig, data: &[u8], w: u32, h: u32) -> Result<Vec<u8>, BoxedError> {
 //!     let mut job = config.dyn_job();
-//!     job.set_metadata_policy(meta, MetadataPolicy::Web);
+//!     job.try_set_metadata_policy(meta, MetadataPolicy::Web)?;
 //!     job.set_limits(limits);
 //!     let encoder = job.into_encoder()?;
 //!     let output = encoder.encode_srgba8(data, true, w, h, w)?;
@@ -535,15 +535,18 @@ pub trait DynEncodeJob {
     /// and routes through [`set_metadata`](Self::set_metadata). Has a default so
     /// adding it is not a breaking change for downstream implementors; the blanket
     /// impl overrides it to filter before the job is consumed.
+    #[deprecated(
+        note = "best-effort retention may omit supplied fields; use try_set_metadata_policy"
+    )]
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
         #[allow(deprecated)]
         self.set_metadata(meta.filtered(&policy));
     }
 
     /// Set metadata (ICC, EXIF, XMP) to embed, without a retention policy. Prefer
-    /// [`set_metadata_policy`](Self::set_metadata_policy) so retention is explicit.
+    /// [`try_set_metadata_policy`](Self::try_set_metadata_policy) so retention is checked.
     #[deprecated(note = "embeds metadata without an explicit retention policy; use \
-                set_metadata_policy(meta, policy)")]
+                try_set_metadata_policy(meta, policy)")]
     fn set_metadata(&mut self, meta: Metadata);
 
     /// Set animation canvas dimensions.
@@ -685,6 +688,7 @@ where
         job.try_set_metadata_policy(meta, policy)
     }
 
+    #[allow(deprecated)] // Preserve the deprecated best-effort forwarding contract.
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
         self.try_apply(|job| job.with_metadata_policy(meta, policy));
     }

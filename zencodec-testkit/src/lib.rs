@@ -422,6 +422,7 @@ impl CollectSink {
 // Encode / decode path runners (generic over codec config)
 // ===========================================================================
 
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_oneshot<E>(
     cfg: &E,
     img: &TestImage,
@@ -444,6 +445,7 @@ where
         .into_vec())
 }
 
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -583,6 +585,7 @@ where
 ///   zero-size refusal, `begin` with the real size on the same encoder
 ///   reports the same timing and streams the same file.
 /// - Every run reports the same timing.
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -1010,6 +1013,7 @@ where
     Ok(())
 }
 
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_animation<E>(cfg: &E, frames: &[TestImage], meta: Metadata) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -1195,6 +1199,7 @@ where
 /// Skipped (returns `Ok`) when the encoder does not advertise animation.
 /// `begin` may decline with an [`UnsupportedOperation`]; any other error
 /// fails the check.
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_animation_streaming_output_honesty<E, D>(
     enc: E,
     dec: D,
@@ -2068,6 +2073,7 @@ fn foreign_format<E: EncoderConfig>() -> ImageFormat {
 }
 
 /// Encode `img` with `gm` attached via `with_gain_map_pixels` (one-shot path).
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_with_gain_map<E>(cfg: &E, img: &TestImage, gm: DecodedGainMap) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -2090,6 +2096,7 @@ where
 /// Encode `img` with `gm` attached, through the incremental `push_rows` +
 /// `finish` path — a separate code path in real codecs, where a job-level
 /// setting is easy to leave behind.
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows_with_gain_map<E>(
     cfg: &E,
     img: &TestImage,
@@ -3138,6 +3145,7 @@ where
     }
 }
 
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
@@ -3158,6 +3166,7 @@ where
     Ok(e.finish()?.into_vec())
 }
 
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_encode_from<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
