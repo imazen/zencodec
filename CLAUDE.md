@@ -854,3 +854,12 @@ confirm supplied mastering fields did not change output. with_metadata_policy
 filters before best-effort embedding; it is not checked admission. PR158's
 capability-based conditional assertions must not mask this gap. See
 docs/metadata-retention-admission.md and just metadata-retention-probe.
+
+## Shared testkit diagnostics and standalone locks (2026-10-29)
+
+Moving diagnostic crates from testkit dev dependencies into reusable library
+helpers changes downstream lock edges even when the root Cargo.lock is unchanged.
+The first PR185 native JPEG CI job refused --locked before compilation. JPEG
+and API-usability tracked dependency locks now include the diagnostic edges;
+isolated locked metadata verifies the graphs without changing existing pins.
+See benchmarks/pulse_checkpoints_2026-10-29.md.

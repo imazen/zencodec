@@ -980,6 +980,7 @@ jpeg-policy-update-lock:
     cargo update --manifest-path perf/jpeg-policy-validation/Cargo.toml
 
 jpeg-policy-check artifacts="$HOME/tmp/zencodec-jpeg-oracles":
+    just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
@@ -1768,3 +1769,32 @@ metadata-retention-probe artifacts:
 
 metadata-retention-probe-check:
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --example metadata_retention --locked -- -D warnings
+
+# Shared deterministic one-shot Pulse oracle and its deliberately broken controls.
+pulse-checkpoints-check:
+    cargo test -p zencodec-testkit --test pulse_checkpoints --locked
+    cargo clippy -p zencodec-testkit --test pulse_checkpoints --locked -- -D warnings
+
+# Full testkit plus generated reference/site qualification for shared Pulse controls.
+pulse-checkpoints-qualification:
+    cargo test -p zencodec-testkit --all-targets --locked
+    cargo test -p zencodec-testkit --doc --locked
+    cargo clippy -p zencodec-testkit --all-targets --locked -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check
+
+# Resolve the chosen harness graph before spending CPU on native compilation.
+codec-graph-check manifest report="$HOME/tmp/zencodec-codec-graph.json":
+    mkdir -p "$(dirname "{{report}}")"
+    cargo metadata --manifest-path "{{manifest}}" --locked --format-version 1 > "{{report}}"
+    python3 scripts/check-codec-graph.py "{{report}}"
+
+codec-graph-controls:
+    python3 scripts/check-codec-graph.test.py
+
+# Native JPEG/PNG adoption of the shared checkpoint oracle, retaining JSON traces.
+pulse-native-check artifacts="$HOME/tmp/zencodec-native-pulse":
+    just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked pulse_diagnostics:: -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

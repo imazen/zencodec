@@ -80,6 +80,7 @@
 //! [`DecoderConfig`]: zencodec::decode::DecoderConfig
 
 mod preparation;
+pub mod pulse;
 
 use std::borrow::Cow;
 use std::sync::Arc;
