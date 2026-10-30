@@ -1750,3 +1750,8 @@ compile-observer-run zenbench root:
 fused-cancellation-check:
     cargo test -p zencodec-testkit --test fused_post_call_cancellation --locked
     cargo clippy -p zencodec-testkit --test fused_post_call_cancellation --locked -- -D warnings
+
+# Final coroutine sink hooks must not turn cancellation into successful Done.
+coroutine-sink-cancellation-check:
+    cargo test -p zencodec-coroutine --test details --locked
+    cargo clippy -p zencodec-coroutine --test details --locked -- -D warnings

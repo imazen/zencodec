@@ -829,3 +829,11 @@ failure and unavailable completion details; native errors remain primary. Three
 failing-first controls, both stop reasons, native-error controls, full workspace
 all-feature tests/doctests and strict Clippy pass. Existing sink effects remain
 irrevocable. See benchmarks/fused_cancellation_2026-10-29.md.
+
+## Coroutine sink completion cancellation (2026-10-29)
+
+A sink could signal cancellation during final begin/finish and still receive a
+subsequent finish or successful Done. Post-hook checks now prevent that, retain
+sink-error priority, and release pending details before decoder drop. The
+failing-first eight-case control and coroutine/I/O tests, doctests and strict
+Clippy pass. See benchmarks/coroutine_sink_cancellation_2026-10-29.md.

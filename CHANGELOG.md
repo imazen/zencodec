@@ -38,6 +38,9 @@
 
 ### Fixed
 
+- Coroutine completion checks cancellation between final sink begin/finish and
+  Done, preserving sink errors and releasing pending details on interruption.
+
 - `Fused` observes cancellation after successful native steps and resumes,
   retaining native error priority and terminal failure even if later calls omit
   Pulse. Already-delivered sink effects are not rolled back.

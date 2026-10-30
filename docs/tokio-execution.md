@@ -409,3 +409,9 @@ code must still poll inside expensive operations. `just fused-cancellation-check
 uses one-shot cancellation and timeout signals so repeated polling cannot mask
 the first interruption. For progress quality and native polling coverage, use
 the how-far diagnostic traces in `just native-pulse-diagnostics-check ARTIFACTS`.
+
+The coroutine adapter also checks after a successful final `sink.begin` and
+`sink.finish`. A stop during begin prevents finish; a stop during finish prevents
+Done and release of successful completion details. The adapter remains terminal,
+and drops pending result owners. A sink error remains primary when the same hook
+also signals cancellation. Already-completed sink effects remain visible.

@@ -312,7 +312,7 @@ where
             return self.deliver_rows(rows, offset, 0, sink);
         }
         if let State::Finishing(info) = &self.state {
-            return self.finish(sink, info.clone(), 0).map(Into::into);
+            return self.finish(sink, info.clone(), 0, pulse).map(Into::into);
         }
         self.state = State::Failed;
         let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0)
@@ -368,7 +368,7 @@ where
                         self.state = State::Finishing(info);
                         self.need.clear();
                     } else {
-                        return self.finish(sink, info, consumed).map(Into::into);
+                        return self.finish(sink, info, consumed, pulse).map(Into::into);
                     }
                 }
                 Poll::Ready(Err(e)) => {
@@ -674,6 +674,7 @@ where
         sink: &mut dyn DecodeRowSink,
         info: OutputInfo,
         consumed: usize,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<E>> {
         // Final sink callbacks may unwind. A caught panic must never resume a
         // completed future or expose its pending details as successful output.
@@ -703,12 +704,14 @@ where
             self.state = State::Failed;
             return Err(e);
         }
+        pulse.check()?;
         if self.begun
             && let Err(e) = sink.finish()
         {
             self.state = State::Failed;
             return Err(StepError::Sink(e));
         }
+        pulse.check()?;
         self.state = State::Done(info.clone());
         self.need.clear();
         let mut shared = self.shared.lock();
