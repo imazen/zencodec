@@ -90,11 +90,11 @@ def source_details(rustdoc, root, directory):
         source = root / filename
         if not source.is_file():
             raise RuntimeError(f"Missing source for {name}: {source}")
-        result.append({"path": name, "file": filename.as_posix(),
+        result.append({"path": name, "kind": next(iter(item["inner"])), "file": filename.as_posix(),
                        "line": span["begin"][0], "end": span["end"][0],
                        "docs": item.get("docs") or "",
                        "deprecated": item.get("deprecation")})
-    return sorted(result, key=lambda item: item["path"])
+    return sorted(result, key=lambda item: (item["path"], item["kind"], item["file"], item["line"]))
 
 
 def main():

@@ -515,3 +515,18 @@ are recorded in the [receipt](../benchmarks/metadata_admission_2026-10-29.md).
 JPEG PR252 subsequently merged as `13a8a23b`, after strict all-target Clippy
 passed on the identical native library and lock. PNG checked adoption remains open. The diagnostic witness still describes the unchanged
 best-effort native paths; these are not silently upgraded by the deprecation.
+
+### Paired dependency qualification update (2026-10-30)
+
+The zenpixels 0.3.1 pair passed fresh all-target tests, doctests, all-feature tests,
+strict Clippy and Rustdoc. Actual extracted packages also passed all-feature
+library checks, doctests and minimal-feature WASM checks using an explicit patch
+to the extracted core package. See the
+[paired receipt](https://github.com/imazen/zenpixels/blob/main/benchmarks/release_source_2026-10-30.md).
+This is not registry publication: required platform CI and explicit publication
+approval remain gates, followed by zencodec's unpatched packaged-crate check.
+
+The core README refresh required catalog regeneration. The regenerated guide
+and matching Rustdoc pass locally, including the complete browser suite;
+[the receipt](../benchmarks/core_package_2026-10-30.md) records the original CI
+failure and the field/method documentation fix found during review.

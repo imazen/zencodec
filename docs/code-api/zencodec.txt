@@ -453,12 +453,12 @@ pub fn zencodec::gainmap::DecodedGainMap::height(&self) -> u32
 pub fn zencodec::gainmap::DecodedGainMap::new(pixels: zenpixels::buffer::PixelBuffer, metadata: zencodec::gainmap::GainMapInfo) -> Self
 pub fn zencodec::gainmap::DecodedGainMap::width(&self) -> u32
 #[non_exhaustive] pub struct zencodec::decode::EmbeddedMetadata
-pub zencodec::decode::EmbeddedMetadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
-pub zencodec::decode::EmbeddedMetadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::decode::EmbeddedMetadata::exif: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub zencodec::decode::EmbeddedMetadata::xmp: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 impl zencodec::decode::EmbeddedMetadata
 pub fn zencodec::decode::EmbeddedMetadata::is_empty(&self) -> bool
-pub fn zencodec::decode::EmbeddedMetadata::with_exif(self, exif: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
-pub fn zencodec::decode::EmbeddedMetadata::with_xmp(self, xmp: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::decode::EmbeddedMetadata::with_exif(self, exif: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn zencodec::decode::EmbeddedMetadata::with_xmp(self, xmp: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub struct zencodec::decode::ErasedError(_)
 impl zencodec::decode::ErasedError
 pub fn zencodec::decode::ErasedError::get_ref(&self) -> &(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)
@@ -566,7 +566,7 @@ pub zencodec::decode::SourceColor::cicp: core::option::Option<zenpixels::cicp::C
 pub zencodec::decode::SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub zencodec::decode::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub zencodec::decode::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub zencodec::decode::SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::decode::SourceColor::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec::decode::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 impl zencodec::SourceColor
 pub fn zencodec::SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
@@ -578,7 +578,7 @@ pub fn zencodec::SourceColor::with_channel_count(self, channel_count: u8) -> Sel
 pub fn zencodec::SourceColor::with_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
 pub fn zencodec::SourceColor::with_color_authority(self, authority: zenpixels::color::ColorAuthority) -> Self
 pub fn zencodec::SourceColor::with_content_light_level(self, clli: zenpixels::hdr::ContentLightLevel) -> Self
-pub fn zencodec::SourceColor::with_icc_profile(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::SourceColor::with_icc_profile(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::SourceColor::with_mastering_display(self, mdcv: zenpixels::hdr::MasteringDisplay) -> Self
 pub trait zencodec::decode::AnimationFrameDecoder: core::marker::Sized
 pub type zencodec::decode::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
@@ -871,9 +871,9 @@ impl core::default::Default for zencodec::encode::AnimationOutputTiming
 pub fn zencodec::encode::AnimationOutputTiming::default() -> Self
 #[non_exhaustive] pub struct zencodec::encode::ColorCarriers
 pub zencodec::encode::ColorCarriers::cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub zencodec::encode::ColorCarriers::icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::encode::ColorCarriers::icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 impl zencodec::encode::ColorCarriers
-pub fn zencodec::encode::ColorCarriers::new(icc: core::option::Option<alloc::sync::Arc<[u8]>>, cicp: core::option::Option<zenpixels::cicp::Cicp>) -> Self
+pub fn zencodec::encode::ColorCarriers::new(icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>, cicp: core::option::Option<zenpixels::cicp::Cicp>) -> Self
 impl core::fmt::Debug for zencodec::encode::ColorCarriers
 pub fn zencodec::encode::ColorCarriers::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::encode::EncodeCapabilities
@@ -1438,10 +1438,10 @@ pub zencodec::frame::Crop::x: u32
 pub zencodec::frame::Crop::y: u32
 pub struct zencodec::frame::Frame
 impl zencodec::frame::Frame
-pub fn zencodec::frame::Frame::interpretation(&self) -> &alloc::sync::Arc<zencodec::frame::FrameInterpretation>
+pub fn zencodec::frame::Frame::interpretation(&self) -> &alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
 pub fn zencodec::frame::Frame::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame::MappedPlanes + '_)>, zencodec::frame::MapError>
-pub fn zencodec::frame::Frame::new(picture: alloc::sync::Arc<dyn zencodec::frame::Picture>, interpretation: alloc::sync::Arc<zencodec::frame::FrameInterpretation>, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
-pub fn zencodec::frame::Frame::picture(&self) -> &alloc::sync::Arc<dyn zencodec::frame::Picture>
+pub fn zencodec::frame::Frame::new(picture: alloc::rcs::arc::Arc<dyn zencodec::frame::Picture>, interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
+pub fn zencodec::frame::Frame::picture(&self) -> &alloc::rcs::arc::Arc<dyn zencodec::frame::Picture>
 pub fn zencodec::frame::Frame::presentation(&self) -> zencodec::frame::Presentation
 pub fn zencodec::frame::Frame::represent(&self, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
 pub fn zencodec::frame::Frame::shares_picture(&self, other: &zencodec::frame::Frame) -> bool
@@ -1579,7 +1579,7 @@ impl core::default::Default for zencodec::gainmap::GainMapChannel
 pub fn zencodec::gainmap::GainMapChannel::default() -> Self
 #[non_exhaustive] pub struct zencodec::gainmap::GainMapInfo
 pub zencodec::gainmap::GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub zencodec::gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec::gainmap::GainMapInfo::bit_depth: u8
 pub zencodec::gainmap::GainMapInfo::channels: u8
 pub zencodec::gainmap::GainMapInfo::height: u32
@@ -1588,7 +1588,7 @@ pub zencodec::gainmap::GainMapInfo::width: u32
 impl zencodec::gainmap::GainMapInfo
 pub fn zencodec::gainmap::GainMapInfo::new(params: zencodec::gainmap::GainMapParams, width: u32, height: u32, channels: u8) -> Self
 pub fn zencodec::gainmap::GainMapInfo::with_alternate_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
-pub fn zencodec::gainmap::GainMapInfo::with_alternate_icc(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::gainmap::GainMapInfo::with_alternate_icc(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::gainmap::GainMapInfo::with_bit_depth(self, bit_depth: u8) -> Self
 #[non_exhaustive] pub struct zencodec::gainmap::GainMapParams
 pub zencodec::gainmap::GainMapParams::alternate_hdr_headroom: f64
@@ -1759,9 +1759,9 @@ pub zencodec::image::ImageInterpretation::geometry: zencodec::image::ImageGeomet
 pub zencodec::image::ImageInterpretation::orientation: core::option::Option<zenpixels::orientation::Orientation>
 pub zencodec::image::ImageInterpretation::placement: core::option::Option<zencodec::image::Placement>
 pub zencodec::image::ImageInterpretation::presentation: core::option::Option<zencodec::frame::Presentation>
-pub zencodec::image::ImageInterpretation::signal: core::option::Option<alloc::sync::Arc<zencodec::frame::FrameInterpretation>>
+pub zencodec::image::ImageInterpretation::signal: core::option::Option<alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>>
 pub zencodec::image::ImageInterpretation::source_details: zencodec::Extensions
-pub zencodec::image::ImageInterpretation::source_frame: core::option::Option<alloc::sync::Arc<zencodec::frame::FrameInterpretation>>
+pub zencodec::image::ImageInterpretation::source_frame: core::option::Option<alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>>
 pub zencodec::image::ImageInterpretation::timing: core::option::Option<zencodec::frame::FrameTiming>
 impl zencodec::image::ImageInterpretation
 pub fn zencodec::image::ImageInterpretation::packed(geometry: zencodec::image::ImageGeometry, orientation: zenpixels::orientation::Orientation) -> Self
@@ -1771,7 +1771,7 @@ pub fn zencodec::image::ImageOutput::from_frame(frame: zencodec::frame::Frame) -
 pub fn zencodec::image::ImageOutput::interpretation(&self) -> &zencodec::image::ImageInterpretation
 pub fn zencodec::image::ImageOutput::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::image::MappedImage + '_)>, whereat::at::At<zencodec::image::OutputError>>
 pub fn zencodec::image::ImageOutput::packed(pixels: zenpixels::buffer::PixelBuffer, extras: alloc::vec::Vec<(zencodec::image::Auxiliary, zencodec::image::Values)>, interpretation: zencodec::image::ImageInterpretation) -> core::result::Result<Self, whereat::at::At<zencodec::image::OutputError>>
-pub fn zencodec::image::ImageOutput::source_frame(&self) -> core::option::Option<&alloc::sync::Arc<zencodec::frame::FrameInterpretation>>
+pub fn zencodec::image::ImageOutput::source_frame(&self) -> core::option::Option<&alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>>
 pub fn zencodec::image::ImageOutput::with_pixels<T>(&self, consume: impl core::ops::function::FnOnce(zenpixels::buffer::PixelSlice<'_>) -> T) -> core::result::Result<T, whereat::at::At<zencodec::image::OutputError>>
 impl zencodec::image::ImageOutput
 pub fn zencodec::image::ImageOutput::from_frame_pixels<P: zencodec::image::PackedImageOwner + 'static>(frame: zencodec::frame::Frame, owner: P, orientation: zenpixels::orientation::Orientation) -> core::result::Result<Self, whereat::at::At<zencodec::image::OutputError>>
@@ -1819,7 +1819,7 @@ pub fn zencodec::image::MappedImage::plane_count(&self) -> usize
 pub trait zencodec::image::PackedImageOwner: core::marker::Send + core::marker::Sync
 pub fn zencodec::image::PackedImageOwner::auxiliary(&self, _index: usize) -> core::result::Result<core::option::Option<zencodec::image::ValueSlice<'_>>, whereat::at::At<zencodec::image::OutputError>>
 pub fn zencodec::image::PackedImageOwner::pixels(&self) -> core::result::Result<zenpixels::buffer::PixelSlice<'_>, whereat::at::At<zencodec::image::OutputError>>
-pub fn zencodec::image::PackedImageOwner::retain_auxiliaries(&self) -> core::result::Result<core::option::Option<alloc::sync::Arc<dyn zencodec::image::AuxiliaryImageOwner>>, whereat::at::At<zencodec::image::OutputError>>
+pub fn zencodec::image::PackedImageOwner::retain_auxiliaries(&self) -> core::result::Result<core::option::Option<alloc::rcs::arc::Arc<dyn zencodec::image::AuxiliaryImageOwner>>, whereat::at::At<zencodec::image::OutputError>>
 pub mod zencodec::inventory
 #[non_exhaustive] pub enum zencodec::inventory::Disposition
 pub zencodec::inventory::Disposition::Dropped
@@ -2419,11 +2419,11 @@ pub fn zencodec::operation::PolicySet::check_workspace(self, qualified_upper_bou
 impl core::default::Default for zencodec::operation::PolicySet
 pub fn zencodec::operation::PolicySet::default() -> Self
 impl zencodec::operation::OperationPolicy for &mut zencodec::operation::PolicySet
-pub type &mut zencodec::operation::PolicySet::Error = core::convert::Infallible
+pub type &mut zencodec::operation::PolicySet::Error = never
 pub fn &mut zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
 pub fn &mut zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 impl zencodec::operation::OperationPolicy for zencodec::operation::PolicySet
-pub type zencodec::operation::PolicySet::Error = core::convert::Infallible
+pub type zencodec::operation::PolicySet::Error = never
 pub fn zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
 pub fn zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 pub struct zencodec::operation::PreparedEncode
@@ -2470,11 +2470,11 @@ pub type zencodec::operation::OperationPolicy::Error: core::error::Error + core:
 pub fn zencodec::operation::OperationPolicy::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<Self::Error>>
 pub fn zencodec::operation::OperationPolicy::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 impl zencodec::operation::OperationPolicy for &mut zencodec::operation::PolicySet
-pub type &mut zencodec::operation::PolicySet::Error = core::convert::Infallible
+pub type &mut zencodec::operation::PolicySet::Error = never
 pub fn &mut zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
 pub fn &mut zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 impl zencodec::operation::OperationPolicy for zencodec::operation::PolicySet
-pub type zencodec::operation::PolicySet::Error = core::convert::Infallible
+pub type zencodec::operation::PolicySet::Error = never
 pub fn zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
 pub fn zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 impl<F, E> zencodec::operation::OperationPolicy for F where F: core::ops::function::FnMut(zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
@@ -3441,8 +3441,8 @@ pub struct zencodec::CodecIoKind
 impl zencodec::CodecIoKind
 pub const fn zencodec::CodecIoKind::kind(&self) -> core::option::Option<core::io::error::ErrorKind>
 pub const fn zencodec::CodecIoKind::opaque() -> Self
-impl core::convert::From<&std::io::error::Error> for zencodec::CodecIoKind
-pub fn zencodec::CodecIoKind::from(e: &std::io::error::Error) -> Self
+impl core::convert::From<&core::io::error::Error> for zencodec::CodecIoKind
+pub fn zencodec::CodecIoKind::from(e: &core::io::error::Error) -> Self
 impl core::convert::From<core::io::error::ErrorKind> for zencodec::CodecIoKind
 pub fn zencodec::CodecIoKind::from(kind: core::io::error::ErrorKind) -> Self
 pub struct zencodec::CodecSet
@@ -3597,7 +3597,7 @@ impl core::default::Default for zencodec::gainmap::GainMapChannel
 pub fn zencodec::gainmap::GainMapChannel::default() -> Self
 #[non_exhaustive] pub struct zencodec::GainMapInfo
 pub zencodec::GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub zencodec::GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::GainMapInfo::alternate_icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec::GainMapInfo::bit_depth: u8
 pub zencodec::GainMapInfo::channels: u8
 pub zencodec::GainMapInfo::height: u32
@@ -3606,7 +3606,7 @@ pub zencodec::GainMapInfo::width: u32
 impl zencodec::gainmap::GainMapInfo
 pub fn zencodec::gainmap::GainMapInfo::new(params: zencodec::gainmap::GainMapParams, width: u32, height: u32, channels: u8) -> Self
 pub fn zencodec::gainmap::GainMapInfo::with_alternate_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
-pub fn zencodec::gainmap::GainMapInfo::with_alternate_icc(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::gainmap::GainMapInfo::with_alternate_icc(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::gainmap::GainMapInfo::with_bit_depth(self, bit_depth: u8) -> Self
 #[non_exhaustive] pub struct zencodec::GainMapParams
 pub zencodec::GainMapParams::alternate_hdr_headroom: f64
@@ -3668,7 +3668,7 @@ pub zencodec::ImageInfo::orientation: zenpixels::orientation::Orientation
 pub zencodec::ImageInfo::resolution: core::option::Option<zencodec::Resolution>
 pub zencodec::ImageInfo::sequence: zencodec::ImageSequence
 pub zencodec::ImageInfo::source_color: zencodec::SourceColor
-pub zencodec::ImageInfo::source_encoding: core::option::Option<alloc::sync::Arc<dyn zencodec::SourceEncodingDetails>>
+pub zencodec::ImageInfo::source_encoding: core::option::Option<alloc::rcs::arc::Arc<dyn zencodec::SourceEncodingDetails>>
 pub zencodec::ImageInfo::supplements: zencodec::Supplements
 pub zencodec::ImageInfo::warnings: alloc::vec::Vec<alloc::string::String>
 pub zencodec::ImageInfo::width: u32
@@ -3693,9 +3693,9 @@ pub fn zencodec::ImageInfo::with_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
 pub fn zencodec::ImageInfo::with_color_authority(self, authority: zenpixels::color::ColorAuthority) -> Self
 pub fn zencodec::ImageInfo::with_content_light_level(self, clli: zenpixels::hdr::ContentLightLevel) -> Self
 pub fn zencodec::ImageInfo::with_embedded_metadata(self, embedded_metadata: zencodec::decode::EmbeddedMetadata) -> Self
-pub fn zencodec::ImageInfo::with_exif(self, exif: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::ImageInfo::with_exif(self, exif: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::ImageInfo::with_gain_map(self, gain_map: zencodec::gainmap::GainMapPresence) -> Self
-pub fn zencodec::ImageInfo::with_icc_profile(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::ImageInfo::with_icc_profile(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::ImageInfo::with_mastering_display(self, mdcv: zenpixels::hdr::MasteringDisplay) -> Self
 pub fn zencodec::ImageInfo::with_orientation(self, orientation: zenpixels::orientation::Orientation) -> Self
 pub fn zencodec::ImageInfo::with_progressive(self, progressive: bool) -> Self
@@ -3706,7 +3706,7 @@ pub fn zencodec::ImageInfo::with_source_encoding_details<T: zencodec::SourceEnco
 pub fn zencodec::ImageInfo::with_supplements(self, supplements: zencodec::Supplements) -> Self
 pub fn zencodec::ImageInfo::with_warning(self, msg: alloc::string::String) -> Self
 pub fn zencodec::ImageInfo::with_warnings(self, msgs: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn zencodec::ImageInfo::with_xmp(self, xmp: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::ImageInfo::with_xmp(self, xmp: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 impl core::cmp::PartialEq for zencodec::ImageInfo
 pub fn zencodec::ImageInfo::eq(&self, other: &Self) -> bool
 impl core::convert::From<&zencodec::ImageInfo> for zencodec::Metadata
@@ -3717,11 +3717,11 @@ pub fn zencodec::ImageInfo::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core
 pub zencodec::Metadata::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub zencodec::Metadata::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub zencodec::Metadata::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub zencodec::Metadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
-pub zencodec::Metadata::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::Metadata::exif: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub zencodec::Metadata::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec::Metadata::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub zencodec::Metadata::orientation: zenpixels::orientation::Orientation
-pub zencodec::Metadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::Metadata::xmp: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 impl zencodec::Metadata
 pub fn zencodec::Metadata::clear_diffuse_white(self) -> Self
 pub fn zencodec::Metadata::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
@@ -3734,11 +3734,11 @@ pub fn zencodec::Metadata::with_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
 pub fn zencodec::Metadata::with_content_light_level(self, clli: zenpixels::hdr::ContentLightLevel) -> Self
 pub fn zencodec::Metadata::with_copyright(self, copyright: &str) -> Self
 pub fn zencodec::Metadata::with_diffuse_white(self, white: zenpixels::hdr::DiffuseWhite) -> Self
-pub fn zencodec::Metadata::with_exif(self, exif: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
-pub fn zencodec::Metadata::with_icc(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::Metadata::with_exif(self, exif: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn zencodec::Metadata::with_icc(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::Metadata::with_mastering_display(self, mdcv: zenpixels::hdr::MasteringDisplay) -> Self
 pub fn zencodec::Metadata::with_orientation(self, orientation: zenpixels::orientation::Orientation) -> Self
-pub fn zencodec::Metadata::with_xmp(self, xmp: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::Metadata::with_xmp(self, xmp: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 impl core::convert::From<&zencodec::ImageInfo> for zencodec::Metadata
 pub fn zencodec::Metadata::from(info: &zencodec::ImageInfo) -> Self
 #[non_exhaustive] pub struct zencodec::MetadataFields
@@ -3831,7 +3831,7 @@ pub zencodec::SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub zencodec::SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub zencodec::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub zencodec::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub zencodec::SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub zencodec::SourceColor::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub zencodec::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 impl zencodec::SourceColor
 pub fn zencodec::SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
@@ -3843,7 +3843,7 @@ pub fn zencodec::SourceColor::with_channel_count(self, channel_count: u8) -> Sel
 pub fn zencodec::SourceColor::with_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
 pub fn zencodec::SourceColor::with_color_authority(self, authority: zenpixels::color::ColorAuthority) -> Self
 pub fn zencodec::SourceColor::with_content_light_level(self, clli: zenpixels::hdr::ContentLightLevel) -> Self
-pub fn zencodec::SourceColor::with_icc_profile(self, icc: impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn zencodec::SourceColor::with_icc_profile(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn zencodec::SourceColor::with_mastering_display(self, mdcv: zenpixels::hdr::MasteringDisplay) -> Self
 pub struct zencodec::StreamOffset(pub u64)
 impl core::fmt::Display for zencodec::StreamOffset

@@ -92,3 +92,16 @@ test('short tails and example initialization stay visible without accordion cont
   assert.equal(inlineContext('use a::A;\nuse b::B;\nuse c::C;',true),false);
   assert.equal(inlineContext('fn unrelated() {\n let x = 1;\n}\n',false),false);
 });
+
+test('same-named fields and methods retain their own contracts in either rustdoc order',()=>{
+  const surface='pub zencodec::policy::DecodePolicy::strict: bool\npub fn zencodec::policy::DecodePolicy::strict() -> Self';
+  const details=[
+    {path:'zencodec::policy::DecodePolicy::strict',kind:'struct_field',file:'src/policy.rs',line:81,docs:'Field contract'},
+    {path:'zencodec::policy::DecodePolicy::strict',kind:'function',file:'src/policy.rs',line:103,docs:'Constructor contract'},
+  ];
+  for(const order of [details,[...details].reverse()]) {
+    const items=catalogItems(surface,order);
+    assert.equal(items[0].detail.docs,'Field contract');
+    assert.equal(items[1].detail.docs,'Constructor contract');
+  }
+});

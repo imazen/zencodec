@@ -55,3 +55,23 @@ again in explicit paired-source mode. No library source changes. Log:
 /home/lilith/tmp/zencodec-core-release-20261030/package-readme.log on r7900x;
 wrapper rc0, 2s, peak RSS 0.14 GiB, minimum available 13809 MiB, peak load 0.29.
 Registry-only qualification and publishing approval remain required.
+
+## Release documentation qualification
+
+The README change in `b38305f7` correctly invalidated the source catalog and
+blocked Documentation CI run 41023020223. Regeneration from that source passed
+strict eight-crate Rustdoc, 26 source checks and the complete browser suite:
+`rc=0 92s | peak-RSS 0.34GiB | min-avail 12789MiB | peak-load 2.01`.
+
+Review exposed ambiguous field/method paths in rustdoc details, including
+`DecodePolicy::strict` and `MuxHint::forward_only`. Details now retain item kinds
+and deterministic ordering; rendering selects the matching kind. The new control
+initially failed because the field-path parser retained the declaration colon.
+The parser correction preserves the field's documentation. No existing test
+assertion was relaxed. Final 27 source checks and the complete browser suite pass:
+`rc=0 67s | peak-RSS 0.34GiB | min-avail 12844MiB | peak-load 0.88`.
+The initial correction failure remains recorded separately (`rc=1`, 8 seconds).
+
+The raw catalog was regenerated with the installed compiler. Its standard-library
+canonical paths changed; library source and API signatures were not edited.
+Validation wrapper memory is not a codec workspace or performance claim.

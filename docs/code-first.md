@@ -34,8 +34,9 @@ workspace path overrides. It requires installed `cargo-public-api` and its
 nightly rustdoc toolchain. The generator verifies each source input against this
 checkout before extracting declarations and documentation.
 
-Commit the updated `docs/code-api/` documentation with an API change. The site
-build verifies source/manifest fingerprints and both generated-file checksums;
+Commit the updated `docs/code-api/` documentation with changes to crate sources,
+manifests or crate READMEs, including documentation-only release edits. The site
+build verifies all three input kinds and both generated-file checksums;
 it refuses stale catalogs. Builds do not contact a documentation service.
 
 Run `just docs-site-browser-check 3547`. This checks all source scopes,
@@ -81,3 +82,11 @@ is not a claim that optional/default behavior meets an application's needs.
 Source signature extraction preserves array lengths and const-generic arguments;
 semicolons inside `[T; N]` are not declaration terminators. Pinned dependency
 recaptures retain the revision, full-source checksums and hyperlinks.
+
+## Field and method contracts
+
+The compiler may report a field and an inherent method at the same qualified
+path (`DecodePolicy::strict`, for example). Catalog details retain rustdoc item
+kinds, and rendering selects the matching kind instead of the last item emitted
+by rustdoc. Field declaration colons are excluded from path lookup. Ambiguous
+aliases do not acquire another declaration's documentation.

@@ -5,17 +5,17 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "04221f6428700108e7aa989a5ec0b264ab48755b431670b5f48bd053901eff68",
-      "surface_sha256": "1c0263c64b57614b5e4bf3cadf9c18e2e1c7a70f2d2d441470fa46ba3575617c",
-      "details_sha256": "5985a65810b4b78b0ea78e5f369b59df94f93f0f030bfdfa5ce0bf74f2acbf3d"
+      "fingerprint": "8e5d46a9ff7146d8d07d37b6b03d32316f76ad109f834c1dd94ddc1f23d1d7a4",
+      "surface_sha256": "698870055e91aa55ae7d9942edeee65a9074984fbb4cb072d5fcee51cff18428",
+      "details_sha256": "b966b3f9b4a3883aea85b252abe4cd0b6942e00960792c40c3970249550b859d"
     },
     {
       "name": "zencodec-io",
       "directory": "zencodec-io",
       "features": "all",
       "fingerprint": "f3090ba359c6c9d09cdc41eb86b5afd567f3cbe5c5d1d953e89376e972d9d8cf",
-      "surface_sha256": "d5a2767f93da45a78cf12560228af9bd454e1eb8ccfd754a3c6adfa65e88bb1e",
-      "details_sha256": "de3e7969869c8400bc25c823f5f76ee6eac745c95f0c6bd7c5f7ef9237dbcd0a"
+      "surface_sha256": "8592df57ddab2e7aaaab39f99ad8b1ff4cc09b5a2cae8002f8a7e06d89bd9014",
+      "details_sha256": "5672c8713a6e049d2946fcc6d7d7195a56be026aedee8c982bb6421ad7b70940"
     },
     {
       "name": "zencodec-coroutine",
@@ -23,15 +23,15 @@
       "features": "all",
       "fingerprint": "5c3a42345b2eb34b4824b16ac9b5b17bbde5b3389dc827e7477959ed80203184",
       "surface_sha256": "5c5f6deb80a8cddeeacefb6e52b98dd31984b07a2cc9d0fdd1e656d0a1da5def",
-      "details_sha256": "6a80bca7d51ea220a1c155bb0c25cd1a04b159dce6d6251e0a9b7a0913d23ccf"
+      "details_sha256": "dcb39bc275ef86e81331f29da6474f75f83c5269c93e241b9e57269fa16ce6a6"
     },
     {
       "name": "zencodec-media",
       "directory": "zencodec-media",
       "features": "all",
       "fingerprint": "18b9c0a64c33f455dfa9ab5e78393f140c3629c08e007fa71ccea2676bfa8065",
-      "surface_sha256": "76f3c5e212008487f198448f3de83bf116930607bee54102f3ec3ac6e77bfa67",
-      "details_sha256": "5e24cfe6d9f18525f4bf3da3be45d84d0d7599c2bfc1f15aa3716ea1043b9a27"
+      "surface_sha256": "d5965d201f60f33442d1e44c4778172867404a7273868b058c206504de347fc4",
+      "details_sha256": "ecf869c76d079004e8050e56fd91ca0ea84d702bbba56198b3bad6e0cc14af98"
     },
     {
       "name": "zencodec-testkit",
@@ -39,7 +39,7 @@
       "features": "all",
       "fingerprint": "97340afbc3c4dad2e9b5600958e456aacb36bda3a7c909e0a30da9c58b9042a9",
       "surface_sha256": "357b033477c3e09173126ed98008b94eb59d15202170af41fabc6a55d2a68629",
-      "details_sha256": "1e1943afc7d8c3bae6db3b9dc0a49f885e1b2bc716429ca079507aa7b33f5e04"
+      "details_sha256": "3f204506189e94430713845db5fb47bf47fbf62feb7fa37c53635a710f1729aa"
     },
     {
       "name": "zencodec-media-testkit",
@@ -47,7 +47,7 @@
       "features": "all",
       "fingerprint": "b9f75974c0a3a4240bc1a388ce05452965df18028f5a175973bb1d4e24ed00a6",
       "surface_sha256": "ca215f9f717bef4ac207a9b564f078b1b11585341709b4900721e1cd07c2d5b2",
-      "details_sha256": "88626543ad4fdeb0052693742e5b179b7293ec22788972f16284979fb662691c"
+      "details_sha256": "8d41cccd23d07129e936ecd0259233dbc53171a08d83f1797bb4970f3cdec3f2"
     },
     {
       "name": "zenmeta",
@@ -55,15 +55,15 @@
       "features": "all",
       "fingerprint": "1c0afbca659d0c359391355e01455c7baaf910b4a4e00c471f4ce51c39920bb7",
       "surface_sha256": "82a2ec3c646e349305e23e6ee0325cf0fdd9751c150bd22d74222a5e53ede41d",
-      "details_sha256": "629a2a51300ac46e0d60c51979e717002873f23654f3759624ccbfd2fb8d47ae"
+      "details_sha256": "aabddefa14e1d8d368fcad107fb9c7b7d88e1cc593e65eae63c4b885fc96a20a"
     },
     {
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
       "fingerprint": "8b78e7b86cafc414833ed82651ace8eb4ca29e843ee7f02fc4989ef67c8147b4",
-      "surface_sha256": "7ea275e869edeb32f973a0b3b40b5c734e6ba4d1a21a1ac6ea02232978c8cc9a",
-      "details_sha256": "f3751e02cf7d4d18067d84c1596913cdac0a45f8b0bb66f353963b108e68b9d8"
+      "surface_sha256": "e8cf095bf46b03712b0d77f9c1f613691c48590b22013e0d7fbb182acd92fd73",
+      "details_sha256": "2702320d44b86d997df7d923dd4f8d68f629afabb9a307ad01a52c22a2d1f5cb"
     }
   ]
 }
