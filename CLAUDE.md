@@ -837,3 +837,11 @@ subsequent finish or successful Done. Post-hook checks now prevent that, retain
 sink-error priority, and release pending details before decoder drop. The
 failing-first eight-case control and coroutine/I/O tests, doctests and strict
 Clippy pass. See benchmarks/coroutine_sink_cancellation_2026-10-29.md.
+
+## Coroutine native error precedence (2026-10-29)
+
+A post-poll cancellation check could hide a concrete native error returned by
+that poll. The coroutine now resolves recorded protocol violations, then native
+errors, then post-poll cancellation before further effects. The regression keeps
+the exact EOF payload and verifies terminal cleanup under both stop reasons.
+See benchmarks/coroutine_native_cause_2026-10-29.md.

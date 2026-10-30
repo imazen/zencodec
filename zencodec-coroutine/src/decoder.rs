@@ -324,12 +324,6 @@ where
             // A caught panic never permits polling the half-mutated future again.
             self.state = State::Failed;
             let polled = self.future.as_mut().poll(&mut cx);
-            self.state = State::Running;
-            if let Err(reason) = pulse.check() {
-                self.shared.lock().cancelled = Some(reason);
-                self.state = State::Failed;
-                return Err(StepError::Cancelled(reason));
-            }
             let event = {
                 let mut shared = self.shared.lock();
                 if shared.info_generation != self.cached_info_generation {
@@ -356,8 +350,23 @@ where
                     Pending::Stalled
                 }
             };
+            // Inspect recorded protocol violations before the native result,
+            // then preserve native errors before polling cancellation again.
+            let polled = match polled {
+                Poll::Ready(Ok(info)) => Poll::Ready(info),
+                Poll::Ready(Err(error)) => {
+                    self.need.clear();
+                    return Err(StepError::Codec(error));
+                }
+                Poll::Pending => Poll::Pending,
+            };
+            if let Err(reason) = pulse.check() {
+                self.shared.lock().cancelled = Some(reason);
+                return Err(StepError::Cancelled(reason));
+            }
+            self.state = State::Running;
             match polled {
-                Poll::Ready(Ok(info)) => {
+                Poll::Ready(info) => {
                     if matches!(event, Pending::Boundary(_)) {
                         self.state = State::Failed;
                         return Err(StepError::Control(ControlError::InconsistentFacts));
@@ -370,11 +379,6 @@ where
                     } else {
                         return self.finish(sink, info, consumed, pulse).map(Into::into);
                     }
-                }
-                Poll::Ready(Err(e)) => {
-                    self.state = State::Failed;
-                    self.need.clear();
-                    return Err(StepError::Codec(e));
                 }
                 Poll::Pending => {}
             }

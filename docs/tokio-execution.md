@@ -415,3 +415,8 @@ The coroutine adapter also checks after a successful final `sink.begin` and
 Done and release of successful completion details. The adapter remains terminal,
 and drops pending result owners. A sink error remains primary when the same hook
 also signals cancellation. Already-completed sink effects remain visible.
+
+If a coroutine poll returns a native error while also signalling cancellation,
+the native error remains primary. Recorded protocol violations retain their
+existing priority. Post-poll cancellation still rejects successful or pending
+work; it must not replace a concrete failure with a generic interruption.

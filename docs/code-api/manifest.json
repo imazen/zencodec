@@ -21,9 +21,9 @@
       "name": "zencodec-coroutine",
       "directory": "zencodec-coroutine",
       "features": "all",
-      "fingerprint": "246dfeeba553c94f931e59c77a2e637892e200e7174b7b9ba983e7ffc64f347b",
+      "fingerprint": "5c3a42345b2eb34b4824b16ac9b5b17bbde5b3389dc827e7477959ed80203184",
       "surface_sha256": "5c5f6deb80a8cddeeacefb6e52b98dd31984b07a2cc9d0fdd1e656d0a1da5def",
-      "details_sha256": "362e146f555e086e199d316cf33f102848bcfe2e2039f650df48a0569ede0847"
+      "details_sha256": "6a80bca7d51ea220a1c155bb0c25cd1a04b159dce6d6251e0a9b7a0913d23ccf"
     },
     {
       "name": "zencodec-media",

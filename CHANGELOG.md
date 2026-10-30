@@ -38,6 +38,9 @@
 
 ### Fixed
 
+- Coroutine polling preserves a native failure when cancellation is signalled
+  during the same poll, retaining typed causes and terminal cleanup.
+
 - Coroutine completion checks cancellation between final sink begin/finish and
   Done, preserving sink errors and releasing pending details on interruption.
 

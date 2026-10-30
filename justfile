@@ -1755,3 +1755,9 @@ fused-cancellation-check:
 coroutine-sink-cancellation-check:
     cargo test -p zencodec-coroutine --test details --locked
     cargo clippy -p zencodec-coroutine --test details --locked -- -D warnings
+
+# Shared coroutine and I/O effects, errors, cancellation and documentation.
+coroutine-io-check:
+    cargo test -p zencodec-coroutine -p zencodec-io --all-features --lib --tests --locked
+    cargo test -p zencodec-coroutine -p zencodec-io --all-features --doc --locked
+    cargo clippy -p zencodec-coroutine -p zencodec-io --all-features --all-targets --locked -- -D warnings
