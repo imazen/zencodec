@@ -20,6 +20,13 @@ paired dependency publication/approval, an unpatched `just core-package-check`,
 current release-head platform/API gates, and the owner's final README/release
 approval. No crate has been published by this work.
 
+The standing testkit rule also requires a coordinated core/I/O/testkit batch.
+An [actual-package consumer gate](../benchmarks/release_cohort_2026-10-30.md)
+reproduces the old testkit's two-core split and passes with the matching
+candidate cohort. A repository-only zenmeta dev edge is omitted from the
+normalized testkit package; source integration tests retain that dependency.
+I/O publication is still disabled pending explicit release review.
+
 The current PR188 timeline branch changes media crate APIs, not core src/.
 That unfinished edited-video work remains part of the larger objective, but its
 private presentation experiments are not part of the core crate tarball. A core
@@ -465,7 +472,11 @@ The dependency order, once each package receives release approval, is:
 5. media-testkit after media; renderer after its own qualification.
 
 This is dependency ordering, not a requirement to publish every companion in
-one batch. Each selected package still needs the release gates above. Verify
+one batch. The standing testkit rollout rule does require the matching testkit
+in the core 0.2 release batch: published testkit 0.1.0 admits only core 0.1.26.
+The candidate testkit additionally needs I/O, whose publication guard must be
+reviewed explicitly. Other companions remain separate. Each selected package
+still needs the release gates above. Verify
 normal, optional, target-specific and dev dependency resolution from the actual
 normalized package; path patches must not conceal unavailable registry edges.
 

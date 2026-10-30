@@ -28,7 +28,7 @@ boundaries. Adapters that need to prepare conversion and encoding while decode
 is paused use `ControlledStepper` with the existing byte cursors. A
 `ControlledEvent::Suspended` keeps the native session held; inspect its facts,
 configure the destination through `sink_mut`, then resume that same boundary.
-See the [controlled protocol](../docs/controlled-decoding.md).
+See the [controlled protocol](https://github.com/imazen/zencodec/blob/main/docs/controlled-decoding.md).
 
 `FileReadAt` and `BufferedReadAt` return `StdSourceError`: structural bounds and
 window failures retain their `SourceError`, and native I/O failures retain the
@@ -94,7 +94,7 @@ for a slow client. Admit buffered jobs and their encoded staging separately;
 License: Apache-2.0 OR MIT.
 
 For policy-controlled row encoding, use
-`row_encode::encode(encoder, source, writer, resolver, options, stop)`.
+`row_encode::encode(encoder, source, writer, resolver, options, pulse)`.
 `Raster::new(pixels)` adapts an existing strided raster; implement `Source`
 to generate or fetch rows on demand. The declaration includes descriptor and
 optional color context, preserved on every row view. Changing either fails

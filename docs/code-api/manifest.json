@@ -13,7 +13,7 @@
       "name": "zencodec-io",
       "directory": "zencodec-io",
       "features": "all",
-      "fingerprint": "f3090ba359c6c9d09cdc41eb86b5afd567f3cbe5c5d1d953e89376e972d9d8cf",
+      "fingerprint": "2dfd4f6fd25781ec5ec77aa0ab9276e0354132016e5d8ab80ae8af578b9404ab",
       "surface_sha256": "8592df57ddab2e7aaaab39f99ad8b1ff4cc09b5a2cae8002f8a7e06d89bd9014",
       "details_sha256": "5672c8713a6e049d2946fcc6d7d7195a56be026aedee8c982bb6421ad7b70940"
     },
@@ -37,7 +37,7 @@
       "name": "zencodec-testkit",
       "directory": "zencodec-testkit",
       "features": "all",
-      "fingerprint": "97340afbc3c4dad2e9b5600958e456aacb36bda3a7c909e0a30da9c58b9042a9",
+      "fingerprint": "7311c44a11603afa2c44ae378ae0d9cdcba8a34484a0746120ef2f5b36aede2a",
       "surface_sha256": "357b033477c3e09173126ed98008b94eb59d15202170af41fabc6a55d2a68629",
       "details_sha256": "3f204506189e94430713845db5fb47bf47fbf62feb7fa37c53635a710f1729aa"
     },

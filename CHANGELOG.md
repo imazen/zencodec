@@ -598,6 +598,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Packaging: keep the repository-only zenmeta dev dependency path-only, so
+  standalone testkit resolution does not require an unpublished registry
+  package unused by its shipped source. Existing repository tests remain.
+
 ### Added
 
 - Shared testkit Pulse checkpoint sweeps with bounded diagnostic observations and adversarial controls (runtime and documentation controls qualified; native adoption pending).

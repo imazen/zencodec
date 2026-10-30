@@ -1884,3 +1884,7 @@ core-package-check output:
 core-package-paired-check output:
     cargo package -p zencodec --allow-dirty --no-verify --exclude-lockfile
     python3 scripts/check-core-package.py "{{output}}" --paired-source
+
+# Actual tarball interoperability, including the published-testkit split control.
+release-cohort-check archives output:
+    python3 scripts/check-release-cohort.py "{{archives}}" "{{output}}"
