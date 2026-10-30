@@ -61,3 +61,32 @@ Preserved fixture compilation failures: nonexistent root DiffuseWhite re-export
 (rc101, 9s, 0.33 GiB), corrected to color_primaries. The intermediate helper also
 passed before stronger per-field substitution controls were added (rc0, 107s,
 0.35 GiB). No pre-existing expectation or native output was changed.
+
+## First native JPEG qualification
+
+JPEG source `92ce25dd362a9d705e0745c180ca0bd67af988af`, core/testkit
+`5493eaaad039a3f6e07f1cc37082f8e7c067caee`, paired pixels `f23ac753`:
+13 checked-metadata controls, 2 cancellation controls, 19 native hardening
+controls (including all 47 verified native seeds), and 9 Pulse controls passed.
+The root independently checked the remote logs and absence of Rust processes.
+Targeted clean plus verbose compilation verified the new source path. The lock
+delta changes only five core-family revisions; this remains a locked graph,
+not proof of portable unlocked dependency selection.
+
+Test wrapper rc0, 195s, peak RSS 0.83 GiB, minimum available 13855 MiB,
+peak load 1.76. Strict native library/four-test-target Clippy rc0, 22s,
+peak RSS 0.59 GiB, minimum available 14010 MiB, peak load 1.43.
+The original attempt's fixture import/type errors are preserved separately;
+its correction changed no library source or behavioral assertion.
+
+These controls include native EXIF/XMP/ICC readback and independent EXIF/ICC
+inspection. Independent XMP inspection and decoded-sample parity against the
+existing encode path remain acceptance gates. The independent JPEG decoder's
+successful length check is not a pixel-correctness oracle. No native landing,
+external fuzz-corpus coverage, reporting-overhead or full codec-matrix claim.
+
+The guide's existing metadata chapter now exposes checked typed/dyn signatures
+and labels the QOI example best-effort. All 26 site source controls pass. A
+first local preview refused a stale Rustdoc revision; the old generated preview
+was preserved and a fresh source-only preview built, without weakening the
+revision guard. Matching full Rustdoc had already passed above.
