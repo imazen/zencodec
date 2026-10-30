@@ -1020,7 +1020,11 @@ offer proves neither native allocation bounds nor container privacy. Presets
 requiring workspace or disclosure evidence therefore refuse. A conversion or
 encoder downstream must still check its own input contract. The compatibility
 `SampleEncoding` mirrors an unpublished zenpixels type; coordinated migration
-to that canonical pixel type remains a 0.3 task.
+to that canonical pixel type remains a 0.3 task. Exhaustive unsigned integer
+description controls now qualify constructor/error-category compatibility;
+[the migration boundary](precision-admission.md#shared-sample-description-migration-boundary-2026-10-30)
+records the remaining convenience and adapter changes without claiming sample
+conversion or native fidelity.
 
 [Native AV1 qualification](../perf/av1-policy-validation/README.md) exercises
 the publication guard, native ownership and independent re-encode readback.

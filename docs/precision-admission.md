@@ -142,3 +142,30 @@ Those build/test receipts are not throughput or native-memory measurements.
 claim); constructor users need no change. No codec method signature changed.
 The paired zenpixels verifier is pinned and unpublished; release qualification
 must use the final published dependency graph.
+
+## Shared sample-description migration boundary (2026-10-30)
+
+Core still uses `zencodec::frame::SampleEncoding` in frame interpretation and
+plane APIs, while conversion uses `zenpixels::sample::SampleEncoding`. The
+compatibility type is intentionally retained for the current release; it is
+not a separate sample normalization scheme.
+
+`just sample-encoding-compat-check` compares every `u8` depth/shift pair for
+both U8 and U16 storage (131,072 descriptions), matching accepted fields and
+all three typed refusal categories. Another 65,536 descriptions verify F32
+refusal. The legacy `U8` constant matches canonical `new(U8, 8, 0)`; its
+`bytes_per_sample()` convenience has no corresponding method on the pinned
+canonical type. Error display text differs and is not asserted identical.
+The two differential tests and strict Clippy pass against paired pixels
+`f23ac753`, using an isolated export based on core `7cde6916` plus the new test.
+Wrapper: `rc=0 3s | peak-RSS 0.29GiB | min-avail 13540MiB | peak-load 0.05`.
+These are validation resources, not conversion performance.
+
+The native AV1 validation harness currently reconstructs the canonical
+three-field description in `coupled_route.rs` and `prepared_conversion.rs`.
+Consolidating the public types would remove that reconstruction, but still
+requires migration of frame/plane signatures and native adapters, plus an
+explicit choice for the two conveniences. This gate establishes constructor
+compatibility only: it does not qualify that migration, all storage variants,
+actual sample extraction, range conversion or codec exactness. In particular,
+it does not resolve the 577-versus-576 reconstruction counterexample above.

@@ -1892,3 +1892,8 @@ release-cohort-check archives output:
 # After publication: no package extraction, source patches or fallback.
 release-registry-check output:
     python3 scripts/check-release-cohort.py --registry "{{output}}"
+
+# Compatibility metadata types must not drift before their coordinated migration.
+sample-encoding-compat-check:
+    cargo test -p zencodec --test sample_encoding_compat
+    cargo clippy -p zencodec --test sample_encoding_compat --locked -- -D warnings
