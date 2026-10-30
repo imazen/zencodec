@@ -187,3 +187,13 @@ before returning; this does not establish interrupt latency, complete progress,
 report-triggered cancellation, or native worker instrumentation. It is separate
 from `check_all`, because repeated native execution needs a caller-chosen fixture
 and explicit bounds.
+
+### Required metadata readback
+
+`check_metadata_retained(&expected, &actual)` compares every requested field
+against completed output inspection, without capability-based exemptions. Pass
+the expected output record after policy and any requested spatial transform;
+preferably inspect with an independent
+decoder. Opaque bytes and typed values must match exactly. Additional metadata,
+privacy, output timing, and correct refusal need separate controls; an encode
+error is not automatically accepted as an unsupported result.

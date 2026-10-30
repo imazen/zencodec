@@ -154,6 +154,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
 }
 
 #[test]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn checked_decode_policy_and_inventory_boundaries() {
     let image = TestImage::rgb8_gradient(4, 3);
     let meta = Metadata::none().with_xmp(b"retained".as_slice());

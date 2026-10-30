@@ -199,6 +199,7 @@ fn encode_with_fidelity_clones_the_template() {
 }
 
 #[test]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_job_carries_metadata() {
     let set = reference_set();
 
@@ -218,6 +219,7 @@ fn encode_job_carries_metadata() {
 }
 
 #[test]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn transcode_roundtrips_pixels_and_carries_metadata() {
     use zencodec::encode::Fidelity;
 
@@ -310,6 +312,7 @@ fn transcode_refuses_implicit_precision_loss() {
 }
 
 #[test]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn checked_policy_admission_matches_generic_and_erased_jobs() {
     let metadata = Metadata::none().with_xmp(b"private note".as_slice());
     let strip_xmp = EncodePolicy::none().with_embed_xmp(false);

@@ -218,6 +218,7 @@ pub fn check_inventory_input_limit<D: DecoderConfig + 'static>(
 /// of treating a successful setter as proof of delivery. `metadata` is the
 /// unfiltered input. Color/fidelity observations remain codec-specific.
 #[allow(clippy::too_many_arguments)]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_encode_policy_admission<E, D>(
     enc: E,
     dec: D,

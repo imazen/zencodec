@@ -1798,3 +1798,36 @@ pulse-native-check artifacts="$HOME/tmp/zencodec-native-pulse":
     just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked pulse_diagnostics:: -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Required metadata admission: defaults, retained owner, typed causes and operation integration.
+metadata-admission-check:
+    cargo test --locked -p zencodec --all-features --lib
+    cargo test --locked -p zencodec-testkit --test operation_policy
+    cargo clippy --locked -p zencodec --all-features --all-targets -- -D warnings
+
+# Generated signatures and the guide must describe the checked metadata candidate.
+metadata-admission-docs:
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check
+
+# Exact required metadata readback, independent of capability declarations.
+metadata-retention-conformance-check:
+    cargo test --locked -p zencodec-testkit --lib metadata_retention
+    cargo clippy --locked -p zencodec-testkit --lib --tests -- -D warnings
+
+# Warning migration preserves compatibility tests while exposing checked setters.
+metadata-deprecation-check:
+    cargo test --locked --workspace --all-features --all-targets
+    cargo test --locked --workspace --all-features --doc
+    cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check
+
+# Continue after compatibility-only annotations; runtime tests use the retained receipt.
+metadata-deprecation-followup:
+    cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
+    python3 docs/generate-code-catalog.py .
+    just docs-reference
+    just docs-site-check

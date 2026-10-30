@@ -111,6 +111,7 @@ pub fn metadata() -> Metadata {
     value.xmp = Some(Arc::from(&b"<x:xmpmeta xmlns:x='adobe:ns:meta/'/>"[..]));
     value
 }
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 pub fn job(
     config: ImiEncoderConfig,
     scratch: Scratch,

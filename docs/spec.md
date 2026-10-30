@@ -51,6 +51,37 @@ Reusing one across decode and encode does not discharge output requirements at
 a decode boundary. Unproven final-effect obligations still refuse. Native
 adapter evidence remains the adapter's responsibility.
 
+### Required encode metadata (candidate)
+
+```rust,ignore
+let job = config.job()
+    .try_with_metadata_policy(metadata, MetadataPolicy::PreserveExact)?;
+```
+
+Retain the job on refusal:
+
+```rust,ignore
+let mut job = config.job();
+job.try_set_metadata_policy(metadata, MetadataPolicy::Web)?;
+```
+
+Registry preparation uses the same checked primitive:
+
+```rust,ignore
+let request = EncodeRequest::new(format)
+    .with_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+```
+
+The mutable primitive returns `Result<(), BoxedError>` and refuses atomically.
+Typed builders and dyn jobs preserve that cause. Both ordinary and Send request
+preparation apply it to retained candidates before selection or pixel input.
+Default implementations reject even empty clearing with
+`UnsupportedOperation::MetadataRetention`; static capability flags are not
+admission. Accepted obligations survive later configuration and must be checked
+before affected output. Native retention qualification is still pending; the
+legacy best-effort setter is deprecated but remains available during adoption. See
+[the native witness and contract](metadata-retention-admission.md).
+
 ### zenpixels: use but never re-export
 
 `zenpixels` defines the cross-crate pixel interchange types: `PixelDescriptor`,

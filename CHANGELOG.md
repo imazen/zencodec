@@ -4,6 +4,13 @@
 
 ### Added
 
+- Testkit `check_metadata_retained` compares required resolved metadata against
+  completed output inspection, without capability exemptions or payload logging.
+
+- Review candidate: checked metadata retention on typed/erased encode jobs and
+  ordinary/Send operation preparation. Defaults refuse even empty clearing;
+  native retention qualification remains required.
+
 - Review candidate: optional `Decode::prepare_output` and erased forwarding
   allow required-output decoding to reject known mismatches before raster
   reconstruction. Unknown facts retain final-result validation. The retained
@@ -35,6 +42,12 @@
   without a configuration clone. Core ownership controls and the native public
   replay-driver matrix pass, including strict Clippy; see
   `benchmarks/replay_driver_2026-10-28.md`.
+
+### Deprecated
+
+- Best-effort `EncodeJob::with_metadata_policy` and
+  `DynEncodeJob::set_metadata_policy`; use the checked metadata setters.
+  Compatibility behavior remains unchanged and native support is explicit.
 
 ### Fixed
 

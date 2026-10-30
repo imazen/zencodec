@@ -100,6 +100,7 @@ fn transcode_in_one_call() {
 // ── Encode / decode controls ────────────────────────────────────────────────
 
 #[test]
+#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_with_fidelity_and_metadata() {
     let codecs = codecs();
 

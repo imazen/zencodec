@@ -830,13 +830,14 @@ impl CodecSet {
     ///   lower precision behind the caller's back.
     /// - **Fidelity and carrier support are best-effort** — the existing
     ///   `with_fidelity`, `with_metadata_policy` and `with_policy` contracts do
-    ///   not report whether every request was honored. Inspect the selected
-    ///   codec's capabilities or use its checked API when a property is required.
+    ///   not report whether every request was honored. Use checked
+    ///   operation APIs when a property is required; capability flags are not admission.
     ///
     /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
     /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
     /// when `target` has no registered encoder, and forwards any decode or
     /// encode error.
+    #[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
     pub fn transcode(
         &self,
         input: &[u8],

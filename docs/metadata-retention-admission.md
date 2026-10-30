@@ -44,17 +44,21 @@ refuses to overwrite prior artifacts. CLL compares both values exactly; masterin
 display uses the testkit's existing fixed-point tolerances. No tolerance was
 loosened. No original conformance assertion or native implementation changed.
 
-## Replacement contract to implement and review
+## Checked replacement candidate
 
 ```rust,ignore
-// Proposed; these methods are not implemented yet.
+// Candidate API; native codec admission is not yet qualified.
 let job = config.job()
     .try_with_metadata_policy(metadata, MetadataPolicy::PreserveExact)?;
 let encoded = job.encoder()?.encode(pixels)?;
 ```
 
-Use one atomic checked setter in the typed job, a provided consuming builder,
-and dyn forwarding. Default implementations must refuse rather than infer
+The candidate adds one atomic checked setter in the typed job, a provided
+consuming builder, and dyn forwarding. `EncodeRequest::with_metadata_policy`
+calls it during both ordinary and Send preparation, before selection and pixels.
+The setter returns `BoxedError`, preserving codec-specific admission causes
+without requiring every native error type to implement another conversion.
+The default cause is `UnsupportedOperation::MetadataRetention`. Default implementations must refuse rather than infer
 retention from static capabilities. Rejection leaves an existing mutable job
 unchanged. A default cannot even promise to clear previously configured metadata.
 Names should mirror `try_set_policy` / `try_with_policy`; an independent
@@ -73,12 +77,28 @@ HDR-pixel fixture from metadata admission. Keep supplied-metadata tests requirin
 verified retention or explicit unsupported/refusal, including false/unknown
 capability declarations and silent-success mutants. Native HDR pixel support is
 not a guarantee of CLL/MDCV carriers, and a false carrier flag is not permission
-to silently disregard a required field. Deprecate the old best-effort setters
-only when the tested replacement is available; a renamed filter alone would not
-fix this contract.
+to silently disregard a required field. The old best-effort setters are deprecated now that the checked primitive and
+a real JPEG implementation have passed retention controls. Their compatibility
+behavior remains unchanged; deprecation does not imply every codec implements
+the checked path. A renamed filter alone would not fix this contract.
 
 This design does not certify opaque ICC/XML as PII-free, preserve unreported
 container metadata, or solve general deferred obligations. Those remain scoped
 requirements of the retained publication owner and issue166.
 
 Implementation tracking: [checked encode metadata admission, issue184](https://github.com/imazen/zencodec/issues/184).
+
+Core ownership/forwarding tests do not certify native retention. JPEG/PNG native
+adoption, declaration-conflict controls and independent positive readback remain
+required for each native adapter before claiming its checked retention support.
+
+An explicitly requested orientation bake may normalize the output orientation
+to identity and reconcile EXIF, provided pixels are actually transformed.
+Retention alone never authorizes that transform. Readback conformance compares
+the resolved output record, not the pre-bake input orientation. Other retained
+fields remain required; this exception does not authorize dropping opaque EXIF.
+
+JPEG `7579c288` passed independent EXIF/ICC/XMP inspection and decoded-sample
+parity against its established Verbatim path. Its production source and lock
+match the previously qualified `92ce25dd` progress/cancellation/seed run. This
+is a frozen native candidate, not a landed all-codec retention guarantee.

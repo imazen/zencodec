@@ -162,6 +162,7 @@ fn malformed_exact_privacy_conflicts_and_missing_carriers_do_not_silently_downgr
 }
 
 #[test]
+#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 fn native_setter_is_best_effort_but_checked_retention_refuses_before_encoding() {
     let fixture = fixture();
     let metadata = Metadata::none().with_copyright("Required attribution");
