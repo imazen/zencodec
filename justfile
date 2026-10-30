@@ -1842,3 +1842,9 @@ metadata-deprecation-followup:
 checked-metadata-guide-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked checked_metadata_guide -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked --all-targets -- -D warnings
+
+# Private exact presentation-map contract experiment.
+presentation-map-check:
+    cp perf/presentation-map/dependencies.lock perf/presentation-map/Cargo.lock
+    cargo test --manifest-path perf/presentation-map/Cargo.toml --locked
+    cargo clippy --manifest-path perf/presentation-map/Cargo.toml --all-targets --locked -- -D warnings
