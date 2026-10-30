@@ -68,3 +68,27 @@ The first graph-preflight CI wiring failed before invoking the checker because
 that native JPEG job does not install `just` (rc127). The workflow now invokes
 the same Python controls, locked Cargo metadata and Python checker directly;
 the local convenience recipes remain. No assertion or graph gate was removed.
+
+## Native adoption of the shared oracle
+
+The pinned JPEG/PNG harness now uses the shared sweep instead of duplicate
+StopAt/DiagnosticPulse implementations. It retains the same artifact names,
+JPEG's nonzero-report assertion, distinct early/middle/last checkpoint requirement,
+PNG's explicit absence-of-progress observation, both stop reasons and incremental
+contracts. Diagnostic traces are written before codec-specific assertions so
+failed observations survive. The shared helper additionally rejects abandoned
+started phases and reporting incidents.
+
+`just pulse-native-check FRESH_ARTIFACT_DIRECTORY` passes all five selected
+native diagnostics tests (zero ignored, 61 unrelated tests filtered), followed
+by strict all-target Clippy. Both progressive JPEG variants and both PNG alpha
+variants use the helper. 412 JSON traces are retained at
+`~/tmp/pulse-checkpoints-native-20261029/artifacts/`. The command returned rc0
+in 81s, peak RSS 0.69 GiB, minimum available 14080 MiB, peak load 1.77. Source
+pins remain JPEG 7c5a9501, PNG 7b6d1436 and pixels f23ac753. No native implementation
+change is implied: this qualifies testkit adoption on the existing routes.
+
+Separately, the new JPEG progress draft 1efd8381 passed its focused shared-helper
+and cancellation tests, 11/11, with no ignored tests (rc0, 564s, peak RSS
+0.78 GiB, minimum available 13537 MiB, peak load 2.09). Native hardening and
+seed replay were not part of that focused command and remain separate gates.

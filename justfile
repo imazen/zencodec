@@ -1792,3 +1792,9 @@ codec-graph-check manifest report="$HOME/tmp/zencodec-codec-graph.json":
 
 codec-graph-controls:
     python3 scripts/check-codec-graph.test.py
+
+# Native JPEG/PNG adoption of the shared checkpoint oracle, retaining JSON traces.
+pulse-native-check artifacts="$HOME/tmp/zencodec-native-pulse":
+    just codec-graph-check perf/jpeg-policy-validation/Cargo.toml
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked pulse_diagnostics:: -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
