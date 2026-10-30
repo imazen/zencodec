@@ -845,3 +845,12 @@ that poll. The coroutine now resolves recorded protocol violations, then native
 errors, then post-poll cancellation before further effects. The regression keeps
 the exact EOF payload and verifies terminal cleanup under both stop reasons.
 See benchmarks/coroutine_native_cause_2026-10-29.md.
+
+## Required metadata admission gap (2026-10-29)
+
+Native PreserveExact JPEG/PNG probing leaves five of six CLL/mastering routes
+unqualified despite successful encoding. Byte-identical empty/CLL controls
+confirm supplied mastering fields did not change output. with_metadata_policy
+filters before best-effort embedding; it is not checked admission. PR158's
+capability-based conditional assertions must not mask this gap. See
+docs/metadata-retention-admission.md and just metadata-retention-probe.

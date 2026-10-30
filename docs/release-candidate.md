@@ -457,3 +457,19 @@ gate was relaxed. The current-main compile plan is portable and prepared, but
 full confirmation remains unqualified pending descendant-lifecycle accounting.
 
 Descendant-lifecycle accounting is tracked in [zenbench issue 44](https://github.com/imazen/zenbench/issues/44).
+
+## Required metadata admission gap
+
+The native [retention witness](metadata-retention-admission.md) supplies CLL,
+mastering display, or both through `with_metadata_policy(PreserveExact)`.
+Five of six JPEG/PNG routes do not establish retention despite successful encode.
+JPEG's supplied-field outputs are byte-identical to empty controls; PNG retains
+CLL, but its mastering-only output equals empty and both-fields output equals
+CLL-only. The native revisions and artifact hashes are recorded in the receipt.
+
+The existing setters filter a record before best-effort native embedding; they
+are not fallible retention admission. Keep PR158's preservation-gap review open.
+Do not waive required fields based on false/unknown capability flags. A checked
+replacement must retain obligations through declaration/planning and refuse
+before affected output if the configured codec cannot honor them. That API and
+native adoption are not implemented by this diagnostic witness.

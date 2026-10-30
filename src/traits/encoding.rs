@@ -423,12 +423,14 @@ pub trait EncodeJob: Sized {
         Ok(self)
     }
 
-    /// Set metadata to embed, **filtered by an explicit retention policy** — the
-    /// blessed path. Metadata retention is a privacy decision, so the policy is
+    /// Filter metadata by an explicit retention policy, then configure embedding.
+    /// This setter is best-effort, not a checked output-retention guarantee.
+    /// Metadata retention is a privacy decision, so the policy is
     /// required: [`MetadataPolicy::Web`](crate::MetadataPolicy::Web) is the
     /// privacy-safe choice (strips GPS/camera/timestamps/thumbnail/XMP, keeps
     /// orientation + rights + color signaling);
-    /// [`PreserveExact`](crate::MetadataPolicy::PreserveExact) embeds verbatim.
+    /// [`PreserveExact`](crate::MetadataPolicy::PreserveExact) keeps fields in the
+    /// filtered record; unsupported codec carriers can still be omitted.
     ///
     /// A *provided* method (no codec change): it filters via
     /// [`Metadata::filtered`](crate::Metadata::filtered) — which also reconciles

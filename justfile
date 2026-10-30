@@ -1761,3 +1761,10 @@ coroutine-io-check:
     cargo test -p zencodec-coroutine -p zencodec-io --all-features --lib --tests --locked
     cargo test -p zencodec-coroutine -p zencodec-io --all-features --doc --locked
     cargo clippy -p zencodec-coroutine -p zencodec-io --all-features --all-targets --locked -- -D warnings
+
+# Native witness: nonzero means retention remains unqualified, not a waived gate.
+metadata-retention-probe artifacts:
+    cargo run --manifest-path perf/jpeg-policy-validation/Cargo.toml --example metadata_retention --locked -- "{{artifacts}}"
+
+metadata-retention-probe-check:
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --example metadata_retention --locked -- -D warnings

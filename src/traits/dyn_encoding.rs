@@ -514,8 +514,9 @@ pub trait DynEncodeJob {
         Err(Box::new(crate::ResolutionError::Unsupported))
     }
 
-    /// Set metadata to embed, filtered by an explicit retention policy (blessed
-    /// path; mirrors [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy)).
+    /// Filter metadata before configuring best-effort embedding; mirrors
+    /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy).
+    /// This does not prove that the codec retains every supplied field.
     ///
     /// Provided method: filters via [`Metadata::filtered`](crate::Metadata::filtered)
     /// and routes through [`set_metadata`](Self::set_metadata). Has a default so

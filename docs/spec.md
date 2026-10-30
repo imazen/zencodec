@@ -1691,7 +1691,10 @@ deprecation warns callers, not implementors). The raw `exif`/`xmp`/`icc_profile`
 bytes stay untouched until that filter runs, so an inspect / bring-your-own
 EXIF-library round-trip still sees the originals. `MetadataPolicy` has **no
 `Default`** — name one explicitly; `Web` is the recommended privacy-safe choice,
-`PreserveExact` embeds verbatim.
+`PreserveExact` keeps fields in the filtered record (with the documented EXIF
+orientation reconciliation). These setters remain best-effort: the codec can
+omit unsupported carriers. They do not provide checked retention admission.
+See [the native retention witness](metadata-retention-admission.md).
 
 ### `MetadataPolicy` / `MetadataFields` / `IccRetention`
 
