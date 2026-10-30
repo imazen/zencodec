@@ -4,12 +4,13 @@ use zencodec::{
     At,
     frame::{
         ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
-        MappedPlanes, Picture, PlaneRole, Presentation, SampleEncoding, Subsampling,
+        MappedPlanes, Picture, PlaneRole, Presentation, Subsampling,
     },
     image::{ImageOutput, OutputError, Row},
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zenpixels::ChannelType;
+use zenpixels::sample::SampleEncoding;
 
 fn encoding(bits: u8) -> SampleEncoding {
     SampleEncoding::new(ChannelType::U16, bits, 0).unwrap()

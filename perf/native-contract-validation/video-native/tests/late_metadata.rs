@@ -10,11 +10,12 @@ use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
     frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        PlaneRole, PlaneSamples, Presentation, Subsampling,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, VideoDecoder, VideoEncoder},
 };
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{ChannelType, Cicp};
 
 const TB: TimeBase = TimeBase::MILLIS;

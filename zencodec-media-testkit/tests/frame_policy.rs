@@ -13,8 +13,7 @@ use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
     frame::{
-        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, SampleEncoding,
-        Subsampling,
+        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Subsampling,
     },
     operation::{
         Decision, DecisionCode, DecisionContext, Decline, MetadataTransfer, PolicyFailure,
@@ -30,6 +29,7 @@ use zencodec_media::{
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoStreamInfo},
     track::CodecId,
 };
+use zenpixels::sample::SampleEncoding;
 
 fn frame(budget: &StorageBudget, i: u16) -> Frame {
     let mut words = budget.words(8).unwrap();

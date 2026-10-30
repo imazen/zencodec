@@ -20,6 +20,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
+use zenpixels::sample::SampleEncoding;
 
 use zencodec::encode::OutputBuffer;
 
@@ -30,7 +31,7 @@ use zencodec_media::container::{
 };
 use zencodec_media::frame::{
     ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes,
-    PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+    PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
 };
 use zencodec_media::limits::MediaLimits;
 use zencodec_media::packet::{Packet, RandomAccess};
@@ -584,7 +585,7 @@ impl VideoDecoder for ToyDecoder {
                 FrameGeometry::full(video.coded_width, video.coded_height),
                 Subsampling::Mono,
                 ChromaSiting::Unknown,
-                SampleEncoding::U8,
+                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
                 vec![PlaneRole::Luma],
             )
             .with_config_epoch(config.epoch),
@@ -647,7 +648,7 @@ impl VideoDecoder for ToyDecoder {
                     height: h,
                     stride_bytes: w,
                 }],
-                SampleEncoding::U8,
+                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
             )
             .map_err(|_| SessionError::Codec(ToyError::ShapeMismatch))?;
             let mut presentation = Presentation::default();

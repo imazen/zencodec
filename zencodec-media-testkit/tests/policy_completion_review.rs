@@ -20,6 +20,7 @@ use zencodec_media::{
     track::TrackInfo,
 };
 use zencodec_media_testkit::toy::ToyEncoder;
+use zenpixels::sample::SampleEncoding;
 
 // A header-only container. Refusing all packets makes exact timing vacuous;
 // unlike delegating to a legacy muxer, this claims no unimplemented timing path.
@@ -211,7 +212,7 @@ fn frame() -> zencodec::frame::Frame {
     use std::sync::Arc;
     use zencodec::frame::{
         ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole,
-        Presentation, SampleEncoding, Subsampling,
+        Presentation, Subsampling,
     };
     use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();

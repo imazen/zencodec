@@ -11,11 +11,12 @@ use zencodec_io::storage::StorageBudget;
 use zencodec_media::{
     frame::{
         ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane,
-        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoEncoder},
 };
+use zenpixels::sample::SampleEncoding;
 
 #[derive(Debug)]
 struct ToyError;
@@ -113,14 +114,14 @@ fn frame(pool: &StorageBudget, i: i64) -> Option<Frame> {
             height: 2,
             stride_bytes: 4,
         }],
-        SampleEncoding::U8,
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
     )
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(4, 2),
         Subsampling::Mono,
         ChromaSiting::Unknown,
-        SampleEncoding::U8,
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         vec![PlaneRole::Luma],
     );
     let base = TimeBase::new(1, 30).unwrap();

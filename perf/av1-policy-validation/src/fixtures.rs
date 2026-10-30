@@ -1,6 +1,7 @@
 //! Native frame and IVF helpers adapted from zenavif ea055f7d's
 //! tests/media_session.rs and examples/media_ivf.rs. Test artifacts only.
 use std::{path::Path, process::Command, sync::Arc};
+use zenpixels::sample::SampleEncoding;
 
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::how_far::NoPulse;
@@ -8,7 +9,7 @@ use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
     frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        PlaneRole, PlaneSamples, Presentation, Subsampling,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoEncoder},

@@ -16,6 +16,7 @@ use zencodec::{
     },
     storage::{SharedStorage, StorageBudget},
 };
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{ChannelType, ColorContext, Orientation, PixelDescriptor, PixelSlice};
 
 #[derive(Debug)]
@@ -376,7 +377,7 @@ fn packed_color_replacement_without_auxiliaries_releases_source_payload() {
 fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     use zencodec::frame::{
         ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MappedPlanes,
-        Picture, PlaneRole, Presentation, SampleEncoding, Subsampling,
+        Picture, PlaneRole, Presentation, Subsampling,
     };
     struct Unmapped;
     impl Picture for Unmapped {

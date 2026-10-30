@@ -5,11 +5,12 @@
 //! stays here because accounted allocations use `zencodec-io`.
 
 use alloc::{boxed::Box, vec::Vec};
+use zenpixels::sample::SampleEncoding;
 
 pub use zencodec::frame::{
     ChromaSiting, ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming,
     MapError, MappedPlanes, Picture, PlaneError, PlaneRole, PlaneSamples, PlaneView, Presentation,
-    SampleEncoding, SampleEncodingError, Subsampling,
+    Subsampling,
 };
 
 /// Words of one owned plane.

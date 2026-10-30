@@ -1,47 +1,44 @@
-//! Differential guard for the explicitly retained compatibility type.
-use zencodec::frame::{SampleEncoding as Legacy, SampleEncodingError as LegacyError};
+//! Canonical sample encoding crosses core mapping and conversion boundaries directly.
+use zencodec::frame::{PlaneSamples, PlaneView};
 use zenpixels::{
     ChannelType,
-    sample::{SampleEncoding as Canonical, SampleEncodingError},
+    sample::{CodePlane, SampleEncoding, SampleEncodingError},
 };
-
-fn legacy_error(error: LegacyError) -> u8 {
-    match error {
-        LegacyError::UnsupportedStorage => 0,
-        LegacyError::InvalidBitDepth => 1,
-        LegacyError::InvalidBitShift => 2,
-        _ => panic!("new compatibility error requires migration review"),
-    }
-}
-fn canonical_error(error: SampleEncodingError) -> u8 {
-    match error {
-        SampleEncodingError::UnsupportedStorage => 0,
-        SampleEncodingError::InvalidBitDepth => 1,
-        SampleEncodingError::InvalidBitShift => 2,
-        _ => panic!("new canonical error requires migration review"),
-    }
-}
 
 #[test]
 fn all_integer_depth_and_shift_inputs_have_identical_contracts() {
-    for storage in [ChannelType::U8, ChannelType::U16] {
+    for (storage, width) in [(ChannelType::U8, 8u16), (ChannelType::U16, 16)] {
         for bits in 0..=u8::MAX {
             for shift in 0..=u8::MAX {
-                match (
-                    Legacy::new(storage, bits, shift),
-                    Canonical::new(storage, bits, shift),
-                ) {
-                    (Ok(old), Ok(new)) => {
-                        assert_eq!(old.storage(), new.storage());
-                        assert_eq!(old.code_bits(), new.code_bits());
-                        assert_eq!(old.bit_shift(), new.bit_shift());
-                        assert_eq!(
-                            old.bytes_per_sample(),
-                            if storage == ChannelType::U8 { 1 } else { 2 }
-                        );
+                let result = SampleEncoding::new(storage, bits, shift);
+                if bits == 0 || u16::from(bits) > width {
+                    assert_eq!(result, Err(SampleEncodingError::InvalidBitDepth));
+                } else if u16::from(bits) + u16::from(shift) > width {
+                    assert_eq!(result, Err(SampleEncodingError::InvalidBitShift));
+                } else {
+                    let encoding = result.unwrap();
+                    assert_eq!(encoding.storage(), storage);
+                    assert_eq!(encoding.code_bits(), bits);
+                    assert_eq!(encoding.bit_shift(), shift);
+                    assert_eq!(encoding.storage().byte_size(), usize::from(width / 8));
+                    // Same checked value feeds native mapping and conversion without
+                    // reconstructing a second crate's representation.
+                    if storage == ChannelType::U16 {
+                        let words = [0xaaaa, 0xffff, 0xdead, 0x5555, 0, 0xbeef];
+                        let native =
+                            PlaneView::new(PlaneSamples::U16(&words), 2, 2, 6, encoding).unwrap();
+                        let convert =
+                            CodePlane::from_u16(&words, 2, 2, 6, native.encoding()).unwrap();
+                        for y in 0..2 {
+                            for x in 0..2 {
+                                let expected = ((u32::from(words[y * 3 + x]) >> shift)
+                                    & ((1u32 << bits) - 1))
+                                    as u16;
+                                assert_eq!(native.code(x, y), Some(expected));
+                                assert_eq!(convert.code(x, y), Some(expected));
+                            }
+                        }
                     }
-                    (Err(old), Err(new)) => assert_eq!(legacy_error(old), canonical_error(new)),
-                    pair => panic!("contract mismatch for {storage:?}/{bits}/{shift}: {pair:?}"),
                 }
             }
         }
@@ -53,17 +50,19 @@ fn floating_storage_refuses_and_u8_convenience_is_equivalent() {
     for bits in 0..=u8::MAX {
         for shift in 0..=u8::MAX {
             assert_eq!(
-                legacy_error(Legacy::new(ChannelType::F32, bits, shift).unwrap_err()),
-                0
-            );
-            assert_eq!(
-                canonical_error(Canonical::new(ChannelType::F32, bits, shift).unwrap_err()),
-                0
+                SampleEncoding::new(ChannelType::F32, bits, shift),
+                Err(SampleEncodingError::UnsupportedStorage)
             );
         }
     }
-    let canonical = Canonical::new(ChannelType::U8, 8, 0).unwrap();
-    assert_eq!(Legacy::U8.storage(), canonical.storage());
-    assert_eq!(Legacy::U8.code_bits(), canonical.code_bits());
-    assert_eq!(Legacy::U8.bit_shift(), canonical.bit_shift());
+    let encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
+    let bytes = [0, 255, 17, 128];
+    let native = PlaneView::new(PlaneSamples::U8(&bytes), 2, 2, 2, encoding).unwrap();
+    let convert = CodePlane::from_u8(&bytes, 2, 2, 2, native.encoding()).unwrap();
+    for y in 0..2 {
+        for x in 0..2 {
+            assert_eq!(native.code(x, y), Some(u16::from(bytes[y * 2 + x])));
+            assert_eq!(native.code(x, y), convert.code(x, y));
+        }
+    }
 }
