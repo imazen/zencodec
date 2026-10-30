@@ -182,3 +182,25 @@ Its tradeoff is initializing/reserving the chosen maximum before reading. The
 private loop handles exact EOF, overflow, zero-cap input, failed admission and
 cancellation between Interrupted retries. This is an alternative route to expose
 to an operation policy, not an implicit promise that all replay uses little RAM.
+
+### Bind policy before replay acquisition
+
+The native replay-source test also exercises this existing boundary:
+
+```rust,ignore
+let decoder = PolicyDecoder::try_new(
+    || { /* admit and freeze source storage, then construct native decoder */ },
+    BoundPolicy::new(requirements, callback),
+    pulse,
+)?;
+```
+
+Unknown required workspace refuses before the factory runs. Default requirements
+permit native decoding; the same bound requirements still filter every frame
+before the callback. Frame facts cannot prove descriptive metadata removal, so
+that requirement refuses publication rather than disappearing after acquisition.
+Snapshot ownership remains with the caller in this witness. The workspace limit
+is additional codec/conversion workspace, not source storage or total RAM.
+Choosing among acquisition strategies remains an open contract; this factory
+boundary does not offer such choices. See the retained-policy section of
+[the source receipt](../../benchmarks/replay_sources_2026-10-30.md).

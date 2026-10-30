@@ -124,3 +124,31 @@ and initializes unused capacity and keeps that capacity charged until the last
 view drops. The source may have consumed a prefix on failure and must not be
 silently retried as a new object. A blocking read still needs transport/native
 cancellation support. No production API or whole-operation memory claim is added.
+
+## Retained policy across acquisition and native frames
+
+Source ca8d4d25934f7bc740a994350b0a1a07a3724da9 encloses the reserved snapshot
+and native AV1 decoder construction in PolicyDecoder::try_new's factory. One
+BoundPolicy stays attached through frame delivery. Both zero and u64::MAX
+workspace requirements refuse unknown evidence before factory invocation, reads
+or managed storage admission, with typed Workspace/Unknown diagnostics and no
+callback. The limit covers additional codec/conversion workspace, not source
+storage or whole-operation RAM.
+
+With default requirements the real decoder publishes all three fixture frames
+through the callback with unchanged samples. Requiring DiscardDescriptive permits
+preparation but refuses frame publication before the callback: native frame facts
+cannot prove container metadata removal. The decoder becomes terminal. The
+separately caller-owned compressed snapshot remains charged until its last view
+drops, including after decoder failure. This is not automatic snapshot cleanup
+by PolicyDecoder and does not add an acquisition-strategy question.
+
+All four complete replay-source tests and strict target Clippy pass in an isolated
+export after explicit package clean, with the committed dependency graph unchanged.
+Command: just presentation-replay-sources <fresh-artifact-directory> 3586,
+followed by cargo clippy --locked --manifest-path
+perf/av1-policy-validation/Cargo.toml --features http --test replay_sources -- -D warnings.
+Wrapper rc0, 7 seconds, peak RSS 0.39 GiB, minimum available 13395 MiB,
+peak load 1.44. Full log: /home/lilith/tmp/zencodec-replay-source-20261030/policy.log
+on r7900x. HTTP controls retain 21 requests across five routes (20 responses 206,
+one 412). Artifacts: replay-source-http-policy under the same artifact root.

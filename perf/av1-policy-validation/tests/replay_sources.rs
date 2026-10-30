@@ -49,8 +49,8 @@ fn snapshot_reserved<R: std::io::Read>(
     budget: &StorageBudget,
     cap: usize,
     pulse: Option<&dyn Pulse>,
-) -> Result<SharedStorage<u8>, Box<dyn Error>> {
-    let check = || -> Result<(), Box<dyn Error>> {
+) -> Result<SharedStorage<u8>, Box<dyn Error + Send + Sync>> {
+    let check = || -> Result<(), Box<dyn Error + Send + Sync>> {
         if let Some(pulse) = pulse {
             pulse
                 .check()
@@ -421,4 +421,135 @@ fn reserved_snapshot_refuses_before_reads_and_polls_between_interrupted_reads() 
     ));
     assert_eq!(reader.calls, 1, "interrupted reads spun past cancellation");
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}
+
+#[test]
+fn retained_policy_admits_snapshot_factory_and_guards_native_frames() {
+    use std::{
+        cell::Cell,
+        convert::Infallible,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    use zencodec::{
+        At,
+        operation::{
+            BoundPolicy, Decision, MetadataTransfer, PolicyRequirement, PolicySet, Question,
+            RequirementEvidence, UnmetRequirements,
+        },
+    };
+    use zencodec_media::policy::PolicyDecoder;
+    let settings = fixtures::settings(8, Subsampling::Yuv444, true);
+    let frames: Vec<_> = (0..3).map(|i| fixtures::frame(&settings, i)).collect();
+    let (config, packets) = fixtures::encode(settings, &frames);
+    let bytes: Vec<_> = packets.iter().flat_map(|p| p.bytes()).copied().collect();
+    for case in 0..4 {
+        let requirements = match case {
+            1 => PolicySet::new().with_workspace_limit(0),
+            2 => PolicySet::new().with_workspace_limit(u64::MAX),
+            3 => PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
+            _ => PolicySet::new(),
+        };
+        let decisions = Cell::new(0);
+        let factories = Cell::new(0);
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let budget = StorageBudget::new(bytes.len(), 1);
+        // This caller owns the snapshot separately from the native decoder.
+        let mut saved = None;
+        let policy = BoundPolicy::new(
+            requirements,
+            |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Frame { choices, .. } = question else {
+                    panic!("unexpected question")
+                };
+                decisions.set(decisions.get() + 1);
+                Ok(Decision::choose(choices.first().unwrap()))
+            },
+        );
+        let result = PolicyDecoder::try_new(
+            || -> Result<_, std::io::Error> {
+                factories.set(factories.get() + 1);
+                let mut reader = ShortReader {
+                    bytes: &bytes,
+                    consumed: consumed.clone(),
+                    stop_at: None,
+                };
+                saved = Some(
+                    snapshot_reserved(&mut reader, &budget, bytes.len(), None)
+                        .map_err(std::io::Error::other)?,
+                );
+                let mut settings = rav1d_safe::Settings::default();
+                settings.threads = 1;
+                zenavif::media::Av1VideoDecoder::with_settings(settings)
+                    .map_err(std::io::Error::other)
+            },
+            policy,
+            None,
+        );
+        if case == 1 || case == 2 {
+            let error = match result {
+                Err(error) => error,
+                Ok(_) => panic!("unqualified workspace admitted"),
+            };
+            let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
+            assert_eq!(
+                unmet.iter().collect::<Vec<_>>(),
+                vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+            assert_eq!(factories.get(), 0);
+            assert_eq!(decisions.get(), 0);
+            assert_eq!(consumed.load(Ordering::SeqCst), 0);
+            assert!(saved.is_none());
+            assert_eq!(budget.reserved_bytes(), 0);
+            continue;
+        }
+        let mut decoder = result.unwrap();
+        let saved = saved.unwrap();
+        assert_eq!(factories.get(), 1);
+        assert_eq!(consumed.load(Ordering::SeqCst), bytes.len());
+        let mut offset = 0;
+        let replay: Vec<_> = packets
+            .iter()
+            .map(|packet| {
+                let end = offset + packet.bytes().len();
+                let view = saved.slice(offset..end).unwrap();
+                offset = end;
+                Packet::from_accounted(view)
+                    .unwrap()
+                    .with_pts(packet.pts().unwrap())
+                    .with_duration_ticks(packet.duration_ticks().unwrap())
+            })
+            .collect();
+        let output = fixtures::decode(&mut decoder, &config, &replay, None);
+        if case == 3 {
+            assert!(
+                output.is_err(),
+                "frame publication cannot prove metadata removal"
+            );
+            assert!(decoder.is_failed());
+            assert_eq!(
+                decisions.get(),
+                0,
+                "requirements must filter before callback"
+            );
+        } else {
+            let output = output.unwrap();
+            assert_eq!(output.len(), frames.len());
+            assert_eq!(decisions.get(), frames.len());
+            for (actual, expected) in output.iter().zip(&frames) {
+                assert_eq!(fixtures::samples(actual), fixtures::samples(expected));
+            }
+        }
+        drop(decoder);
+        drop(replay);
+        assert_eq!(
+            budget.reserved_bytes(),
+            bytes.len(),
+            "caller still owns snapshot"
+        );
+        drop(saved);
+        assert_eq!(budget.reserved_bytes(), 0);
+    }
 }
