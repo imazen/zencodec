@@ -1,8 +1,10 @@
 # Complete track timelines — review draft
 
-This branch implements shared storage and mux admission. Native full edit-list
-parsing/remuxing and the presentation driver are not implemented by this change.
-Do not merge or publish it as full edited-video support before those gates pass.
+This branch implements shared storage and mux admission, with native adoption
+and execution controls described below. Native full edit-list parsing/remuxing
+lives in the linked codec PRs; the caller-facing presentation driver is still
+unimplemented. Do not merge or publish it as full edited-video support before
+the ownership, policy and native integration gates pass.
 
 ## Consumer: ordinary remuxing keeps one entry point
 
@@ -256,3 +258,20 @@ the policy tradeoff concrete: a growable spool plus copy versus eager reservatio
 without a payload copy. Both require an explicit allowance; neither proves
 native workspace bounds. The private tested read loop also checks cancellation
 between Interrupted retries and distinguishes exact-cap EOF from excess input.
+
+
+### One policy through source preparation and frame publication
+
+The native source test now encloses snapshot admission and decoder construction
+inside `PolicyDecoder::try_new`, passing a single `BoundPolicy`. Required unknown
+workspace refuses before factory invocation even with a `u64::MAX` limit. Default
+requirements permit native frames unchanged; required metadata removal remains
+unproven and refuses publication before the callback can choose a route.
+
+This reuses the existing operation boundary without pretending `EncodeRoute`
+row/raster choices represent compressed video acquisition. It does not yet offer
+source-strategy choices. The snapshot is explicitly caller-owned; decoder failure
+does not release that separate owner. The
+[retained-policy controls](../benchmarks/replay_sources_2026-10-30.md#retained-policy-across-acquisition-and-native-frames)
+qualify these effects, not a whole-operation memory bound or late-metadata
+completion protocol.
