@@ -7,7 +7,7 @@ zencodec contains no pixel encoding or decoding logic — that lives in the indi
 Import as `zencodec` — `zencodec::encode`, `zencodec::decode`, and the shared
 types (metadata, limits, format detection, color emission) at the root.
 
-[Visual guide](https://imazen.github.io/zencodec/) — consumer, adapter, and implementor journeys, with tested examples and an interactive transport lab. [Guide source and checks](docs/SITE.md).
+[Visual guide](https://imazen.github.io/zencodec/) — consumer, adapter, and implementor journeys, with tested examples and an interactive transport lab. [Guide source and checks](https://github.com/imazen/zencodec/blob/main/docs/SITE.md).
 
 ## Quick start
 
@@ -19,7 +19,7 @@ keep one copy of the shared types. For the published API, see
 
 [Current generated reference](https://imazen.github.io/zencodec/reference.html)
 and [code-first examples](https://imazen.github.io/zencodec/code.html) show the
-repository signatures. [Release gates](docs/release-candidate.md) distinguish
+repository signatures. [Release gates](https://github.com/imazen/zencodec/blob/main/docs/release-candidate.md) distinguish
 qualified paths from remaining integration work.
 
 zencodec defines the traits; a concrete codec crate (here `zenjpeg`) supplies the
@@ -247,8 +247,8 @@ and checkpoint granularity. Pulse retention alone does not establish progress
 reporting or a deadline bound. `check_image_info` checks reported facts, and
 `max_memory_bytes` requires codec enforcement; neither bounds arbitrary native,
 source or caller allocations. Checked operation policies refuse an unknown
-workspace bound when a hard bound is required. See [the Pulse migration](docs/pulse-migration.md)
-and [row-driver admission](docs/row-replay-driver.md).
+workspace bound when a hard bound is required. See [the Pulse migration](https://github.com/imazen/zencodec/blob/main/docs/pulse-migration.md)
+and [row-driver admission](https://github.com/imazen/zencodec/blob/main/docs/row-replay-driver.md).
 
 ### Classifying a codec's error for an HTTP response
 
@@ -487,20 +487,31 @@ let no_thumb = decoded_meta.filtered(&policy);
 
 `MetadataFields` encapsulates EXIF in an `ExifPolicy` with twelve keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `time_offsets`, `camera`, `device_ids`, `camera_owner`, `image_unique_id`, `color`, `other` — and ICC retention through `IccRetention`. EXIF passes through byte-unchanged when no category is dropped and its orientation agrees with `Metadata::orientation`; filtering may otherwise rewrite it, including reconciling orientation. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8) and Orientation (`set_orientation`, insert-or-replace).
 
-**Choose metadata retention explicitly.**
-`job.with_metadata_policy(meta, MetadataPolicy::Web)` filters the supplied metadata
-before passing it to the codec. `Web` drops XMP and disallowed EXIF fields while
-retaining attribution, orientation and color signaling. Attribution can contain
-names or contact details; retained ICC bytes are opaque. This is not a guarantee
-that a whole container contains no PII. `ColorAndRotation` removes attribution
-but still retains the color signaling needed to interpret pixels.
+**Choose metadata retention explicitly.** Use the checked setter when the
+encoder must honor the policy-filtered record:
 
-The unfiltered `with_metadata` method is deprecated. Its compiler warning is a
-migration aid, not enforcement: callers can still invoke it. Likewise,
-`PreserveExact` asks the compatibility filter to keep metadata; this setter cannot
-prove the destination codec will carry every field. Required retention needs a
-checked executing adapter with suitable evidence, or an explicit refusal. See
-[metadata/transcoding policy](docs/policy-transcoding.md).
+```rust,ignore
+let job = config.job().try_with_metadata_policy(meta, MetadataPolicy::Web)?;
+let encoded = job.encoder()?.encode(pixels)?;
+```
+
+Unsupported retention returns an error. If acceptance depends on later pixels or
+color configuration, the codec must validate those conditions before affected
+output. Use `job.try_set_metadata_policy(meta, policy)?` to retain the job after refusal.
+The default implementation refuses, including an empty clearing request.
+
+`Web` drops XMP and disallowed EXIF fields while retaining attribution,
+orientation and color signaling. Attribution can contain names or contact
+details; retained ICC bytes are opaque. This is not a guarantee that a whole
+container contains no PII. `ColorAndRotation` removes attribution but retains
+color signaling. `PreserveExact` requires the filtered record to survive, subject
+to the documented orientation reconciliation.
+
+Both `with_metadata` and the best-effort `with_metadata_policy` are deprecated.
+The latter filters before handing metadata to the codec but cannot guarantee
+output retention; its warning is a migration aid, not enforcement. The checked
+setter does not certify unreported or opaque data as PII-free. See
+[metadata/transcoding policy](https://github.com/imazen/zencodec/blob/main/docs/policy-transcoding.md).
 
 To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).
 

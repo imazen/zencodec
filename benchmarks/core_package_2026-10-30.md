@@ -39,3 +39,19 @@ codec-memory bound or registry publication is claimed. Required release approval
 paired dependency availability and current release-head CI remain gates. Media
 PR188 is separate: its library changes are in the unpublished media crate, not
 core src/. The complete image/video/transcoding objective remains open.
+
+## Published README refresh
+
+Source 5c694ba46ae68aaf4362f13ac36462de4bb5a0c0 regenerates README.crates.md
+from the repository README using the existing zenutils generator. The stale
+published text still taught with_stop and described best-effort metadata as
+compile-time enforcement. The source README now leads with the implemented
+checked retention setters, explains default refusal and preserves the PII limits.
+Relative documentation links are made absolute for crates.io rendering.
+
+A new actual package includes README.crates.md byte-identical to the generated
+source. Packaged all-feature/all-target tests, doctests and strict Clippy pass
+again in explicit paired-source mode. No library source changes. Log:
+/home/lilith/tmp/zencodec-core-release-20261030/package-readme.log on r7900x;
+wrapper rc0, 2s, peak RSS 0.14 GiB, minimum available 13809 MiB, peak load 0.29.
+Registry-only qualification and publishing approval remain required.

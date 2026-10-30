@@ -4,6 +4,27 @@ The immediate deliverable is a reviewable zencodec release candidate. The larger
 codec-agnostic image/video/transcoding goal remains open. Do not label the entire
 codec family or every native mode qualified from this candidate's evidence.
 
+## Core publication gate (2026-10-30)
+
+Core main has passed default workspace all-target tests/doctests/Clippy and
+core all-feature tests/doctests/Clippy/strict Rustdoc. Actual tarball testing found
+and fixed one missing source file used by its shipped example. The regenerated
+crates.io README now matches Pulse and checked metadata retention. Unpacked
+all-target tests, doctests and strict Clippy pass with the explicit paired pixel
+source. [Exact evidence and scope](../benchmarks/core_package_2026-10-30.md).
+
+These checks do not establish registry availability. The live zenpixels sparse
+index on October 30 still has no unyanked release satisfying the candidate's
+floor; 0.2.16 is the highest unyanked version observed. Required next steps are
+paired dependency publication/approval, an unpatched `just core-package-check`,
+current release-head platform/API gates, and the owner's final README/release
+approval. No crate has been published by this work.
+
+The current PR188 timeline branch changes media crate APIs, not core src/.
+That unfinished edited-video work remains part of the larger objective, but its
+private presentation experiments are not part of the core crate tarball. A core
+release must not advertise complete edited-video support.
+
 ## Open presentation contract gate
 
 Video presentation is not release-qualified by packet timestamp tests. Native
