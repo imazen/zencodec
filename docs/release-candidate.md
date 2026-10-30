@@ -4,6 +4,21 @@ The immediate deliverable is a reviewable zencodec release candidate. The larger
 codec-agnostic image/video/transcoding goal remains open. Do not label the entire
 codec family or every native mode qualified from this candidate's evidence.
 
+## Open presentation contract gate
+
+Video presentation is not release-qualified by packet timestamp tests. Native
+MP4 controls reproduce loss of edit duration, later segments and playback rate;
+track-to-codec configuration also drops delay/pre-roll/edit fields. These can
+change the shared contracts and must be resolved before claiming the full
+codec-agnostic video objective. See [issue 187](https://github.com/imazen/zencodec/issues/187)
+and the [native receipt](../benchmarks/media_edits_2026-10-30.md).
+
+The private [presentation-map experiment](../perf/presentation-map/README.md)
+qualifies exact interval mapping and explicit segment acquisition requests.
+It does not qualify native playback, seek/replay admission, delay/discard
+handling or independent player parity. Do not promote its signatures or declare
+this gate complete from its unit tests alone.
+
 ## Freeze
 
 PR175 merged as `aa30ebba`, including the joint route and production Rows/Replay driver. The retained-job API candidate in this batch is `EncodeJob::into_dyn_job`: an additive
