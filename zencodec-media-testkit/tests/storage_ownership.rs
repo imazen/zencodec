@@ -3,12 +3,13 @@ use std::sync::Arc;
 use zencodec_io::storage::{StorageBudget, StorageError};
 use zencodec_media::{
     frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane,
-        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
+        PlaneRole, PlaneSamples, Presentation,
     },
     packet::{Packet, PacketAddition, PacketPayload},
 };
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 #[test]
 fn deferred_admission_blocks_competitors_and_transfers_the_same_charge() {
@@ -84,7 +85,7 @@ fn frame(data: PlaneData, encoding: SampleEncoding, epoch: u32) -> Frame {
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding,
         vec![PlaneRole::Luma],

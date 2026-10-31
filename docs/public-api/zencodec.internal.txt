@@ -10,17 +10,17 @@
 ## summary
 #
 #   inherent methods                           85
-#   trait roster entries (type × trait)       153
+#   trait roster entries (type × trait)       151
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
 #   collection                        5
 #   decode                           12
-#   encode                            9
+#   encode                           10
 #   estimate                          2
 #   exif                              3
-#   frame                             7
+#   frame                             6
 #   gainmap                           2
 #   image                             6
 #   inventory                         6
@@ -74,6 +74,7 @@ pub fn encode::EncodeDeclaration<'a>::assert_fields_are_eq(&self)
 pub fn encode::EncodePlan::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
 pub fn encode::InputRequirement::assert_fields_are_eq(&self)
+pub fn encode::OrientationPlan::assert_fields_are_eq(&self)
 pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
 pub fn encode::OutputTiming::assert_fields_are_eq(&self)
 pub fn encode::SourcePasses::assert_fields_are_eq(&self)
@@ -88,7 +89,6 @@ pub fn frame::FrameGeometry::assert_fields_are_eq(&self)
 pub fn frame::FrameInterpretation::assert_fields_are_eq(&self)
 pub fn frame::FrameTiming::assert_fields_are_eq(&self)
 pub fn frame::Presentation::assert_fields_are_eq(&self)
-pub fn frame::SampleEncoding::assert_fields_are_eq(&self)
 pub fn gainmap::Fraction::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn image::GeometryError::assert_fields_are_eq(&self)
@@ -118,7 +118,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (153 types)
+## trait impls (151 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -173,6 +173,7 @@ decode::InterpretationUnavailable: TrivialClone
 decode::MetadataUpdate: TrivialClone
 encode::AnimationOutputTiming: TrivialClone
 encode::EncodeDeclaration<'a>: TrivialClone
+encode::EncodeOrientation: TrivialClone
 encode::EncodePlanError: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
@@ -180,6 +181,7 @@ encode::FidelityRejection: TrivialClone
 encode::FidelityTargetError: TrivialClone
 encode::InputRequirement: TrivialClone
 encode::LossyTarget: TrivialClone
+encode::OrientationPlan: TrivialClone
 encode::OutputPhase: TrivialClone
 encode::OutputTiming: TrivialClone
 encode::PullProgress: TrivialClone
@@ -195,7 +197,6 @@ exif::ExifPolicy: TrivialClone
 exif::Ifd: TrivialClone
 exif::Retention: TrivialClone
 exif::TextEncoding: TrivialClone
-frame::ChromaSiting: TrivialClone
 frame::ColorClaim: TrivialClone
 frame::Crop: TrivialClone
 frame::FrameGeometry: TrivialClone
@@ -205,9 +206,6 @@ frame::PlaneRole: TrivialClone
 frame::PlaneSamples<'a>: TrivialClone
 frame::PlaneView<'a>: TrivialClone
 frame::Presentation: TrivialClone
-frame::SampleEncoding: TrivialClone
-frame::SampleEncodingError: TrivialClone
-frame::Subsampling: TrivialClone
 gainmap::Fraction: TrivialClone
 gainmap::GainMapChannel: TrivialClone
 gainmap::GainMapDirection: TrivialClone

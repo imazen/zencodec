@@ -9,11 +9,20 @@
 
 ## summary
 #
-#   trait roster entries (type × trait)         1
+#   inherent methods                            2
+#   trait roster entries (type × trait)         3
+#
+# per-module pub lines:
+#   (root)                            1
+#   pulse                             1
 
-## items (0 lines)
+## items (2 lines)
 
+pub fn ExpectedError::assert_fields_are_eq(&self)
+pub fn pulse::Case::assert_fields_are_eq(&self)
 
-## trait impls (1 types)
+## trait impls (3 types)
 
 ExpectedError: TrivialClone
+pulse::Case: TrivialClone
+pulse::Limits: TrivialClone

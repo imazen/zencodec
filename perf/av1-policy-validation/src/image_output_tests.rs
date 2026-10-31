@@ -5,10 +5,8 @@ use crate::{
 use std::sync::Arc;
 use zenavif::media::Av1VideoDecoder;
 use zencodec::how_far::NoPulse;
-use zencodec_media::{
-    frame::{PlaneSamples, Subsampling},
-    session::VideoDecoder,
-};
+use zencodec_media::{frame::PlaneSamples, session::VideoDecoder};
+use zenpixels::sample::ChromaSubsampling;
 
 #[test]
 fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
@@ -18,11 +16,11 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
     std::fs::create_dir_all(root).unwrap();
     for bits in [8, 10, 12] {
         for (sub, identity) in [
-            (Subsampling::Mono, false),
-            (Subsampling::Yuv420, false),
-            (Subsampling::Yuv422, false),
-            (Subsampling::Yuv444, false),
-            (Subsampling::Yuv444, true),
+            (ChromaSubsampling::Mono, false),
+            (ChromaSubsampling::Yuv420, false),
+            (ChromaSubsampling::Yuv422, false),
+            (ChromaSubsampling::Yuv444, false),
+            (ChromaSubsampling::Yuv444, true),
         ] {
             let settings = settings(bits, sub, identity);
             let inputs: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();

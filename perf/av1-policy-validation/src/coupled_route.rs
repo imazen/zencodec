@@ -11,10 +11,7 @@ use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
     encode::Fidelity,
-    frame::{
-        ChromaSiting, ColorClaim, Frame, FrameGeometry, FrameInterpretation, PlaneRole,
-        PlaneSamples, Subsampling,
-    },
+    frame::{ColorClaim, Frame, FrameGeometry, FrameInterpretation, PlaneRole, PlaneSamples},
     operation::{
         Decision, DecisionCode, FrameConversionOffer, FrameFacts, OperationPolicy, PolicyFailure,
         PolicySet, Question, Selection,
@@ -23,9 +20,10 @@ use zencodec::{
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 use zenpixels::{
     ChannelType, Cicp, PixelSliceMut,
-    sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
+    sample::{ChromaSubsampling, CodePlane},
 };
 use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 type Cause = Box<dyn Error + Send + Sync>;
@@ -105,15 +103,15 @@ pub(crate) fn push(
         })
     };
     let sub = match info.subsampling {
-        Subsampling::Yuv444 => ChromaSubsampling::Yuv444,
-        Subsampling::Yuv422 => ChromaSubsampling::Yuv422,
-        Subsampling::Yuv420 => ChromaSubsampling::Yuv420,
+        s @ (ChromaSubsampling::Yuv444 | ChromaSubsampling::Yuv422 | ChromaSubsampling::Yuv420) => {
+            s
+        }
         _ => return Err(std::io::Error::other("unsupported sampling").into()),
     };
     let plan = YcbcrToRgbF32::new(
         [view(0)?, view(1)?, view(2)?],
         sub,
-        PixelSiting::Center,
+        ChromaSiting::Center,
         info.color
             .resolved
             .ok_or_else(|| std::io::Error::other("unknown color"))?,
@@ -137,7 +135,7 @@ pub(crate) fn push(
     let output_encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
     let mut target = FrameInterpretation::new(
         info.geometry,
-        Subsampling::Yuv444,
+        ChromaSubsampling::Yuv444,
         ChromaSiting::Unknown,
         output_encoding,
         vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
@@ -198,9 +196,9 @@ pub(crate) fn push(
 pub(crate) fn sources() -> Vec<Frame> {
     let mut result = Vec::new();
     for (i, (bits, sub, full)) in [
-        (8, Subsampling::Yuv420, true),
-        (10, Subsampling::Yuv422, false),
-        (12, Subsampling::Yuv444, true),
+        (8, ChromaSubsampling::Yuv420, true),
+        (10, ChromaSubsampling::Yuv422, false),
+        (12, ChromaSubsampling::Yuv444, true),
     ]
     .into_iter()
     .enumerate()
@@ -227,7 +225,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
         frame::FrameTiming,
         time::{TimeBase, Timestamp},
     };
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let originals: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &originals);
     let inputs = decode(

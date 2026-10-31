@@ -26,6 +26,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 use zencodec::decode::{
     AnimationFrame, AnimationFrameDecoder, DecodeRowSink, OutputInfo, SinkError,
@@ -38,8 +39,8 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
-    ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane,
-    OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
+    Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane, OwnedPlanes,
+    PlaneData, PlaneRole, PlaneSamples, Presentation,
 };
 use crate::session::{
     CodecConfig, ProtocolViolation, PumpError, SessionError, VideoDecoder, VideoEncoder,
@@ -115,7 +116,7 @@ impl RenderFrame for Gray8 {
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
-        if interp.subsampling != Subsampling::Mono
+        if interp.subsampling != ChromaSubsampling::Mono
             || interp.encoding != SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
         {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
@@ -159,7 +160,7 @@ impl CaptureFrame for Gray8 {
             _ => {
                 let i = Arc::new(FrameInterpretation::new(
                     FrameGeometry::full(w, h),
-                    Subsampling::Mono,
+                    ChromaSubsampling::Mono,
                     ChromaSiting::Unknown,
                     SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
                     vec![PlaneRole::Luma],

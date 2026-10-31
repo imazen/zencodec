@@ -3,14 +3,15 @@ use std::sync::Arc;
 use zencodec::{
     At,
     frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
-        MappedPlanes, Picture, PlaneRole, Presentation, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, MappedPlanes, Picture,
+        PlaneRole, Presentation,
     },
     image::{ImageOutput, OutputError, Row},
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zenpixels::ChannelType;
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 fn encoding(bits: u8) -> SampleEncoding {
     SampleEncoding::new(ChannelType::U16, bits, 0).unwrap()
@@ -18,7 +19,7 @@ fn encoding(bits: u8) -> SampleEncoding {
 fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(width, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding(bits),
         vec![PlaneRole::Luma],
@@ -519,7 +520,7 @@ fn rgb_owner(pool: &zencodec::storage::StorageBudget, width: u32) -> RgbOwner {
 fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding(10),
         vec![PlaneRole::Luma],

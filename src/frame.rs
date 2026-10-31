@@ -7,56 +7,11 @@
 pub use crate::frame_storage::{
     Frame, MapError, MappedPlanes, Picture, PlaneError, PlaneSamples, PlaneView, Presentation,
 };
-use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
 
 use crate::time::Timestamp;
 use alloc::vec::Vec;
 use zenpixels::Cicp;
-
-/// Chroma subsampling of a planar picture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum Subsampling {
-    /// One plane, no chroma.
-    Mono,
-    /// Chroma halved both ways.
-    Yuv420,
-    /// Chroma halved horizontally.
-    Yuv422,
-    /// Full-resolution chroma.
-    Yuv444,
-}
-
-impl Subsampling {
-    /// Chroma plane size for a luma size, rounded up; `None` for mono.
-    pub const fn chroma_size(self, width: u32, height: u32) -> Option<(u32, u32)> {
-        match self {
-            Self::Mono => None,
-            Self::Yuv420 => Some((width.div_ceil(2), height.div_ceil(2))),
-            Self::Yuv422 => Some((width.div_ceil(2), height)),
-            Self::Yuv444 => Some((width, height)),
-        }
-    }
-}
-
-/// Where chroma samples sit relative to luma. An axis of its own:
-/// `Unknown` is kept, never defaulted to `Center`; a conversion that needs
-/// siting refuses `Unknown` on a subsampled axis or takes it from the
-/// caller.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
-#[non_exhaustive]
-pub enum ChromaSiting {
-    /// The stream does not say.
-    #[default]
-    Unknown,
-    /// Co-sited with the left luma sample, vertically between rows (MPEG-2
-    /// style 4:2:0).
-    Left,
-    /// Co-sited with the top-left luma sample.
-    TopLeft,
-    /// Centred between luma samples (JPEG style).
-    Center,
-}
 
 /// What a plane holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -162,7 +117,7 @@ pub struct FrameInterpretation {
     /// Picture shape.
     pub geometry: FrameGeometry,
     /// Chroma subsampling.
-    pub subsampling: Subsampling,
+    pub subsampling: ChromaSubsampling,
     /// Chroma siting.
     pub siting: ChromaSiting,
     /// Sample storage and code depth.
@@ -179,7 +134,7 @@ impl FrameInterpretation {
     /// An interpretation with no colour claims, at epoch 0.
     pub fn new(
         geometry: FrameGeometry,
-        subsampling: Subsampling,
+        subsampling: ChromaSubsampling,
         siting: ChromaSiting,
         encoding: SampleEncoding,
         roles: Vec<PlaneRole>,

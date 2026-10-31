@@ -10,11 +10,12 @@ use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
     frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, PlaneSamples, Presentation, Subsampling,
+        PlaneRole, PlaneSamples, Presentation,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, VideoDecoder, VideoEncoder},
 };
+use zenpixels::sample::ChromaSubsampling;
 use zenpixels::sample::SampleEncoding;
 use zenpixels::{ChannelType, Cicp};
 
@@ -27,7 +28,7 @@ const LATE: usize = 3;
 fn settings() -> Av1EncodeSettings {
     Av1EncodeSettings::new(W, H)
         .with_bit_depth(8)
-        .with_subsampling(Subsampling::Yuv420)
+        .with_subsampling(ChromaSubsampling::Yuv420)
         .with_color(Cicp::new(9, 16, 9, false))
         .with_quantizer(100)
         .with_speed(10)
@@ -56,7 +57,7 @@ fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
     let encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(W, H),
-        Subsampling::Yuv420,
+        ChromaSubsampling::Yuv420,
         s.siting,
         encoding,
         vec![PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr],

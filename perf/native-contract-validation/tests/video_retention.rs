@@ -10,13 +10,14 @@ use zencodec::time::{TimeBase, Timestamp};
 use zencodec_io::storage::StorageBudget;
 use zencodec_media::{
     frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane,
-        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
+        PlaneRole, PlaneSamples, Presentation,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoEncoder},
 };
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 #[derive(Debug)]
 struct ToyError;
@@ -119,7 +120,7 @@ fn frame(pool: &StorageBudget, i: i64) -> Option<Frame> {
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(4, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         vec![PlaneRole::Luma],

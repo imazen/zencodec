@@ -130,6 +130,11 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Frame ablation candidate: remove `frame::Subsampling` and `frame::ChromaSiting`
+  (and their zencodec-media re-exports); signatures use
+  `zenpixels::sample::{ChromaSubsampling, ChromaSiting}`, which gained `Mono`,
+  `chroma_size`, `Hash` and `Default` (zenpixels PRs #99, #100). Rename
+  `Subsampling::X` to `ChromaSubsampling::X`; variants are unchanged.
 - Frame ablation candidate: remove core/media `SampleEncoding` and its error;
   signatures now use `zenpixels::sample::SampleEncoding` directly. Import from
   zenpixels; use `storage().byte_size()` for word size.

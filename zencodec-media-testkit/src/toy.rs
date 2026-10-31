@@ -21,6 +21,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 use zencodec::encode::OutputBuffer;
 
@@ -30,8 +31,8 @@ use zencodec_media::container::{
     MuxTiming, Muxer, Patch, SeekMode, SeekResult, SeekScope, SeekStatus, SeekTarget,
 };
 use zencodec_media::frame::{
-    ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes,
-    PlaneData, PlaneRole, PlaneSamples, Presentation, Subsampling,
+    Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
+    PlaneRole, PlaneSamples, Presentation,
 };
 use zencodec_media::limits::MediaLimits;
 use zencodec_media::packet::{Packet, RandomAccess};
@@ -583,7 +584,7 @@ impl VideoDecoder for ToyDecoder {
         let interp = Arc::new(
             FrameInterpretation::new(
                 FrameGeometry::full(video.coded_width, video.coded_height),
-                Subsampling::Mono,
+                ChromaSubsampling::Mono,
                 ChromaSiting::Unknown,
                 SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
                 vec![PlaneRole::Luma],
@@ -807,7 +808,7 @@ impl VideoEncoder for ToyEncoder {
         let g = &frame.interpretation().geometry;
         if g.coded_width != video.coded_width
             || g.coded_height != video.coded_height
-            || frame.interpretation().subsampling != Subsampling::Mono
+            || frame.interpretation().subsampling != ChromaSubsampling::Mono
         {
             return Err(SessionError::Codec(ToyError::ShapeMismatch));
         }

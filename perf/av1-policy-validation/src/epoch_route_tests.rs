@@ -17,7 +17,7 @@ fn native_stream(threads: u32) -> Vec<Frame> {
 }
 
 fn native_stream_observed(threads: u32, mut observed: impl FnMut(&Frame, u32)) -> Vec<Frame> {
-    let mut source = settings(8, Subsampling::Yuv420, false);
+    let mut source = settings(8, ChromaSubsampling::Yuv420, false);
     let mut variants = vec![(source.clone(), TB), (source.clone(), TB)];
     source.width = 19;
     source.height = 15;
@@ -25,7 +25,7 @@ fn native_stream_observed(threads: u32, mut observed: impl FnMut(&Frame, u32)) -
     source.color = Cicp::new(9, 16, 9, true);
     variants.push((source.clone(), TB));
     source.bit_depth = 10;
-    source.subsampling = Subsampling::Yuv422;
+    source.subsampling = ChromaSubsampling::Yuv422;
     variants.push((source.clone(), TB));
     variants.push((source, TimeBase::hz(90_000).unwrap()));
     let mut settings = rav1d_safe::Settings::default();

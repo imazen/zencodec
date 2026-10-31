@@ -21,6 +21,7 @@ use zencodec_media::{
 };
 use zencodec_media_testkit::toy::ToyEncoder;
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 // A header-only container. Refusing all packets makes exact timing vacuous;
 // unlike delegating to a legacy muxer, this claims no unimplemented timing path.
@@ -211,8 +212,7 @@ fn empty_staged_finish_cannot_discharge_unproven_bound_requirements() {
 fn frame() -> zencodec::frame::Frame {
     use std::sync::Arc;
     use zencodec::frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole,
-        Presentation, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Presentation,
     };
     use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
@@ -230,7 +230,7 @@ fn frame() -> zencodec::frame::Frame {
         Arc::new(pixels),
         Arc::new(FrameInterpretation::new(
             FrameGeometry::full(1, 1),
-            Subsampling::Mono,
+            ChromaSubsampling::Mono,
             ChromaSiting::Unknown,
             encoding,
             vec![PlaneRole::Luma],

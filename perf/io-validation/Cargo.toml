@@ -29,8 +29,8 @@ zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 kamadak-exif = "0.6.1"
 
 [patch.crates-io]
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7befd3905e746d41426f4006fd69de3f981c5f79" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7befd3905e746d41426f4006fd69de3f981c5f79" }
 zencodec = { path = "../.." }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-media = { path = "../../zencodec-media" }

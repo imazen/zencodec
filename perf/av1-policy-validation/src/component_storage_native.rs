@@ -5,12 +5,13 @@ use crate::{
     fixtures::*,
 };
 use zenavif::media::Av1VideoDecoder;
-use zencodec::frame::{PlaneSamples, Subsampling};
+use zencodec::frame::PlaneSamples;
+use zenpixels::sample::ChromaSubsampling;
 
 #[test]
 fn component_storage_native_borrows_av1_without_repacking() {
     for bits in [8, 10, 12] {
-        for sub in [Subsampling::Yuv420, Subsampling::Yuv444] {
+        for sub in [ChromaSubsampling::Yuv420, ChromaSubsampling::Yuv444] {
             let settings = settings(bits, sub, false);
             let input = frame(&settings, 0);
             let (config, packets) = encode(settings, &[input]);
@@ -41,7 +42,7 @@ fn component_storage_native_borrows_av1_without_repacking() {
                     // An odd luma crop must not reset the chroma sampling phase.
                     // Retain all samples from the chosen component origin; this is
                     // a view identity control, not a resampling/filter-halo policy.
-                    let factor = if index > 0 && sub == Subsampling::Yuv420 {
+                    let factor = if index > 0 && sub == ChromaSubsampling::Yuv420 {
                         2
                     } else {
                         1

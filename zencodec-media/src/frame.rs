@@ -6,11 +6,11 @@
 
 use alloc::{boxed::Box, vec::Vec};
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 pub use zencodec::frame::{
-    ChromaSiting, ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming,
-    MapError, MappedPlanes, Picture, PlaneError, PlaneRole, PlaneSamples, PlaneView, Presentation,
-    Subsampling,
+    ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
+    MappedPlanes, Picture, PlaneError, PlaneRole, PlaneSamples, PlaneView, Presentation,
 };
 
 /// Words of one owned plane.

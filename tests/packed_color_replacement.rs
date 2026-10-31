@@ -17,6 +17,7 @@ use zencodec::{
     storage::{SharedStorage, StorageBudget},
 };
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 use zenpixels::{ChannelType, ColorContext, Orientation, PixelDescriptor, PixelSlice};
 
 #[derive(Debug)]
@@ -376,8 +377,8 @@ fn packed_color_replacement_without_auxiliaries_releases_source_payload() {
 #[test]
 fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     use zencodec::frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MappedPlanes,
-        Picture, PlaneRole, Presentation, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, MappedPlanes, Picture, PlaneRole,
+        Presentation,
     };
     struct Unmapped;
     impl Picture for Unmapped {
@@ -387,7 +388,7 @@ fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     }
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(2, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
         vec![PlaneRole::Luma],

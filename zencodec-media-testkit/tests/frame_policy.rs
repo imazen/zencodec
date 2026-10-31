@@ -12,9 +12,7 @@ use std::{
 use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
-    frame::{
-        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Subsampling,
-    },
+    frame::{FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole},
     operation::{
         Decision, DecisionCode, DecisionContext, Decline, MetadataTransfer, PolicyFailure,
         PolicySet, Question,
@@ -30,6 +28,7 @@ use zencodec_media::{
     track::CodecId,
 };
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 fn frame(budget: &StorageBudget, i: u16) -> Frame {
     let mut words = budget.words(8).unwrap();
@@ -49,7 +48,7 @@ fn frame(budget: &StorageBudget, i: u16) -> Frame {
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding,
         vec![PlaneRole::Luma],

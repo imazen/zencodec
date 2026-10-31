@@ -5,11 +5,10 @@ use super::{
 };
 use crate::{
     At,
-    frame::{
-        ChromaSiting, ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling,
-    },
+    frame::{ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming},
 };
 use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 /// Bounded diagnostic facts about one native presentation. Full component roles
 /// remain borrowed in the question; this record contains no sample payloads.
@@ -19,7 +18,7 @@ pub struct FrameFacts {
     /// Coded, visible and render geometry, without an implicit crop or resize.
     pub geometry: FrameGeometry,
     /// Native chroma layout.
-    pub subsampling: Subsampling,
+    pub subsampling: ChromaSubsampling,
     /// Declared chroma siting; unknown remains unknown.
     pub siting: ChromaSiting,
     /// Storage word and significant sample-code placement.

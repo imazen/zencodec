@@ -13,9 +13,10 @@ use std::{
 };
 use zenavif::media::Av1VideoDecoder;
 use zencodec::{
-    frame::{FrameTiming, MappedPlanes, PlaneSamples, Presentation, Subsampling},
+    frame::{FrameTiming, MappedPlanes, PlaneSamples, Presentation},
     image::Meaning,
 };
+use zenpixels::sample::ChromaSubsampling;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 type Cause = Box<dyn StdError + Send + Sync>;
@@ -39,8 +40,8 @@ impl Owner for Av1 {
         }))
     }
 }
-fn grid(index: usize, sub: Subsampling) -> Grid {
-    let axis = if index > 0 && sub == Subsampling::Yuv420 {
+fn grid(index: usize, sub: ChromaSubsampling) -> Grid {
+    let axis = if index > 0 && sub == ChromaSubsampling::Yuv420 {
         Axis::new(1, 4, 2)
     } else {
         Axis::new(0, 1, 1)
@@ -84,7 +85,7 @@ impl Mapping for Av1Map<'_> {
 #[test]
 fn component_owner_retains_native_picture_across_presentations() {
     for bits in [8, 10, 12] {
-        let s = settings(bits, Subsampling::Yuv420, false);
+        let s = settings(bits, ChromaSubsampling::Yuv420, false);
         let input = frame(&s, 0);
         let (config, packets) = encode(s, &[input]);
         let mut decoder = Av1VideoDecoder::new().unwrap();
@@ -113,7 +114,7 @@ fn component_owner_retains_native_picture_across_presentations() {
                 representation: Representation::Component {
                     channel: p.encoding().storage(),
                     encoding: Some(p.encoding()),
-                    grid: grid(n, Subsampling::Yuv420),
+                    grid: grid(n, ChromaSubsampling::Yuv420),
                 },
             });
         }
