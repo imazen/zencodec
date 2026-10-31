@@ -167,7 +167,6 @@ pub fn zencodec_media::container::apply_finish(file: &mut alloc::vec::Vec<u8>, f
 pub fn zencodec_media::container::erase_muxer<M: zencodec_media::container::Muxer + core::marker::Send + 'static>(m: M) -> alloc::boxed::Box<(dyn zencodec_media::container::DynMuxer + core::marker::Send)>
 pub type zencodec_media::container::Request = zencodec::traits::incremental::InputRequest
 pub mod zencodec_media::frame
-pub use zencodec_media::frame::ChromaSiting
 pub use zencodec_media::frame::ColorClaim
 pub use zencodec_media::frame::Crop
 pub use zencodec_media::frame::Frame
@@ -182,7 +181,6 @@ pub use zencodec_media::frame::PlaneRole
 pub use zencodec_media::frame::PlaneSamples
 pub use zencodec_media::frame::PlaneView
 pub use zencodec_media::frame::Presentation
-pub use zencodec_media::frame::Subsampling
 pub enum zencodec_media::frame::PlaneData
 pub zencodec_media::frame::PlaneData::AccountedU16(zencodec::storage::SharedStorage<u16>)
 pub zencodec_media::frame::PlaneData::AccountedU8(zencodec::storage::SharedStorage<u8>)

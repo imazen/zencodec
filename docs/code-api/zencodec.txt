@@ -1375,11 +1375,6 @@ pub const fn zencodec::exif::ExifPolicy::with_thumbnail(self, r: zencodec::exif:
 pub const fn zencodec::exif::ExifPolicy::with_time_offsets(self, r: zencodec::exif::Retention) -> Self
 pub fn zencodec::exif::retain<'a>(src: &'a [u8], policy: &zencodec::exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
 pub mod zencodec::frame
-#[non_exhaustive] pub enum zencodec::frame::ChromaSiting
-pub zencodec::frame::ChromaSiting::Center
-pub zencodec::frame::ChromaSiting::Left
-pub zencodec::frame::ChromaSiting::TopLeft
-pub zencodec::frame::ChromaSiting::Unknown
 #[non_exhaustive] pub enum zencodec::frame::MapError
 pub zencodec::frame::MapError::Backend(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>)
 pub zencodec::frame::MapError::Unavailable
@@ -1411,13 +1406,6 @@ impl zencodec::frame::PlaneSamples<'_>
 pub fn zencodec::frame::PlaneSamples<'_>::is_empty(&self) -> bool
 pub fn zencodec::frame::PlaneSamples<'_>::len(&self) -> usize
 pub fn zencodec::frame::PlaneSamples<'_>::storage(&self) -> zenpixels::descriptor::ChannelType
-#[non_exhaustive] pub enum zencodec::frame::Subsampling
-pub zencodec::frame::Subsampling::Mono
-pub zencodec::frame::Subsampling::Yuv420
-pub zencodec::frame::Subsampling::Yuv422
-pub zencodec::frame::Subsampling::Yuv444
-impl zencodec::frame::Subsampling
-pub const fn zencodec::frame::Subsampling::chroma_size(self, width: u32, height: u32) -> core::option::Option<(u32, u32)>
 #[non_exhaustive] pub struct zencodec::frame::ColorClaim
 pub zencodec::frame::ColorClaim::bitstream: core::option::Option<zenpixels::cicp::Cicp>
 pub zencodec::frame::ColorClaim::container: core::option::Option<zenpixels::cicp::Cicp>
@@ -1454,10 +1442,10 @@ pub zencodec::frame::FrameInterpretation::config_epoch: u32
 pub zencodec::frame::FrameInterpretation::encoding: zenpixels::sample::SampleEncoding
 pub zencodec::frame::FrameInterpretation::geometry: zencodec::frame::FrameGeometry
 pub zencodec::frame::FrameInterpretation::roles: alloc::vec::Vec<zencodec::frame::PlaneRole>
-pub zencodec::frame::FrameInterpretation::siting: zencodec::frame::ChromaSiting
-pub zencodec::frame::FrameInterpretation::subsampling: zencodec::frame::Subsampling
+pub zencodec::frame::FrameInterpretation::siting: zenpixels::sample::plane::ChromaSiting
+pub zencodec::frame::FrameInterpretation::subsampling: zenpixels::sample::plane::ChromaSubsampling
 impl zencodec::frame::FrameInterpretation
-pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, subsampling: zencodec::frame::Subsampling, siting: zencodec::frame::ChromaSiting, encoding: zenpixels::sample::SampleEncoding, roles: alloc::vec::Vec<zencodec::frame::PlaneRole>) -> Self
+pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, subsampling: zenpixels::sample::plane::ChromaSubsampling, siting: zenpixels::sample::plane::ChromaSiting, encoding: zenpixels::sample::SampleEncoding, roles: alloc::vec::Vec<zencodec::frame::PlaneRole>) -> Self
 pub fn zencodec::frame::FrameInterpretation::with_color(self, color: zencodec::frame::ColorClaim) -> Self
 pub fn zencodec::frame::FrameInterpretation::with_config_epoch(self, epoch: u32) -> Self
 #[non_exhaustive] pub struct zencodec::frame::FrameTiming
@@ -2286,7 +2274,7 @@ pub const fn zencodec::operation::EncodeRouteOffer::external_source_passes(&self
 pub const fn zencodec::operation::EncodeRouteOffer::new(acquisition: zencodec::operation::InputAcquisition, output: zencodec::operation::OutputScheduleOffer) -> Self
 #[non_exhaustive] pub struct zencodec::operation::FrameConversionOffer
 pub zencodec::operation::FrameConversionOffer::admitted_bytes: usize
-pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zencodec::frame::ChromaSiting>
+pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
 pub zencodec::operation::FrameConversionOffer::encoder_input: zencodec::operation::FrameFacts
 pub zencodec::operation::FrameConversionOffer::preserves_extended_range: bool
 pub zencodec::operation::FrameConversionOffer::preserves_samples: bool
@@ -2298,8 +2286,8 @@ pub zencodec::operation::FrameFacts::config_epoch: u32
 pub zencodec::operation::FrameFacts::encoding: zenpixels::sample::SampleEncoding
 pub zencodec::operation::FrameFacts::geometry: zencodec::frame::FrameGeometry
 pub zencodec::operation::FrameFacts::planes: usize
-pub zencodec::operation::FrameFacts::siting: zencodec::frame::ChromaSiting
-pub zencodec::operation::FrameFacts::subsampling: zencodec::frame::Subsampling
+pub zencodec::operation::FrameFacts::siting: zenpixels::sample::plane::ChromaSiting
+pub zencodec::operation::FrameFacts::subsampling: zenpixels::sample::plane::ChromaSubsampling
 pub zencodec::operation::FrameFacts::timing: zencodec::frame::FrameTiming
 impl zencodec::operation::FrameFacts
 pub fn zencodec::operation::FrameFacts::new(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming) -> Self
@@ -2323,7 +2311,7 @@ pub zencodec::operation::FrameRouteState::output_committed: bool
 pub zencodec::operation::FrameRouteState::previous: core::option::Option<zencodec::operation::FrameFacts>
 #[non_exhaustive] pub struct zencodec::operation::ImageConversionOffer
 pub zencodec::operation::ImageConversionOffer::admitted_bytes: usize
-pub zencodec::operation::ImageConversionOffer::assumed_chroma_siting: core::option::Option<zencodec::frame::ChromaSiting>
+pub zencodec::operation::ImageConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
 pub zencodec::operation::ImageConversionOffer::geometry: zencodec::image::ImageGeometry
 pub zencodec::operation::ImageConversionOffer::orientation: zenpixels::orientation::Orientation
 pub zencodec::operation::ImageConversionOffer::output: zenpixels::descriptor::PixelDescriptor
