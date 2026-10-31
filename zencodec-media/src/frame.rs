@@ -6,7 +6,6 @@
 
 use alloc::{boxed::Box, vec::Vec};
 use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 pub use zencodec::frame::{
     ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
