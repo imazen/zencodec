@@ -4,34 +4,14 @@
 //! operations. Mapping borrows native storage without conversion. Media codec
 //! sessions and accounted software allocations stay outside this crate.
 
-pub use crate::frame_storage::{
-    Frame, MapError, MappedPlanes, Picture, PlaneError, PlaneSamples, PlaneView, Presentation,
-};
+pub use crate::frame_storage::{Frame, MapError, MappedPlanes, Picture, PlaneError, Presentation};
 use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
 
 use crate::time::Timestamp;
 use alloc::vec::Vec;
 use zenpixels::Cicp;
 
-/// What a plane holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum PlaneRole {
-    /// Y.
-    Luma,
-    /// Cb (U).
-    Cb,
-    /// Cr (V).
-    Cr,
-    /// G (planar RGB, AV1 identity matrix).
-    Green,
-    /// B.
-    Blue,
-    /// R.
-    Red,
-    /// Alpha.
-    Alpha,
-}
+pub use zenpixels::plane::{AnyPlane, PlaneRef, PlaneRole};
 
 /// A rectangle in coded coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -31,8 +31,8 @@ use zencodec_media::container::{
     MuxTiming, Muxer, Patch, SeekMode, SeekResult, SeekScope, SeekStatus, SeekTarget,
 };
 use zencodec_media::frame::{
-    Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-    PlaneRole, PlaneSamples, Presentation,
+    Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneRole,
+    Presentation,
 };
 use zencodec_media::limits::MediaLimits;
 use zencodec_media::packet::{Packet, RandomAccess};
@@ -643,12 +643,10 @@ impl VideoDecoder for ToyDecoder {
             let start = 2 + i * w * h;
             let data = b[start..start + w * h].to_vec();
             let planes = OwnedPlanes::new(
-                vec![OwnedPlane {
-                    data: PlaneData::U8(data),
-                    width: w,
-                    height: h,
-                    stride_bytes: w,
-                }],
+                vec![OwnedPlane::U8(
+                    zenpixels::plane::PlaneBuf::new(data, w, h, w)
+                        .map_err(|_| SessionError::Codec(ToyError::ShapeMismatch))?,
+                )],
                 SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
             )
             .map_err(|_| SessionError::Codec(ToyError::ShapeMismatch))?;
@@ -763,11 +761,11 @@ impl ToyEncoder {
         let mut payload = Vec::with_capacity(2 + w * h);
         payload.push(1);
         payload.push(0);
-        for y in 0..h {
-            match plane.row(y).expect("row in range") {
-                PlaneSamples::U8(r) => payload.extend_from_slice(r),
-                PlaneSamples::U16(_) => return Err(SessionError::Codec(ToyError::ShapeMismatch)),
-            }
+        let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+            return Err(SessionError::Codec(ToyError::ShapeMismatch));
+        };
+        for r in plane.rows() {
+            payload.extend_from_slice(r);
         }
         let pts = frame
             .timing()

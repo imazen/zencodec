@@ -409,7 +409,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=7befd3905e746d41426f4006fd69de3f981c5f79#7befd3905e746d41426f4006fd69de3f981c5f79"
+source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -424,4 +424,4 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 [[patch.unused]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=7befd3905e746d41426f4006fd69de3f981c5f79#7befd3905e746d41426f4006fd69de3f981c5f79"
+source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"

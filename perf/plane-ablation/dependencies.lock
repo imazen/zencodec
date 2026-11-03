@@ -74,7 +74,7 @@ checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=7befd3905e746d41426f4006fd69de3f981c5f79#7befd3905e746d41426f4006fd69de3f981c5f79"
+source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
 dependencies = [
  "bytemuck",
  "whereat",

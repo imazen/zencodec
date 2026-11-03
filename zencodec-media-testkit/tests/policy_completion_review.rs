@@ -214,15 +214,12 @@ fn frame() -> zencodec::frame::Frame {
     use zencodec::frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Presentation,
     };
-    use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+    use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
     let pixels = OwnedPlanes::new(
-        vec![OwnedPlane {
-            data: PlaneData::U8(vec![42]),
-            width: 1,
-            height: 1,
-            stride_bytes: 1,
-        }],
+        vec![OwnedPlane::U8(
+            zenpixels::plane::Plane::new(vec![42], 1, 1, 1).unwrap(),
+        )],
         encoding,
     )
     .unwrap();

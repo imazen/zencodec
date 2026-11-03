@@ -1,5 +1,6 @@
 //! Canonical sample encoding crosses core mapping and conversion boundaries directly.
-use zencodec::frame::{PlaneSamples, PlaneView};
+use zencodec::frame::{AnyPlane, PlaneRef};
+use zencodec::image::CodePlane as NativePlane;
 use zenpixels::{
     ChannelType,
     sample::{CodePlane, SampleEncoding, SampleEncodingError},
@@ -25,10 +26,9 @@ fn all_integer_depth_and_shift_inputs_have_identical_contracts() {
                     // reconstructing a second crate's representation.
                     if storage == ChannelType::U16 {
                         let words = [0xaaaa, 0xffff, 0xdead, 0x5555, 0, 0xbeef];
-                        let native =
-                            PlaneView::new(PlaneSamples::U16(&words), 2, 2, 6, encoding).unwrap();
-                        let convert =
-                            CodePlane::from_u16(&words, 2, 2, 6, native.encoding()).unwrap();
+                        let plane = AnyPlane::U16(PlaneRef::new(&words[..], 2, 2, 3).unwrap());
+                        let native = NativePlane::new(plane, encoding).unwrap();
+                        let convert = CodePlane::new(native.plane(), native.encoding()).unwrap();
                         for y in 0..2 {
                             for x in 0..2 {
                                 let expected = ((u32::from(words[y * 3 + x]) >> shift)
@@ -57,8 +57,9 @@ fn floating_storage_refuses_and_u8_convenience_is_equivalent() {
     }
     let encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
     let bytes = [0, 255, 17, 128];
-    let native = PlaneView::new(PlaneSamples::U8(&bytes), 2, 2, 2, encoding).unwrap();
-    let convert = CodePlane::from_u8(&bytes, 2, 2, 2, native.encoding()).unwrap();
+    let plane = AnyPlane::U8(PlaneRef::new(&bytes[..], 2, 2, 2).unwrap());
+    let native = NativePlane::new(plane, encoding).unwrap();
+    let convert = CodePlane::new(native.plane(), native.encoding()).unwrap();
     for y in 0..2 {
         for x in 0..2 {
             assert_eq!(native.code(x, y), Some(u16::from(bytes[y * 2 + x])));

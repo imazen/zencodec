@@ -8,7 +8,7 @@ use zencodec::{
     },
     image::{ImageOutput, OutputError, Row},
 };
-use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
 use zenpixels::ChannelType;
 use zenpixels::sample::SampleEncoding;
 use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
@@ -34,12 +34,15 @@ fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
 fn words() -> Arc<dyn Picture> {
     Arc::new(
         OwnedPlanes::new(
-            vec![OwnedPlane {
-                data: PlaneData::U16(vec![0, 512, 1023, 65535, 1, 511, 1022]),
-                width: 3,
-                height: 2,
-                stride_bytes: 8,
-            }],
+            vec![OwnedPlane::U16(
+                zenpixels::plane::Plane::new(
+                    vec![0, 512, 1023, 65535, 1, 511, 1022],
+                    3,
+                    2,
+                    (8) / 2,
+                )
+                .unwrap(),
+            )],
             encoding(10),
         )
         .unwrap(),

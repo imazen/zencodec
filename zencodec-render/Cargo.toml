@@ -19,8 +19,8 @@ zenpixels-convert = { version = ">=0.2.17, <0.4.0", default-features = false }
 bytemuck = { version = "1.25.2", default-features = false }
 
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7befd3905e746d41426f4006fd69de3f981c5f79" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7befd3905e746d41426f4006fd69de3f981c5f79" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
 
 [lints.rust]
 unsafe_code = "forbid"

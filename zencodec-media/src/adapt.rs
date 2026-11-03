@@ -40,7 +40,7 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
     Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane, OwnedPlanes,
-    PlaneData, PlaneRole, PlaneSamples, Presentation,
+    PlaneRole, Presentation,
 };
 use crate::session::{
     CodecConfig, ProtocolViolation, PumpError, SessionError, VideoDecoder, VideoEncoder,
@@ -128,10 +128,10 @@ impl RenderFrame for Gray8 {
         if plane.width() != canvas.width() as usize || plane.height() != canvas.rows() as usize {
             return Err(convert_error("frame size differs from the canvas"));
         }
-        for y in 0..plane.height() {
-            let PlaneSamples::U8(row) = plane.row(y).expect("in range") else {
-                return Err(convert_error("8-bit frame with 16-bit storage"));
-            };
+        let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+            return Err(convert_error("8-bit frame with 16-bit storage"));
+        };
+        for (y, row) in plane.rows().enumerate() {
             canvas.row_mut(y as u32)[..row.len()].copy_from_slice(row);
         }
         Ok(())
@@ -177,12 +177,9 @@ impl CaptureFrame for Gray8 {
             data.extend_from_slice(&pixels.row(y)[..wu]);
         }
         let planes = OwnedPlanes::new(
-            vec![OwnedPlane {
-                data: PlaneData::U8(data),
-                width: wu,
-                height: hu,
-                stride_bytes: wu,
-            }],
+            vec![OwnedPlane::U8(
+                zenpixels::plane::PlaneBuf::new(data, wu, hu, wu).map_err(Box::new)?,
+            )],
             SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         )?;
         Ok(Frame::new(

@@ -1,6 +1,6 @@
 {
   "repository": "imazen/zenpixels",
-  "revision": "7befd3905e746d41426f4006fd69de3f981c5f79",
+  "revision": "5bf81d640752793454802d7a94346c3c1e97c81e",
   "sources": [
     {
       "path": "zenpixels/src/sample/plane.rs",
