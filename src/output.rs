@@ -651,17 +651,15 @@ impl<'a> AnimationFrame<'a> {
         let w = ps.width();
         let h = ps.rows();
         let desc = ps.descriptor();
-        let bpp = desc.bytes_per_pixel();
-        let row_bytes = w as usize * bpp;
 
-        // Copy rows into a tightly-packed buffer
-        let mut data = alloc::vec::Vec::with_capacity(h as usize * row_bytes);
-        for y in 0..h {
-            data.extend_from_slice(ps.row(y));
+        // Copy rows into a tightly-packed buffer of the format's own sample type.
+        let mut pixels = PixelBuffer::new(w, h, desc);
+        {
+            let mut out = pixels.as_slice_mut();
+            for y in 0..h {
+                out.row_mut(y).copy_from_slice(ps.row(y));
+            }
         }
-
-        let mut pixels = PixelBuffer::from_vec(data, w, h, desc)
-            .expect("to_owned_frame: buffer sized correctly");
         if let Some(ctx) = ps.color_context() {
             pixels = pixels.with_color_context(ctx.clone());
         }

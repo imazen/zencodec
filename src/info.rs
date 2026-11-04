@@ -198,6 +198,12 @@ pub enum ResolutionUnit {
 
 pub use zenpixels::hdr::{ContentLightLevel, DiffuseWhite, MasteringDisplay};
 
+/// A source's deciding color description; see [`SourceColor::authoritative`].
+pub(crate) enum AuthoritativeColor<'a> {
+    Icc(&'a Arc<[u8]>),
+    Cicp(Cicp),
+}
+
 /// Source color description from the image file.
 ///
 /// Groups color-related metadata from the original source: CICP tags,
@@ -347,6 +353,16 @@ impl SourceColor {
             .unwrap_or(ColorPrimaries::Bt709)
     }
 
+    /// The color source that decides this image's color: the authoritative one when
+    /// it is present, otherwise the other. Every reader chooses through this, so
+    /// they cannot disagree.
+    pub(crate) fn authoritative(&self) -> Option<AuthoritativeColor<'_>> {
+        self.color_authority.select(
+            self.icc_profile.as_ref().map(AuthoritativeColor::Icc),
+            self.cicp.map(AuthoritativeColor::Cicp),
+        )
+    }
+
     /// Build a [`zenpixels::ColorContext`] that carries only the
     /// authoritative color field.
     ///
@@ -360,25 +376,10 @@ impl SourceColor {
     /// returns the authoritative source without needing a separate
     /// authority parameter.
     pub fn to_color_context(&self) -> zenpixels::ColorContext {
-        let base = match self.color_authority {
-            ColorAuthority::Cicp if self.cicp.is_some() => {
-                zenpixels::ColorContext::from_cicp(self.cicp.unwrap())
-            }
-            ColorAuthority::Icc if self.icc_profile.is_some() => {
-                zenpixels::ColorContext::from_icc(self.icc_profile.clone().unwrap())
-            }
-            _ => {
-                // Authoritative field absent — keep whatever we have.
-                // If both fields were present, one of the authority arms above
-                // already selected its field. No ambiguous constructor is needed.
-                if let Some(icc) = &self.icc_profile {
-                    zenpixels::ColorContext::from_icc(icc.clone())
-                } else if let Some(cicp) = self.cicp {
-                    zenpixels::ColorContext::from_cicp(cicp)
-                } else {
-                    zenpixels::ColorContext::default()
-                }
-            }
+        let base = match self.authoritative() {
+            Some(AuthoritativeColor::Icc(icc)) => zenpixels::ColorContext::from_icc(icc.clone()),
+            Some(AuthoritativeColor::Cicp(cicp)) => zenpixels::ColorContext::from_cicp(cicp),
+            None => zenpixels::ColorContext::default(),
         };
         // Carry the absolute-luminance anchor onto the pixel-side color context
         // so the converter (e.g. `zenpixels_convert::hdr::quantize_to`) reads it.

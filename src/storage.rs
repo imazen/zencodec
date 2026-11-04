@@ -355,7 +355,7 @@ impl<T> fmt::Debug for SharedStorage<T> {
     }
 }
 
-impl<T: zenpixels::plane::PlaneSample> zenpixels::plane::PlaneStorage for SharedStorage<T> {
+impl<T: zenpixels::plane::PlaneSample> zenpixels::plane::SampleStorage for SharedStorage<T> {
     type Sample = T;
     fn samples(&self) -> &[T] {
         self.as_slice()

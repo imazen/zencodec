@@ -66,3 +66,7 @@ required-features = ["tokio"]
 [[bench]]
 name = "coroutine_admission"
 harness = false
+
+[[bench]]
+name = "decode_storage"
+harness = false
