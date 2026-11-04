@@ -22,5 +22,5 @@ overflow-checks = true
 
 # Paired precision verifier; release requires these APIs in published zenpixels.
 [patch.crates-io]
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }

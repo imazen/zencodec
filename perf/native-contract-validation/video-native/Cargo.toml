@@ -20,8 +20,8 @@ rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec656120
 [patch.crates-io]
 zenmeta = { path = "../../../zenmeta" }
 zencodec = { path = "../../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 
 [patch."https://github.com/imazen/zencodec"]

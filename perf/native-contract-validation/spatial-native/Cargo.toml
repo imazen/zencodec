@@ -13,8 +13,8 @@ zencodec = { path = "../../..", features = ["std"] }
 tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5", default-features = false, features = ["lzw", "deflate"] }
 
 [patch.crates-io]
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "83839ef3dcf0817322974337f7c02966c46089e8" }
 zencodec = { path = "../../.." }
 
 [profile.test]

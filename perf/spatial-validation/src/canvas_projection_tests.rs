@@ -519,9 +519,13 @@ fn synthetic_with_grid(
         TransferFunction::Linear,
     );
     let stride = width as usize * 16 + 16;
-    let bytes = (0..stride * height as usize).map(|x| x as u8).collect();
+    let bytes: Vec<u8> = (0..stride * height as usize).map(|x| x as u8).collect();
     let color = PixelBuffer::try_from_parts(PixelBufferParts::new(
-        bytes, width, height, stride, descriptor,
+        zenpixels::PixelStorage::from(bytes),
+        width,
+        height,
+        stride,
+        descriptor,
     ))
     .unwrap();
     let mut extras = Vec::new();
