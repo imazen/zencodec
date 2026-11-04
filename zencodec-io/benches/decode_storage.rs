@@ -3,8 +3,8 @@
 //! A decoder is simulated by filling each strip; no codec runs here.
 
 use zenbench::prelude::*;
-use zencodec::decode::DecodeRowSink;
 use zencodec::AnimationFrame;
+use zencodec::decode::DecodeRowSink;
 use zencodec_io::CollectSink;
 use zenpixels::{PixelBuffer, PixelDescriptor};
 

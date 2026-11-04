@@ -648,21 +648,11 @@ impl<'a> AnimationFrame<'a> {
     /// buffer-level color signaling silently dies (zencodec#25).
     pub fn to_owned_frame(&self) -> OwnedAnimationFrame {
         let ps = &self.pixels;
-        let w = ps.width();
-        let h = ps.rows();
-        let desc = ps.descriptor();
 
-        // Copy rows into a tightly-packed buffer of the format's own sample type.
-        let mut pixels = PixelBuffer::new(w, h, desc);
-        {
-            let mut out = pixels.as_slice_mut();
-            for y in 0..h {
-                out.row_mut(y).copy_from_slice(ps.row(y));
-            }
-        }
-        if let Some(ctx) = ps.color_context() {
-            pixels = pixels.with_color_context(ctx.clone());
-        }
+        // A tightly-packed copy of the format's own sample type, with its color context.
+        let pixels = ps
+            .try_to_tight_buffer()
+            .expect("to_owned_frame: allocation failed");
 
         OwnedAnimationFrame {
             pixels,
