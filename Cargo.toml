@@ -95,5 +95,5 @@ harness = false
 
 # Paired precision verifier; release requires these APIs in published zenpixels.
 [patch.crates-io]
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "85c0c10409a0998549fb5f104a6ceb570a176306" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "85c0c10409a0998549fb5f104a6ceb570a176306" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "8de69899ae7fb3e02c80440ecd8f833a3065f21d" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "8de69899ae7fb3e02c80440ecd8f833a3065f21d" }
