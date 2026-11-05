@@ -123,7 +123,7 @@ jobs:
       - name: Check IQA WASM and freestanding core
         run: |
           cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-wasip1
-          cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features codec --target wasm32-wasip1
+          cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features std --target wasm32-wasip1
           cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
 
       - name: Check zenmeta WASM feature set

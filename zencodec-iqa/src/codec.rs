@@ -6,28 +6,29 @@
 //!
 //! ```
 //! use zencodec::image::ImageOutput;
-//! use zencodec_iqa::{Metric, EvalOpts, Evaluation, Result};
+//! use zencodec_iqa::iqa::{Metric, EvalOpts, Evaluated, MetricResult};
 //! fn compare_decoded(
 //!     metric: &mut dyn Metric,
 //!     reference: &ImageOutput,
 //!     candidate: &ImageOutput,
-//! ) -> Result<Evaluation> {
-//!     zencodec_iqa::codec::score_outputs(metric, reference, candidate,
+//! ) -> MetricResult<Evaluated> {
+//!     zencodec_iqa::score_outputs(metric, reference, candidate,
 //!         EvalOpts::new().with_max_pixels(16_000_000))
 //! }
 //! ```
 
-use crate::{At, ResultAtExt};
-use crate::{Error, ErrorKind, EvalOpts, Evaluation, Metric, Result};
+use crate::iqa::{self, ErrorKind, EvalOpts, Evaluated, Metric, MetricError, MetricResult};
+use iqa::how_far::{Complete, PhaseSpec, Stages, Total};
+use iqa::whereat::{At, ResultAtExt};
+use iqa::zenpixels::Orientation;
 use zencodec::{
     CodecErrorExt, ErrorCategory,
     collection::Composition,
     image::{ImageOutput, OutputError},
 };
-use zenpixels::Orientation;
 
 #[track_caller]
-fn admit(image: &ImageOutput) -> Result<()> {
+fn admit(image: &ImageOutput) -> MetricResult<()> {
     let interpretation = image.interpretation();
     let geometry = interpretation.geometry;
     let region = geometry.region;
@@ -40,7 +41,7 @@ fn admit(image: &ImageOutput) -> Result<()> {
         || region.width != geometry.canvas_width
         || region.height != geometry.canvas_height
     {
-        return crate::fail(ErrorKind::UnsupportedInput);
+        return iqa::fail(MetricError::new(ErrorKind::UnsupportedInput));
     }
     Ok(())
 }
@@ -58,15 +59,17 @@ pub fn score_outputs(
     reference: &ImageOutput,
     candidate: &ImageOutput,
     opts: EvalOpts<'_>,
-) -> Result<Evaluation> {
-    crate::operation(opts, "score decoded outputs", |opts| {
+) -> MetricResult<Evaluated> {
+    operation(opts, |opts| {
         opts.checkpoint().at()?;
         admit(reference).at()?;
         admit(candidate).at()?;
         reference
             .with_pixels(|reference| {
                 candidate
-                    .with_pixels(|candidate| crate::score(metric, reference, candidate, opts))
+                    .with_pixels(|candidate| {
+                        iqa::score(metric, reference.into(), candidate.into(), opts)
+                    })
                     .map_err(mapping_error)
                     .at()?
             })
@@ -75,11 +78,26 @@ pub fn score_outputs(
     })
 }
 
-fn mapping_error(cause: At<OutputError>) -> At<Error> {
+fn mapping_error(cause: At<OutputError>) -> At<MetricError> {
     let kind = match cause.error_category() {
         Some(ErrorCategory::Stopped(reason)) => ErrorKind::Stopped(reason),
         _ if matches!(cause.error(), OutputError::NotPackedColor) => ErrorKind::UnsupportedInput,
         _ => ErrorKind::Backend,
     };
-    Error::from_located(kind, cause)
+    MetricError::from_located(kind, cause)
+}
+
+// The adapter owns mapping and admission as one operation. Core scoring owns
+// its nested phase; neither can complete the caller's borrowed parent.
+#[track_caller]
+fn operation<T>(
+    opts: EvalOpts<'_>,
+    work: impl FnOnce(EvalOpts<'_>) -> MetricResult<T>,
+) -> MetricResult<T> {
+    let mut stages = Stages::new(
+        opts.pulse,
+        &[PhaseSpec::new("score decoded outputs", 1, Total::Unknown)],
+    );
+    let result = stages.run_classified(iqa::is_stopped, |pulse| work(opts.with_pulse(pulse)));
+    stages.complete_classified(result, iqa::is_stopped).at()
 }

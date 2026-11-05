@@ -1,8 +1,6 @@
 //! Cross-crate controls for Pulse ownership and located error propagation.
-use how_far::{
-    Child, ChildPulse, Complete, Execution, Outcome, PhaseSpec, PlanError, Report, Stages, Stop,
-    Total,
-};
+use how_far::{Child, ChildPulse, Execution, Outcome, PhaseSpec, PlanError, Report, Stop, Total};
+use how_far::{Pulse, SharedPulse, StopReason};
 use std::{
     collections::BTreeMap,
     sync::{
@@ -10,7 +8,9 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use zencodec_iqa::*;
+use whereat::{At, ErrorAtExt};
+use zencodec_iqa::iqa::*;
+use zencodec_iqa::iqa::{how_far, whereat, zenpixels};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 #[derive(Default)]
@@ -131,316 +131,42 @@ impl Drop for Recorder {
     }
 }
 
-fn descriptor() -> Descriptor {
-    Descriptor::new(
-        MetricId::new("control", "protocol only", "test/1", 1),
-        ScoreSpec::new("score", Direction::Lower, "native"),
-    )
-}
-fn image() -> PixelSlice<'static> {
+fn pixels() -> PixelSlice<'static> {
     PixelSlice::new(&[0; 12], 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap()
 }
-struct Worker {
-    descriptor: Descriptor,
-    stop_at_return: bool,
-    error: Option<At<Error>>,
-    log: Arc<Log>,
-}
-impl Metric for Worker {
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor
-    }
-    fn evaluate(
-        &mut self,
-        _: PixelSlice<'_>,
-        _: PixelSlice<'_>,
-        opts: EvalOpts<'_>,
-    ) -> Result<f64> {
-        opts.pulse.set_total(Total::Exact(2)).unwrap();
-        let shared = opts.pulse.share().unwrap();
-        // An owned worker gets the complete view, including progress and stop.
-        std::thread::spawn(move || EvalOpts::new().with_pulse(shared.as_pulse()).step(2))
-            .join()
-            .unwrap()?;
-        if self.stop_at_return {
-            self.log.stopped.store(true, Ordering::Release);
-        }
-        if let Some(error) = self.error.take() {
-            return Err(error);
-        }
-        Ok(1.25)
-    }
-}
-fn worker(log: &Arc<Log>) -> Worker {
-    Worker {
-        descriptor: descriptor(),
-        stop_at_return: false,
-        error: None,
-        log: log.clone(),
-    }
-}
-
-#[test]
-fn owned_worker_reporting_and_parent_result_handoffs_compose() {
-    let log = Arc::new(Log::default());
-    let pulse = Recorder::root(&log);
-    let mut metric = worker(&log);
-    let mut caller = Stages::new(&pulse, &[PhaseSpec::new("compare", 1, Total::Unknown)]);
-    let result = caller.run_classified(
-        |e| stop_reason(e).is_some(),
-        |pulse| {
-            score(
-                &mut metric,
-                image(),
-                image(),
-                EvalOpts::new().with_pulse(pulse),
-            )
-        },
-    );
-    assert_eq!(
-        caller
-            .complete_classified(result, |e| stop_reason(e).is_some())
-            .unwrap()
-            .value,
-        1.25
-    );
-    assert_eq!(
-        *log.outcomes.lock().unwrap(),
-        BTreeMap::from([
-            ("caller/compare".into(), Outcome::Succeeded),
-            ("caller/compare/score".into(), Outcome::Succeeded),
-        ])
-    );
-    assert_eq!(log.reports.lock().unwrap()["caller/compare/score"], 2);
-    assert_eq!(
-        log.totals.lock().unwrap()["caller/compare/score"],
-        Total::Exact(2)
-    );
-    assert!(log.issues.lock().unwrap().is_empty());
-}
-
-#[test]
-fn cancellation_and_failure_complete_owned_children_without_finishing_parent() {
-    for stopped in [false, true] {
-        let log = Arc::new(Log::default());
-        let pulse = Recorder::root(&log);
-        let mut metric = worker(&log);
-        if stopped {
-            metric.stop_at_return = true;
-        } else {
-            metric.error = Some(Error::new(ErrorKind::Backend).start_at());
-        }
-        let error = score(
-            &mut metric,
-            image(),
-            image(),
-            EvalOpts::new().with_pulse(&pulse),
-        )
-        .unwrap_err();
-        assert_eq!(stop_reason(&error), stopped.then_some(StopReason::TimedOut));
-        assert_eq!(
-            *log.outcomes.lock().unwrap(),
-            BTreeMap::from([(
-                "caller/score".into(),
-                if stopped {
-                    Outcome::Cancelled
-                } else {
-                    Outcome::Failed
-                }
-            ),])
-        );
-        assert!(!error.is_empty());
-    }
-}
-
-#[test]
-fn rejected_observation_plan_retains_cancellation_without_inventing_progress() {
-    let log = Arc::new(Log::default());
-    log.reject_plan.store(true, Ordering::Relaxed);
-    let pulse = Recorder::root(&log);
-    let mut metric = worker(&log);
-    assert_eq!(
-        score(
-            &mut metric,
-            image(),
-            image(),
-            EvalOpts::new().with_pulse(&pulse)
-        )
-        .unwrap()
-        .value,
-        1.25
-    );
-    // Rejected tracking follows how-far's cancellation-only fallback. Reports
-    // must not be credited to a parent whose plan could not be applied.
-    assert!(log.reports.lock().unwrap().is_empty());
-    assert_eq!(*log.issues.lock().unwrap(), vec![PlanError::Unsupported]);
-    metric.stop_at_return = true;
-    assert_eq!(
-        stop_reason(
-            &score(
-                &mut metric,
-                image(),
-                image(),
-                EvalOpts::new().with_pulse(&pulse)
-            )
-            .unwrap_err()
-        ),
-        Some(StopReason::TimedOut)
-    );
-    assert!(log.outcomes.lock().unwrap().is_empty());
-}
-
 #[derive(Debug)]
 struct Native(Box<u32>);
 impl std::fmt::Display for Native {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("native sentinel")
+        write!(f, "native {}", self.0)
     }
 }
 impl std::error::Error for Native {}
-
-#[test]
-fn native_trace_cause_and_error_priority_survive_the_envelope_and_scoring_boundary() {
-    let native = Native(Box::new(17));
-    let allocation = &*native.0 as *const u32;
-    let origin = line!() + 1;
-    let native = native.start_at().at_str("native context");
-    let error = Error::from_located(ErrorKind::Backend, native);
-    let log = Arc::new(Log::default());
-    let pulse = Recorder::root(&log);
-    let mut metric = worker(&log);
-    metric.error = Some(error);
-    metric.stop_at_return = true;
-    let error = score(
-        &mut metric,
-        image(),
-        image(),
-        EvalOpts::new().with_pulse(&pulse),
-    )
-    .unwrap_err();
-    assert_eq!(
-        error.error().kind(),
-        ErrorKind::Backend,
-        "the actual native failure precedes the later stop"
-    );
-    assert_eq!(stop_reason(&error), None);
-    let first = error.frames().find_map(|frame| frame.location()).unwrap();
-    assert!(first.file().ends_with("tests/protocol.rs"));
-    assert_eq!(first.line(), origin);
-    assert!(
-        error
-            .contexts()
-            .any(|context| context.as_text() == Some("native context"))
-    );
-    assert!(
-        error.frames().count() >= 3,
-        "conversion and public propagation append frames"
-    );
-    let cause = std::error::Error::source(error.error())
-        .unwrap()
-        .downcast_ref::<Native>()
-        .unwrap();
-    assert_eq!(&*cause.0 as *const u32, allocation);
-    assert_eq!(
-        log.outcomes.lock().unwrap()["caller/score"],
-        Outcome::Failed
-    );
+struct Probe {
+    calls: usize,
 }
-
-#[test]
-fn nr_and_prepared_reference_operations_own_independent_result_handoffs() {
-    struct Session;
-    impl WarmReference for Session {
-        fn evaluate(&mut self, image: PixelSlice<'_>, opts: EvalOpts<'_>) -> Result<f64> {
-            opts.step(u64::from(image.rows()))?;
-            Ok(1.25)
-        }
+impl Metric for Probe {
+    fn id(&self) -> MetricId {
+        MetricId::new("probe", Implementation::new("adapter-control", "1", 1))
     }
-    struct MetricControl(Descriptor);
-    impl Metric for MetricControl {
-        fn descriptor(&self) -> &Descriptor {
-            &self.0
-        }
-        fn evaluate(
-            &mut self,
-            _: PixelSlice<'_>,
-            _: PixelSlice<'_>,
-            _: EvalOpts<'_>,
-        ) -> Result<f64> {
-            unreachable!("the test exercises prepared scoring")
-        }
-        fn prepare_reference(
-            &mut self,
-            image: PixelSlice<'_>,
-            opts: EvalOpts<'_>,
-        ) -> Result<Box<dyn WarmReference + '_>> {
-            opts.step(u64::from(image.rows()))?;
-            Ok(Box::new(Session))
-        }
+    fn outputs(&self) -> std::borrow::Cow<'static, [ScoreSpec]> {
+        std::borrow::Cow::Owned(vec![ScoreSpec::new("score", ScoreKind::Feature)])
     }
-    impl NoReferenceMetric for MetricControl {
-        fn descriptor(&self) -> &Descriptor {
-            &self.0
-        }
-        fn evaluate(&mut self, image: PixelSlice<'_>, opts: EvalOpts<'_>) -> Result<f64> {
-            opts.step(u64::from(image.rows()))?;
-            Ok(1.25)
-        }
+    fn accepts(&self, f: &InputFormat) -> bool {
+        is_rgb8_srgb(f)
     }
-    let log = Arc::new(Log::default());
-    let pulse = Recorder::root(&log);
-    let mut caller = Stages::new(
-        &pulse,
-        &[
-            PhaseSpec::new("prepare", 1, Total::Unknown),
-            PhaseSpec::new("candidate", 1, Total::Unknown),
-            PhaseSpec::new("nr", 1, Total::Unknown),
-        ],
-    );
-    let mut metric = MetricControl(descriptor());
-    let mut reference = caller
-        .run_classified(
-            |e| stop_reason(e).is_some(),
-            |pulse| prepare_reference(&mut metric, image(), EvalOpts::new().with_pulse(pulse)),
-        )
-        .unwrap();
-    let value = caller
-        .run_classified(
-            |e| stop_reason(e).is_some(),
-            |pulse| reference.score(image(), EvalOpts::new().with_pulse(pulse)),
-        )
-        .unwrap();
-    drop(reference);
-    let nr = caller.run_classified(
-        |e| stop_reason(e).is_some(),
-        |pulse| score_no_reference(&mut metric, image(), EvalOpts::new().with_pulse(pulse)),
-    );
-    assert_eq!(
-        value,
-        caller
-            .complete_classified(nr, |e| stop_reason(e).is_some())
-            .unwrap()
-    );
-    let outcomes = log.outcomes.lock().unwrap();
-    for path in [
-        "caller/prepare",
-        "caller/prepare/prepare reference",
-        "caller/candidate",
-        "caller/candidate/score prepared reference",
-        "caller/nr",
-        "caller/nr/score no reference",
-    ] {
-        assert_eq!(outcomes[path], Outcome::Succeeded, "{path}");
+    fn evaluate(
+        &mut self,
+        r: Image<'_>,
+        d: Image<'_>,
+        _: EvalOpts<'_>,
+    ) -> MetricResult<Box<dyn Evaluation>> {
+        self.calls += 1;
+        let (r, d) = rgb8_pair(&r, &d)?;
+        assert_eq!((r.width, r.height), (d.width, d.height));
+        Ok(Box::new(ScalarEval::single("score", 1.0)))
     }
-    assert_eq!(outcomes.len(), 6, "the borrowed root is never completed");
-    assert_eq!(
-        log.reports.lock().unwrap().values().copied().sum::<u64>(),
-        6
-    );
-    assert!(log.issues.lock().unwrap().is_empty());
 }
-
-#[cfg(feature = "codec")]
 #[test]
 fn mapping_refusal_keeps_native_location_payload_and_classification() {
     use zencodec::{
@@ -470,7 +196,7 @@ fn mapping_refusal_keeps_native_location_payload_and_classification() {
                     .start_at()
                     .at_str("mapping origin"));
             }
-            Ok(image())
+            Ok(pixels())
         }
     }
     for stopped in [false, true] {
@@ -495,9 +221,9 @@ fn mapping_refusal_keeps_native_location_payload_and_classification() {
         )
         .unwrap();
         let log = Arc::new(Log::default());
-        let mut metric = worker(&log);
+        let mut metric = Probe { calls: 0 };
         let pulse = Recorder::root(&log);
-        let error = codec::score_outputs(
+        let error = zencodec_iqa::score_outputs(
             &mut metric,
             &output,
             &output,

@@ -14,6 +14,13 @@ None. This is a new unpublished review API.
   and optional mapped-output bridge; no codec core API or metric implementation
   changes (`73b2351b`). Source and contract checks are in the companion crate.
 
+### Changed
+
+- Move codec-independent still-image contracts to `zenpixels-iqa`; this
+  companion now provides only resolved packed-output mapping and re-exports
+  the shared contract as `iqa`. Native mapping causes and cancellation survive
+  the handoff. The review API remains unpublished.
+
 ### Fixed
 
 - Make the IQA review API extensible through non-exhaustive records/enums and

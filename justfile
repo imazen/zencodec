@@ -1905,7 +1905,7 @@ iqa-check:
     cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
     cargo clippy --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --all-targets -- -D warnings
     cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-unknown-unknown
-    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features codec --target wasm32-unknown-unknown
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features std --target wasm32-unknown-unknown
 
 # Install the named toolchain/target first; separate from native CI gates.
 iqa-portability-check:
