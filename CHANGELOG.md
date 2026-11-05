@@ -1,5 +1,20 @@
 # Changelog
 
+## zencodec-iqa
+
+### [Unreleased]
+
+### QUEUED BREAKING CHANGES
+
+None. This is a new unpublished review API.
+
+### Added
+
+- Add the unpublished standalone `zencodec-iqa` still-image scalar contract
+  and optional mapped-output bridge; no codec core API or metric implementation
+  changes (`73b2351b`). Source and contract checks are in the companion crate.
+
+
 ## Native image selection (unreleased experiment)
 
 ### Added
@@ -597,10 +612,6 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 ## zencodec-testkit
 
 ### [Unreleased]
-
-- Add the unpublished standalone `zencodec-iqa` still-image scalar contract
-  and optional mapped-output bridge; no codec core API or metric implementation
-  changes (`73b2351b`). Source and contract checks are in the companion crate.
 
 - Packaging: keep the repository-only zenmeta dev dependency path-only, so
   standalone testkit resolution does not require an unpublished registry
