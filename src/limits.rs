@@ -301,7 +301,7 @@ pub struct ResourceLimits {
     ///
     /// Defaults to [`AllocPreference::CodecDefault`] (each codec chooses:
     /// decoders favour `Fallible` on untrusted input, encoders/trusted paths
-    /// favour the faster infallible `vec!`). Override with
+    /// favour infallible failure handling). Override with
     /// [`with_prefer_fallible_allocations`](Self::with_prefer_fallible_allocations).
     pub prefer_fallible_allocations: AllocPreference,
 }
@@ -311,17 +311,18 @@ pub struct ResourceLimits {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<ResourceLimits>() == 128);
 
-/// Caller preference for how a codec sizes buffers from untrusted input: the
-/// fallible `try_reserve` path (graceful out-of-memory error) or the faster
-/// infallible `vec!` / `Vec::with_capacity` path (aborts on OOM).
+/// Caller preference for handling allocation failure when a codec sizes buffers.
 ///
-/// `try_reserve` is slower — LLVM lowers `vec![0u8; n]` to a single `calloc`,
-/// so the infallible path is the fast default for trusted sizes. This is a
-/// *preference*: a codec honours it where it controls the allocation and falls
-/// back where it physically cannot (e.g. a transitive allocation it does not
-/// own). Carried on [`ResourceLimits::prefer_fallible_allocations`] so the
-/// policy travels with the rest of the resource governance the codec already
-/// threads.
+/// Fallible allocation returns an out-of-memory error; infallible allocation
+/// uses the allocator's error handler (or panics on capacity overflow). The
+/// successful allocation may use the same primitive in either mode, including
+/// allocator-zeroed storage for buffers with a valid all-zero representation.
+/// The preference alone does not establish a performance difference.
+///
+/// A codec honours this preference where it controls the allocation and falls
+/// back where it cannot (for example, an allocation owned by a dependency).
+/// Carried on [`ResourceLimits::prefer_fallible_allocations`] alongside the
+/// codec's other resource controls.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AllocPreference {
@@ -330,12 +331,11 @@ pub enum AllocPreference {
     /// [`Infallible`](Self::Infallible). Default — preserves existing behaviour.
     #[default]
     CodecDefault,
-    /// Force the fallible path: `try_reserve`, returning a graceful
-    /// out-of-memory error instead of aborting. Prefer for untrusted input.
+    /// Return an out-of-memory error when a controlled allocation fails.
+    /// Prefer for untrusted input.
     Fallible,
-    /// Force the infallible path: `vec!` / `Vec::with_capacity` (faster — a
-    /// single `calloc` for the zeroed case) at the cost of aborting on OOM.
-    /// Prefer for trusted sizes and benchmarks.
+    /// Use the allocator's error handler on out-of-memory failure, or panic
+    /// on capacity overflow. Prefer when allocation failure should be fatal.
     Infallible,
 }
 
@@ -435,9 +435,9 @@ impl ResourceLimits {
 
     /// Set the allocation-fallibility preference (see [`AllocPreference`]).
     ///
-    /// `CodecDefault` lets each codec choose; `Fallible` forces `try_reserve`
-    /// (graceful OOM on untrusted input); `Infallible` forces the faster
-    /// `vec!` path. Default is [`AllocPreference::CodecDefault`].
+    /// `CodecDefault` lets each codec choose; `Fallible` returns allocation
+    /// errors; `Infallible` uses the allocator's error handler on OOM, or panics
+    /// on capacity overflow. Default is [`AllocPreference::CodecDefault`].
     pub fn with_prefer_fallible_allocations(mut self, pref: AllocPreference) -> Self {
         self.prefer_fallible_allocations = pref;
         self

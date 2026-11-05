@@ -2905,6 +2905,8 @@ where
         .icc_profile
         .as_deref()
         .is_some_and(|icc| zenpixels::icc::profile_color_space(icc) == Some(desc.color_model()));
+    // Older admitted zenpixels versions had an exhaustive two-variant enum.
+    #[allow(unreachable_patterns)]
     match src.color_authority {
         ColorAuthority::Icc if src_icc_class_valid => {
             if ctx.icc.as_deref() != src.icc_profile.as_deref() {
@@ -2934,6 +2936,12 @@ where
         // Authority field absent, or an ICC the output layout can't carry: any
         // non-empty, class-valid description (already validated) is acceptable.
         ColorAuthority::Icc | ColorAuthority::Cicp => {}
+        authority => {
+            return Err(fail(
+                CHECK,
+                format!("unrecognized source color authority: {authority:?}"),
+            ));
+        }
     }
 
     if D::capabilities().streaming() {

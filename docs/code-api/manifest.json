@@ -5,9 +5,9 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "ed69f1f380a97ff55cfbd2b9f8bb15835472aff11a921bbf4fc0573bc9e715bf",
-      "surface_sha256": "698870055e91aa55ae7d9942edeee65a9074984fbb4cb072d5fcee51cff18428",
-      "details_sha256": "b966b3f9b4a3883aea85b252abe4cd0b6942e00960792c40c3970249550b859d"
+      "fingerprint": "20a06db888b5152f520d8eeec9bdbeae00753c9077fd18babf5536784d4ffcf6",
+      "surface_sha256": "42f2d026f130556977791d80078dc396e22daa5d6daf1279beedd6b2354b1c8e",
+      "details_sha256": "eb274114a50952481e4097105d7bd506743b93ae614272829933957c0598e282"
     },
     {
       "name": "zencodec-io",
@@ -22,7 +22,7 @@
       "directory": "zencodec-coroutine",
       "features": "all",
       "fingerprint": "5c3a42345b2eb34b4824b16ac9b5b17bbde5b3389dc827e7477959ed80203184",
-      "surface_sha256": "5c5f6deb80a8cddeeacefb6e52b98dd31984b07a2cc9d0fdd1e656d0a1da5def",
+      "surface_sha256": "360cc2becc9390fab50bd24e9d8afa41630da1ae30a67baed184d645dd196024",
       "details_sha256": "dcb39bc275ef86e81331f29da6474f75f83c5269c93e241b9e57269fa16ce6a6"
     },
     {
@@ -37,9 +37,9 @@
       "name": "zencodec-testkit",
       "directory": "zencodec-testkit",
       "features": "all",
-      "fingerprint": "7311c44a11603afa2c44ae378ae0d9cdcba8a34484a0746120ef2f5b36aede2a",
+      "fingerprint": "a9083d14bd61fc69804353e7c0168a036a5e94fbffd4fc1461b53610b818e73d",
       "surface_sha256": "357b033477c3e09173126ed98008b94eb59d15202170af41fabc6a55d2a68629",
-      "details_sha256": "3f204506189e94430713845db5fb47bf47fbf62feb7fa37c53635a710f1729aa"
+      "details_sha256": "3703b5d4c73da89bcb555c33a6cbf3ac9ab16f1f0dc26ff35c5baf3fafa9bff0"
     },
     {
       "name": "zencodec-media-testkit",
@@ -61,7 +61,7 @@
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
-      "fingerprint": "8b78e7b86cafc414833ed82651ace8eb4ca29e843ee7f02fc4989ef67c8147b4",
+      "fingerprint": "8aacb6c56d4a0b14ba6831ea002f917476d6b287618bdcc6f387a2ff8b241102",
       "surface_sha256": "e8cf095bf46b03712b0d77f9c1f613691c48590b22013e0d7fbb182acd92fd73",
       "details_sha256": "2702320d44b86d997df7d923dd4f8d68f629afabb9a307ad01a52c22a2d1f5cb"
     }

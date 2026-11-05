@@ -16,7 +16,7 @@ pub zencodec_coroutine::CoroutineError::Sink(zencodec::sink::SinkError)
 pub zencodec_coroutine::CoroutineError::Source(zencodec::source::SourceError)
 pub zencodec_coroutine::CoroutineError::Stalled
 pub zencodec_coroutine::CoroutineError::Storage(zencodec::storage::StorageError)
-impl core::convert::From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>> for zencodec_coroutine::CoroutineError
+impl core::convert::From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Sync + core::marker::Send)>> for zencodec_coroutine::CoroutineError
 pub fn zencodec_coroutine::CoroutineError::from(e: zencodec::sink::SinkError) -> Self
 impl core::convert::From<enough::reason::StopReason> for zencodec_coroutine::CoroutineError
 pub fn zencodec_coroutine::CoroutineError::from(r: enough::reason::StopReason) -> Self

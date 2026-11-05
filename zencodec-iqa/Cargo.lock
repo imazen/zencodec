@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=49f13e3ed32749230b25cf74d5e98ef465a0a015#49f13e3ed32749230b25cf74d5e98ef465a0a015"
+source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -132,7 +132,7 @@ dependencies = [
 [[package]]
 name = "zenpsychovisual-api"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenpixels?rev=49f13e3ed32749230b25cf74d5e98ef465a0a015#49f13e3ed32749230b25cf74d5e98ef465a0a015"
+source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
 dependencies = [
  "bytemuck",
  "how-far",

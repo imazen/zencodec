@@ -1916,3 +1916,14 @@ iqa-portability-check:
 # Run inside the standalone workspace so cross does not duplicate parent mounts.
 iqa-cross-check toolchain='':
     cd zencodec-iqa && cross {{toolchain}} test --locked --all-features --target i686-unknown-linux-gnu
+
+# Shared sibling cohort: full workspace behavior and strict lint with one pixel source.
+sibling-cohort-check:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+# Regenerate compiler-derived catalogs after shared manifest/source changes.
+sibling-docs-catalog-check:
+    RUSTUP_TOOLCHAIN=nightly-2026-10-06 python3 docs/generate-code-catalog.py .
+    npm ci --prefix docs --ignore-scripts
+    just docs-site-check

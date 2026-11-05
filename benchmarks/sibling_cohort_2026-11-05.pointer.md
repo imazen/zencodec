@@ -1,0 +1,40 @@
+# Shared sibling pixel cohort — 2026-11-05
+
+Baseline: zencodec `a51d4119`. Paired zenpixels and zenpixels-convert now use
+`fa836abf72afe9826e866dc25712b7c800323962` in the workspace, fuzz and isolated
+render graphs. The renderer's tracked dependency lock matches that source.
+
+The new non-exhaustive ColorAuthority exposed an exhaustive match in the
+conformance testkit. Unknown authority values now return a conformance error;
+known ICC/CICP checks and every existing assertion remain unchanged. The narrow
+unreachable-pattern allowance also admits the older exhaustive enum versions
+already covered by the dependency range. No public signature changed.
+
+`just sibling-cohort-check` passes: 1,449 test/doctest passes, zero failures and
+39 pre-existing ignores across the workspace, plus strict all-feature,
+all-target Clippy. Isolated fuzz and renderer checks pass. Baseline strict
+Clippy passed before the pin update. No codec pixel/quality claim follows from
+these shared-crate gates; downstream codecs and frozen EVAL need their own gates.
+
+Receipts on **dev**, checked 2026-11-05:
+
+`/mnt/v/output/zensim-siblings-20261105/zencodec/`
+
+`phase2-zencodec-{baseline,cohort,cohort-fixed,isolated}.log` preserve the baseline,
+initial compile refusal and successful checks. `SHA256SUMS` records all hashes.
+Validation ran in an isolated source mirror on lilith-wsl through the shared
+heavy lock, two jobs and a 4 GiB hard cap. Successful workspace receipt:
+`rc=0 38s | peak-RSS 0.50GiB | min-avail 6825MiB | peak-load 3.71`.
+
+Documentation follow-up: the Documentation workflow for `1816b4d0` failed
+its source-fingerprint gate because the root/render manifests and private
+color-authority matcher changed without regenerated catalogs. Regenerated all
+eight catalogs with `nightly-2026-10-06` (rustc 1.101.0-nightly ea137335b).
+The public listing differences are only Send/Sync trait-bound ordering in two
+From implementations; exported signatures and capabilities are unchanged.
+The testkit source-location records now match its private matcher.
+`just sibling-docs-catalog-check` passes its generator, Python ownership control,
+site build and 27 Node tests: `rc=0 31s | peak-RSS 0.35GiB | min-avail 8180MiB | peak-load 2.30`.
+The initial June-nightly generation and failed non-git preview attempt are
+preserved with the other raw logs; the final preview ran in a fresh origin/main
+clone. This is a documentation repair, not a new shared runtime revision.
