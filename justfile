@@ -1906,3 +1906,9 @@ iqa-check:
     cargo clippy --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --all-targets -- -D warnings
     cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-unknown-unknown
     cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features codec --target wasm32-unknown-unknown
+
+# Install the named toolchain/target first; separate from native CI gates.
+iqa-portability-check:
+    cargo +1.88.0 check --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --no-deps

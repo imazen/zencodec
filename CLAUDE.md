@@ -256,6 +256,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed IQA review-contract gaps (2026-11-04): exhaustive records/enums constrained
+  API extension, `At::wrap` captured no error location, and borrowed Pulse
+  checks did not hand off owned phase outcomes. The unpublished companion now
+  uses constructors/non-exhaustive types, located cause transfer and classified
+  child completion. Nested ownership, planning refusal, owned-worker reporting
+  and mapping cancellation controls run in `just iqa-check`. See
+  `zencodec-iqa/README.md`; this does not qualify metric implementations.
+
 - Fixed container final-position cancellation (2026-10-29): output could flush
   after its final seek signalled a stop. The driver now checks before flush;
   testkit controls retain confirmed append counts and native seek error priority.

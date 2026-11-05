@@ -14,6 +14,13 @@ None. This is a new unpublished review API.
   and optional mapped-output bridge; no codec core API or metric implementation
   changes (`73b2351b`). Source and contract checks are in the companion crate.
 
+### Fixed
+
+- Make the IQA review API extensible through non-exhaustive records/enums and
+  constructors. Complete owned how-far phases with classified outcomes and
+  preserve whereat traces, typed native causes and mapping cancellation
+  (`c7666dba`).
+
 
 ## Native image selection (unreleased experiment)
 
