@@ -22,7 +22,8 @@ assert_eq!(interpretation.uniform_code_encoding(), None);
 
 An absent common encoding means inspect the per-plane layout. It does not mean
 8-bit, unknown storage, or permission to normalize the samples. `FrameFacts`
-keeps a bounded diagnostic summary; policy questions retain the actual frame or
+keeps all ordered plane specifications in a bounded inline record, so mixed-depth
+conversion offers cannot compare equal accidentally. Policy questions retain the actual frame or
 image, including its full layout.
 
 For an owned software frame, `OwnedPlanes::new(planes, encoding)` remains the
@@ -81,3 +82,12 @@ color conversion support, losslessness or a whole-operation memory bound.
 The migration is a release candidate until the core, renderer, native adapters,
 compiler API snapshots and site gates are qualified. The reproducible core gate
 is `just plane-main-check`; run it in an export outside workspace overrides.
+
+## Review still open
+
+[Issue 198](https://github.com/imazen/zencodec/issues/198) records the remaining
+API decisions: whether mapped owners must always state encoding, where direct
+`Frame::map` consumers get layout agreement checks, typed interleaved F32
+access, and extensible sample enums. These are not qualified by the core tests.
+The concrete mixed-layout policy equality and alpha-as-gray findings have
+regression controls in `zencodec-media-testkit/tests/plane_layout.rs`.
