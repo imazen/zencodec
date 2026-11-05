@@ -891,3 +891,10 @@ single required source file. Actual unpacked all-target tests, doctests and
 strict Clippy pass with the paired dependency explicitly pinned. Use
 core-package-check for registry-only qualification after dependencies publish;
 core-package-paired-check proves contents only. See benchmarks/core_package_2026-10-30.md.
+
+## Known Bugs: sibling pixel cohort compilation (2026-11-05, fixed)
+
+The current pixel revision marks ColorAuthority non-exhaustive. Its two known
+authorities retain their conformance checks; unknown values now fail explicitly.
+Full workspace tests and strict all-feature Clippy pass against fa836abf, as do
+isolated fuzz/render checks. See benchmarks/sibling_cohort_2026-11-05.pointer.md.

@@ -1897,3 +1897,8 @@ release-registry-check output:
 sample-encoding-compat-check:
     cargo test -p zencodec --test sample_encoding_compat
     cargo clippy -p zencodec --test sample_encoding_compat --locked -- -D warnings
+
+# Shared sibling cohort: full workspace behavior and strict lint with one pixel source.
+sibling-cohort-check:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

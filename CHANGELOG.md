@@ -598,6 +598,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Align the paired zenpixels/zenpixels-convert verifier to `fa836abf` across the
+  workspace, fuzz and render graphs. The testkit refuses unknown non-exhaustive
+  color authority values while retaining all existing ICC/CICP checks.
+
 - Packaging: keep the repository-only zenmeta dev dependency path-only, so
   standalone testkit resolution does not require an unpublished registry
   package unused by its shipped source. Existing repository tests remain.
