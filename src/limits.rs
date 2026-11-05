@@ -301,7 +301,7 @@ pub struct ResourceLimits {
     ///
     /// Defaults to [`AllocPreference::CodecDefault`] (each codec chooses:
     /// decoders favour `Fallible` on untrusted input, encoders/trusted paths
-    /// favour the faster infallible `vec!`). Override with
+    /// favour infallible failure handling). Override with
     /// [`with_prefer_fallible_allocations`](Self::with_prefer_fallible_allocations).
     pub prefer_fallible_allocations: AllocPreference,
 }
@@ -435,9 +435,9 @@ impl ResourceLimits {
 
     /// Set the allocation-fallibility preference (see [`AllocPreference`]).
     ///
-    /// `CodecDefault` lets each codec choose; `Fallible` forces `try_reserve`
-    /// (graceful OOM on untrusted input); `Infallible` forces the faster
-    /// `vec!` path. Default is [`AllocPreference::CodecDefault`].
+    /// `CodecDefault` lets each codec choose; `Fallible` returns allocation
+    /// errors; `Infallible` uses the allocator's error handler on OOM, or panics
+    /// on capacity overflow. Default is [`AllocPreference::CodecDefault`].
     pub fn with_prefer_fallible_allocations(mut self, pref: AllocPreference) -> Self {
         self.prefer_fallible_allocations = pref;
         self
