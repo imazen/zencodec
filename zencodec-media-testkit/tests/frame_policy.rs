@@ -45,10 +45,20 @@ fn frame(budget: &StorageBudget, i: u16) -> Frame {
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        ChromaSubsampling::Mono,
-        ChromaSiting::Unknown,
-        encoding,
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(encoding),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     )
     .with_config_epoch(u32::from(i % 2));
     Frame::new(
@@ -231,7 +241,14 @@ fn absent_control_reaches_native_policy_calls_and_preserves_required_metadata_ga
             };
             assert!(Arc::ptr_eq(output.picture(), &owner.upgrade().unwrap()));
             assert_eq!(decoder.report().decisions().count(), 1);
-            assert_eq!(output.interpretation().encoding.code_bits(), 10);
+            assert_eq!(
+                output
+                    .interpretation()
+                    .uniform_code_encoding()
+                    .expect("uniform integer fixture")
+                    .code_bits(),
+                10
+            );
         }
     }
 }
@@ -255,8 +272,22 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
             else {
                 panic!("wrong domain")
             };
-            assert_eq!(interpretation.encoding.code_bits(), 10);
-            assert_eq!(interpretation.roles, [PlaneRole::Luma]);
+            assert_eq!(
+                interpretation
+                    .uniform_code_encoding()
+                    .expect("uniform integer fixture")
+                    .code_bits(),
+                10
+            );
+            assert_eq!(
+                interpretation
+                    .layout
+                    .planes()
+                    .iter()
+                    .map(|p| p.role())
+                    .collect::<Vec<_>>(),
+                [PlaneRole::Luma]
+            );
             assert_eq!(interpretation.config_epoch, seen % 2);
             assert_eq!(timing.pts.unwrap().ticks(), i64::from(seen));
             assert_eq!(timing.packet_ordinal, Some(7));
@@ -353,7 +384,9 @@ fn stale_policy_choice_publishes_no_second_frame_and_releases_all_native_owners(
     assert_eq!(
         zenpixels::sample::CodePlane::new(
             old.map().unwrap().plane(0).unwrap(),
-            old.interpretation().encoding
+            old.interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
         )
         .unwrap()
         .code(2, 0),

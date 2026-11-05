@@ -116,8 +116,9 @@ impl RenderFrame for Gray8 {
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
-        if interp.subsampling != ChromaSubsampling::Mono
-            || interp.encoding != SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+        if interp.layout.subsampling() != ChromaSubsampling::Mono
+            || interp.uniform_code_encoding()
+                != Some(SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap())
         {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
@@ -160,10 +161,22 @@ impl CaptureFrame for Gray8 {
             _ => {
                 let i = Arc::new(FrameInterpretation::new(
                     FrameGeometry::full(w, h),
-                    ChromaSubsampling::Mono,
-                    ChromaSiting::Unknown,
-                    SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
-                    vec![PlaneRole::Luma],
+                    zenpixels::plane::PlanarLayout::new(
+                        (vec![PlaneRole::Luma])
+                            .into_iter()
+                            .map(|role| {
+                                zenpixels::plane::PlaneSpec::new(
+                                    role,
+                                    zenpixels::plane::PlaneEncoding::Code(
+                                        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0)
+                                            .unwrap(),
+                                    ),
+                                )
+                            })
+                            .collect(),
+                        ChromaSubsampling::Mono,
+                        ChromaSiting::Unknown,
+                    )?,
                 ));
                 self.interpretation = Some(Arc::clone(&i));
                 i

@@ -21,8 +21,9 @@ pub struct FrameFacts {
     pub subsampling: ChromaSubsampling,
     /// Declared chroma siting; unknown remains unknown.
     pub siting: ChromaSiting,
-    /// Storage word and significant sample-code placement.
-    pub encoding: SampleEncoding,
+    /// Common integer encoding; absent for mixed-depth or floating-point layouts.
+    /// The question retains the complete per-plane layout.
+    pub encoding: Option<SampleEncoding>,
     /// Number of native component roles.
     pub planes: usize,
     /// Bitstream, container and selected color declarations.
@@ -37,10 +38,10 @@ impl FrameFacts {
     pub fn new(interpretation: &FrameInterpretation, timing: FrameTiming) -> Self {
         Self {
             geometry: interpretation.geometry,
-            subsampling: interpretation.subsampling,
-            siting: interpretation.siting,
-            encoding: interpretation.encoding,
-            planes: interpretation.roles.len(),
+            subsampling: interpretation.layout.subsampling(),
+            siting: interpretation.layout.siting(),
+            encoding: interpretation.uniform_code_encoding(),
+            planes: interpretation.layout.planes().len(),
             color: interpretation.color,
             config_epoch: interpretation.config_epoch,
             timing,

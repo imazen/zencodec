@@ -19,10 +19,20 @@ fn encoding(bits: u8) -> SampleEncoding {
 fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(width, 2),
-        ChromaSubsampling::Mono,
-        ChromaSiting::Unknown,
-        encoding(bits),
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(encoding(bits)),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     );
     ImageOutput::from_frame(Frame::new(
         picture,
@@ -132,7 +142,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
         let DecisionContext::ImageConversion(facts) = record.context else {
             panic!()
         };
-        assert_eq!(facts.frame.unwrap().encoding, encoding(10));
+        assert_eq!(facts.frame.unwrap().encoding, Some(encoding(10)));
         let Some(Selection::ImageConversion(selected)) = record.selected else {
             panic!()
         };
@@ -268,8 +278,14 @@ fn native_codes_keep_active_rows_and_refuse_conflicting_claims() {
         assert_eq!(*index, 0);
         assert_eq!(*expected_dimensions, (width as usize, 2));
         assert_eq!(*actual_dimensions, (3, 2));
-        assert_eq!(*expected_encoding, encoding(bits));
-        assert_eq!(*actual_encoding, encoding(10));
+        assert_eq!(
+            *expected_encoding,
+            zenpixels::plane::PlaneEncoding::Code(encoding(bits))
+        );
+        assert_eq!(
+            *actual_encoding,
+            zenpixels::plane::PlaneEncoding::Code(encoding(10))
+        );
     }
 }
 
@@ -346,7 +362,7 @@ mod publication {
                 assert_eq!(facts.auxiliaries, 0);
                 assert_eq!(facts.source_details, 0);
                 assert_eq!(facts.packed, None);
-                assert_eq!(facts.frame.unwrap().encoding, encoding(10));
+                assert_eq!(facts.frame.unwrap().encoding, Some(encoding(10)));
                 let mapped = image.map().unwrap();
                 assert_eq!(
                     mapped.plane(0).unwrap().unwrap().samples.code_encoding(),
@@ -523,10 +539,20 @@ fn rgb_owner(pool: &zencodec::storage::StorageBudget, width: u32) -> RgbOwner {
 fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        ChromaSubsampling::Mono,
-        ChromaSiting::Unknown,
-        encoding(10),
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(encoding(10)),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     );
     interpretation.geometry.crop.x = 1;
     interpretation.geometry.crop.width = crop_width;
@@ -576,7 +602,10 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
     );
     let facts = ImageFacts::new(&image);
     assert!(facts.frame.is_none());
-    assert_eq!(facts.source_frame.unwrap().encoding.code_bits(), 10);
+    assert_eq!(
+        facts.source_frame.unwrap().encoding.unwrap().code_bits(),
+        10
+    );
     assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
     let clone = image.clone();
     let replacement = rgb_owner(&pool, 2);
@@ -603,7 +632,10 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
                 panic!()
             };
             assert!(facts.frame.is_none());
-            assert_eq!(facts.source_frame.unwrap().encoding.code_bits(), 10);
+            assert_eq!(
+                facts.source_frame.unwrap().encoding.unwrap().code_bits(),
+                10
+            );
             assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
             assert!(image.with_pixels(|p| p.width() == 2).unwrap());
             assert_eq!(facts.timing, Some(timing));

@@ -584,10 +584,22 @@ impl VideoDecoder for ToyDecoder {
         let interp = Arc::new(
             FrameInterpretation::new(
                 FrameGeometry::full(video.coded_width, video.coded_height),
-                ChromaSubsampling::Mono,
-                ChromaSiting::Unknown,
-                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
-                vec![PlaneRole::Luma],
+                zenpixels::plane::PlanarLayout::new(
+                    (vec![PlaneRole::Luma])
+                        .into_iter()
+                        .map(|role| {
+                            zenpixels::plane::PlaneSpec::new(
+                                role,
+                                zenpixels::plane::PlaneEncoding::Code(
+                                    SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+                                ),
+                            )
+                        })
+                        .collect(),
+                    ChromaSubsampling::Mono,
+                    ChromaSiting::Unknown,
+                )
+                .expect("valid fixture layout"),
             )
             .with_config_epoch(config.epoch),
         );
@@ -806,7 +818,7 @@ impl VideoEncoder for ToyEncoder {
         let g = &frame.interpretation().geometry;
         if g.coded_width != video.coded_width
             || g.coded_height != video.coded_height
-            || frame.interpretation().subsampling != ChromaSubsampling::Mono
+            || frame.interpretation().layout.subsampling() != ChromaSubsampling::Mono
         {
             return Err(SessionError::Codec(ToyError::ShapeMismatch));
         }

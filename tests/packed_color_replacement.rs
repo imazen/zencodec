@@ -388,10 +388,22 @@ fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     }
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(2, 2),
-        ChromaSubsampling::Mono,
-        ChromaSiting::Unknown,
-        SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(
+                            SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+                        ),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     );
     let source = ImageOutput::from_frame(Frame::new(
         Arc::new(Unmapped),

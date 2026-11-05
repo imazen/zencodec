@@ -7,7 +7,7 @@ use crate::frame::{FrameInterpretation, FrameTiming};
 use alloc::{boxed::Box, sync::Arc};
 use core::fmt;
 use zenpixels::plane::AnyPlane;
-use zenpixels::sample::SampleEncoding;
+use zenpixels::plane::PlaneEncoding;
 
 /// Facts about one presentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -48,7 +48,7 @@ pub trait MappedPlanes {
 
     /// The sample encoding plane `index` was written with, when the owner
     /// records one. Consumers compare it with the frame interpretation.
-    fn encoding(&self, index: usize) -> Option<SampleEncoding> {
+    fn encoding(&self, index: usize) -> Option<PlaneEncoding> {
         let _ = index;
         None
     }

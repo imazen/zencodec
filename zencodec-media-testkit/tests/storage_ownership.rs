@@ -86,10 +86,20 @@ fn frame(data: Data, encoding: SampleEncoding, epoch: u32) -> Frame {
     let picture = OwnedPlanes::new(vec![plane], encoding).unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        ChromaSubsampling::Mono,
-        ChromaSiting::Unknown,
-        encoding,
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(encoding),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     )
     .with_config_epoch(epoch);
     Frame::new(
@@ -188,7 +198,13 @@ fn ten_bit_strided_planes_keep_native_words_and_their_full_charge() {
     assert!(
         matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [1, 511, 1022])
     );
-    assert_eq!(clone.interpretation().encoding, encoding);
+    assert_eq!(
+        clone
+            .interpretation()
+            .uniform_code_encoding()
+            .expect("uniform integer fixture"),
+        encoding
+    );
     drop(mapped);
     drop(clone);
     assert_eq!(budget.reserved_bytes(), 0);

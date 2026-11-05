@@ -5,10 +5,12 @@
 //! sessions and accounted software allocations stay outside this crate.
 
 pub use crate::frame_storage::{Frame, MapError, MappedPlanes, Picture, PlaneError, Presentation};
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
+use zenpixels::{
+    plane::{PlanarLayout, PlaneEncoding},
+    sample::SampleEncoding,
+};
 
 use crate::time::Timestamp;
-use alloc::vec::Vec;
 use zenpixels::Cicp;
 
 pub use zenpixels::plane::{AnyPlane, PlaneRef, PlaneRole};
@@ -96,14 +98,9 @@ impl ColorClaim {
 pub struct FrameInterpretation {
     /// Picture shape.
     pub geometry: FrameGeometry,
-    /// Chroma subsampling.
-    pub subsampling: ChromaSubsampling,
-    /// Chroma siting.
-    pub siting: ChromaSiting,
-    /// Sample storage and code depth.
-    pub encoding: SampleEncoding,
-    /// What each plane holds, in plane order.
-    pub roles: Vec<PlaneRole>,
+    /// Validated roles, per-plane encodings, subsampling and siting.
+    /// Storage owners must agree with this layout; no frame-wide depth is assumed.
+    pub layout: PlanarLayout,
     /// Colour claims.
     pub color: ColorClaim,
     /// The codec configuration epoch it was decoded under.
@@ -112,22 +109,26 @@ pub struct FrameInterpretation {
 
 impl FrameInterpretation {
     /// An interpretation with no colour claims, at epoch 0.
-    pub fn new(
-        geometry: FrameGeometry,
-        subsampling: ChromaSubsampling,
-        siting: ChromaSiting,
-        encoding: SampleEncoding,
-        roles: Vec<PlaneRole>,
-    ) -> Self {
+    pub fn new(geometry: FrameGeometry, layout: PlanarLayout) -> Self {
         Self {
             geometry,
-            subsampling,
-            siting,
-            encoding,
-            roles,
+            layout,
             color: ColorClaim::default(),
             config_epoch: 0,
         }
+    }
+
+    /// A common integer encoding only when every plane has exactly that encoding.
+    /// Mixed-depth or floating-point layouts return `None`.
+    pub fn uniform_code_encoding(&self) -> Option<SampleEncoding> {
+        let PlaneEncoding::Code(first) = self.layout.planes().first()?.encoding() else {
+            return None;
+        };
+        self.layout
+            .planes()
+            .iter()
+            .all(|p| p.encoding() == PlaneEncoding::Code(first))
+            .then_some(first)
     }
 
     /// The colour claims.

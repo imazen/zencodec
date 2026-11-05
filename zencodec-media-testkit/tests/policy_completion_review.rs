@@ -227,10 +227,20 @@ fn frame() -> zencodec::frame::Frame {
         Arc::new(pixels),
         Arc::new(FrameInterpretation::new(
             FrameGeometry::full(1, 1),
-            ChromaSubsampling::Mono,
-            ChromaSiting::Unknown,
-            encoding,
-            vec![PlaneRole::Luma],
+            zenpixels::plane::PlanarLayout::new(
+                (vec![PlaneRole::Luma])
+                    .into_iter()
+                    .map(|role| {
+                        zenpixels::plane::PlaneSpec::new(
+                            role,
+                            zenpixels::plane::PlaneEncoding::Code(encoding),
+                        )
+                    })
+                    .collect(),
+                ChromaSubsampling::Mono,
+                ChromaSiting::Unknown,
+            )
+            .expect("valid fixture layout"),
         )),
         FrameTiming::at(zencodec::time::Timestamp::new(
             0,

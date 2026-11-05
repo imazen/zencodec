@@ -332,7 +332,7 @@ impl SourceColor {
             return true;
         }
         if let Some(ref icc) = self.icc_profile
-            && let Some(c) = zenpixels::icc::extract_cicp(icc)
+            && let Some(c) = zenpixels::Cicp::from_icc(icc)
         {
             return matches!(c.transfer_characteristics, 16 | 18);
         }

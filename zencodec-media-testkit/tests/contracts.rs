@@ -349,7 +349,10 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
     assert_eq!(
         zenpixels::sample::CodePlane::new(
             frames[2].map().unwrap().plane(0).unwrap(),
-            frames[2].interpretation().encoding
+            frames[2]
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
         )
         .unwrap()
         .code(0, 0),
@@ -385,15 +388,24 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     };
     drop(dec);
     assert_eq!(
-        zenpixels::sample::CodePlane::new(plane, first.interpretation().encoding)
-            .unwrap()
-            .code(3, 2),
+        zenpixels::sample::CodePlane::new(
+            plane,
+            first
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
+        )
+        .unwrap()
+        .code(3, 2),
         Some(9)
     );
     assert_eq!(
         zenpixels::sample::CodePlane::new(
             second.map().unwrap().plane(0).unwrap(),
-            second.interpretation().encoding
+            second
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
         )
         .unwrap()
         .code(0, 0),

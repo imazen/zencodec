@@ -234,8 +234,8 @@ pub struct ColorEmitPlan {
 /// (or ICC is absent), the explicit CICP wins, then the ICC-derived fallback.
 fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
     let from_icc = |icc_bytes: &[u8]| -> Option<Cicp> {
-        icc::extract_cicp(icc_bytes)
-            .or_else(|| icc::identify_common(icc_bytes).and_then(|id| id.to_cicp()))
+        Cicp::from_icc(icc_bytes)
+            .or_else(|| icc::IccIdentification::from_icc(icc_bytes).and_then(|id| id.to_cicp()))
     };
     match src.authoritative()? {
         AuthoritativeColor::Icc(icc_bytes) => from_icc(icc_bytes),
@@ -259,10 +259,7 @@ pub fn resolve_color_emit(
     // Grayscale / CMYK: CICP is RGB-centric and cannot describe these. Keep the
     // ICC (the only valid color description) and suppress CICP — emitting an RGB
     // CICP over gray/CMYK pixels would recolor them.
-    let model = src
-        .icc_profile
-        .as_deref()
-        .and_then(icc::profile_color_space);
+    let model = src.icc_profile.as_deref().and_then(ColorModel::from_icc);
     let is_gray = matches!(model, Some(ColorModel::Gray)) || src.channel_count == Some(1);
     let is_cmyk = matches!(model, Some(ColorModel::Cmyk));
     if is_gray || is_cmyk {
@@ -281,7 +278,10 @@ pub fn resolve_color_emit(
     let has_carrier = target.cicp();
     let is_valid_carrier = target.cicp_is_valid_carrier();
     let sole_safe = target.cicp_safe_sole_carrier();
-    let icc_is_srgb = src.icc_profile.as_deref().is_some_and(icc::is_common_srgb);
+    let icc_is_srgb = src
+        .icc_profile
+        .as_deref()
+        .is_some_and(icc::IccIdentification::is_common_srgb);
 
     // Whether to emit CICP.
     let emit_cicp = match policy {

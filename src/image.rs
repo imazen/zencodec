@@ -11,6 +11,7 @@ use crate::frame::{
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
 use zenpixels::plane::AnyPlane;
+use zenpixels::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
 use zenpixels::sample::SampleEncoding;
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = At<OutputError>;
@@ -329,6 +330,13 @@ pub enum Samples<'a> {
     Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
     Codes(CodePlane<'a>),
+    /// Floating component samples with their explicit value mapping.
+    Float {
+        /// Native-endian strided samples.
+        plane: PlaneRef<'a, f32>,
+        /// Value scale and offset, independent of color signaling.
+        encoding: FloatEncoding,
+    },
 }
 /// A mapped native plane with the code encoding its words carry. Built on
 /// [`zenpixels::plane::AnyPlane`]; the storage type is checked against the
@@ -425,6 +433,8 @@ pub enum Row<'a> {
     Bytes(&'a [u8]),
     /// Native-endian sixteen-bit component words; retain their code encoding.
     Words16(&'a [u16]),
+    /// Native-endian floating component samples.
+    Floats(&'a [f32]),
 }
 impl Samples<'_> {
     /// Width and height of this emitted plane.
@@ -433,6 +443,7 @@ impl Samples<'_> {
             Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
             Self::Values(p) => (p.width as usize, p.height as usize),
             Self::Codes(p) => (p.width(), p.height()),
+            Self::Float { plane, .. } => (plane.width(), plane.height()),
         }
     }
     /// Storage sample type, not original precision or code depth.
@@ -441,6 +452,7 @@ impl Samples<'_> {
             Self::Pixels(p) => p.descriptor().channel_type(),
             Self::Values(p) => p.channel,
             Self::Codes(p) => p.encoding().storage(),
+            Self::Float { .. } => ChannelType::F32,
         }
     }
     /// Significant code bits for component words; absent for pixels/values.
@@ -456,6 +468,7 @@ impl Samples<'_> {
             Self::Pixels(p) => p.stride(),
             Self::Values(p) => p.stride,
             Self::Codes(p) => p.stride_bytes(),
+            Self::Float { plane, .. } => plane.stride() * core::mem::size_of::<f32>(),
         }
     }
     /// Active row, or `None` past the plane height.
@@ -469,6 +482,14 @@ impl Samples<'_> {
                 &p.bytes[y * p.stride..y * p.stride + p.width as usize * p.channel.byte_size()],
             ),
             Self::Codes(p) => p.row(y)?,
+            Self::Float { plane, .. } => {
+                let start = if plane.width() == 0 {
+                    0
+                } else {
+                    y * plane.stride()
+                };
+                Row::Floats(&plane.strided_samples()[start..start + plane.width()])
+            }
         })
     }
 }
@@ -662,10 +683,10 @@ impl ImageOutput {
         Self {
             storage: Arc::new(Components {
                 roles: signal
-                    .roles
+                    .layout
+                    .planes()
                     .iter()
-                    .copied()
-                    .map(Meaning::Component)
+                    .map(|p| Meaning::Component(p.role()))
                     .collect(),
                 frame,
             }),
@@ -730,9 +751,9 @@ pub enum OutputError {
         /// Actual dimensions supplied by the native mapping.
         actual_dimensions: (usize, usize),
         /// Code encoding captured with the frame.
-        expected_encoding: SampleEncoding,
+        expected_encoding: PlaneEncoding,
         /// Code encoding supplied by the mapping.
-        actual_encoding: SampleEncoding,
+        actual_encoding: PlaneEncoding,
     },
     /// The packed-color convenience was requested for component codes.
     NotPackedColor,
@@ -949,14 +970,7 @@ impl ImageStorage for Components {
         }
         .validate()
         .map_err(|e| fail(OutputError::Region(e)))?;
-        if signal.roles.is_empty()
-            || signal
-                .roles
-                .iter()
-                .enumerate()
-                .any(|(i, role)| signal.roles[..i].contains(role))
-            || g.render.is_some_and(|(w, h)| w == 0 || h == 0)
-        {
+        if g.render.is_some_and(|(w, h)| w == 0 || h == 0) {
             return Err(fail(OutputError::Interpretation));
         }
         let native = self
@@ -986,38 +1000,45 @@ impl MappedImage for ComponentMap<'_> {
             .plane(index)
             .ok_or_else(|| fail(OutputError::MissingPlane))?;
         let g = self.signal.geometry;
-        let role = self.signal.roles[index];
-        let (w, h) = match role {
-            PlaneRole::Cb | PlaneRole::Cr => self
-                .signal
-                .subsampling
-                .chroma_size(g.coded_width, g.coded_height)
-                .ok_or_else(|| fail(OutputError::Interpretation))?,
-            _ => (g.coded_width, g.coded_height),
-        };
-        let expected_dimensions = (w as usize, h as usize);
+        let spec = self.signal.layout.planes()[index];
+        let (w, h) = self
+            .signal
+            .layout
+            .plane_size(index, g.coded_width, g.coded_height)
+            .ok_or_else(|| fail(OutputError::Interpretation))?;
+        let expected_dimensions = (
+            (w as usize)
+                .checked_mul(spec.role().components())
+                .ok_or_else(|| fail(OutputError::Geometry))?,
+            h as usize,
+        );
         let actual_dimensions = (samples.width(), samples.height());
-        let actual_encoding = self.native.encoding(index).unwrap_or(self.signal.encoding);
-        let samples = match CodePlane::new(samples, self.signal.encoding) {
-            Ok(codes)
-                if actual_dimensions == expected_dimensions
-                    && actual_encoding == self.signal.encoding =>
-            {
-                codes
-            }
-            _ => {
-                return Err(fail(OutputError::Component {
-                    index,
-                    expected_dimensions,
-                    actual_dimensions,
-                    expected_encoding: self.signal.encoding,
-                    actual_encoding,
-                }));
-            }
+        let expected_encoding = spec.encoding();
+        let actual_encoding = self.native.encoding(index).unwrap_or(expected_encoding);
+        let mismatch = || {
+            fail(OutputError::Component {
+                index,
+                expected_dimensions,
+                actual_dimensions,
+                expected_encoding,
+                actual_encoding,
+            })
         };
-        Ok(Some(Plane {
-            meaning,
-            samples: Samples::Codes(samples),
-        }))
+        if actual_dimensions != expected_dimensions
+            || actual_encoding != expected_encoding
+            || samples.channel_type() != expected_encoding.channel_type()
+        {
+            return Err(mismatch());
+        }
+        let samples = match (samples, expected_encoding) {
+            (plane, PlaneEncoding::Code(encoding)) => {
+                Samples::Codes(CodePlane::new(plane, encoding).map_err(|_| mismatch())?)
+            }
+            (zenpixels::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
+                Samples::Float { plane, encoding }
+            }
+            _ => return Err(fail(OutputError::Interpretation)),
+        };
+        Ok(Some(Plane { meaning, samples }))
     }
 }
