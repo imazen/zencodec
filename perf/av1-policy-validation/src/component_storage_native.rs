@@ -5,8 +5,8 @@ use crate::{
     fixtures::*,
 };
 use zenavif::media::Av1VideoDecoder;
-use zencodec::frame::PlaneSamples;
-use zenpixels::sample::ChromaSubsampling;
+use zenpixels::plane::AnyPlane;
+use zenpixels::sample::{ChromaSubsampling, CodePlane};
 
 #[test]
 fn component_storage_native_borrows_av1_without_repacking() {
@@ -24,18 +24,16 @@ fn component_storage_native_borrows_av1_without_repacking() {
                 assert_eq!(mapped.plane_count(), 3);
                 for index in 0..mapped.plane_count() {
                     let original = mapped.plane(index).unwrap();
-                    let bytes = match original.as_strided_samples() {
-                        PlaneSamples::U8(values) => values,
-                        PlaneSamples::U16(values) => bytemuck::cast_slice(values),
-                    };
-                    let encoding = original.encoding();
+                    let encoding = code_encoding(frame.interpretation(), index);
+                    let (bytes, stride_bytes) = strided_bytes(original);
+                    let original_codes = CodePlane::new(original, encoding).unwrap();
                     let plane = Plane::new(
                         bytes,
                         encoding.storage(),
                         Order::Native,
                         original.width(),
                         original.height(),
-                        original.stride_bytes(),
+                        stride_bytes,
                         encoding.storage().byte_size(),
                     )
                     .unwrap();
@@ -63,7 +61,7 @@ fn component_storage_native_borrows_av1_without_repacking() {
                         for x in 0..original.width() - px {
                             assert_eq!(
                                 cropped_codes.code(x, y).unwrap(),
-                                original.code(x + px, y + py).unwrap()
+                                original_codes.code(x + px, y + py).unwrap()
                             );
                             let (nx, dx) = gx.center(x as u64).unwrap();
                             let (ny, dy) = gy.center(y as u64).unwrap();
@@ -76,18 +74,24 @@ fn component_storage_native_borrows_av1_without_repacking() {
                     let codes = plane.codes(encoding).unwrap();
                     for y in 0..original.height() {
                         let row = plane.row(y).unwrap();
-                        match original.row(y).unwrap() {
-                            PlaneSamples::U8(values) => {
+                        match original {
+                            AnyPlane::U8(native) => {
+                                let values = native.row(y).unwrap();
                                 assert_eq!(row.typed::<u8>().unwrap().as_ptr(), values.as_ptr());
                                 assert_eq!(row.typed::<u8>().unwrap(), values);
                             }
-                            PlaneSamples::U16(values) => {
+                            AnyPlane::U16(native) => {
+                                let values = native.row(y).unwrap();
                                 assert_eq!(row.typed::<u16>().unwrap().as_ptr(), values.as_ptr());
                                 assert_eq!(row.typed::<u16>().unwrap(), values);
                             }
+                            other => panic!("unexpected AV1 storage {:?}", other.channel_type()),
                         }
                         for x in 0..original.width() {
-                            assert_eq!(codes.code(x, y).unwrap(), original.code(x, y).unwrap());
+                            assert_eq!(
+                                codes.code(x, y).unwrap(),
+                                original_codes.code(x, y).unwrap()
+                            );
                         }
                     }
                 }

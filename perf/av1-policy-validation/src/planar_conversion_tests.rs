@@ -5,13 +5,13 @@ use crate::fixtures::*;
 use std::sync::Arc;
 use zenavif::{media::Av1VideoDecoder, yuv_convert::*};
 use zencodec::frame::{
-    Crop, Frame, FrameInterpretation, FrameTiming, PlaneRole, PlaneSamples, PlaneView, Presentation,
+    Crop, Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, Presentation,
 };
 use zencodec::how_far::NoPulse;
-use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
 use zencodec_media::session::VideoDecoder;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
+use zenpixels::plane::{AnyPlane, PlanarLayout, PlaneBuf, PlaneEncoding, PlaneSpec};
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
 use zenpixels::{ChannelType, Cicp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,24 +42,55 @@ pub(super) struct ConvertedFacts {
     output_encoding: SampleEncoding,
 }
 
-fn checked_plane<'a>(
-    plane: PlaneView<'a>,
-    dimensions: (usize, usize),
+/// Map plane `index`, requiring the layout's size and the owner's recorded encoding.
+/// A mapping that records no encoding refuses: word placement is never assumed here.
+pub(super) fn mapped_plane<'a>(
+    mapped: &'a dyn MappedPlanes,
+    index: usize,
+    dimensions: (u32, u32),
     encoding: SampleEncoding,
-) -> Result<PlaneView<'a>, Refusal> {
-    if (plane.width(), plane.height()) != dimensions || plane.encoding() != encoding {
+) -> Result<AnyPlane<'a>, Refusal> {
+    let plane = mapped.plane(index).ok_or(Refusal::Mapping)?;
+    if (plane.width(), plane.height()) != (dimensions.0 as usize, dimensions.1 as usize)
+        || mapped.encoding(index) != Some(PlaneEncoding::Code(encoding))
+    {
         return Err(Refusal::Mapping);
     }
+    Ok(plane)
+}
+
+/// Padding is not a sample: only active words of row `y` are inspected.
+pub(super) fn row_is_canonical(
+    plane: AnyPlane<'_>,
+    y: usize,
+    encoding: SampleEncoding,
+) -> Result<bool, Refusal> {
     let max = ((1u32 << encoding.code_bits()) - 1) as u16;
-    // Padding is not a sample. Inspect active words before any destination write.
-    // A general normalizing bridge could accept shifted/masked words later;
-    // this borrowed native path must never pass them to an LSB-only kernel.
+    match plane {
+        AnyPlane::U8(p) => {
+            let row = p.row(y).ok_or(Refusal::Mapping)?;
+            Ok(row.iter().all(|v| u16::from(*v) <= max))
+        }
+        AnyPlane::U16(p) => {
+            let row = p.row(y).ok_or(Refusal::Mapping)?;
+            Ok(row.iter().all(|v| *v <= max))
+        }
+        _ => Err(Refusal::Mapping),
+    }
+}
+
+fn checked_plane<'a>(
+    mapped: &'a dyn MappedPlanes,
+    index: usize,
+    dimensions: (u32, u32),
+    encoding: SampleEncoding,
+) -> Result<AnyPlane<'a>, Refusal> {
+    let plane = mapped_plane(mapped, index, dimensions, encoding)?;
+    // Inspect active words before any destination write. A general normalizing
+    // bridge could accept shifted/masked words later; this borrowed native path
+    // must never pass them to an LSB-only kernel.
     for y in 0..plane.height() {
-        let valid = match plane.row(y).ok_or(Refusal::Mapping)? {
-            PlaneSamples::U8(row) => row.iter().all(|v| u16::from(*v) <= max),
-            PlaneSamples::U16(row) => row.iter().all(|v| *v <= max),
-        };
-        if !valid {
+        if !row_is_canonical(plane, y, encoding)? {
             return Err(Refusal::Sample);
         }
     }
@@ -83,15 +114,19 @@ pub(super) fn conversion_facts(
     if color.color_primaries != 1
         || color.transfer_characteristics != 13
         || color.matrix_coefficients != 1
-        || info.roles != [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr]
+        || !info.layout.planes().iter().map(|p| p.role()).eq([
+            PlaneRole::Luma,
+            PlaneRole::Cb,
+            PlaneRole::Cr,
+        ])
         || !matches!(
-            info.subsampling,
+            info.layout.subsampling(),
             ChromaSubsampling::Yuv420 | ChromaSubsampling::Yuv422 | ChromaSubsampling::Yuv444
         )
     {
         return Err(Refusal::Interpretation);
     }
-    let encoding = info.encoding;
+    let encoding = info.uniform_code_encoding().ok_or(Refusal::Encoding)?;
     let bits = encoding.code_bits();
     if !matches!(bits, 8 | 10 | 12)
         || encoding.bit_shift() != 0
@@ -104,10 +139,10 @@ pub(super) fn conversion_facts(
     {
         return Err(Refusal::Encoding);
     }
-    let assumed_center = if info.subsampling == ChromaSubsampling::Yuv444 {
+    let assumed_center = if info.layout.subsampling() == ChromaSubsampling::Yuv444 {
         false
     } else {
-        match (info.siting, choice) {
+        match (info.layout.siting(), choice) {
             (ChromaSiting::Center, _) => false,
             (ChromaSiting::Unknown, SitingChoice::AssumeCenterIfUnknown) => true,
             _ => return Err(Refusal::Siting),
@@ -154,7 +189,7 @@ fn convert(
     let facts = conversion_facts(frame, choice)?;
     let info = frame.interpretation();
     let color = info.color.resolved.unwrap();
-    let encoding = info.encoding;
+    let encoding = info.uniform_code_encoding().ok_or(Refusal::Encoding)?;
     let bits = encoding.code_bits();
     let geometry = info.geometry;
     let crop = geometry.crop;
@@ -173,19 +208,15 @@ fn convert(
     if mapped.plane_count() != 3 {
         return Err(Refusal::Mapping);
     }
-    let chroma = info
-        .subsampling
-        .chroma_size(geometry.coded_width, geometry.coded_height)
-        .ok_or(Refusal::Interpretation)?;
-    let mut planes = Vec::new();
-    for dimensions in [
-        (width, height),
-        (chroma.0 as usize, chroma.1 as usize),
-        (chroma.0 as usize, chroma.1 as usize),
-    ] {
-        let plane = mapped.plane(planes.len()).ok_or(Refusal::Mapping)?;
-        planes.push(checked_plane(plane, dimensions, encoding)?);
-    }
+    let plane = |index| {
+        let dimensions = info
+            .layout
+            .plane_size(index, geometry.coded_width, geometry.coded_height)
+            .ok_or(Refusal::Interpretation)?;
+        checked_plane(mapped.as_ref(), index, dimensions, encoding)
+    };
+    // An array keeps the three-plane kernel contract explicit.
+    let planes = [plane(0)?, plane(1)?, plane(2)?];
     let range = if color.full_range {
         YuvRange::Full
     } else {
@@ -193,22 +224,20 @@ fn convert(
     };
     let count = rows_per_strip.min(crop.height as usize);
     let scratch_len = width.checked_mul(count).ok_or(Refusal::Allocation)?;
-    // An array keeps the three-plane kernel contract explicit.
-    let planes: [PlaneView<'_>; 3] = planes.try_into().map_err(|_| Refusal::Mapping)?;
     macro_rules! convert_words {
         ($kind:ident, $f420:ident, $f422:ident, $f444:ident $(, $depth:expr)?) => {{
-            let [y, u, v] = planes.each_ref().map(|plane| plane.as_strided_samples());
-            let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v) else {
+            let [AnyPlane::$kind(y), AnyPlane::$kind(u), AnyPlane::$kind(v)] = planes else {
                 return Err(Refusal::Mapping);
             };
-            let [ys, us, vs] = planes.each_ref().map(|plane| plane.stride_bytes() / encoding.storage().byte_size());
+            let [ys, us, vs] = [y.stride(), u.stride(), v.stride()];
+            let [y, u, v] = [y.into_strided_samples(), u.into_strided_samples(), v.into_strided_samples()];
             let mut scratch = Vec::new();
             scratch.try_reserve_exact(scratch_len).map_err(|_| Refusal::Allocation)?;
             scratch.resize(scratch_len, Default::default());
             for start in (0..crop.height as usize).step_by(count) {
                 let rows = count.min(crop.height as usize - start);
                 let y_start = crop.y as usize + start;
-                match info.subsampling {
+                match info.layout.subsampling() {
                     ChromaSubsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
                     ChromaSubsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
                     ChromaSubsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
@@ -241,6 +270,27 @@ fn convert(
         );
     }
     Ok(facts)
+}
+
+/// Relabel through the validated layout; the picture's samples do not change.
+fn relayout(
+    info: &mut FrameInterpretation,
+    edit: impl FnOnce(&mut Vec<PlaneSpec>, &mut ChromaSiting),
+) {
+    let mut planes = info.layout.planes().to_vec();
+    let mut siting = info.layout.siting();
+    edit(&mut planes, &mut siting);
+    info.layout = PlanarLayout::new(planes, info.layout.subsampling(), siting).unwrap();
+}
+fn with_siting(info: &mut FrameInterpretation, siting: ChromaSiting) {
+    relayout(info, |_, current| *current = siting);
+}
+fn with_encoding(info: &mut FrameInterpretation, encoding: SampleEncoding) {
+    relayout(info, |planes, _| {
+        for plane in planes {
+            *plane = PlaneSpec::new(plane.role(), PlaneEncoding::Code(encoding));
+        }
+    });
 }
 
 fn reinterpret(frame: &Frame, edit: impl FnOnce(&mut FrameInterpretation)) -> Frame {
@@ -350,7 +400,10 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                     assert_eq!(facts.output_encoding.code_bits(), 16);
                     assert_eq!(facts.assumed_center, sub != ChromaSubsampling::Yuv444);
                     // Conversion facts never relabel the source's component encoding.
-                    assert_eq!(facts.source.encoding.code_bits(), bits);
+                    assert_eq!(
+                        facts.source.uniform_code_encoding().unwrap().code_bits(),
+                        bits
+                    );
                     let mut padded_source_rgb = vec![[0; 3]; w * h];
                     convert(
                         &input,
@@ -431,7 +484,10 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                         retained_picture.upgrade().is_none(),
                         "converted facts must not retain raw picture storage"
                     );
-                    assert_eq!(facts.source.encoding.code_bits(), bits);
+                    assert_eq!(
+                        facts.source.uniform_code_encoding().unwrap().code_bits(),
+                        bits
+                    );
                 }
             }
         }
@@ -444,7 +500,7 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
     let base = frame(&settings(10, ChromaSubsampling::Yuv420, false), 0);
     let mut destination = vec![[0xaaaa; 3]; 17 * 13];
     for siting in [ChromaSiting::Left, ChromaSiting::TopLeft] {
-        let frame = reinterpret(&base, |i| i.siting = siting);
+        let frame = reinterpret(&base, |i| with_siting(i, siting));
         assert_eq!(
             convert(
                 &frame,
@@ -457,16 +513,24 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
             Refusal::Siting
         );
     }
-    let centered = reinterpret(&base, |i| i.siting = ChromaSiting::Center);
+    let centered = reinterpret(&base, |i| with_siting(i, ChromaSiting::Center));
     for frame in [
         reinterpret(&centered, |i| {
-            i.encoding = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap()
+            with_encoding(i, SampleEncoding::new(ChannelType::U16, 10, 6).unwrap())
         }),
         reinterpret(&centered, |i| {
-            i.encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+            with_encoding(
+                i,
+                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+            )
         }),
     ] {
-        let expected = if frame.interpretation().encoding.bit_shift() == 6 {
+        let shift = frame
+            .interpretation()
+            .uniform_code_encoding()
+            .unwrap()
+            .bit_shift();
+        let expected = if shift == 6 {
             Refusal::Encoding
         } else {
             Refusal::Mapping
@@ -485,7 +549,9 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
     }
     for frame in [
         reinterpret(&centered, |i| i.color.resolved = None),
-        reinterpret(&centered, |i| i.roles.swap(1, 2)),
+        reinterpret(&centered, |i| {
+            relayout(i, |planes, _| planes.swap(1, 2));
+        }),
         reinterpret(&centered, |i| {
             i.color.resolved = Some(Cicp::new(9, 16, 9, true))
         }),
@@ -586,30 +652,27 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
 #[test]
 fn planar_rejects_noncanonical_active_words_but_not_padding() {
     let source = frame(&settings(10, ChromaSubsampling::Yuv420, false), 0);
-    let source = reinterpret(&source, |i| i.siting = ChromaSiting::Center);
+    let source = reinterpret(&source, |i| with_siting(i, ChromaSiting::Center));
     let mapped = source.map().unwrap();
     let mut planes = Vec::new();
     for p in 0..3 {
-        let plane = mapped.plane(p).unwrap();
+        let AnyPlane::U16(plane) = mapped.plane(p).unwrap() else {
+            unreachable!()
+        };
         let stride = plane.width() + 3;
         let mut words = vec![0xffff; stride * plane.height()];
         for y in 0..plane.height() {
-            let PlaneSamples::U16(row) = plane.row(y).unwrap() else {
-                unreachable!()
-            };
+            let row = plane.row(y).unwrap();
             words[y * stride..][..row.len()].copy_from_slice(row);
         }
         if p == 2 {
             words[(plane.height() - 1) * stride + plane.width() - 1] = 1024;
         }
-        planes.push(OwnedPlane {
-            data: PlaneData::U16(words),
-            width: plane.width(),
-            height: plane.height(),
-            stride_bytes: stride * 2,
-        });
+        planes.push(OwnedPlane::U16(
+            PlaneBuf::new(words, plane.width(), plane.height(), stride).unwrap(),
+        ));
     }
-    let encoding = source.interpretation().encoding;
+    let encoding = source.interpretation().uniform_code_encoding().unwrap();
     let bad = Frame::new(
         Arc::new(OwnedPlanes::new(planes, encoding).unwrap()),
         Arc::clone(source.interpretation()),
@@ -644,7 +707,7 @@ fn planar_native_signalled_siting_cannot_be_overridden_by_unknown_fallback() {
         let frames = decode(&mut decoder, &config, &packets, Some(&NoPulse)).unwrap();
         assert_eq!(frames.len(), 1);
         let native = &frames[0];
-        assert_eq!(native.interpretation().siting, siting);
+        assert_eq!(native.interpretation().layout.siting(), siting);
         crate::prepared_conversion::reject_declared_siting(native);
         assert_eq!(samples(native), samples(&input));
         let mut destination = vec![[0xaaaa; 3]; 17 * 13];
@@ -736,7 +799,7 @@ fn qualify_packed_publication(native: &Frame, expected: &[[u16; 3]]) {
             assert!(current.frame.is_none());
             assert_eq!(
                 current.source_frame.unwrap().encoding,
-                facts.source.encoding
+                Some(facts.source.uniform_code_encoding().unwrap())
             );
             assert_eq!(current.timing, Some(facts.timing));
             assert_eq!(current.presentation, Some(facts.presentation));

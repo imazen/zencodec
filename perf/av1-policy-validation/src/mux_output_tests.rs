@@ -5,10 +5,9 @@ use zencodec::how_far::NoPulse;
 use zencodec::time::TimeBase;
 use zencodec_media::{
     container::{MuxFinish, Patch, PatchError},
-    frame::ChromaSubsampling,
     session::CodecConfig,
 };
-use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSubsampling, SampleEncoding};
 
 fn root() -> PathBuf {
     let root = PathBuf::from(
@@ -1204,19 +1203,20 @@ fn rgb_frame(s: &zenavif::media::Av1EncodeSettings, rgb: &[u8]) -> zencodec_medi
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
     let planes = [1, 2, 0]
         .into_iter()
-        .map(|c| OwnedPlane {
-            data: PlaneData::U8(rgb.as_chunks::<3>().0.iter().map(|p| p[c]).collect()),
-            width: s.width as usize,
-            height: s.height as usize,
-            stride_bytes: s.width as usize,
+        .map(|c| {
+            let words: Vec<u8> = rgb.as_chunks::<3>().0.iter().map(|p| p[c]).collect();
+            let (width, height) = (s.width as usize, s.height as usize);
+            OwnedPlane::U8(zenpixels::plane::PlaneBuf::new(words, width, height, width).unwrap())
         })
         .collect();
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(s.width, s.height),
-        ChromaSubsampling::Yuv444,
-        s.siting,
-        encoding,
-        vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+        uniform_layout(
+            &[PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+            ChromaSubsampling::Yuv444,
+            s.siting,
+            encoding,
+        ),
     );
     interpretation.color = zencodec::frame::ColorClaim::new(None, None, Some(s.color));
     Frame::new(

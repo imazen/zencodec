@@ -36,8 +36,8 @@ retained declaration, not independent verification.
 
 ## Sample words versus spatial positions
 
-`AnyPlane::width()` and `Samples::dimensions()` count active sample words per
-row. An odd-width 3-pixel 4:2:0 image has 2 chroma positions, so an interleaved
+`AnyPlane::width()` counts active sample words per row. `Samples::dimensions()`
+counts pixels for packed color and sample words for component/value planes. An odd-width 3-pixel 4:2:0 image has 2 chroma positions, so an interleaved
 CbCr plane is 4 words wide. Padding is excluded from active rows.
 
 ```rust,ignore
