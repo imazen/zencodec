@@ -12,7 +12,7 @@ use zencodec::{
     operation::{CollectionStage, Decision, Decline, Question},
 };
 use zenpixels::{ColorPrimaries, Orientation, TransferFunction};
-use zenpixels_convert::{cms_moxcms::MoxCms, icc_profiles::display_p3_icc};
+use zenpixels_convert::{cms_moxcms::MoxCms, icc_profiles::DISPLAY_P3_V4};
 
 #[cfg(feature = "cms_oracle")]
 #[path = "canvas_render_oracle_tests.rs"]
@@ -37,7 +37,7 @@ fn tiff<C: colortype::ColorType, K: TiffKind>(
         .unwrap();
     image
         .encoder()
-        .write_tag(Tag::IccProfile, display_p3_icc(false))
+        .write_tag(Tag::IccProfile, DISPLAY_P3_V4)
         .unwrap();
     image.write_data(samples).unwrap();
 }
@@ -197,8 +197,7 @@ fn canvas_render_selected_subifd_keeps_child_color_orientation_and_identity() {
         dir.write_tag(Tag::StripByteCounts, &[7 * 5 * 4 * 4u32][..])
             .unwrap();
         dir.write_tag(Tag::Orientation, orientation).unwrap();
-        dir.write_tag(Tag::IccProfile, display_p3_icc(false))
-            .unwrap();
+        dir.write_tag(Tag::IccProfile, DISPLAY_P3_V4).unwrap();
         if let Some(child) = child {
             dir.write_tag(Tag::SubIfd, &[child][..]).unwrap();
         }
@@ -264,7 +263,7 @@ fn canvas_render_selected_subifd_keeps_child_color_orientation_and_identity() {
         assert!(images.next(&mut children).unwrap().is_none());
         let renderer = Renderer {
             request: Request {
-                target: Target::Icc(Arc::from(display_p3_icc(false))),
+                target: Target::Icc(Arc::from(DISPLAY_P3_V4)),
                 required: PixelDescriptor::RGBAF32
                     .with_transfer(TransferFunction::Srgb)
                     .with_primaries(ColorPrimaries::DisplayP3),
@@ -308,7 +307,7 @@ fn p3_descriptor(source: &ImageOutput) -> PixelDescriptor {
 fn renderer(source: &ImageOutput, region: Option<Rect>) -> Renderer<'static> {
     Renderer {
         request: Request {
-            target: Target::Icc(Arc::from(display_p3_icc(false))),
+            target: Target::Icc(Arc::from(DISPLAY_P3_V4)),
             required: p3_descriptor(source),
             region,
             conversion: ConvertOptions::retain_channels().with_clip_out_of_gamut(false),

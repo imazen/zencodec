@@ -73,7 +73,7 @@ fn canvas_render_independent_cms_after_native_jxl_and_tiff_reconstruction() {
             })
             .unwrap();
         save(&dir.join("source.f32"), &original);
-        save(&dir.join("target.icc"), display_p3_icc(false));
+        save(&dir.join("target.icc"), DISPLAY_P3_V4);
         let result = Command::new("timeout")
             .args(["--kill-after=2s", "30s"])
             .arg(&oracle)
@@ -108,7 +108,7 @@ fn canvas_render_independent_cms_after_native_jxl_and_tiff_reconstruction() {
             .with_pixels(|pixels| {
                 assert_eq!(
                     pixels.color_context().unwrap().icc.as_deref(),
-                    Some(display_p3_icc(false))
+                    Some(DISPLAY_P3_V4)
                 );
                 let region = output.interpretation().geometry.region;
                 let mut actual = Vec::new();
