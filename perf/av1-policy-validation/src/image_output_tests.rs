@@ -5,7 +5,8 @@ use crate::{
 use std::sync::Arc;
 use zenavif::media::Av1VideoDecoder;
 use zencodec::how_far::NoPulse;
-use zencodec_media::{frame::PlaneSamples, session::VideoDecoder};
+use zencodec_media::session::VideoDecoder;
+use zenpixels::plane::AnyPlane;
 use zenpixels::sample::ChromaSubsampling;
 
 #[test]
@@ -49,9 +50,10 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                 let addresses: Vec<_> = {
                     let mapped = native.map().unwrap();
                     (0..mapped.plane_count())
-                        .map(|p| match mapped.plane(p).unwrap().row(0).unwrap() {
-                            PlaneSamples::U8(row) => row.as_ptr() as usize,
-                            PlaneSamples::U16(row) => row.as_ptr() as usize,
+                        .map(|p| match mapped.plane(p).unwrap() {
+                            AnyPlane::U8(plane) => plane.row(0).unwrap().as_ptr() as usize,
+                            AnyPlane::U16(plane) => plane.row(0).unwrap().as_ptr() as usize,
+                            other => panic!("unexpected AV1 storage {:?}", other.channel_type()),
                         })
                         .collect()
                 };
@@ -67,7 +69,10 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                         assert_eq!(facts.planes, addresses.len());
                         assert_eq!(facts.timing, Some(timing));
                         assert_eq!(facts.presentation, Some(presentation));
-                        assert_eq!(facts.frame.unwrap().encoding, interpretation.encoding);
+                        assert_eq!(
+                            facts.frame.unwrap().encoding,
+                            Some(interpretation.uniform_code_encoding().unwrap())
+                        );
                         Ok(zencodec::operation::Decision::choose(choices.first().unwrap()))
                     },
                     zencodec::operation::PolicySet::new(),
@@ -93,16 +98,23 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                 let error = retained.with_pixels(|_| ()).unwrap_err();
                 assert!(matches!(error.error(), OutputError::NotPackedColor));
                 let mapped = retained.map().unwrap();
-                assert_eq!(mapped.plane_count(), interpretation.roles.len());
+                assert_eq!(mapped.plane_count(), interpretation.layout.planes().len());
                 let mut actual = Vec::new();
                 for (p, address) in addresses.iter().enumerate() {
                     let plane = mapped.plane(p).unwrap().unwrap();
-                    assert_eq!(plane.meaning, &Meaning::Component(interpretation.roles[p]));
-                    assert_eq!(plane.samples.code_encoding(), Some(interpretation.encoding));
+                    assert_eq!(
+                        plane.meaning,
+                        &Meaning::Component(interpretation.layout.planes()[p].role())
+                    );
+                    assert_eq!(
+                        plane.samples.code_encoding(),
+                        Some(interpretation.uniform_code_encoding().unwrap())
+                    );
                     assert_eq!(plane.samples.code_encoding().unwrap().code_bits(), bits);
                     let pointer = match plane.samples.row(0).unwrap() {
                         Row::Bytes(row) => row.as_ptr() as usize,
                         Row::Words16(row) => row.as_ptr() as usize,
+                        Row::Floats(_) => panic!("AV1 output became floating samples"),
                     };
                     assert_eq!(pointer, *address, "mapping must not copy the native plane");
                     for y in 0..plane.samples.dimensions().1 {
@@ -111,6 +123,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                             Row::Words16(row) => {
                                 actual.extend(row.iter().flat_map(|word| word.to_le_bytes()))
                             }
+                            Row::Floats(_) => panic!("AV1 output became floating samples"),
                         }
                     }
                     assert!(plane.samples.row(plane.samples.dimensions().1).is_none());

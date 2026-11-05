@@ -131,9 +131,20 @@ fn approved_native_frames_reencode_exactly_under_independent_decoder() {
                         else {
                             panic!("expected frame decision")
                         };
-                        assert_eq!(interpretation.encoding.code_bits(), bits);
-                        assert_eq!(interpretation.subsampling, sub);
-                        assert_eq!(interpretation.roles, inputs[0].interpretation().roles);
+                        assert_eq!(
+                            interpretation.uniform_code_encoding().unwrap().code_bits(),
+                            bits
+                        );
+                        assert_eq!(interpretation.layout.subsampling(), sub);
+                        let input = inputs[0].interpretation();
+                        assert!(
+                            interpretation
+                                .layout
+                                .planes()
+                                .iter()
+                                .map(|p| p.role())
+                                .eq(input.layout.planes().iter().map(|p| p.role()))
+                        );
                         assert_eq!(interpretation.color.bitstream, Some(s.color));
                         seen.push(FrameFacts::new(interpretation, timing));
                         Ok(Decision::choose(choices.first().unwrap()))

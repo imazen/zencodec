@@ -43,19 +43,21 @@ struct Key {
 impl Key {
     fn from_input(input: &FrameInterpretation, timing: FrameTiming) -> Result<Self, Cause> {
         let geometry = input.geometry;
-        if geometry != FrameGeometry::full(geometry.coded_width, geometry.coded_height)
-            || input.encoding.bit_shift() != 0
-        {
-            return Err(
-                std::io::Error::other("native route requires full canonical coded planes").into(),
-            );
-        }
+        let encoding = input
+            .uniform_code_encoding()
+            .filter(|encoding| encoding.bit_shift() == 0)
+            .filter(|_| {
+                geometry == FrameGeometry::full(geometry.coded_width, geometry.coded_height)
+            })
+            .ok_or_else(|| {
+                std::io::Error::other("native route requires full canonical coded planes")
+            })?;
         Ok(Self {
             width: geometry.coded_width,
             height: geometry.coded_height,
-            bits: input.encoding.code_bits(),
-            sub: input.subsampling,
-            siting: input.siting,
+            bits: encoding.code_bits(),
+            sub: input.layout.subsampling(),
+            siting: input.layout.siting(),
             color: input.color.resolved.ok_or_else(|| {
                 std::io::Error::other("unknown color requires an explicit interpretation route")
             })?,

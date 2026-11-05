@@ -13,10 +13,10 @@ use std::{
 };
 use zenavif::media::Av1VideoDecoder;
 use zencodec::{
-    frame::{FrameTiming, MappedPlanes, PlaneSamples, Presentation},
+    frame::{FrameTiming, MappedPlanes, Presentation},
     image::Meaning,
 };
-use zenpixels::sample::ChromaSubsampling;
+use zenpixels::sample::{ChromaSubsampling, CodePlane, SampleEncoding};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 type Cause = Box<dyn StdError + Send + Sync>;
@@ -24,19 +24,19 @@ struct Av1(zencodec::frame::Frame);
 struct Av1Map<'a> {
     native: Box<dyn MappedPlanes + 'a>,
     grids: Vec<Grid>,
+    encodings: Vec<SampleEncoding>,
 }
 impl Owner for Av1 {
     fn map(&self, _pulse: Option<&dyn zencodec::Pulse>) -> Result<Box<dyn Mapping + '_>, Cause> {
         let i = self.0.interpretation();
-        let grids = i
-            .roles
-            .iter()
-            .enumerate()
-            .map(|(n, _)| grid(n, i.subsampling))
-            .collect();
+        let planes = 0..i.layout.planes().len();
         Ok(Box::new(Av1Map {
             native: self.0.map()?,
-            grids,
+            grids: planes
+                .clone()
+                .map(|n| grid(n, i.layout.subsampling()))
+                .collect(),
+            encodings: planes.map(|n| code_encoding(i, n)).collect(),
         }))
     }
 }
@@ -61,11 +61,8 @@ impl Mapping for Av1Map<'_> {
         let Some(p) = self.native.plane(index) else {
             return Ok(None);
         };
-        let bytes = match p.as_strided_samples() {
-            PlaneSamples::U8(s) => s,
-            PlaneSamples::U16(s) => bytemuck::cast_slice(s),
-        };
-        let encoding = p.encoding();
+        let encoding = self.encodings[index];
+        let (bytes, stride_bytes) = strided_bytes(p);
         Ok(Some(Samples::Component {
             plane: Plane::new(
                 bytes,
@@ -73,7 +70,7 @@ impl Mapping for Av1Map<'_> {
                 Order::Native,
                 p.width(),
                 p.height(),
-                p.stride_bytes(),
+                stride_bytes,
                 encoding.storage().byte_size(),
             )
             .unwrap(),
@@ -99,21 +96,23 @@ fn component_owner_retains_native_picture_across_presentations() {
         let mut specs = Vec::new();
         for n in 0..mapping.plane_count() {
             let p = mapping.plane(n).unwrap();
+            let encoding = code_encoding(source.interpretation(), n);
+            let codes = CodePlane::new(p, encoding).unwrap();
             expected.push(
                 (0..p.height())
                     .map(|y| {
                         (0..p.width())
-                            .map(|x| p.code(x, y).unwrap())
+                            .map(|x| codes.code(x, y).unwrap())
                             .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>(),
             );
             specs.push(Spec {
-                meaning: Meaning::Component(source.interpretation().roles[n]),
+                meaning: Meaning::Component(source.interpretation().layout.planes()[n].role()),
                 dimensions: (p.width(), p.height()),
                 representation: Representation::Component {
-                    channel: p.encoding().storage(),
-                    encoding: Some(p.encoding()),
+                    channel: encoding.storage(),
+                    encoding: Some(encoding),
                     grid: grid(n, ChromaSubsampling::Yuv420),
                 },
             });
