@@ -1926,3 +1926,9 @@ plane-ablation-check:
 plane-ablation-native-check:
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked component_ -- --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Canonical zenpixels plane/storage migration, including adversarial public mappings.
+plane-main-check:
+    cargo test --workspace --all-targets --all-features
+    cargo test --workspace --doc --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

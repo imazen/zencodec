@@ -760,8 +760,10 @@ pub(crate) fn class_gated_context(
         .icc
         .take_if(|icc| zenpixels::icc::profile_color_space(icc) != Some(model))
     {
-        ctx.cicp = zenpixels::icc::extract_cicp(&icc)
-            .or_else(|| zenpixels::icc::identify_common(&icc).and_then(|id| id.to_cicp()))
+        ctx.cicp = zenpixels::Cicp::from_icc(&icc)
+            .or_else(|| {
+                zenpixels::icc::IccIdentification::from_icc(&icc).and_then(|id| id.to_cicp())
+            })
             .or(ctx.cicp)
             .or(source.cicp);
     }
