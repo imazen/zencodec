@@ -6,7 +6,7 @@ use zencodec::{
     operation::{Decision, PolicySet, PublicationOffer, Question, Selection, resolve_image},
 };
 use zenpixels::{AlphaMode, PixelFormat};
-use zenpixels_convert::icc_profiles::display_p3_icc;
+use zenpixels_convert::icc_profiles::DISPLAY_P3_V4;
 
 fn save(path: &Path, data: &[u8]) {
     fs::OpenOptions::new()
@@ -71,7 +71,7 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
         std::env::var_os("SPATIAL_COLOR_ARTIFACTS").expect("supply fresh color artifact directory"),
     );
     fs::create_dir_all(&artifacts).unwrap();
-    let target: Arc<[u8]> = Arc::from(display_p3_icc(false));
+    let target: Arc<[u8]> = Arc::from(DISPLAY_P3_V4);
     let mut total = 0;
     let mut color_failures = Vec::new();
     for (name, view, count) in [

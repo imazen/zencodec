@@ -160,7 +160,7 @@ callback; policy still decides at the existing admission/publication boundaries.
 ## CMYK output finalization
 
 `just spatial-conversion-check` runs the real first raw layer of the pinned
-CMYK JXL fixture through `zenpixels-convert::finalize_for_output_with`.
+CMYK JXL fixture through `zenpixels_convert::output::EncodeReady::finalize`.
 This exercises the current-profile entry point separately from the
 descriptor-only `RowConverter` control above. Four controls establish:
 
@@ -262,7 +262,7 @@ The `cms_oracle` feature adds a separately executed Little CMS reference to the
 native color stage. It converts the first RGB F32 presentation of
 `conformance_test_images/animation_spline.jxl` and all five RGBA F32 raw layers of
 `multiple_layers_noise_spline.jxl` from their actual current ICC to the exact
-`display_p3_icc(false)` target bytes. The adapter uses `OutputPlan`, preserves
+`DISPLAY_P3_V4` target bytes. The adapter uses `OutputPlan`, preserves
 extended range explicitly, and writes into aligned, strided, admitted storage.
 
 The reference uses relative colorimetric intent and `NOOPTIMIZE|COPY_ALPHA`.
@@ -1459,7 +1459,7 @@ substitute, even if its local dimensions equal the canvas. Native reconstruction
 and reference composition already happened before this stage.
 
 The stage inverse-maps the requested rectangle, borrows that strided stored
-region, and uses `zenpixels_convert::orient::apply_orientation_into` directly
+region, and uses `PixelSliceConvertExt::oriented_into` directly
 into admitted, padded output. It allocates no full oriented intermediate.
 Color descriptor/context, timing and original source details remain intact;
 `ProjectionSource` records the immediate input coordinates and orientation.

@@ -69,6 +69,7 @@ pub(crate) fn mapped_planes(image: &ImageOutput) -> Vec<crate::jxl_items::Plane>
                 ),
                 Samples::Values(v) => (1, v.as_strided_bytes().to_vec()),
                 Samples::Codes(_) => panic!("JXL f32 output became unsigned codes"),
+                Samples::Float { .. } => panic!("JXL f32 output became component floats"),
             };
             crate::jxl_items::Plane {
                 width,

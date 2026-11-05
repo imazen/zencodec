@@ -1,4 +1,6 @@
 > The current review uses `Pulse` / `SharedPulse` for operation control.
+
+The current frame/plane migration is specified in [canonical plane interchange](canonical-plane-interchange.md). It replaces duplicated frame-wide encoding/layout fields with zenpixels per-plane layouts.
 > See [the control migration](pulse-migration.md) for caller and codec changes.
 > Bare byte requests are `InputRequest`; metadata rewriting uses `RewriteRequest`.
 

@@ -130,6 +130,8 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Frame interpretation adopts zenpixels `PlanarLayout`; per-plane integer/float encodings replace frame-wide encoding and roles. Mapping exposes F32 and explicit interleaved component access; frame diagnostic uniform encoding becomes optional (51411aee, d2beb2dc).
+
 - Frame ablation candidate: remove `frame::Subsampling` and `frame::ChromaSiting`
   (and their zencodec-media re-exports); signatures use
   `zenpixels::sample::{ChromaSubsampling, ChromaSiting}`, which gained `Mono`,
