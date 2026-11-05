@@ -1,0 +1,32 @@
+[package]
+name = "zencodec-iqa"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Minimal still-image quality evaluation contract for zen codecs"
+repository = "https://github.com/imazen/zencodec"
+publish = false
+
+# Isolate this review API from the published codec dependency graph.
+[workspace]
+
+[features]
+default = []
+std = ["zenpixels/std"]
+codec = ["dep:zencodec"]
+
+[dependencies]
+zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false }
+how-far = { version = "0.1.0", default-features = false }
+enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
+whereat = { version = "0.1.5", default-features = false }
+zencodec = { path = "..", version = ">=0.2.0, <0.4.0", optional = true }
+
+# Same reviewed pixel identity as zencodec; publishing needs released contents.
+[patch.crates-io]
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

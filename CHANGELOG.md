@@ -598,6 +598,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Add the unpublished standalone `zencodec-iqa` still-image scalar contract
+  and optional mapped-output bridge; no codec core API or metric implementation
+  changes. Source and contract checks are in the companion crate.
+
 - Packaging: keep the repository-only zenmeta dev dependency path-only, so
   standalone testkit resolution does not require an unpublished registry
   package unused by its shipped source. Existing repository tests remain.

@@ -1897,3 +1897,12 @@ release-registry-check output:
 sample-encoding-compat-check:
     cargo test -p zencodec --test sample_encoding_compat
     cargo clippy -p zencodec --test sample_encoding_compat --locked -- -D warnings
+
+# Minimal IQA contract and optional mapped-output bridge; independent of codecs.
+iqa-check:
+    cargo fmt --manifest-path zencodec-iqa/Cargo.toml --check
+    cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features
+    cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
+    cargo clippy --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --all-targets -- -D warnings
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-unknown-unknown
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features codec --target wasm32-unknown-unknown
