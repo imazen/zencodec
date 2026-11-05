@@ -6,10 +6,10 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorAuthority, ColorModel};
+use zenpixels::{Cicp, ColorModel};
 
 use crate::capabilities::EncodeCapabilities;
-use crate::info::SourceColor;
+use crate::info::{AuthoritativeColor, SourceColor};
 use crate::metadata::IccRetention;
 
 /// How an image's color *description* (ICC profile vs CICP code points) is
@@ -224,7 +224,7 @@ pub struct ColorEmitPlan {
 
 /// The CICP that describes this source's color as code points, if any.
 ///
-/// Authority-aware (per [`ColorAuthority`]): when the **ICC** is authoritative and
+/// Authority-aware (per [`ColorAuthority`](zenpixels::ColorAuthority)): when the **ICC** is authoritative and
 /// present, the emittable CICP must *describe that ICC* — derived from its `cicp`
 /// tag, then the corpus — **not** a co-existing CICP, which the spec treats as a
 /// backwards-compat round-trip companion that "should NOT override the TRC." If the
@@ -237,17 +237,10 @@ fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
         icc::extract_cicp(icc_bytes)
             .or_else(|| icc::identify_common(icc_bytes).and_then(|id| id.to_cicp()))
     };
-    if src.color_authority == ColorAuthority::Icc
-        && let Some(icc_bytes) = src.icc_profile.as_deref()
-    {
-        return from_icc(icc_bytes);
+    match src.authoritative()? {
+        AuthoritativeColor::Icc(icc_bytes) => from_icc(icc_bytes),
+        AuthoritativeColor::Cicp(cicp) => Some(cicp),
     }
-    // CICP authoritative (or ICC declared authoritative but absent — the lenient
-    // fallback the contract allows): explicit CICP first, then the ICC-derived one.
-    if let Some(c) = src.cicp {
-        return Some(c);
-    }
-    from_icc(src.icc_profile.as_deref()?)
 }
 
 /// Reconcile a source's color description against a target's capabilities under

@@ -13,7 +13,7 @@ use zencodec::how_far::NoPulse;
 use zencodec::{
     At, CodecError,
     encode::Fidelity,
-    frame::{ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling},
+    frame::{Frame, FrameGeometry, FrameInterpretation, FrameTiming},
     operation::{
         DestinationFacts, FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer,
         FrameRouteState, OperationPolicy, OperationReport, PolicySet, resolve_frame_route,
@@ -26,6 +26,7 @@ use zencodec_media::{
     session::{CodecConfig, Receive, SendStatus, VideoEncoder},
 };
 use zenpixels::Cicp;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 type Cause = Box<dyn Error + Send + Sync>;
 
@@ -34,7 +35,7 @@ struct Key {
     width: u32,
     height: u32,
     bits: u8,
-    sub: Subsampling,
+    sub: ChromaSubsampling,
     siting: ChromaSiting,
     color: Cicp,
     clock: TimeBase,

@@ -41,8 +41,8 @@ lto = "thin"
 # heads that take it from crates.io.
 [patch.crates-io]
 zencodec = { path = "vendor/zencodec" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
 # zenpng's StripCompressor (zenflate::png) is unpublished.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 # zenjpeg needs unpublished zenanalyze 0.2.

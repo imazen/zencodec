@@ -919,7 +919,9 @@ type erasure. `Unavailable` has no backend cause. These debugging contracts are
 part of the unpublished media surface; see [the media contract](media-contract.md#error-inspection-across-pumps-and-mappings).
 
 ```rust
-// zencodec::frame (public fields; non_exhaustive except Crop and SampleEncoding)
+// Canonical component code encoding (import directly, not re-exported):
+use zenpixels::sample::SampleEncoding;
+// zencodec::frame (public fields; non_exhaustive except Crop)
 enum Subsampling { Mono, Yuv420, Yuv422, Yuv444 }
 enum ChromaSiting { Unknown, Left, TopLeft, Center }
 enum PlaneRole { Luma, Cb, Cr, Green, Blue, Red, Alpha }
@@ -940,17 +942,6 @@ struct FrameTiming {
     pts: Option<Timestamp>, duration_ticks: Option<u64>,
     packet_ordinal: Option<u64>, input_offset: Option<u64>,
 }
-struct SampleEncoding { /* private */ }
-impl SampleEncoding {
-    const U8: Self;
-    const fn new(storage: zenpixels::ChannelType, code_bits: u8, bit_shift: u8)
-        -> Result<Self, SampleEncodingError>;
-    const fn storage(self) -> zenpixels::ChannelType;
-    const fn code_bits(self) -> u8;
-    const fn bit_shift(self) -> u8;
-    const fn bytes_per_sample(self) -> usize;
-}
-
 // zencodec::operation
 enum PublicationOffer { ReturnHeld } // non_exhaustive
 fn resolve_image<R: OperationPolicy + ?Sized>(
@@ -1018,13 +1009,10 @@ causes or `At<PolicyFailure>` and the original callback's `At<E>` chain.
 The native decoder has already reconstructed the frame at this boundary. The
 offer proves neither native allocation bounds nor container privacy. Presets
 requiring workspace or disclosure evidence therefore refuse. A conversion or
-encoder downstream must still check its own input contract. The compatibility
-`SampleEncoding` mirrors an unpublished zenpixels type; coordinated migration
-to that canonical pixel type remains a 0.3 task. Exhaustive unsigned integer
-description controls now qualify constructor/error-category compatibility;
-[the migration boundary](precision-admission.md#shared-sample-description-migration-boundary-2026-10-30)
-records the remaining convenience and adapter changes without claiming sample
-conversion or native fidelity.
+encoder downstream must still check its own input contract. Frame and plane signatures use `zenpixels::sample::SampleEncoding` directly.
+The duplicate core/media type and error are removed in the ablation candidate.
+See [the migration boundary](precision-admission.md#shared-sample-description-migration-boundary-2026-10-30)
+for migration and qualification scope.
 
 [Native AV1 qualification](../perf/av1-policy-validation/README.md) exercises
 the publication guard, native ownership and independent re-encode readback.

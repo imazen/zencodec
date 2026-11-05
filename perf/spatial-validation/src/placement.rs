@@ -148,7 +148,7 @@ fn placement_intersection_copies_strided_samples_without_relabeling_or_clipping_
     }
     let expected_storage = bytes.clone();
     let pixels = PixelBuffer::try_from_parts(PixelBufferParts::new(
-        bytes,
+        zenpixels::PixelStorage::from(bytes),
         4,
         3,
         18,

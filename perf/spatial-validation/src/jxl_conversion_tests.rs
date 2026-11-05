@@ -32,7 +32,7 @@ fn stage_for_finalizer(pixels: PixelSlice<'_>) -> PixelBuffer {
     let bpp = pixels.descriptor().bytes_per_pixel();
     let stride = (pixels.width() as usize + 2) * bpp;
     let mut parts = PixelBufferParts::new(
-        vec![0xa5; bpp + stride * pixels.rows() as usize + bpp],
+        zenpixels::PixelStorage::from(vec![0xa5; bpp + stride * pixels.rows() as usize + bpp]),
         pixels.width(),
         pixels.rows(),
         stride,

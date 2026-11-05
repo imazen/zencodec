@@ -6,11 +6,12 @@
 //! The collection/discovery adapter is separate from this output contract.
 use crate::At;
 use crate::frame::{
-    Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, PlaneSamples,
-    PlaneView as CodePlane, Presentation, SampleEncoding,
+    Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, Presentation,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
+use zenpixels::plane::AnyPlane;
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = At<OutputError>;
 
@@ -329,6 +330,95 @@ pub enum Samples<'a> {
     /// Native component words with significant code depth and placement.
     Codes(CodePlane<'a>),
 }
+/// A mapped native plane with the code encoding its words carry. Built on
+/// [`zenpixels::plane::AnyPlane`]; the storage type is checked against the
+/// encoding at construction.
+#[derive(Clone, Copy, Debug)]
+pub struct CodePlane<'a> {
+    plane: AnyPlane<'a>,
+    encoding: SampleEncoding,
+}
+
+impl<'a> CodePlane<'a> {
+    /// Codes of `encoding` stored in `plane`.
+    ///
+    /// # Errors
+    ///
+    /// When the plane's storage type disagrees with `encoding`.
+    pub fn new(
+        plane: AnyPlane<'a>,
+        encoding: SampleEncoding,
+    ) -> Result<Self, zenpixels::sample::CodePlaneError> {
+        zenpixels::sample::CodePlane::new(plane, encoding)?;
+        Ok(Self { plane, encoding })
+    }
+
+    /// The native plane.
+    pub fn plane(&self) -> AnyPlane<'a> {
+        self.plane
+    }
+
+    /// Width in samples.
+    pub fn width(&self) -> usize {
+        self.plane.width()
+    }
+
+    /// Height in rows.
+    pub fn height(&self) -> usize {
+        self.plane.height()
+    }
+
+    /// The code encoding.
+    pub fn encoding(&self) -> SampleEncoding {
+        self.encoding
+    }
+
+    /// Distance between row starts in bytes.
+    pub fn stride_bytes(&self) -> usize {
+        match self.plane {
+            AnyPlane::U8(p) => p.stride(),
+            AnyPlane::U16(p) => p.stride() * 2,
+            AnyPlane::F32(p) => p.stride() * 4,
+            _ => 0,
+        }
+    }
+
+    /// Active row `y`, without padding.
+    pub fn row(&self, y: usize) -> Option<Row<'a>> {
+        fn span<T>(s: &[T], y: usize, width: usize, stride: usize) -> &[T] {
+            if width == 0 {
+                return &[];
+            }
+            &s[y * stride..y * stride + width]
+        }
+        if y >= self.height() {
+            return None;
+        }
+        match self.plane {
+            AnyPlane::U8(p) => Some(Row::Bytes(span(
+                p.into_strided_samples(),
+                y,
+                p.width(),
+                p.stride(),
+            ))),
+            AnyPlane::U16(p) => Some(Row::Words16(span(
+                p.into_strided_samples(),
+                y,
+                p.width(),
+                p.stride(),
+            ))),
+            _ => None,
+        }
+    }
+
+    /// The code at (x, y), shifted and masked per the encoding.
+    pub fn code(&self, x: usize, y: usize) -> Option<u16> {
+        zenpixels::sample::CodePlane::new(self.plane, self.encoding)
+            .ok()?
+            .code(x, y)
+    }
+}
+
 /// Active row storage, excluding padding. Read its type from the plane.
 pub enum Row<'a> {
     /// Bytes of packed pixels or values, or eight-bit component words.
@@ -378,10 +468,7 @@ impl Samples<'_> {
             Self::Values(p) => Row::Bytes(
                 &p.bytes[y * p.stride..y * p.stride + p.width as usize * p.channel.byte_size()],
             ),
-            Self::Codes(p) => match p.row(y)? {
-                PlaneSamples::U8(v) => Row::Bytes(v),
-                PlaneSamples::U16(v) => Row::Words16(v),
-            },
+            Self::Codes(p) => p.row(y)?,
         })
     }
 }
@@ -910,15 +997,24 @@ impl MappedImage for ComponentMap<'_> {
         };
         let expected_dimensions = (w as usize, h as usize);
         let actual_dimensions = (samples.width(), samples.height());
-        if samples.encoding() != self.signal.encoding || actual_dimensions != expected_dimensions {
-            return Err(fail(OutputError::Component {
-                index,
-                expected_dimensions,
-                actual_dimensions,
-                expected_encoding: self.signal.encoding,
-                actual_encoding: samples.encoding(),
-            }));
-        }
+        let actual_encoding = self.native.encoding(index).unwrap_or(self.signal.encoding);
+        let samples = match CodePlane::new(samples, self.signal.encoding) {
+            Ok(codes)
+                if actual_dimensions == expected_dimensions
+                    && actual_encoding == self.signal.encoding =>
+            {
+                codes
+            }
+            _ => {
+                return Err(fail(OutputError::Component {
+                    index,
+                    expected_dimensions,
+                    actual_dimensions,
+                    expected_encoding: self.signal.encoding,
+                    actual_encoding,
+                }));
+            }
+        };
         Ok(Some(Plane {
             meaning,
             samples: Samples::Codes(samples),

@@ -5,10 +5,9 @@ use super::{
 };
 use crate::{
     At,
-    frame::ChromaSiting,
     image::{ImageGeometry, ImageOutput},
 };
-use zenpixels::{Orientation, PixelDescriptor};
+use zenpixels::{Orientation, PixelDescriptor, sample::ChromaSiting};
 
 /// Effects of one prepared conversion of the exact held image.
 ///

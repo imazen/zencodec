@@ -3,13 +3,15 @@ use std::sync::Arc;
 use zencodec::{
     At,
     frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
-        MappedPlanes, Picture, PlaneRole, Presentation, SampleEncoding, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, MappedPlanes, Picture,
+        PlaneRole, Presentation,
     },
     image::{ImageOutput, OutputError, Row},
 };
-use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
 use zenpixels::ChannelType;
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 fn encoding(bits: u8) -> SampleEncoding {
     SampleEncoding::new(ChannelType::U16, bits, 0).unwrap()
@@ -17,7 +19,7 @@ fn encoding(bits: u8) -> SampleEncoding {
 fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(width, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding(bits),
         vec![PlaneRole::Luma],
@@ -32,12 +34,15 @@ fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
 fn words() -> Arc<dyn Picture> {
     Arc::new(
         OwnedPlanes::new(
-            vec![OwnedPlane {
-                data: PlaneData::U16(vec![0, 512, 1023, 65535, 1, 511, 1022]),
-                width: 3,
-                height: 2,
-                stride_bytes: 8,
-            }],
+            vec![OwnedPlane::U16(
+                zenpixels::plane::Plane::new(
+                    vec![0, 512, 1023, 65535, 1, 511, 1022],
+                    3,
+                    2,
+                    (8) / 2,
+                )
+                .unwrap(),
+            )],
             encoding(10),
         )
         .unwrap(),
@@ -518,7 +523,7 @@ fn rgb_owner(pool: &zencodec::storage::StorageBudget, width: u32) -> RgbOwner {
 fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding(10),
         vec![PlaneRole::Luma],

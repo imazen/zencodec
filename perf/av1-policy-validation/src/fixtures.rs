@@ -1,6 +1,8 @@
 //! Native frame and IVF helpers adapted from zenavif ea055f7d's
 //! tests/media_session.rs and examples/media_ivf.rs. Test artifacts only.
 use std::{path::Path, process::Command, sync::Arc};
+use zenpixels::sample::ChromaSubsampling;
+use zenpixels::sample::SampleEncoding;
 
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::how_far::NoPulse;
@@ -8,7 +10,7 @@ use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
     frame::{
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        PlaneRole, PlaneSamples, Presentation,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoEncoder},
@@ -17,7 +19,7 @@ use zenpixels::{ChannelType, Cicp};
 
 pub const TB: TimeBase = TimeBase::MILLIS;
 
-pub fn settings(bits: u8, sub: Subsampling, identity: bool) -> Av1EncodeSettings {
+pub fn settings(bits: u8, sub: ChromaSubsampling, identity: bool) -> Av1EncodeSettings {
     Av1EncodeSettings::new(17, 13)
         .with_bit_depth(bits)
         .with_subsampling(sub)
@@ -31,14 +33,14 @@ pub fn settings(bits: u8, sub: Subsampling, identity: bool) -> Av1EncodeSettings
 pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
     let (w, h) = (s.width as usize, s.height as usize);
     let dims = match s.subsampling {
-        Subsampling::Mono => vec![(w, h)],
-        Subsampling::Yuv420 => vec![
+        ChromaSubsampling::Mono => vec![(w, h)],
+        ChromaSubsampling::Yuv420 => vec![
             (w, h),
             (w.div_ceil(2), h.div_ceil(2)),
             (w.div_ceil(2), h.div_ceil(2)),
         ],
-        Subsampling::Yuv422 => vec![(w, h), (w.div_ceil(2), h), (w.div_ceil(2), h)],
-        Subsampling::Yuv444 => vec![(w, h); 3],
+        ChromaSubsampling::Yuv422 => vec![(w, h), (w.div_ceil(2), h), (w.div_ceil(2), h)],
+        ChromaSubsampling::Yuv444 => vec![(w, h); 3],
         other => panic!("unsupported test layout {other:?}"),
     };
     let mask = (1u32 << s.bit_depth) - 1;
@@ -77,7 +79,7 @@ pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
         0,
     )
     .unwrap();
-    let roles = if s.subsampling == Subsampling::Mono {
+    let roles = if s.subsampling == ChromaSubsampling::Mono {
         vec![PlaneRole::Luma]
     } else if s.color.matrix_coefficients == 0 {
         vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red]
@@ -230,11 +232,11 @@ pub fn oracle_container(
     let decoded = dir.join("dav1d.raw");
     std::fs::write(&encoded, bytes).unwrap();
     let base = match (s.subsampling, s.color.matrix_coefficients) {
-        (Subsampling::Mono, _) => "gray",
-        (Subsampling::Yuv420, _) => "yuv420p",
-        (Subsampling::Yuv422, _) => "yuv422p",
-        (Subsampling::Yuv444, 0) => "gbrp",
-        (Subsampling::Yuv444, _) => "yuv444p",
+        (ChromaSubsampling::Mono, _) => "gray",
+        (ChromaSubsampling::Yuv420, _) => "yuv420p",
+        (ChromaSubsampling::Yuv422, _) => "yuv422p",
+        (ChromaSubsampling::Yuv444, 0) => "gbrp",
+        (ChromaSubsampling::Yuv444, _) => "yuv444p",
         _ => panic!("unsupported oracle layout"),
     };
     let fmt = if s.bit_depth == 8 {

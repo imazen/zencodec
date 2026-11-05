@@ -5,12 +5,13 @@ use crate::fixtures::*;
 use std::sync::Arc;
 use zenavif::{media::Av1VideoDecoder, yuv_convert::*};
 use zencodec::frame::{
-    ChromaSiting, Crop, Frame, FrameInterpretation, FrameTiming, PlaneRole, PlaneSamples,
-    PlaneView, Presentation, SampleEncoding, Subsampling,
+    Crop, Frame, FrameInterpretation, FrameTiming, PlaneRole, PlaneSamples, PlaneView, Presentation,
 };
 use zencodec::how_far::NoPulse;
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
 use zencodec_media::session::VideoDecoder;
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 use zenpixels::{ChannelType, Cicp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,7 +86,7 @@ pub(super) fn conversion_facts(
         || info.roles != [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr]
         || !matches!(
             info.subsampling,
-            Subsampling::Yuv420 | Subsampling::Yuv422 | Subsampling::Yuv444
+            ChromaSubsampling::Yuv420 | ChromaSubsampling::Yuv422 | ChromaSubsampling::Yuv444
         )
     {
         return Err(Refusal::Interpretation);
@@ -103,7 +104,7 @@ pub(super) fn conversion_facts(
     {
         return Err(Refusal::Encoding);
     }
-    let assumed_center = if info.subsampling == Subsampling::Yuv444 {
+    let assumed_center = if info.subsampling == ChromaSubsampling::Yuv444 {
         false
     } else {
         match (info.siting, choice) {
@@ -200,7 +201,7 @@ fn convert(
             let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v) else {
                 return Err(Refusal::Mapping);
             };
-            let [ys, us, vs] = planes.each_ref().map(|plane| plane.stride_bytes() / encoding.bytes_per_sample());
+            let [ys, us, vs] = planes.each_ref().map(|plane| plane.stride_bytes() / encoding.storage().byte_size());
             let mut scratch = Vec::new();
             scratch.try_reserve_exact(scratch_len).map_err(|_| Refusal::Allocation)?;
             scratch.resize(scratch_len, Default::default());
@@ -208,9 +209,9 @@ fn convert(
                 let rows = count.min(crop.height as usize - start);
                 let y_start = crop.y as usize + start;
                 match info.subsampling {
-                    Subsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
-                    Subsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
-                    Subsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
+                    ChromaSubsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
+                    ChromaSubsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
+                    ChromaSubsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, y_start, rows, range, YuvMatrix::Bt709, $($depth,)? &mut scratch),
                     _ => unreachable!(),
                 }
                 for row in 0..rows {
@@ -264,9 +265,9 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
     );
     for bits in [8, 10, 12] {
         for sub in [
-            Subsampling::Yuv420,
-            Subsampling::Yuv422,
-            Subsampling::Yuv444,
+            ChromaSubsampling::Yuv420,
+            ChromaSubsampling::Yuv422,
+            ChromaSubsampling::Yuv444,
         ] {
             for full in [false, true] {
                 let s = settings(bits, sub, false).with_color(Cicp::new(1, 13, 1, full));
@@ -347,7 +348,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                     assert_eq!(facts.timing, native.timing());
                     assert_eq!(facts.presentation, native.presentation());
                     assert_eq!(facts.output_encoding.code_bits(), 16);
-                    assert_eq!(facts.assumed_center, sub != Subsampling::Yuv444);
+                    assert_eq!(facts.assumed_center, sub != ChromaSubsampling::Yuv444);
                     // Conversion facts never relabel the source's component encoding.
                     assert_eq!(facts.source.encoding.code_bits(), bits);
                     let mut padded_source_rgb = vec![[0; 3]; w * h];
@@ -416,7 +417,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                         ));
                     }
                     let mut untouched = vec![[0xffff; 3]; w * h];
-                    if sub != Subsampling::Yuv444 {
+                    if sub != ChromaSubsampling::Yuv444 {
                         assert_eq!(
                             convert(&native, SitingChoice::RequireDeclared, &mut untouched, w, 1)
                                 .unwrap_err(),
@@ -440,7 +441,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
 
 #[test]
 fn planar_unqualified_interpretations_refuse_before_writing() {
-    let base = frame(&settings(10, Subsampling::Yuv420, false), 0);
+    let base = frame(&settings(10, ChromaSubsampling::Yuv420, false), 0);
     let mut destination = vec![[0xaaaa; 3]; 17 * 13];
     for siting in [ChromaSiting::Left, ChromaSiting::TopLeft] {
         let frame = reinterpret(&base, |i| i.siting = siting);
@@ -461,7 +462,9 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
         reinterpret(&centered, |i| {
             i.encoding = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap()
         }),
-        reinterpret(&centered, |i| i.encoding = SampleEncoding::U8),
+        reinterpret(&centered, |i| {
+            i.encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+        }),
     ] {
         let expected = if frame.interpretation().encoding.bit_shift() == 6 {
             Refusal::Encoding
@@ -582,7 +585,7 @@ fn planar_unqualified_interpretations_refuse_before_writing() {
 
 #[test]
 fn planar_rejects_noncanonical_active_words_but_not_padding() {
-    let source = frame(&settings(10, Subsampling::Yuv420, false), 0);
+    let source = frame(&settings(10, ChromaSubsampling::Yuv420, false), 0);
     let source = reinterpret(&source, |i| i.siting = ChromaSiting::Center);
     let mapped = source.map().unwrap();
     let mut planes = Vec::new();
@@ -632,7 +635,7 @@ fn planar_rejects_noncanonical_active_words_but_not_padding() {
 #[test]
 fn planar_native_signalled_siting_cannot_be_overridden_by_unknown_fallback() {
     for siting in [ChromaSiting::Left, ChromaSiting::TopLeft] {
-        let s = settings(8, Subsampling::Yuv420, false).with_siting(siting);
+        let s = settings(8, ChromaSubsampling::Yuv420, false).with_siting(siting);
         let input = frame(&s, 0);
         let (config, packets) = encode(s, std::slice::from_ref(&input));
         let mut settings = rav1d_safe::Settings::default();

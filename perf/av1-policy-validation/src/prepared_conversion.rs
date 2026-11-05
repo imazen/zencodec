@@ -6,7 +6,7 @@ use std::{error::Error, fmt, sync::Arc};
 use zenavif::yuv_convert::*;
 use zencodec::{
     At, CodecError,
-    frame::{ChromaSiting, Frame, MappedPlanes, PlaneSamples, PlaneView, Subsampling},
+    frame::{Frame, MappedPlanes, PlaneSamples, PlaneView},
     image::{ImageGeometry, ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
         ImageConversionOffer, OperationPolicy, OperationReport, Outcome, PolicySet,
@@ -14,10 +14,11 @@ use zencodec::{
     },
     storage::{PreparedStorage, SharedStorage, StorageBudget, StorageError},
 };
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 use zenpixels::{Cicp, ColorContext, Orientation, PixelDescriptor, PixelSlice};
 use zenpixels::{
     PixelSliceMut,
-    sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
+    sample::{ChromaSubsampling, CodePlane},
 };
 use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 
@@ -206,7 +207,7 @@ impl<'a> Prepared<'a> {
         let (output, descriptor, admitted_bytes) = match target {
             Target::Rgb16 => {
                 let scratch_bytes = (geometry.coded_width as usize)
-                    .checked_mul(3 * info.encoding.bytes_per_sample())
+                    .checked_mul(3 * info.encoding.storage().byte_size())
                     .ok_or_else(overflow)?;
                 let destination = pool
                     .prepare_filled(count, [0xdead; 3])
@@ -233,12 +234,7 @@ impl<'a> Prepared<'a> {
                     .prepare_filled(count, [f32::from_bits(0x7fc1_2345); 3])
                     .map_err(|e| failed(Stage::Prepare, &report, e))?;
                 let bytes = destination.reserved_bytes();
-                let encoding = zenpixels::sample::SampleEncoding::new(
-                    info.encoding.storage(),
-                    info.encoding.code_bits(),
-                    info.encoding.bit_shift(),
-                )
-                .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let encoding = info.encoding;
                 let view = |p: PlaneView<'a>| {
                     match p.as_strided_samples() {
                         PlaneSamples::U8(s) => {
@@ -255,9 +251,9 @@ impl<'a> Prepared<'a> {
                     .map_err(|e| failed(Stage::Prepare, &report, e))
                 };
                 let sub = match info.subsampling {
-                    Subsampling::Yuv444 => ChromaSubsampling::Yuv444,
-                    Subsampling::Yuv422 => ChromaSubsampling::Yuv422,
-                    Subsampling::Yuv420 => ChromaSubsampling::Yuv420,
+                    s @ (ChromaSubsampling::Yuv444
+                    | ChromaSubsampling::Yuv422
+                    | ChromaSubsampling::Yuv420) => s,
                     _ => return Err(failed(Stage::Prepare, &report, Refusal::Interpretation)),
                 };
                 // The selected fallback remains visible in the policy offer.
@@ -265,7 +261,7 @@ impl<'a> Prepared<'a> {
                 let plan = YcbcrToRgbF32::new(
                     [view(planes[0])?, view(planes[1])?, view(planes[2])?],
                     sub,
-                    PixelSiting::Center,
+                    ChromaSiting::Center,
                     info.color.resolved.unwrap(),
                 )
                 .map_err(|e| failed(Stage::Prepare, &report, e))?;
@@ -354,15 +350,15 @@ impl<'a> Prepared<'a> {
                 let [y, u, v] = self.planes.each_ref().map(|p| p.as_strided_samples());
                 let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v)
                     else { return Err(failed(Stage::Execute, &report, Refusal::Mapping)); };
-                let [ys, us, vs] = self.planes.each_ref().map(|p| p.stride_bytes() / info.encoding.bytes_per_sample());
+                let [ys, us, vs] = self.planes.each_ref().map(|p| p.stride_bytes() / info.encoding.storage().byte_size());
                 let scratch = bytemuck::cast_slice_mut(scratch_bytes);
                 for row in 0..crop.height as usize {
                     check(stop, Stage::Execute, &report)?;
                     let start = row + crop.y as usize;
                     match info.subsampling {
-                        Subsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
-                        Subsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
-                        Subsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                        ChromaSubsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                        ChromaSubsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                        ChromaSubsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
                         _ => unreachable!(),
                     }
                     for (out, pixel) in data.as_mut_slice()[row * self.stride..][..crop.width as usize].iter_mut()
@@ -670,7 +666,7 @@ mod tests {
     use zencodec_media::session::VideoDecoder;
 
     fn native() -> Frame {
-        let settings = fixtures::settings(10, Subsampling::Yuv420, false)
+        let settings = fixtures::settings(10, ChromaSubsampling::Yuv420, false)
             .with_color(Cicp::new(1, 13, 1, false));
         let input = fixtures::frame(&settings, 0);
         let (config, packets) = fixtures::encode(settings, &[input]);

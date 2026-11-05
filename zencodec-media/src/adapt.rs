@@ -25,6 +25,8 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 use zencodec::decode::{
     AnimationFrame, AnimationFrameDecoder, DecodeRowSink, OutputInfo, SinkError,
@@ -37,8 +39,8 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
-    ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane,
-    OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+    Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, OwnedPlane, OwnedPlanes,
+    PlaneRole, Presentation,
 };
 use crate::session::{
     CodecConfig, ProtocolViolation, PumpError, SessionError, VideoDecoder, VideoEncoder,
@@ -114,7 +116,9 @@ impl RenderFrame for Gray8 {
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
-        if interp.subsampling != Subsampling::Mono || interp.encoding != SampleEncoding::U8 {
+        if interp.subsampling != ChromaSubsampling::Mono
+            || interp.encoding != SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap()
+        {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
         let mapped = frame.map()?;
@@ -124,10 +128,10 @@ impl RenderFrame for Gray8 {
         if plane.width() != canvas.width() as usize || plane.height() != canvas.rows() as usize {
             return Err(convert_error("frame size differs from the canvas"));
         }
-        for y in 0..plane.height() {
-            let PlaneSamples::U8(row) = plane.row(y).expect("in range") else {
-                return Err(convert_error("8-bit frame with 16-bit storage"));
-            };
+        let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+            return Err(convert_error("8-bit frame with 16-bit storage"));
+        };
+        for (y, row) in plane.rows().enumerate() {
             canvas.row_mut(y as u32)[..row.len()].copy_from_slice(row);
         }
         Ok(())
@@ -156,9 +160,9 @@ impl CaptureFrame for Gray8 {
             _ => {
                 let i = Arc::new(FrameInterpretation::new(
                     FrameGeometry::full(w, h),
-                    Subsampling::Mono,
+                    ChromaSubsampling::Mono,
                     ChromaSiting::Unknown,
-                    SampleEncoding::U8,
+                    SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
                     vec![PlaneRole::Luma],
                 ));
                 self.interpretation = Some(Arc::clone(&i));
@@ -173,13 +177,10 @@ impl CaptureFrame for Gray8 {
             data.extend_from_slice(&pixels.row(y)[..wu]);
         }
         let planes = OwnedPlanes::new(
-            vec![OwnedPlane {
-                data: PlaneData::U8(data),
-                width: wu,
-                height: hu,
-                stride_bytes: wu,
-            }],
-            SampleEncoding::U8,
+            vec![OwnedPlane::U8(
+                zenpixels::plane::PlaneBuf::new(data, wu, hu, wu).map_err(Box::new)?,
+            )],
+            SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         )?;
         Ok(Frame::new(
             Arc::new(planes),

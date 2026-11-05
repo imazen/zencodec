@@ -85,8 +85,13 @@ impl Region {
             u8::try_from(self.orientation).map_err(|_| InterpretationError::Orientation)?,
         )
         .ok_or(InterpretationError::Orientation)?;
-        let mut parts =
-            PixelBufferParts::new(self.bytes, self.width, self.height, self.stride, descriptor);
+        let mut parts = PixelBufferParts::new(
+            zenpixels::PixelStorage::from(self.bytes),
+            self.width,
+            self.height,
+            self.stride,
+            descriptor,
+        );
         parts.color_context = self
             .icc
             .map(|icc| Arc::new(ColorContext::from_icc(Arc::<[u8]>::from(icc))));

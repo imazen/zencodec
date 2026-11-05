@@ -6,6 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+use zenpixels::sample::ChromaSubsampling;
 
 use enough::{Stop, StopReason};
 use zenavif::media::{Av1SessionError, Av1VideoDecoder};
@@ -16,7 +17,7 @@ use zencodec::{
     time::{TimeBase, Timestamp},
 };
 use zencodec_media::{
-    frame::{Frame, Picture, Subsampling},
+    frame::{Frame, Picture},
     packet::Packet,
     policy::{PolicyDecoder, Stage},
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoStreamInfo},
@@ -107,11 +108,11 @@ fn approved_native_frames_reencode_exactly_under_independent_decoder() {
     std::fs::create_dir_all(root).unwrap();
     for bits in [8, 10, 12] {
         for (sub, identity) in [
-            (Subsampling::Mono, false),
-            (Subsampling::Yuv420, false),
-            (Subsampling::Yuv422, false),
-            (Subsampling::Yuv444, false),
-            (Subsampling::Yuv444, true),
+            (ChromaSubsampling::Mono, false),
+            (ChromaSubsampling::Yuv420, false),
+            (ChromaSubsampling::Yuv422, false),
+            (ChromaSubsampling::Yuv444, false),
+            (ChromaSubsampling::Yuv444, true),
         ] {
             let s = settings(bits, sub, identity);
             let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
@@ -182,7 +183,7 @@ fn approved_native_frames_reencode_exactly_under_independent_decoder() {
 
 #[test]
 fn queued_native_epochs_present_original_facts_to_policy() {
-    let s = settings(10, Subsampling::Yuv420, false).with_color(Cicp::new(2, 2, 2, true));
+    let s = settings(10, ChromaSubsampling::Yuv420, false).with_color(Cicp::new(2, 2, 2, true));
     let inputs: Vec<_> = (0..7).map(|i| frame(&s, i)).collect();
     let (base, packets) = encode(s.clone(), &inputs);
     assert_eq!(packets.len(), inputs.len());
@@ -256,7 +257,7 @@ fn queued_native_epochs_present_original_facts_to_policy() {
 
 #[test]
 fn one_native_packet_with_multiple_presentations_asks_for_each() {
-    let s = settings(8, Subsampling::Yuv420, false);
+    let s = settings(8, ChromaSubsampling::Yuv420, false);
     let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     let combined = Packet::from_vec(packets.iter().flat_map(|p| p.bytes()).copied().collect())
@@ -317,7 +318,7 @@ fn cause<'a, E: Error + 'static>(mut error: &'a (dyn Error + 'static)) -> &'a E 
 
 #[test]
 fn native_refusal_stale_choice_error_cancel_and_unwind_release_held_picture() {
-    let s = settings(10, Subsampling::Yuv420, false);
+    let s = settings(10, ChromaSubsampling::Yuv420, false);
     let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     for mode in 0..5 {
@@ -439,7 +440,7 @@ fn native_error_keeps_rav1d_whereat_trace_through_policy_and_erasure() {
 
 #[test]
 fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
-    let s = settings(10, Subsampling::Yuv420, false).with_color(Cicp::new(2, 2, 2, true));
+    let s = settings(10, ChromaSubsampling::Yuv420, false).with_color(Cicp::new(2, 2, 2, true));
     let inputs: Vec<_> = (0..2).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     let mut ordinary = crate::checked_video::open_video().unwrap();
@@ -482,7 +483,7 @@ fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
 
 #[test]
 fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
-    let s = settings(10, Subsampling::Yuv420, false);
+    let s = settings(10, ChromaSubsampling::Yuv420, false);
     let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     let mut decoder = crate::checked_video::open_video_with_picture_limit(0).unwrap();
@@ -574,7 +575,7 @@ fn native_mp4_track_facts_agree_across_input_drivers() {
         limits::MediaLimits,
         track::TrackInfo,
     };
-    let settings = settings(8, Subsampling::Yuv444, true);
+    let settings = settings(8, ChromaSubsampling::Yuv444, true);
     let input: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &input);
     let mut track = TrackInfo::video(
@@ -610,7 +611,7 @@ fn native_mp4_track_facts_agree_across_input_drivers() {
 fn native_av1_presentation_cursor_clips_repeats_and_detects_missing_frames() {
     use presentation_map_experiment::{Content, Cursor, Edit, Error, Extent, Interval, Plan, Time};
     use zencodec::time::FrameDuration;
-    let settings = settings(8, Subsampling::Yuv444, true);
+    let settings = settings(8, ChromaSubsampling::Yuv444, true);
     let input: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &input);
     let decoded = decode(&mut watched(1).0, &config, &packets, None).unwrap();

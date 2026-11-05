@@ -12,10 +12,7 @@ use std::{
 use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
-    frame::{
-        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, SampleEncoding,
-        Subsampling,
-    },
+    frame::{FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole},
     operation::{
         Decision, DecisionCode, DecisionContext, Decline, MetadataTransfer, PolicyFailure,
         PolicySet, Question,
@@ -24,12 +21,14 @@ use zencodec::{
     time::{TimeBase, Timestamp},
 };
 use zencodec_media::{
-    frame::{Frame, OwnedPlane, OwnedPlanes, PlaneData, PlaneSamples, Presentation},
+    frame::{Frame, OwnedPlane, OwnedPlanes, Presentation},
     packet::Packet,
     policy::{PolicyDecoder, Stage},
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoStreamInfo},
     track::CodecId,
 };
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 fn frame(budget: &StorageBudget, i: u16) -> Frame {
     let mut words = budget.words(8).unwrap();
@@ -38,18 +37,15 @@ fn frame(budget: &StorageBudget, i: u16) -> Frame {
         .copy_from_slice(&[i, 512, 1023, 60000, i + 1, 511, 1022, 60001]);
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap();
     let picture = OwnedPlanes::new(
-        vec![OwnedPlane {
-            data: PlaneData::AccountedU16(words.freeze()),
-            width: 3,
-            height: 2,
-            stride_bytes: 8,
-        }],
+        vec![OwnedPlane::AccountedU16(
+            zenpixels::plane::Plane::new(words.freeze(), 3, 2, (8) / 2).unwrap(),
+        )],
         encoding,
     )
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
+        ChromaSubsampling::Mono,
         ChromaSiting::Unknown,
         encoding,
         vec![PlaneRole::Luma],
@@ -276,10 +272,10 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
         let mapping = output.map().unwrap();
         let plane = mapping.plane(0).unwrap();
         assert!(
-            matches!(plane.row(0).unwrap(), PlaneSamples::U16(row) if row == [i as u16, 512, 1023])
+            matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [i as u16, 512, 1023])
         );
         assert!(
-            matches!(plane.row(1).unwrap(), PlaneSamples::U16(row) if row == [i as u16 + 1, 511, 1022])
+            matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [i as u16 + 1, 511, 1022])
         );
     }
     assert_eq!(decoder.report().decisions().count(), 16);
@@ -354,7 +350,15 @@ fn stale_policy_choice_publishes_no_second_frame_and_releases_all_native_owners(
         "only previously published frame survives"
     );
     assert_finished(&mut decoder);
-    assert_eq!(old.map().unwrap().plane(0).unwrap().code(2, 0), Some(1023));
+    assert_eq!(
+        zenpixels::sample::CodePlane::new(
+            old.map().unwrap().plane(0).unwrap(),
+            old.interpretation().encoding
+        )
+        .unwrap()
+        .code(2, 0),
+        Some(1023)
+    );
     drop(old);
     assert_eq!(budget.reserved_bytes(), 0);
 }
