@@ -211,7 +211,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check MSRV
-        run: cargo +1.88.0 check -p zencodec -p zenmeta --all-features
+        run: |
+          cargo +1.88.0 check -p zencodec -p zenmeta --all-features
+          cargo +1.88.0 check --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
 
   # ==========================================================================
   # Semver check (API compatibility)
