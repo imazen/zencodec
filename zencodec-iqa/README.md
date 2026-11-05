@@ -1,7 +1,7 @@
 # zencodec-iqa
 
 Unpublished, `no_std + alloc` codec-output adapter for
-[zenpixels-iqa](https://github.com/imazen/zenpixels/pull/111). Metric traits,
+[zenpsychovisual-api](https://github.com/imazen/zenpixels/pull/111). Metric traits,
 identity, native scores/maps, preparation and conformance live in that core;
 this crate re-exports it as `iqa` without defining a second metric hierarchy.
 

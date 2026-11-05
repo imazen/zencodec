@@ -4,18 +4,18 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
-description = "Resolved codec output adapter for zenpixels-iqa"
+description = "Resolved codec output adapter for zenpsychovisual-api"
 repository = "https://github.com/imazen/zencodec"
 publish = false
 [workspace]
 [features]
 default = []
-std = ["zenpixels-iqa/std", "zencodec/std"]
+std = ["zenpsychovisual-api/std", "zencodec/std"]
 [dependencies]
-zenpixels-iqa = { git = "https://github.com/imazen/zenpixels", rev = "6962bf77bcaedcfbfbe58c2c2e2f685c0863d6d3", version = "0.1.0" }
+zenpsychovisual-api = { git = "https://github.com/imazen/zenpixels", rev = "49f13e3ed32749230b25cf74d5e98ef465a0a015", version = "0.1.0" }
 zencodec = { path = "..", version = ">=0.2.0, <0.4.0", default-features = false }
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "6962bf77bcaedcfbfbe58c2c2e2f685c0863d6d3" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "49f13e3ed32749230b25cf74d5e98ef465a0a015" }
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

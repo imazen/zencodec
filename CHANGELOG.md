@@ -16,7 +16,7 @@ None. This is a new unpublished review API.
 
 ### Changed
 
-- Move codec-independent still-image contracts to `zenpixels-iqa`; this
+- Move codec-independent still-image contracts to `zenpsychovisual-api`; this
   companion now provides only resolved packed-output mapping and re-exports
   the shared contract as `iqa`. Native mapping causes and cancellation survive
   the handoff. The review API remains unpublished.
