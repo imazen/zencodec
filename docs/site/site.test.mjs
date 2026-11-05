@@ -98,7 +98,8 @@ test('checked API page links executable examples and actual signatures for each 
   assert.ok(page.includes('data-api="ycbcrPlan"'));
   const ycbcrApi=JSON.parse(await readFile(new URL('../ycbcr-api.json',import.meta.url),'utf8'));
   assert.match(ycbcrApi.surface,/pub fn convert_rows<'b>/);
-  assert.match(ycbcrApi.surface,/pub fn from_u16/);
+  assert.match(ycbcrApi.surface,/pub fn new\(plane: AnyPlane/);
+  assert.match(ycbcrApi.surface,/pub fn component/);
   assert.match(ycbcrApi.surface,/pub enum YcbcrError/);
   assert.ok(page.includes(`/blob/${ycbcrApi.revision}/zenpixels-convert/src/ycbcr.rs`));
   assert.ok(page.includes('data-example="native_required_layout"'));

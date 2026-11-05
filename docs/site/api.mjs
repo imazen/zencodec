@@ -20,7 +20,7 @@ export const api = {
   multipassReader: {path:'multipass_validation::sources::ReaderRows (contract experiment)',file:'perf/multipass-validation/src/sources.rs',scope:'impl<R: Read> ReaderRows<R>',methods:['new']},
   multipassFile: {path:'multipass_validation::sources::FileRows (contract experiment)',file:'perf/multipass-validation/src/sources.rs',scope:'impl FileRows',methods:['new']},
   operationDecisionRecord: {path:'zencodec::operation::DecisionRecord',file:'src/operation/policy.rs',scope:'pub struct DecisionRecord',methods:[],item:true},
-  stridedPlane: {path:'zencodec::frame::PlaneView',file:'src/frame_storage.rs',scope:"impl<'a> PlaneView<'a>",methods:['encoding','stride_bytes','as_strided_samples','row','code']},
+  stridedPlane: {path:'zencodec::image::CodePlane',file:'src/image.rs',scope:"impl<'a> CodePlane<'a>",methods:['encoding','stride_bytes','components','component','row','code']},
   floatColorPlan: {path:'candidate::plan_float_export (private native color-stage prototype)',file:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',scope:'mod planning {',methods:['plan_float_export'],associated:false},
   operationDecode: {path:'zencodec::operation::DecodeRequest',file:'src/operation.rs',scope:'impl DecodeRequest {',methods:['new','with_output','preferring_output','with_policy','decode','start_controlled']},
   operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_resolution','with_orientation_mode','with_policy','with_policy_set','encode','encode_with']},

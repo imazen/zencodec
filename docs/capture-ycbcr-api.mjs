@@ -8,7 +8,7 @@ if(!checkout||!revision?.match(/^[0-9a-f]{40}$/))throw Error('usage: capture-ycb
 const specifications=[
   {path:'zenpixels/src/sample/plane.rs',scope:'pub enum ChromaSubsampling',methods:[],item:true},
   {path:'zenpixels/src/sample/plane.rs',scope:'pub enum ChromaSiting',methods:[],item:true},
-  {path:'zenpixels/src/sample/plane.rs',scope:"impl<'a> CodePlane<'a>",methods:['from_u8','from_u16','width','height','encoding','code']},
+  {path:'zenpixels/src/sample/plane.rs',scope:"impl<'a> CodePlane<'a>",methods:['new','component','width','height','encoding','code']},
   {path:'zenpixels-convert/src/ycbcr.rs',scope:"impl<'a> YcbcrToRgbF32<'a>",methods:['new','output_descriptor','convert_rows']},
   {path:'zenpixels-convert/src/ycbcr.rs',scope:'pub enum YcbcrError',methods:[],item:true},
 ];
@@ -19,7 +19,7 @@ const sources=specifications.map(spec=>{
   const {code,line}=declarations(source,spec);
   return {path:spec.path,line,source_sha256:createHash('sha256').update(source).digest('hex'),code};
 });
-const surface=`use zenpixels::{Cicp, PixelDescriptor, PixelSliceMut, sample::{CodePlane, CodePlaneError, SampleEncoding, ChromaSubsampling, ChromaSiting}};
+const surface=`use zenpixels::{Cicp, PixelDescriptor, PixelSliceMut, plane::AnyPlane, sample::{CodePlane, CodePlaneError, SampleEncoding, ChromaSubsampling, ChromaSiting}};
 use zenpixels_convert::ycbcr::{YcbcrToRgbF32, YcbcrError};
 use whereat::At;
 
