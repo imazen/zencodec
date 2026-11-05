@@ -3,11 +3,13 @@ use std::sync::Arc;
 use zencodec_io::storage::{StorageBudget, StorageError};
 use zencodec_media::{
     frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane,
-        OwnedPlanes, PlaneData, PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneRole,
+        Presentation,
     },
     packet::{Packet, PacketAddition, PacketPayload},
 };
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 #[test]
 fn deferred_admission_blocks_competitors_and_transfers_the_same_charge() {
@@ -69,24 +71,35 @@ fn ten_gib_reservation_can_be_declined_without_materializing_pixels() {
     assert_eq!(pool.bytes(1).unwrap().as_slice(), &[0]);
 }
 
-fn frame(data: PlaneData, encoding: SampleEncoding, epoch: u32) -> Frame {
-    let words = encoding.bytes_per_sample();
-    let picture = OwnedPlanes::new(
-        vec![OwnedPlane {
-            data,
-            width: 3,
-            height: 2,
-            stride_bytes: 4 * words,
-        }],
-        encoding,
-    )
-    .unwrap();
+/// Accounted storage handed to [`frame`]; planes are 3x2 with stride 4.
+enum Data {
+    AccountedU8(zencodec_io::storage::SharedStorage<u8>),
+    AccountedU16(zencodec_io::storage::SharedStorage<u16>),
+}
+
+fn frame(data: Data, encoding: SampleEncoding, epoch: u32) -> Frame {
+    use zenpixels::plane::Plane;
+    let plane = match data {
+        Data::AccountedU8(s) => OwnedPlane::AccountedU8(Plane::new(s, 3, 2, 4).unwrap()),
+        Data::AccountedU16(s) => OwnedPlane::AccountedU16(Plane::new(s, 3, 2, 4).unwrap()),
+    };
+    let picture = OwnedPlanes::new(vec![plane], encoding).unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        Subsampling::Mono,
-        ChromaSiting::Unknown,
-        encoding,
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(encoding),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     )
     .with_config_epoch(epoch);
     Frame::new(
@@ -130,14 +143,18 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
     let mut old = budget.bytes(8).unwrap();
     old.as_mut_slice()
         .copy_from_slice(&[1, 2, 3, 99, 4, 5, 6, 98]);
-    let old = frame(PlaneData::AccountedU8(old.freeze()), SampleEncoding::U8, 0);
+    let old = frame(
+        Data::AccountedU8(old.freeze()),
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+        0,
+    );
     let retained = old.clone();
     let replay = old.represent(FrameTiming::default(), Presentation::default());
     assert!(old.shares_picture(&replay));
     drop(old); // decoder/queue released its handle
     let new = frame(
-        PlaneData::AccountedU8(budget.bytes(8).unwrap().freeze()),
-        SampleEncoding::U8,
+        Data::AccountedU8(budget.bytes(8).unwrap().freeze()),
+        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
         1,
     );
     assert_eq!(budget.reserved_bytes(), 16);
@@ -146,8 +163,8 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
     assert_eq!(new.interpretation().config_epoch, 1);
     let mapped = retained.map().unwrap();
     let plane = mapped.plane(0).unwrap();
-    assert!(matches!(plane.row(0).unwrap(), PlaneSamples::U8(row) if row == [1, 2, 3]));
-    assert!(matches!(plane.row(1).unwrap(), PlaneSamples::U8(row) if row == [4, 5, 6]));
+    assert!(matches!(plane, zenpixels::plane::AnyPlane::U8(p) if p.row(0).unwrap() == [1, 2, 3]));
+    assert!(matches!(plane, zenpixels::plane::AnyPlane::U8(p) if p.row(1).unwrap() == [4, 5, 6]));
     drop(mapped);
     drop(retained);
     assert_eq!(
@@ -169,15 +186,25 @@ fn ten_bit_strided_planes_keep_native_words_and_their_full_charge() {
         .as_mut_slice()
         .copy_from_slice(&[0, 512, 1023, 65535, 1, 511, 1022, 65534]);
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap();
-    let frame = frame(PlaneData::AccountedU16(words.freeze()), encoding, 5);
+    let frame = frame(Data::AccountedU16(words.freeze()), encoding, 5);
     let clone = frame.clone();
     drop(frame);
     assert_eq!(budget.reserved_bytes(), 16);
     let mapped = clone.map().unwrap();
     let plane = mapped.plane(0).unwrap();
-    assert!(matches!(plane.row(0).unwrap(), PlaneSamples::U16(row) if row == [0, 512, 1023]));
-    assert!(matches!(plane.row(1).unwrap(), PlaneSamples::U16(row) if row == [1, 511, 1022]));
-    assert_eq!(clone.interpretation().encoding, encoding);
+    assert!(
+        matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [0, 512, 1023])
+    );
+    assert!(
+        matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [1, 511, 1022])
+    );
+    assert_eq!(
+        clone
+            .interpretation()
+            .uniform_code_encoding()
+            .expect("uniform integer fixture"),
+        encoding
+    );
     drop(mapped);
     drop(clone);
     assert_eq!(budget.reserved_bytes(), 0);

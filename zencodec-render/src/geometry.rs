@@ -15,7 +15,7 @@ use zenpixels::{
     ChannelLayout, ColorContext, Orientation, PixelDescriptor, PixelSlice, PixelSliceMut,
     TransferFunction,
 };
-use zenpixels_convert::orient::apply_orientation_into;
+use zenpixels_convert::PixelSliceConvertExt;
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -280,7 +280,7 @@ pub fn project(
             required.width,
             required.height,
         );
-        apply_orientation_into(selected, orientation, dst)?;
+        selected.oriented_into(orientation, dst)?;
         check(pulse)?;
         planes.push(Plane {
             data: data.freeze(),

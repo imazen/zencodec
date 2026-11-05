@@ -11,7 +11,7 @@ use zenpixels::{ColorOrigin, PixelBuffer, PixelBufferParts, PixelFormat, PixelSl
 use zenpixels_convert::{
     Cicp, ConvertError,
     cms_moxcms::MoxCms,
-    output::{OutputProfile, finalize_for_output_with},
+    output::{EncodeReady, OutputProfile},
 };
 
 fn native_cmyk(view: Composition) -> (ImageOutput, StorageBudget) {
@@ -32,7 +32,7 @@ fn stage_for_finalizer(pixels: PixelSlice<'_>) -> PixelBuffer {
     let bpp = pixels.descriptor().bytes_per_pixel();
     let stride = (pixels.width() as usize + 2) * bpp;
     let mut parts = PixelBufferParts::new(
-        vec![0xa5; bpp + stride * pixels.rows() as usize + bpp],
+        zenpixels::PixelStorage::from(vec![0xa5u8; bpp + stride * pixels.rows() as usize + bpp]),
         pixels.width(),
         pixels.rows(),
         stride,
@@ -77,7 +77,7 @@ fn native_cmyk_finalization_identity_preserves_samples_and_current_profile() {
         OutputProfile::Icc(profile.clone()),
     ] {
         let ready =
-            finalize_for_output_with(&buffer, &origin, target, PixelFormat::CmykF32Inverted, None)
+            EncodeReady::finalize(&buffer, &origin, target, PixelFormat::CmykF32Inverted, None)
                 .unwrap();
         let converted = ready.pixels();
         assert_eq!(converted.descriptor(), buffer.descriptor());
@@ -105,7 +105,7 @@ fn native_cmyk_finalization_does_not_convert_float_cmyk_with_moxcms() {
         None,
         Some(&MoxCms as &dyn zenpixels_convert::cms::PluggableCms),
     ] {
-        let error = finalize_for_output_with(
+        let error = EncodeReady::finalize(
             &buffer,
             &origin,
             OutputProfile::Named(Cicp::SRGB),
@@ -130,7 +130,7 @@ fn native_cmyk_finalization_copies_are_outside_the_decode_output_pool() {
         .with_pixels(|p| p.as_strided_bytes().as_ptr() as usize)
         .unwrap();
     let buffer = image.with_pixels(stage_for_finalizer).unwrap();
-    let ready = finalize_for_output_with(
+    let ready = EncodeReady::finalize(
         &buffer,
         &ColorOrigin::from_icc(icc(&buffer)),
         OutputProfile::SameAsOrigin,
@@ -163,7 +163,7 @@ fn native_cmyk_finalization_origin_cannot_replace_missing_current_profile() {
     parts.color_context = None;
     let buffer = PixelBuffer::try_from_parts(parts).unwrap();
     let original = buffer.as_slice().as_strided_bytes().to_vec();
-    let error = finalize_for_output_with(
+    let error = EncodeReady::finalize(
         &buffer,
         &origin,
         OutputProfile::SameAsOrigin,

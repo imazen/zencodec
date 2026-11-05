@@ -177,10 +177,11 @@ fn absent_container_and_decode_controls_match_explicit_noop_bytes_samples_and_ti
             assert_eq!(frame.timing().pts, Some(Timestamp::new(i as i64, tb())));
             let mapped = frame.map().unwrap();
             let plane = mapped.plane(0).unwrap();
+            let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+                panic!("unexpected sample type")
+            };
             for y in 0..H as usize {
-                let zencodec_media::frame::PlaneSamples::U8(row) = plane.row(y).unwrap() else {
-                    panic!("unexpected sample type")
-                };
+                let row = plane.row(y).unwrap();
                 assert_eq!(row, &gray(i as u8)[..W as usize]);
             }
         }
@@ -346,7 +347,15 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
     );
     assert_eq!(frames[0].timing().packet_ordinal, None);
     assert_eq!(
-        frames[2].map().unwrap().plane(0).unwrap().code(0, 0),
+        zenpixels::sample::CodePlane::new(
+            frames[2].map().unwrap().plane(0).unwrap(),
+            frames[2]
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
+        )
+        .unwrap()
+        .code(0, 0),
         Some(2)
     );
 }
@@ -378,8 +387,30 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
         panic!()
     };
     drop(dec);
-    assert_eq!(plane.code(3, 2), Some(9));
-    assert_eq!(second.map().unwrap().plane(0).unwrap().code(0, 0), Some(5));
+    assert_eq!(
+        zenpixels::sample::CodePlane::new(
+            plane,
+            first
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
+        )
+        .unwrap()
+        .code(3, 2),
+        Some(9)
+    );
+    assert_eq!(
+        zenpixels::sample::CodePlane::new(
+            second.map().unwrap().plane(0).unwrap(),
+            second
+                .interpretation()
+                .uniform_code_encoding()
+                .expect("uniform integer fixture")
+        )
+        .unwrap()
+        .code(0, 0),
+        Some(5)
+    );
     assert!(!first.shares_picture(&second));
 }
 

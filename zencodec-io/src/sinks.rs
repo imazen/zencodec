@@ -116,22 +116,10 @@ impl DecodeRowSink for CollectSink {
         if self.descriptor.is_some() {
             return Err("CollectSink: begin called twice".into());
         }
-        let stride = (width as usize)
-            .checked_mul(descriptor.bytes_per_pixel())
-            .ok_or_else(|| SinkError::from("CollectSink: row too large"))?;
-        let total = stride
-            .checked_mul(height as usize)
-            .ok_or_else(|| SinkError::from("CollectSink: image too large"))?;
-        // Retain the original reservation cause and leave state unchanged on
-        // failure. Prefix slack lets PixelBuffer align U16/F32 storage without
-        // copying; every row is written through that same aligned owner.
-        let capacity = total
-            .checked_add(descriptor.min_alignment() - 1)
-            .ok_or_else(|| SinkError::from("CollectSink: aligned image too large"))?;
-        let mut data = Vec::new();
-        data.try_reserve_exact(capacity)?;
-        data.resize(capacity, 0);
-        let buffer = PixelBuffer::from_vec(data, width, height, descriptor)?;
+        // Leaves state unchanged on failure. Allocates the format's own sample type, so
+        // the rows are aligned whatever the allocator returns for bytes, and the
+        // decoded buffer can move to a typed owner without a copy.
+        let buffer = PixelBuffer::try_new(width, height, descriptor)?;
         let words = usize::try_from(u64::from(height).div_ceil(64))
             .map_err(|_| SinkError::from("CollectSink: coverage too large"))?;
         let mut coverage = Vec::new();

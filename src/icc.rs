@@ -2,7 +2,7 @@
 //!
 //! This module is a thin compatibility shim. The real implementation lives in
 //! [`zenpixels::icc`] (enabled via the `icc` feature, already required by
-//! zencodec). Prefer calling `zenpixels::icc::extract_cicp` directly — it
+//! zencodec). Prefer calling `zenpixels::Cicp::from_icc` directly — it
 //! returns a typed [`zenpixels::Cicp`] instead of a tuple and comes with
 //! richer identification helpers (`identify_common`, `is_common_srgb`).
 
@@ -20,15 +20,15 @@
 /// # Deprecated
 ///
 /// This wrapper is kept for backwards compatibility. Prefer
-/// [`zenpixels::icc::extract_cicp`], which returns a typed
+/// [`zenpixels::Cicp::from_icc`], which returns a typed
 /// [`zenpixels::Cicp`] and lives alongside richer ICC identification
 /// helpers. This function will be removed in the next breaking release.
 #[deprecated(
     since = "0.1.16",
-    note = "use zenpixels::icc::extract_cicp — returns a typed Cicp instead of a tuple"
+    note = "use zenpixels::Cicp::from_icc — returns a typed Cicp instead of a tuple"
 )]
 pub fn icc_extract_cicp(data: &[u8]) -> Option<(u8, u8, u8, bool)> {
-    let c = zenpixels::icc::extract_cicp(data)?;
+    let c = zenpixels::Cicp::from_icc(data)?;
     Some((
         c.color_primaries,
         c.transfer_characteristics,

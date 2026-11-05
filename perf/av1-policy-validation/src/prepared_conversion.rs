@@ -1,12 +1,14 @@
 //! Executing witness: ask policy before materializing destination/scratch.
 //! Integer strip kernels remain test-only; float uses the shared pixel converter.
-use crate::planar_conversion_tests::{Refusal, SitingChoice, conversion_facts, widen};
+use crate::planar_conversion_tests::{
+    Refusal, SitingChoice, conversion_facts, mapped_plane, row_is_canonical, widen,
+};
 use enough::Stop;
 use std::{error::Error, fmt, sync::Arc};
 use zenavif::yuv_convert::*;
 use zencodec::{
     At, CodecError,
-    frame::{ChromaSiting, Frame, MappedPlanes, PlaneSamples, PlaneView, Subsampling},
+    frame::{Frame, MappedPlanes},
     image::{ImageGeometry, ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
         ImageConversionOffer, OperationPolicy, OperationReport, Outcome, PolicySet,
@@ -14,10 +16,10 @@ use zencodec::{
     },
     storage::{PreparedStorage, SharedStorage, StorageBudget, StorageError},
 };
-use zenpixels::{Cicp, ColorContext, Orientation, PixelDescriptor, PixelSlice};
 use zenpixels::{
-    PixelSliceMut,
-    sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
+    Cicp, ColorContext, Orientation, PixelDescriptor, PixelSlice, PixelSliceMut,
+    plane::AnyPlane,
+    sample::{ChromaSiting, ChromaSubsampling, CodePlane, SampleEncoding},
 };
 use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 
@@ -142,7 +144,8 @@ enum OutputStorage<'a> {
 /// No destination payload exists during policy; allocation can still fail.
 struct Prepared<'a> {
     frame: &'a Frame,
-    planes: [PlaneView<'a>; 3],
+    planes: [AnyPlane<'a>; 3],
+    encoding: SampleEncoding,
     output: OutputStorage<'a>,
     stride: usize,
     offer: ImageConversionOffer,
@@ -162,40 +165,26 @@ impl<'a> Prepared<'a> {
         let info = frame.interpretation();
         let geometry = info.geometry;
         let crop = geometry.crop;
-        let chroma = info
-            .subsampling
-            .chroma_size(geometry.coded_width, geometry.coded_height)
-            .ok_or_else(|| fail(Refusal::Interpretation))?;
+        let encoding = info
+            .uniform_code_encoding()
+            .ok_or_else(|| fail(Refusal::Encoding))?;
         if mapped.plane_count() != 3 {
             return Err(fail(Refusal::Mapping));
         }
         let mut planes = [None; 3];
-        for (i, dimensions) in [
-            (geometry.coded_width, geometry.coded_height),
-            chroma,
-            chroma,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let plane = mapped.plane(i).ok_or_else(|| fail(Refusal::Mapping))?;
-            if (plane.width(), plane.height()) != (dimensions.0 as usize, dimensions.1 as usize)
-                || plane.encoding() != info.encoding
-            {
-                return Err(fail(Refusal::Mapping));
-            }
-            let max = ((1u32 << info.encoding.code_bits()) - 1) as u16;
+        for (i, slot) in planes.iter_mut().enumerate() {
+            let dimensions = info
+                .layout
+                .plane_size(i, geometry.coded_width, geometry.coded_height)
+                .ok_or_else(|| fail(Refusal::Interpretation))?;
+            let plane = mapped_plane(mapped, i, dimensions, encoding).map_err(fail)?;
             for row in 0..plane.height() {
                 check(stop, Stage::Prepare, &report)?;
-                let valid = match plane.row(row).ok_or_else(|| fail(Refusal::Mapping))? {
-                    PlaneSamples::U8(r) => r.iter().all(|v| u16::from(*v) <= max),
-                    PlaneSamples::U16(r) => r.iter().all(|v| *v <= max),
-                };
-                if !valid {
+                if !row_is_canonical(plane, row, encoding).map_err(fail)? {
                     return Err(fail(Refusal::Sample));
                 }
             }
-            planes[i] = Some(plane);
+            *slot = Some(plane);
         }
         let planes = planes.map(Option::unwrap);
         let overflow = || failed(Stage::Prepare, &report, StorageError::SizeOverflow);
@@ -206,7 +195,7 @@ impl<'a> Prepared<'a> {
         let (output, descriptor, admitted_bytes) = match target {
             Target::Rgb16 => {
                 let scratch_bytes = (geometry.coded_width as usize)
-                    .checked_mul(3 * info.encoding.bytes_per_sample())
+                    .checked_mul(3 * encoding.storage().byte_size())
                     .ok_or_else(overflow)?;
                 let destination = pool
                     .prepare_filled(count, [0xdead; 3])
@@ -233,31 +222,13 @@ impl<'a> Prepared<'a> {
                     .prepare_filled(count, [f32::from_bits(0x7fc1_2345); 3])
                     .map_err(|e| failed(Stage::Prepare, &report, e))?;
                 let bytes = destination.reserved_bytes();
-                let encoding = zenpixels::sample::SampleEncoding::new(
-                    info.encoding.storage(),
-                    info.encoding.code_bits(),
-                    info.encoding.bit_shift(),
-                )
-                .map_err(|e| failed(Stage::Prepare, &report, e))?;
-                let view = |p: PlaneView<'a>| {
-                    match p.as_strided_samples() {
-                        PlaneSamples::U8(s) => {
-                            CodePlane::from_u8(s, p.width(), p.height(), p.stride_bytes(), encoding)
-                        }
-                        PlaneSamples::U16(s) => CodePlane::from_u16(
-                            s,
-                            p.width(),
-                            p.height(),
-                            p.stride_bytes(),
-                            encoding,
-                        ),
-                    }
-                    .map_err(|e| failed(Stage::Prepare, &report, e))
+                let view = |p: AnyPlane<'a>| {
+                    CodePlane::new(p, encoding).map_err(|e| failed(Stage::Prepare, &report, e))
                 };
-                let sub = match info.subsampling {
-                    Subsampling::Yuv444 => ChromaSubsampling::Yuv444,
-                    Subsampling::Yuv422 => ChromaSubsampling::Yuv422,
-                    Subsampling::Yuv420 => ChromaSubsampling::Yuv420,
+                let sub = match info.layout.subsampling() {
+                    s @ (ChromaSubsampling::Yuv444
+                    | ChromaSubsampling::Yuv422
+                    | ChromaSubsampling::Yuv420) => s,
                     _ => return Err(failed(Stage::Prepare, &report, Refusal::Interpretation)),
                 };
                 // The selected fallback remains visible in the policy offer.
@@ -265,7 +236,7 @@ impl<'a> Prepared<'a> {
                 let plan = YcbcrToRgbF32::new(
                     [view(planes[0])?, view(planes[1])?, view(planes[2])?],
                     sub,
-                    PixelSiting::Center,
+                    ChromaSiting::Center,
                     info.color.resolved.unwrap(),
                 )
                 .map_err(|e| failed(Stage::Prepare, &report, e))?;
@@ -298,6 +269,7 @@ impl<'a> Prepared<'a> {
         Ok(Self {
             frame,
             planes,
+            encoding,
             output,
             stride,
             offer,
@@ -343,7 +315,7 @@ impl<'a> Prepared<'a> {
                 let crop = info.geometry.crop;
                 let width = info.geometry.coded_width as usize;
                 let height = info.geometry.coded_height as usize;
-                let bits = info.encoding.code_bits();
+                let bits = self.encoding.code_bits();
                 let range = if info.color.resolved.unwrap().full_range {
                     YuvRange::Full
                 } else {
@@ -351,18 +323,18 @@ impl<'a> Prepared<'a> {
                 };
                 macro_rules! execute {
             ($kind:ident, $f420:ident, $f422:ident, $f444:ident $(, $depth:expr)?) => {{
-                let [y, u, v] = self.planes.each_ref().map(|p| p.as_strided_samples());
-                let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v)
+                let [AnyPlane::$kind(y), AnyPlane::$kind(u), AnyPlane::$kind(v)] = self.planes
                     else { return Err(failed(Stage::Execute, &report, Refusal::Mapping)); };
-                let [ys, us, vs] = self.planes.each_ref().map(|p| p.stride_bytes() / info.encoding.bytes_per_sample());
+                let [ys, us, vs] = [y.stride(), u.stride(), v.stride()];
+                let [y, u, v] = [y.into_strided_samples(), u.into_strided_samples(), v.into_strided_samples()];
                 let scratch = bytemuck::cast_slice_mut(scratch_bytes);
                 for row in 0..crop.height as usize {
                     check(stop, Stage::Execute, &report)?;
                     let start = row + crop.y as usize;
-                    match info.subsampling {
-                        Subsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
-                        Subsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
-                        Subsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                    match info.layout.subsampling() {
+                        ChromaSubsampling::Yuv420 => $f420(y, ys, u, us, v, vs, width, height, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                        ChromaSubsampling::Yuv422 => $f422(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
+                        ChromaSubsampling::Yuv444 => $f444(y, ys, u, us, v, vs, width, start, 1, range, YuvMatrix::Bt709, $($depth,)? scratch),
                         _ => unreachable!(),
                     }
                     for (out, pixel) in data.as_mut_slice()[row * self.stride..][..crop.width as usize].iter_mut()
@@ -495,7 +467,7 @@ pub(super) fn qualify(native: &Frame, expected: &[[u16; 3]]) {
             ));
             assert_eq!(
                 facts.frame.unwrap().encoding,
-                native.interpretation().encoding
+                Some(native.interpretation().uniform_code_encoding().unwrap())
             );
             let offer = choices.first().unwrap().value();
             assert_eq!(offer.admitted_bytes, pool.reserved_bytes());
@@ -670,7 +642,7 @@ mod tests {
     use zencodec_media::session::VideoDecoder;
 
     fn native() -> Frame {
-        let settings = fixtures::settings(10, Subsampling::Yuv420, false)
+        let settings = fixtures::settings(10, ChromaSubsampling::Yuv420, false)
             .with_color(Cicp::new(1, 13, 1, false));
         let input = fixtures::frame(&settings, 0);
         let (config, packets) = fixtures::encode(settings, &[input]);

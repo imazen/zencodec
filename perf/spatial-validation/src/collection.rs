@@ -60,7 +60,7 @@ mod checked_consumer {
         At, SharedPulse,
         collection::{Composition, ImageRequest},
         image::ImageOutput,
-        operation::{CheckedCollection, CollectionOperationError, Outcome, OperationPolicy},
+        operation::{CheckedCollection, CollectionOperationError, OperationPolicy, Outcome},
     };
 
     // Native factory setup stays in the adapter. Limits are application input:
@@ -121,7 +121,7 @@ mod registered_consumer {
         At, CodecSet, ImageFormat, SharedPulse,
         collection::{ImageRequest, OpenRequest},
         image::ImageOutput,
-        operation::{CollectionOperationError, Outcome, OperationPolicy},
+        operation::{CollectionOperationError, OperationPolicy, Outcome},
         source::DynReadAt,
     };
 
@@ -166,7 +166,7 @@ mod checked_layer_consumer {
         At, SharedPulse,
         collection::ImageRequest,
         image::ImageOutput,
-        operation::{CheckedCollection, CollectionOperationError, Outcome, OperationPolicy},
+        operation::{CheckedCollection, CollectionOperationError, OperationPolicy, Outcome},
     };
 
     // The adapter fixes the uncomposited view before IDs are discovered.

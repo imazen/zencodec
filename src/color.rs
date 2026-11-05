@@ -6,10 +6,10 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorAuthority, ColorModel};
+use zenpixels::{Cicp, ColorModel};
 
 use crate::capabilities::EncodeCapabilities;
-use crate::info::SourceColor;
+use crate::info::{AuthoritativeColor, SourceColor};
 use crate::metadata::IccRetention;
 
 /// How an image's color *description* (ICC profile vs CICP code points) is
@@ -224,7 +224,7 @@ pub struct ColorEmitPlan {
 
 /// The CICP that describes this source's color as code points, if any.
 ///
-/// Authority-aware (per [`ColorAuthority`]): when the **ICC** is authoritative and
+/// Authority-aware (per [`ColorAuthority`](zenpixels::ColorAuthority)): when the **ICC** is authoritative and
 /// present, the emittable CICP must *describe that ICC* — derived from its `cicp`
 /// tag, then the corpus — **not** a co-existing CICP, which the spec treats as a
 /// backwards-compat round-trip companion that "should NOT override the TRC." If the
@@ -234,20 +234,13 @@ pub struct ColorEmitPlan {
 /// (or ICC is absent), the explicit CICP wins, then the ICC-derived fallback.
 fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
     let from_icc = |icc_bytes: &[u8]| -> Option<Cicp> {
-        icc::extract_cicp(icc_bytes)
-            .or_else(|| icc::identify_common(icc_bytes).and_then(|id| id.to_cicp()))
+        Cicp::from_icc(icc_bytes)
+            .or_else(|| icc::IccIdentification::from_icc(icc_bytes).and_then(|id| id.to_cicp()))
     };
-    if src.color_authority == ColorAuthority::Icc
-        && let Some(icc_bytes) = src.icc_profile.as_deref()
-    {
-        return from_icc(icc_bytes);
+    match src.authoritative()? {
+        AuthoritativeColor::Icc(icc_bytes) => from_icc(icc_bytes),
+        AuthoritativeColor::Cicp(cicp) => Some(cicp),
     }
-    // CICP authoritative (or ICC declared authoritative but absent — the lenient
-    // fallback the contract allows): explicit CICP first, then the ICC-derived one.
-    if let Some(c) = src.cicp {
-        return Some(c);
-    }
-    from_icc(src.icc_profile.as_deref()?)
 }
 
 /// Reconcile a source's color description against a target's capabilities under
@@ -266,10 +259,7 @@ pub fn resolve_color_emit(
     // Grayscale / CMYK: CICP is RGB-centric and cannot describe these. Keep the
     // ICC (the only valid color description) and suppress CICP — emitting an RGB
     // CICP over gray/CMYK pixels would recolor them.
-    let model = src
-        .icc_profile
-        .as_deref()
-        .and_then(icc::profile_color_space);
+    let model = src.icc_profile.as_deref().and_then(ColorModel::from_icc);
     let is_gray = matches!(model, Some(ColorModel::Gray)) || src.channel_count == Some(1);
     let is_cmyk = matches!(model, Some(ColorModel::Cmyk));
     if is_gray || is_cmyk {
@@ -288,7 +278,10 @@ pub fn resolve_color_emit(
     let has_carrier = target.cicp();
     let is_valid_carrier = target.cicp_is_valid_carrier();
     let sole_safe = target.cicp_safe_sole_carrier();
-    let icc_is_srgb = src.icc_profile.as_deref().is_some_and(icc::is_common_srgb);
+    let icc_is_srgb = src
+        .icc_profile
+        .as_deref()
+        .is_some_and(icc::IccIdentification::is_common_srgb);
 
     // Whether to emit CICP.
     let emit_cicp = match policy {

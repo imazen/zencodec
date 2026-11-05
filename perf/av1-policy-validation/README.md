@@ -183,7 +183,7 @@ records source identities and the native and shared API gates.
 ## Private planar conversion bridge
 
 `just av1-planar-check <fresh-artifacts>` separately exercises the existing
-zenavif strip kernels through `PlaneView::as_strided_samples`. This uses the
+zenavif strip kernels through the borrowed samples of `zenpixels` `AnyPlane`. This uses the
 codec's `_dev` export in this unpublished harness, not a new public conversion
 API. A complete run of `av1-policy-check` includes these controls.
 

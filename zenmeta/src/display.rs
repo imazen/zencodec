@@ -62,7 +62,7 @@ pub fn filter_for_gain_map(
         && !meta
             .icc_profile
             .as_ref()
-            .is_some_and(|icc| zenpixels::icc::is_common_srgb(icc))
+            .is_some_and(|icc| zenpixels::icc::IccIdentification::is_common_srgb(icc))
     {
         return Err(Error::Removed("ICC profile"));
     }

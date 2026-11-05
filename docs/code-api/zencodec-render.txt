@@ -20,7 +20,7 @@ pub zencodec_render::geometry::ProjectionSource::orientation: zenpixels::orienta
 pub fn zencodec_render::geometry::project(image: &zencodec::image::ImageOutput, region: core::option::Option<zencodec::image::Rect>, storage: &zencodec::storage::StorageBudget, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::image::ImageOutput, zencodec::collection::Cause>
 #[non_exhaustive] pub enum zencodec_render::ColorTarget
 pub zencodec_render::ColorTarget::Current
-pub zencodec_render::ColorTarget::Icc(alloc::rcs::arc::Arc<[u8]>)
+pub zencodec_render::ColorTarget::Icc(alloc::sync::Arc<[u8]>)
 pub zencodec_render::ColorTarget::Named(zenpixels::cicp::Cicp)
 #[non_exhaustive] pub enum zencodec_render::RenderStage
 pub zencodec_render::RenderStage::Color

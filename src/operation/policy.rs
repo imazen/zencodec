@@ -18,6 +18,7 @@ use core::{
 };
 use enough::StopReason;
 use zenpixels::PixelDescriptor;
+use zenpixels::sample::ChromaSiting;
 
 /// A token for one offer at one decision. Tokens cannot authorize a different
 /// operation or a later question, even if its alternatives look identical.
@@ -602,8 +603,7 @@ impl PolicySet {
                     .find(|choice| {
                         let offer = choice.value();
                         (offer.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
-                            && offer.assumed_chroma_siting
-                                != Some(crate::frame::ChromaSiting::Unknown)
+                            && offer.assumed_chroma_siting != Some(ChromaSiting::Unknown)
                             && (!self.require_extended_range || offer.preserves_extended_range)
                             && self.workspace_limit.is_none_or(|limit| {
                                 offer
@@ -625,8 +625,7 @@ impl PolicySet {
                         let conversion = choice.value().conversion;
                         let conversion_permitted = conversion.is_none_or(|c| {
                             (c.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
-                                && c.assumed_chroma_siting
-                                    != Some(crate::frame::ChromaSiting::Unknown)
+                                && c.assumed_chroma_siting != Some(ChromaSiting::Unknown)
                         }) && (!self.require_extended_range
                             || (choice.value().fidelity == Some(Fidelity::Lossless)
                                 && conversion.is_some_and(|c| c.preserves_extended_range)));

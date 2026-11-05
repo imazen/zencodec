@@ -16,6 +16,8 @@ use zencodec::{
     },
     storage::{SharedStorage, StorageBudget},
 };
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 use zenpixels::{ChannelType, ColorContext, Orientation, PixelDescriptor, PixelSlice};
 
 #[derive(Debug)]
@@ -375,8 +377,8 @@ fn packed_color_replacement_without_auxiliaries_releases_source_payload() {
 #[test]
 fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     use zencodec::frame::{
-        ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MappedPlanes,
-        Picture, PlaneRole, Presentation, SampleEncoding, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, MappedPlanes, Picture, PlaneRole,
+        Presentation,
     };
     struct Unmapped;
     impl Picture for Unmapped {
@@ -386,10 +388,22 @@ fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     }
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(2, 2),
-        Subsampling::Mono,
-        ChromaSiting::Unknown,
-        SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
-        vec![PlaneRole::Luma],
+        zenpixels::plane::PlanarLayout::new(
+            (vec![PlaneRole::Luma])
+                .into_iter()
+                .map(|role| {
+                    zenpixels::plane::PlaneSpec::new(
+                        role,
+                        zenpixels::plane::PlaneEncoding::Code(
+                            SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+                        ),
+                    )
+                })
+                .collect(),
+            ChromaSubsampling::Mono,
+            ChromaSiting::Unknown,
+        )
+        .expect("valid fixture layout"),
     );
     let source = ImageOutput::from_frame(Frame::new(
         Arc::new(Unmapped),

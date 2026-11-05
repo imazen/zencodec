@@ -238,7 +238,7 @@ impl Metadata {
     /// callers hand-parsing EXIF.
     ///
     /// - **ICC** is three-way ([`IccRetention`]): keep as-is, keep only when
-    ///   it isn't a redundant sRGB ([`zenpixels::icc::is_common_srgb`]), or drop.
+    ///   it isn't a redundant sRGB ([`zenpixels::icc::IccIdentification::is_common_srgb`]), or drop.
     /// - **EXIF** is pruned by category via [`ExifPolicy`]. The source blob
     ///   passes through unchanged (zero-copy `Arc` clone) when no category is
     ///   dropped and the embedded orientation already matches the field, and is
@@ -317,7 +317,7 @@ impl Metadata {
             IccRetention::KeepNonSrgb => self
                 .icc_profile
                 .as_ref()
-                .filter(|icc| !zenpixels::icc::is_common_srgb(icc))
+                .filter(|icc| !zenpixels::icc::IccIdentification::is_common_srgb(icc))
                 .cloned(),
         };
 

@@ -145,27 +145,28 @@ must use the final published dependency graph.
 
 ## Shared sample-description migration boundary (2026-10-30)
 
-Core still uses `zencodec::frame::SampleEncoding` in frame interpretation and
-plane APIs, while conversion uses `zenpixels::sample::SampleEncoding`. The
-compatibility type is intentionally retained for the current release; it is
-not a separate sample normalization scheme.
+The ablation candidate removes `zencodec::frame::SampleEncoding` and its error,
+and the corresponding media re-exports. Import `zenpixels::sample::SampleEncoding`
+directly. Frame interpretation, mapped planes and policy facts now carry that
+same type. The AV1 conversion harness passes it directly instead of reconstructing
+its fields at two boundaries.
 
-`just sample-encoding-compat-check` compares every `u8` depth/shift pair for
-both U8 and U16 storage (131,072 descriptions), matching accepted fields and
-all three typed refusal categories. Another 65,536 descriptions verify F32
-refusal. The legacy `U8` constant matches canonical `new(U8, 8, 0)`; its
-`bytes_per_sample()` convenience has no corresponding method on the pinned
-canonical type. Error display text differs and is not asserted identical.
-The two differential tests and strict Clippy pass against paired pixels
-`f23ac753`, using an isolated export based on core `7cde6916` plus the new test.
-Wrapper: `rc=0 3s | peak-RSS 0.29GiB | min-avail 13540MiB | peak-load 0.05`.
-These are validation resources, not conversion performance.
+Replace `SampleEncoding::U8` with `SampleEncoding::new(ChannelType::U8, 8, 0)?`;
+replace `encoding.bytes_per_sample()` with `encoding.storage().byte_size()`.
+There is no numerical conversion in this migration.
 
-The native AV1 validation harness currently reconstructs the canonical
-three-field description in `coupled_route.rs` and `prepared_conversion.rs`.
-Consolidating the public types would remove that reconstruction, but still
-requires migration of frame/plane signatures and native adapters, plus an
-explicit choice for the two conveniences. This gate establishes constructor
-compatibility only: it does not qualify that migration, all storage variants,
-actual sample extraction, range conversion or codec exactness. In particular,
-it does not resolve the 577-versus-576 reconstruction counterexample above.
+The preceding compatibility experiment on `a51d4119` passed all 131,072 U8/U16
+descriptions and 65,536 F32 refusal descriptions against paired pixels `f23ac753`.
+Its receipt remains: `rc=0 3s | peak-RSS 0.29GiB | min-avail 13540MiB | peak-load 0.05`.
+That experiment qualified the old constructor equivalence, not the new surface.
+The migrated test retains the exhaustive input space against independent validity
+rules and checks strided sample extraction through both mapping and conversion
+views. The core library, focused mapping/replacement tests, media and media-testkit
+library/integration tests, and strict all-target Clippy pass in an isolated
+export. `just frame-ablation-check` reproduces that scope. Native adapters
+and their dependency graph remain unqualified.
+
+This is the first ablation, not the final frame/plane model. Frame-wide encoding,
+U8/U16-only mappings, mixed-depth auxiliary planes, float planes and component
+strides remain structural release gates. Neither this migration nor its tests
+resolve native conversion exactness, including the 577-versus-576 counterexample.

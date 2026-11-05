@@ -6,28 +6,39 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 108 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 121 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 5 lines (5 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        23
+#   pub modules                                 3
+#   pub types (struct/enum/trait/alias)        25
 #   pub consts/statics                          2
-#   free functions                             36
+#   free functions                             38
 #   inherent methods                            8
-#   struct fields                               7
-#   enum variants                              14
-#   trait roster entries (type × trait)        38
-#   auto-trait-complete types                  14
+#   struct fields                              11
+#   enum variants                              16
+#   trait roster entries (type × trait)        46
+#   auto-trait-complete types                  16
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           72
+#   (root)                           74
+#   pulse                             9
 #   reference                        20
 
-## items (87 lines)
+## items (98 lines)
 
 pub mod zencodec_testkit
+pub mod pulse
+#[non_exhaustive] pub enum pulse::Case
+pub pulse::Case::StopAt
+pub pulse::Case::StopAt::checkpoint: usize
+pub pulse::Case::StopAt::reason: enough::reason::StopReason
+pub pulse::Case::Uninterrupted
+pub struct pulse::Limits
+pub pulse::Limits::checkpoints: usize
+pub pulse::Limits::trace_capacity: usize
+pub fn pulse::check_checkpoints<E: core::fmt::Debug>(pulse::Limits, impl core::ops::function::FnMut(&dyn how_far::pulse::Pulse) -> core::result::Result<(), E>, impl core::ops::function::Fn(&E) -> core::option::Option<enough::reason::StopReason>, impl core::ops::function::FnMut(pulse::Case, &how_far_really::profile::Trace) -> Conformance) -> Conformance
 pub mod reference
 pub reference::RefError::Cancelled(enough::reason::StopReason)
 pub reference::RefError::Invalid(alloc::string::String)
@@ -104,6 +115,7 @@ pub fn check_inventory<D>(D, &[u8]) -> Conformance where D: zencodec::traits::de
 pub fn check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_metadata_no_leak<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
+pub fn check_metadata_retained(&zencodec::metadata::Metadata, &zencodec::metadata::Metadata) -> Conformance
 pub fn check_metadata_rewrite<'a>(zencodec::metadata_rewrite::RewriteRequest<'a>, impl core::ops::function::Fn(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>, impl core::ops::function::Fn(&[u8]) -> Conformance) -> Conformance
 pub fn check_native_hdr_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_orientation_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
@@ -115,10 +127,12 @@ pub fn check_streaming_output_honesty<E, D>(E, D, &TestImage) -> Conformance whe
 pub fn expected_color_authority(zencodec::format::ImageFormat, bool, bool) -> core::option::Option<zenpixels::color::ColorAuthority>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (16 types)
+## trait impls (18 types)
 
 ExpectedError: Clone, Copy, Debug, Eq, PartialEq
 Failure: Clone, Debug, Display, Error
+pulse::Case: Clone, Copy, Debug, Eq, PartialEq
+pulse::Limits: Clone, Copy, Debug
 reference::RefAnimDec: zencodec::traits::decoder::AnimationFrameDecoder
 reference::RefAnimEnc: zencodec::traits::encoder::AnimationFrameEncoder
 reference::RefDec<'_>: zencodec::traits::decoder::Decode
@@ -136,7 +150,7 @@ whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 
 ## auto traits
 
-14 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+16 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe
 reference::RefIncDec: !RefUnwindSafe !UnwindSafe

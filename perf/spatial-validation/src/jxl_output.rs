@@ -94,7 +94,13 @@ pub fn adopt(
         .with_alpha(alpha)
         .with_transfer(TransferFunction::Unknown)
         .with_primaries(ColorPrimaries::Unknown);
-    let mut parts = PixelBufferParts::new(color.bytes, width, height, color.stride, descriptor);
+    let mut parts = PixelBufferParts::new(
+        zenpixels::PixelStorage::from(color.bytes),
+        width,
+        height,
+        color.stride,
+        descriptor,
+    );
     parts.color_context = Some(Arc::new(ColorContext::from_icc(Arc::<[u8]>::from(icc))));
     let pixels = PixelBuffer::try_from_parts(parts).map_err(|e| e.without_buffer())?;
     let mut extras = Vec::new();
