@@ -3089,7 +3089,7 @@ pub zencodec::CodecSetError::NoDecoder(zencodec::ImageFormat)
 pub zencodec::CodecSetError::NoEncoder(zencodec::ImageFormat)
 pub zencodec::CodecSetError::TranscodeRequiresExplicitHandling(zencodec::TranscodeBarrier)
 pub zencodec::CodecSetError::UnrecognizedFormat
-impl core::convert::From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>> for zencodec::CodecSetError
+impl core::convert::From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Sync + core::marker::Send)>> for zencodec::CodecSetError
 pub fn zencodec::CodecSetError::from(e: zencodec::encode::BoxedError) -> Self
 impl core::error::Error for zencodec::CodecSetError
 pub fn zencodec::CodecSetError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>

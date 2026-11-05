@@ -898,3 +898,11 @@ The current pixel revision marks ColorAuthority non-exhaustive. Its two known
 authorities retain their conformance checks; unknown values now fail explicitly.
 Full workspace tests and strict all-feature Clippy pass against fa836abf, as do
 isolated fuzz/render checks. See benchmarks/sibling_cohort_2026-11-05.pointer.md.
+
+## Known Bugs: sibling cohort catalog drift (2026-11-05, fixed)
+
+Changing shared source/manifests invalidates the documentation catalog's
+fingerprints even when public signatures are unchanged. The sibling cohort's
+runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
+gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
+the generator, ownership control, site build and all 27 Node tests pass locally.

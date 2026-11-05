@@ -25,3 +25,16 @@ initial compile refusal and successful checks. `SHA256SUMS` records all hashes.
 Validation ran in an isolated source mirror on lilith-wsl through the shared
 heavy lock, two jobs and a 4 GiB hard cap. Successful workspace receipt:
 `rc=0 38s | peak-RSS 0.50GiB | min-avail 6825MiB | peak-load 3.71`.
+
+Documentation follow-up: the Documentation workflow for `1816b4d0` failed
+its source-fingerprint gate because the root/render manifests and private
+color-authority matcher changed without regenerated catalogs. Regenerated all
+eight catalogs with `nightly-2026-10-06` (rustc 1.101.0-nightly ea137335b).
+The public listing differences are only Send/Sync trait-bound ordering in two
+From implementations; exported signatures and capabilities are unchanged.
+The testkit source-location records now match its private matcher.
+`just sibling-docs-catalog-check` passes its generator, Python ownership control,
+site build and 27 Node tests: `rc=0 31s | peak-RSS 0.35GiB | min-avail 8180MiB | peak-load 2.30`.
+The initial June-nightly generation and failed non-git preview attempt are
+preserved with the other raw logs; the final preview ran in a fresh origin/main
+clone. This is a documentation repair, not a new shared runtime revision.
