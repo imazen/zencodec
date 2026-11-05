@@ -97,7 +97,8 @@ jobs:
         run: cross test --workspace --all-features --target i686-unknown-linux-gnu
 
       - name: Test IQA (i686/QEMU)
-        run: cross test --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --target i686-unknown-linux-gnu
+        working-directory: zencodec-iqa
+        run: cross test --locked --all-features --target i686-unknown-linux-gnu
 
   # ==========================================================================
   # WASM check

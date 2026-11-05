@@ -256,6 +256,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed standalone IQA cross invocation (2026-11-05): invoking cross from the
+  parent with `--manifest-path` duplicated a mount for the parent codec path
+  dependency. Run from `zencodec-iqa` instead. Native i686 tests and the
+  consumer doctest retain their assertions; see `just iqa-cross-check`.
+
+
 - Fixed IQA review-contract gaps (2026-11-04): exhaustive records/enums constrained
   API extension, `At::wrap` captured no error location, and borrowed Pulse
   checks did not hand off owned phase outcomes. The unpublished companion now

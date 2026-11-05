@@ -1912,3 +1912,7 @@ iqa-portability-check:
     cargo +1.88.0 check --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
     cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
     RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --no-deps
+
+# Run inside the standalone workspace so cross does not duplicate parent mounts.
+iqa-cross-check toolchain='':
+    cd zencodec-iqa && cross {{toolchain}} test --locked --all-features --target i686-unknown-linux-gnu

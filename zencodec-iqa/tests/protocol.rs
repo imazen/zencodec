@@ -262,3 +262,113 @@ fn mapping_refusal_keeps_native_location_payload_and_classification() {
         );
     }
 }
+
+#[test]
+fn rich_results_and_nested_completion_survive_output_mapping() {
+    use zencodec::{
+        collection::Composition,
+        image::{ImageGeometry, ImageInterpretation, ImageOutput, Rect},
+    };
+    use zenpixels::{Orientation, PixelBuffer};
+    struct Rich;
+    struct NativeResult {
+        scalars: ScalarEval,
+        map: PixelBuffer,
+    }
+    impl Evaluation for NativeResult {
+        fn score(&self) -> f64 {
+            self.scalars.score()
+        }
+        fn scores(&self) -> Scores<'_> {
+            self.scalars.scores()
+        }
+        fn map(&self) -> Option<MapView<'_>> {
+            Some(
+                MapView::new(
+                    "native",
+                    self.map.as_slice(),
+                    MapPolarity::Difference,
+                    MapGeometry::identity(2, 2),
+                )
+                .unwrap(),
+            )
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl Metric for Rich {
+        fn id(&self) -> MetricId {
+            MetricId::new("rich", Implementation::new("adapter-control", "1", 1))
+        }
+        fn outputs(&self) -> std::borrow::Cow<'static, [ScoreSpec]> {
+            std::borrow::Cow::Owned(vec![
+                ScoreSpec::new("score", ScoreKind::Difference),
+                ScoreSpec::new("feature", ScoreKind::Feature),
+            ])
+        }
+        fn accepts(&self, f: &InputFormat) -> bool {
+            is_rgb8_srgb(f)
+        }
+        fn evaluate(
+            &mut self,
+            r: Image<'_>,
+            d: Image<'_>,
+            _: EvalOpts<'_>,
+        ) -> MetricResult<Box<dyn Evaluation>> {
+            rgb8_pair(&r, &d)?;
+            Ok(Box::new(NativeResult {
+                scalars: ScalarEval::single("score", 1.0).with("feature", 7.0),
+                map: gray_f32_buffer(&[1.0, 2.0, 3.0, 4.0], 2, 2)?,
+            }))
+        }
+    }
+    let mut interpretation = ImageInterpretation::packed(
+        ImageGeometry {
+            canvas_width: 2,
+            canvas_height: 2,
+            region: Rect {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2,
+            },
+        },
+        Orientation::Identity,
+    );
+    interpretation.composition = Some(Composition::Composited);
+    let output = ImageOutput::packed(
+        PixelBuffer::from_vec(vec![0; 12], 2, 2, PixelDescriptor::RGB8_SRGB).unwrap(),
+        vec![],
+        interpretation,
+    )
+    .unwrap();
+    let log = Arc::new(Log::default());
+    let pulse = Recorder::root(&log);
+    let result = zencodec_iqa::score_outputs(
+        &mut Rich,
+        &output,
+        &output,
+        EvalOpts::new().with_pulse(&pulse).with_native_map(),
+    )
+    .unwrap();
+    assert_eq!(
+        result.result.scores().collect::<Vec<_>>(),
+        vec![("score".into(), 1.0), ("feature".into(), 7.0)]
+    );
+    assert!(result.result.as_any().is::<NativeResult>());
+    assert_eq!(
+        result.result.map().unwrap().values().as_ref(),
+        &[1.0, 2.0, 3.0, 4.0]
+    );
+    assert_eq!(
+        *log.outcomes.lock().unwrap(),
+        BTreeMap::from([
+            ("caller/score decoded outputs".into(), Outcome::Succeeded),
+            (
+                "caller/score decoded outputs/score image pair".into(),
+                Outcome::Succeeded
+            ),
+        ])
+    );
+}
