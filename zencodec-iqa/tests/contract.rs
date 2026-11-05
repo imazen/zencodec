@@ -1,33 +1,28 @@
 //! Protocol probes, not implementations or qualification of an IQA algorithm.
 use std::sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, Ordering},
 };
 use zencodec_iqa::*;
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice};
 
 fn descriptor() -> Descriptor {
-    Descriptor {
-        id: MetricId {
-            method: "protocol-probe/profile".into(),
-            reference: "synthetic contract control".into(),
-            implementation: "test/1".into(),
-            score_revision: 1,
-            backend: "cpu".into(),
-            configuration: "preparation=explicit;model=none".into(),
-        },
-        output: ScoreSpec {
-            key: "probe".into(),
-            direction: Direction::Lower,
-            unit: "native".into(),
-            nonfinite: NonFinite::Refuse,
-        },
-    }
+    Descriptor::new(
+        MetricId::new(
+            "protocol-probe/profile",
+            "synthetic contract control",
+            "test/1",
+            1,
+        )
+        .with_configuration("preparation=explicit;model=none"),
+        ScoreSpec::new("probe", Direction::Lower, "native"),
+    )
 }
 struct Probe {
     descriptor: Descriptor,
     calls: usize,
     output: f64,
+    stop_after_work: Option<Arc<AtomicBool>>,
 }
 impl Probe {
     fn new(output: f64) -> Self {
@@ -35,6 +30,7 @@ impl Probe {
             descriptor: descriptor(),
             calls: 0,
             output,
+            stop_after_work: None,
         }
     }
 }
@@ -60,9 +56,12 @@ impl Metric for Probe {
             || reference.color_context().is_some()
             || candidate.color_context().is_some()
         {
-            return Err(whereat::At::wrap(Error::new(ErrorKind::UnsupportedInput)));
+            return Err(Error::new(ErrorKind::UnsupportedInput).start_at());
         }
         assert_eq!(sum(&reference), sum(&candidate));
+        if let Some(stop) = &self.stop_after_work {
+            stop.store(true, Ordering::Release);
+        }
         Ok(self.output)
     }
     fn prepare_reference(
@@ -79,7 +78,7 @@ impl Metric for Probe {
                 if candidate.color_context().is_some()
                     || candidate.descriptor() != PixelDescriptor::RGB8_SRGB
                 {
-                    return Err(whereat::At::wrap(Error::new(ErrorKind::UnsupportedInput)));
+                    return Err(Error::new(ErrorKind::UnsupportedInput).start_at());
                 }
                 assert_eq!(self.reference_sum, sum(&candidate));
                 Ok(self.output)
@@ -120,7 +119,7 @@ fn strided_minimum_extent_and_warm_results_preserve_identity() {
         warm.score(pixels(&tight[..6], 2, 1, 6), EvalOpts::default())
             .unwrap_err()
             .error()
-            .kind,
+            .kind(),
         ErrorKind::DimensionMismatch
     );
     assert_eq!(
@@ -141,11 +140,8 @@ fn dimension_and_pixel_limits_refuse_before_backend() {
         EvalOpts::default(),
     )
     .unwrap_err();
-    assert_eq!(error.error().kind, ErrorKind::DimensionMismatch);
-    let opts = EvalOpts {
-        max_pixels: Some(3),
-        ..EvalOpts::default()
-    };
+    assert_eq!(error.error().kind(), ErrorKind::DimensionMismatch);
+    let opts = EvalOpts::new().with_max_pixels(3);
     assert_eq!(
         score(
             &mut metric,
@@ -155,7 +151,7 @@ fn dimension_and_pixel_limits_refuse_before_backend() {
         )
         .unwrap_err()
         .error()
-        .kind,
+        .kind(),
         ErrorKind::Resource
     );
     assert!(prepare_reference(&mut metric, pixels(&data, 2, 2, 6), opts).is_err());
@@ -175,7 +171,7 @@ fn actual_color_context_reaches_the_scorer() {
         EvalOpts::default(),
     )
     .unwrap_err();
-    assert_eq!(error.error().kind, ErrorKind::UnsupportedInput);
+    assert_eq!(error.error().kind(), ErrorKind::UnsupportedInput);
     assert_eq!(metric.calls, 1);
 }
 
@@ -193,7 +189,7 @@ fn successful_nonfinite_policy_is_explicit() {
             )
             .unwrap_err()
             .error()
-            .kind,
+            .kind(),
             ErrorKind::Backend
         );
         metric.descriptor.output.nonfinite = NonFinite::PositiveInfinity;
@@ -207,13 +203,11 @@ fn successful_nonfinite_policy_is_explicit() {
     }
 }
 
-struct StopAfter(AtomicUsize);
-impl enough::Stop for StopAfter {
-    fn check(&self) -> core::result::Result<(), enough::StopReason> {
-        let previous = self.0.load(Ordering::Relaxed);
-        self.0.store(previous.saturating_sub(1), Ordering::Relaxed);
-        if previous == 0 {
-            Err(enough::StopReason::TimedOut)
+struct ControlledStop(Arc<AtomicBool>);
+impl how_far::Stop for ControlledStop {
+    fn check(&self) -> core::result::Result<(), how_far::StopReason> {
+        if self.0.load(Ordering::Acquire) {
+            Err(StopReason::TimedOut)
         } else {
             Ok(())
         }
@@ -222,26 +216,22 @@ impl enough::Stop for StopAfter {
 #[test]
 fn cancellation_before_and_after_work_preserves_reason() {
     let data = [0; 3];
-    for (checks, expected_calls) in [(0, 0), (2, 1)] {
-        let control = StopAfter(AtomicUsize::new(checks));
-        let stop = how_far::StopOnly::borrowed(&control);
+    for initially_stopped in [true, false] {
+        let stopped = Arc::new(AtomicBool::new(initially_stopped));
+        let control = ControlledStop(stopped.clone());
+        let pulse = how_far::StopOnly::borrowed(&control);
         let mut metric = Probe::new(0.0);
-        let opts = EvalOpts {
-            pulse: &stop,
-            max_pixels: None,
-        };
+        metric.stop_after_work = Some(stopped);
         let error = score(
             &mut metric,
             pixels(&data, 1, 1, 3),
             pixels(&data, 1, 1, 3),
-            opts,
+            EvalOpts::new().with_pulse(&pulse),
         )
         .unwrap_err();
-        assert_eq!(
-            error.error().kind,
-            ErrorKind::Stopped(enough::StopReason::TimedOut)
-        );
-        assert_eq!(metric.calls, expected_calls);
+        assert_eq!(stop_reason(&error), Some(StopReason::TimedOut));
+        assert_eq!(metric.calls, usize::from(!initially_stopped));
+        assert!(!error.is_empty());
     }
 }
 
@@ -286,7 +276,7 @@ fn no_reference_uses_one_image_and_default_warm_refuses() {
     );
     assert_eq!(metric.calls, 1);
     assert!(
-        matches!(prepare_reference(&mut metric, pixels(&data, 1, 1, 3), EvalOpts::default()), Err(error) if error.error().kind == ErrorKind::UnsupportedOperation)
+        matches!(prepare_reference(&mut metric, pixels(&data, 1, 1, 3), EvalOpts::default()), Err(error) if error.error().kind() == ErrorKind::UnsupportedOperation)
     );
 }
 
@@ -345,7 +335,7 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
             codec::score_outputs(&mut metric, &good, &bad, EvalOpts::default())
                 .unwrap_err()
                 .error()
-                .kind,
+                .kind(),
             ErrorKind::UnsupportedInput
         );
     }
@@ -355,7 +345,7 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
         codec::score_outputs(&mut metric, &good, &contextual, EvalOpts::default())
             .unwrap_err()
             .error()
-            .kind,
+            .kind(),
         ErrorKind::UnsupportedInput
     );
     assert_eq!(metric.calls, 2);

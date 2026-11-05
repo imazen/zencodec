@@ -13,15 +13,20 @@
 //!     candidate: &ImageOutput,
 //! ) -> Result<Evaluation> {
 //!     zencodec_iqa::codec::score_outputs(metric, reference, candidate,
-//!         EvalOpts { max_pixels: Some(16_000_000), ..EvalOpts::default() })
+//!         EvalOpts::new().with_max_pixels(16_000_000))
 //! }
 //! ```
 
+use crate::{At, ResultAtExt};
 use crate::{Error, ErrorKind, EvalOpts, Evaluation, Metric, Result};
-use whereat::At;
-use zencodec::{collection::Composition, image::ImageOutput};
+use zencodec::{
+    CodecErrorExt, ErrorCategory,
+    collection::Composition,
+    image::{ImageOutput, OutputError},
+};
 use zenpixels::Orientation;
 
+#[track_caller]
 fn admit(image: &ImageOutput) -> Result<()> {
     let interpretation = image.interpretation();
     let geometry = interpretation.geometry;
@@ -35,7 +40,7 @@ fn admit(image: &ImageOutput) -> Result<()> {
         || region.width != geometry.canvas_width
         || region.height != geometry.canvas_height
     {
-        return Err(At::wrap(Error::new(ErrorKind::UnsupportedInput)));
+        return crate::fail(ErrorKind::UnsupportedInput);
     }
     Ok(())
 }
@@ -47,20 +52,34 @@ fn admit(image: &ImageOutput) -> Result<()> {
 /// must admit their color/alpha/precision/luminance interpretation. This bridge
 /// does not decode, transform pixels, certify a renderer, or budget native
 /// mapping allocations. Mapping failures retain their original cause.
+#[track_caller]
 pub fn score_outputs(
     metric: &mut dyn Metric,
     reference: &ImageOutput,
     candidate: &ImageOutput,
     opts: EvalOpts<'_>,
 ) -> Result<Evaluation> {
-    opts.checkpoint()?;
-    admit(reference)?;
-    admit(candidate)?;
-    reference
-        .with_pixels(|reference| {
-            candidate
-                .with_pixels(|candidate| crate::score(metric, reference, candidate, opts))
-                .map_err(|cause| At::wrap(Error::new(ErrorKind::Backend).with_cause(cause)))?
-        })
-        .map_err(|cause| At::wrap(Error::new(ErrorKind::Backend).with_cause(cause)))?
+    crate::operation(opts, "score decoded outputs", |opts| {
+        opts.checkpoint().at()?;
+        admit(reference).at()?;
+        admit(candidate).at()?;
+        reference
+            .with_pixels(|reference| {
+                candidate
+                    .with_pixels(|candidate| crate::score(metric, reference, candidate, opts))
+                    .map_err(mapping_error)
+                    .at()?
+            })
+            .map_err(mapping_error)
+            .at()?
+    })
+}
+
+fn mapping_error(cause: At<OutputError>) -> At<Error> {
+    let kind = match cause.error_category() {
+        Some(ErrorCategory::Stopped(reason)) => ErrorKind::Stopped(reason),
+        _ if matches!(cause.error(), OutputError::NotPackedColor) => ErrorKind::UnsupportedInput,
+        _ => ErrorKind::Backend,
+    };
+    Error::from_located(kind, cause)
 }

@@ -116,7 +116,6 @@ dependencies = [
 name = "zencodec-iqa"
 version = "0.1.0"
 dependencies = [
- "enough",
  "how-far",
  "whereat",
  "zencodec",
