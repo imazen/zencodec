@@ -35,3 +35,13 @@ Renderer, native AV1/spatial adapters, generated API catalogs and site controls
 are separate gates. Native AV1 still needs its plane mappings migrated; JXL
 pins exclude the converter's archmage prerelease and use removed orientation
 helpers. Core success does not qualify those integrations or every platform.
+
+## Renderer
+
+Source `427390a4` passed no-default-feature check, all-target strict Clippy,
+unit tests and doctest after targeted archmage resolution to 0.9.31-beta.2.
+Receipt: `rc=0 24s | peak-RSS 0.37GiB | min-avail 26921MiB | peak-load 6.52`.
+The initial stale-lock resolution failure is retained separately. The lock delta
+is limited to zenpixels/convert revisions, archmage/macros/magetypes prerelease
+versions and the pinned garb/linear-srgb source replacements; no unrelated
+package versions changed. Native spatial oracles were not run.
