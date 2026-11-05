@@ -1033,6 +1033,8 @@ None.
 
 ## zencodec
 
+- Clarify that allocation preferences govern failure handling and do not imply separate success paths or a universal performance difference.
+
 ## [Unreleased]
 
 - Add `CheckedCollection::decode_with` for adapter processing before the single
