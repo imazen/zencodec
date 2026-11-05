@@ -184,3 +184,56 @@ fn per_plane_owner_encoding_contradiction_is_a_typed_refusal() {
     assert_eq!(*expected_encoding, claimed);
     assert_eq!(*actual_encoding, actual);
 }
+
+#[test]
+fn policy_facts_distinguish_mixed_depth_and_plane_order() {
+    let make = |bits, reversed| {
+        let mut specs = vec![
+            PlaneSpec::new(PlaneRole::Luma, code(ChannelType::U16, bits, 0)),
+            PlaneSpec::new(PlaneRole::Alpha, code(ChannelType::U8, 8, 0)),
+        ];
+        if reversed {
+            specs.reverse();
+        }
+        let interpretation = FrameInterpretation::new(
+            FrameGeometry::full(3, 2),
+            PlanarLayout::new(specs, ChromaSubsampling::Mono, ChromaSiting::Unknown).unwrap(),
+        );
+        zencodec::operation::FrameFacts::new(&interpretation, FrameTiming::default())
+    };
+    assert_eq!(make(10, false).encoding, None);
+    assert_eq!(make(12, false).encoding, None);
+    assert_ne!(make(10, false), make(12, false));
+    assert_ne!(make(10, false), make(10, true));
+}
+
+#[test]
+fn gray_renderer_refuses_alpha_only_before_writing() {
+    use zencodec_media::adapt::{Gray8, RenderFrame};
+    use zenpixels::{PixelDescriptor, PixelSliceMut};
+    let encoding = code(ChannelType::U8, 8, 0);
+    let frame = Frame::new(
+        Arc::new(
+            OwnedPlanes::from_encoded_planes(vec![(
+                OwnedPlane::U8(Plane::new(vec![1, 2], 2, 1, 2).unwrap()),
+                encoding,
+            )])
+            .unwrap(),
+        ),
+        Arc::new(FrameInterpretation::new(
+            FrameGeometry::full(2, 1),
+            PlanarLayout::new(
+                vec![PlaneSpec::new(PlaneRole::Alpha, encoding)],
+                ChromaSubsampling::Mono,
+                ChromaSiting::Unknown,
+            )
+            .unwrap(),
+        )),
+        FrameTiming::default(),
+        Presentation::default(),
+    );
+    let mut bytes = [99u8; 2];
+    let mut canvas = PixelSliceMut::new(&mut bytes, 2, 1, 2, PixelDescriptor::GRAY8_SRGB).unwrap();
+    assert!(Gray8::default().render(&frame, &mut canvas).is_err());
+    assert_eq!(bytes, [99, 99]);
+}

@@ -7,11 +7,12 @@ use crate::{
     At,
     frame::{ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming},
 };
+use zenpixels::plane::PlaneSpec;
 use zenpixels::sample::SampleEncoding;
 use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
-/// Bounded diagnostic facts about one native presentation. Full component roles
-/// remain borrowed in the question; this record contains no sample payloads.
+/// Bounded facts about one native presentation, including every plane declaration.
+/// This record contains no sample payloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FrameFacts {
@@ -24,6 +25,9 @@ pub struct FrameFacts {
     /// Common integer encoding; absent for mixed-depth or floating-point layouts.
     /// The question retains the complete per-plane layout.
     pub encoding: Option<SampleEncoding>,
+    /// Complete ordered plane declarations. Validated RGB/YCbCr/gray layouts
+    /// contain at most four planes (including alpha); unused entries are None.
+    pub plane_specs: [Option<PlaneSpec>; 4],
     /// Number of native component roles.
     pub planes: usize,
     /// Bitstream, container and selected color declarations.
@@ -41,6 +45,7 @@ impl FrameFacts {
             subsampling: interpretation.layout.subsampling(),
             siting: interpretation.layout.siting(),
             encoding: interpretation.uniform_code_encoding(),
+            plane_specs: core::array::from_fn(|i| interpretation.layout.planes().get(i).copied()),
             planes: interpretation.layout.planes().len(),
             color: interpretation.color,
             config_epoch: interpretation.config_epoch,

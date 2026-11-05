@@ -116,7 +116,9 @@ impl RenderFrame for Gray8 {
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
-        if interp.layout.subsampling() != ChromaSubsampling::Mono
+        if interp.layout.planes().len() != 1
+            || interp.layout.planes()[0].role() != PlaneRole::Luma
+            || interp.layout.subsampling() != ChromaSubsampling::Mono
             || interp.uniform_code_encoding()
                 != Some(SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap())
         {
