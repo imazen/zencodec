@@ -45,3 +45,28 @@ The initial stale-lock resolution failure is retained separately. The lock delta
 is limited to zenpixels/convert revisions, archmage/macros/magetypes prerelease
 versions and the pinned garb/linear-srgb source replacements; no unrelated
 package versions changed. Native spatial oracles were not run.
+
+## Review corrections
+
+Source `7b1240aece98050b098959ae84493d5eab3f32f1` passed the same complete
+workspace checks, tests, doctests and strict Clippy, then regenerated all eight
+compiler catalogs. Both new controls pass: mixed-depth/order facts remain
+distinct and an alpha-only Gray8 input refuses before writing.
+Receipt: `rc=0 228s | peak-RSS 1.10GiB | min-avail 25953MiB | peak-load 11.64`.
+A separate correctness build overlapped part of this run; no timings are used
+as performance evidence. An initial compile failure used a private role field;
+the corrected accessor leaves the intended assertions unchanged.
+
+The guide build and 27 source/catalog tests passed before these final two core
+fixes. Initial bootstrap failures (missing shiki, export revision environment)
+and stale pinned snapshots were retained and corrected without weakening gates.
+The initial PR CI core and fuzz jobs passed; native documentation jobs failed
+on the recorded archmage dependency graph. Those jobs remain required.
+
+The final reviewed core revision has 1453 passing tests/doctests, zero failures
+and 39 existing ignored cases. Its eight-crate Rustdoc reference rebuilt with
+strict warnings; the matching guide build and all 27 source/catalog tests pass.
+Site receipt: `rc=0 24s | peak-RSS 0.33GiB | min-avail 26883MiB | peak-load 7.40`.
+A preceding site attempt correctly refused mismatched reference identity; both
+reference and guide were rebuilt, preserving that guard. Browser tests were not
+run in this migration.

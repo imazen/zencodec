@@ -2270,6 +2270,7 @@ pub zencodec::operation::FrameFacts::color: zencodec::frame::ColorClaim
 pub zencodec::operation::FrameFacts::config_epoch: u32
 pub zencodec::operation::FrameFacts::encoding: core::option::Option<zenpixels::sample::SampleEncoding>
 pub zencodec::operation::FrameFacts::geometry: zencodec::frame::FrameGeometry
+pub zencodec::operation::FrameFacts::plane_specs: [core::option::Option<zenpixels::plane::PlaneSpec>; 4]
 pub zencodec::operation::FrameFacts::planes: usize
 pub zencodec::operation::FrameFacts::siting: zenpixels::sample::plane::ChromaSiting
 pub zencodec::operation::FrameFacts::subsampling: zenpixels::sample::plane::ChromaSubsampling
