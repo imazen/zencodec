@@ -345,6 +345,7 @@ pub enum Samples<'a> {
 pub struct CodePlane<'a> {
     plane: AnyPlane<'a>,
     encoding: SampleEncoding,
+    components: usize,
 }
 
 impl<'a> CodePlane<'a> {
@@ -358,7 +359,11 @@ impl<'a> CodePlane<'a> {
         encoding: SampleEncoding,
     ) -> Result<Self, zenpixels::sample::CodePlaneError> {
         zenpixels::sample::CodePlane::new(plane, encoding)?;
-        Ok(Self { plane, encoding })
+        Ok(Self {
+            plane,
+            encoding,
+            components: 1,
+        })
     }
 
     /// The native plane.
@@ -419,11 +424,27 @@ impl<'a> CodePlane<'a> {
         }
     }
 
-    /// The code at (x, y), shifted and masked per the encoding.
+    /// Number of component words stored at each spatial position.
+    pub fn components(&self) -> usize {
+        self.components
+    }
+
+    /// Borrow one component using spatial coordinates, without copying.
+    /// Component order is the enclosing plane role's order (CbCr or CrCb).
+    pub fn component(
+        &self,
+        index: usize,
+    ) -> Result<zenpixels::sample::CodePlane<'a>, zenpixels::sample::CodePlaneError> {
+        zenpixels::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
+    }
+
+    /// Read a single-component plane at spatial `(x, y)`.
+    /// Interleaved planes return `None`: select `component(index)` explicitly.
     pub fn code(&self, x: usize, y: usize) -> Option<u16> {
-        zenpixels::sample::CodePlane::new(self.plane, self.encoding)
-            .ok()?
-            .code(x, y)
+        if self.components != 1 {
+            return None;
+        }
+        self.component(0).ok()?.code(x, y)
     }
 }
 
@@ -437,7 +458,8 @@ pub enum Row<'a> {
     Floats(&'a [f32]),
 }
 impl Samples<'_> {
-    /// Width and height of this emitted plane.
+    /// Active sample words per row and row count, excluding padding.
+    /// Semiplanar chroma has two words per spatial position; its role records the order.
     pub fn dimensions(&self) -> (usize, usize) {
         match self {
             Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
@@ -1031,9 +1053,11 @@ impl MappedImage for ComponentMap<'_> {
             return Err(mismatch());
         }
         let samples = match (samples, expected_encoding) {
-            (plane, PlaneEncoding::Code(encoding)) => {
-                Samples::Codes(CodePlane::new(plane, encoding).map_err(|_| mismatch())?)
-            }
+            (plane, PlaneEncoding::Code(encoding)) => Samples::Codes({
+                let mut codes = CodePlane::new(plane, encoding).map_err(|_| mismatch())?;
+                codes.components = spec.role().components();
+                codes
+            }),
             (zenpixels::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
                 Samples::Float { plane, encoding }
             }

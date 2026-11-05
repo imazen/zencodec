@@ -141,6 +141,14 @@ fn odd_width_semiplanar_chroma_counts_components_and_retains_order() {
         let chroma = mapped.plane(1).unwrap().unwrap();
         assert_eq!(chroma.meaning, &zencodec::image::Meaning::Component(role));
         assert_eq!(chroma.samples.dimensions(), (4, 1));
+        let Samples::Codes(codes) = &chroma.samples else {
+            panic!("integer chroma")
+        };
+        assert_eq!(codes.components(), 2);
+        assert_eq!(codes.code(1, 0), None);
+        assert_eq!(codes.component(0).unwrap().code(1, 0), Some(30));
+        assert_eq!(codes.component(1).unwrap().code(1, 0), Some(40));
+        assert!(codes.component(2).is_err());
         let Some(Row::Bytes(row)) = chroma.samples.row(0) else {
             panic!("chroma bytes")
         };

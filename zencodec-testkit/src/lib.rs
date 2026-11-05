@@ -2695,7 +2695,7 @@ fn validate_buffer_context(
     }
     if let Some(icc) = &ctx.icc {
         let model = desc.color_model();
-        match zenpixels::icc::profile_color_space(icc) {
+        match zenpixels::ColorModel::from_icc(icc) {
             Some(class) if class == model => {}
             Some(class) => {
                 return Err(format!(
@@ -2904,7 +2904,7 @@ where
     let src_icc_class_valid = src
         .icc_profile
         .as_deref()
-        .is_some_and(|icc| zenpixels::icc::profile_color_space(icc) == Some(desc.color_model()));
+        .is_some_and(|icc| zenpixels::ColorModel::from_icc(icc) == Some(desc.color_model()));
     // Older admitted zenpixels versions had an exhaustive two-variant enum.
     #[allow(unreachable_patterns)]
     match src.color_authority {

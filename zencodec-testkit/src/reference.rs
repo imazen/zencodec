@@ -737,7 +737,7 @@ pub(crate) fn build_info(h: &Header) -> ImageInfo {
 ///    ([`SourceColor::to_color_context`] — drop-dupe: ICC *or* CICP, never a
 ///    duplicated pair the CMS would have to arbitrate).
 /// 2. **Class-gate the ICC.** A profile rides a buffer only when its device
-///    class (header bytes 16..20, read via `zenpixels::icc::profile_color_space`)
+///    class (header bytes 16..20, read via `zenpixels::ColorModel::from_icc`)
 ///    matches the buffer's colour model — `RGB ` on Rgb/Rgba/Bgr/Bgra, `GRAY` on
 ///    Gray/GrayAlpha, `CMYK` on Cmyk. Crosswise pairing is invalid signaling.
 /// 3. On a mismatch, **derive the profile's CICP** (embedded `cICP` tag, then
@@ -758,7 +758,7 @@ pub(crate) fn class_gated_context(
     let mut ctx = source.to_color_context();
     if let Some(icc) = ctx
         .icc
-        .take_if(|icc| zenpixels::icc::profile_color_space(icc) != Some(model))
+        .take_if(|icc| zenpixels::ColorModel::from_icc(icc) != Some(model))
     {
         ctx.cicp = zenpixels::Cicp::from_icc(&icc)
             .or_else(|| {
