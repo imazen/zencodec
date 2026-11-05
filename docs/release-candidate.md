@@ -25,7 +25,8 @@ An [actual-package consumer gate](../benchmarks/release_cohort_2026-10-30.md)
 reproduces the old testkit's two-core split and passes with the matching
 candidate cohort. A repository-only zenmeta dev edge is omitted from the
 normalized testkit package; source integration tests retain that dependency.
-I/O publication is still disabled pending explicit release review.
+The I/O publication switch is prepared for release review. This enables the
+manual Cargo command; it does not approve publication or trigger it automatically.
 
 The current PR188 timeline branch changes media crate APIs, not core src/.
 That unfinished edited-video work remains part of the larger objective, but its
@@ -455,7 +456,7 @@ not registry resolution or compilation. The separate renderer is not part of
 that seven-package gate.
 
 The versioned testkit has a normal dependency on `zencodec-io 0.1.0`.
-I/O still has `publish = false`, and its
+At that audit, I/O had `publish = false`, and its
 [sparse registry entry](https://index.crates.io/ze/nc/zencodec-io) returned HTTP
 404 during this audit. Thus publishing the testkit requires a reviewed I/O
 release first; core's successful workspace tests do not discharge that gate.
