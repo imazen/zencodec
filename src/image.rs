@@ -458,8 +458,9 @@ pub enum Row<'a> {
     Floats(&'a [f32]),
 }
 impl Samples<'_> {
-    /// Active sample words per row and row count, excluding padding.
-    /// Semiplanar chroma has two words per spatial position; its role records the order.
+    /// Width and height excluding padding: pixels for packed color, scalar
+    /// sample words for values and component planes. Semiplanar chroma has
+    /// two words per spatial position; its role records the order.
     pub fn dimensions(&self) -> (usize, usize) {
         match self {
             Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
