@@ -31,6 +31,9 @@ ureq = { version = "3.5.0", default-features = false, optional = true }
 rustix = { version = "1.1.5", features = ["fs"], optional = true }
 
 [patch.crates-io]
+# Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
+garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zencodec = { path = "../.." }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
 # Combined output planning and native sample carriage from zenpixels PRs 92/93.

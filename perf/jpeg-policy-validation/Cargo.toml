@@ -28,6 +28,9 @@ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "13a8a23bb0062fe08f
 zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "f03224661f6912221f75dd7a43b1329431cc2e16", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
+# Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
+garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 # Paired PNG requires the unpublished 0.4 DEFLATE family.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "13a8a23bb0062fe08f5c55dd4abe36aab9acc546" }

@@ -21,6 +21,9 @@ zenivf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b21
 zenwebm = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", version = "0.1.0" }
 
 [patch.crates-io]
+# Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
+garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-media = { path = "../../zencodec-media" }
 zenmeta = { path = "../../zenmeta" }
