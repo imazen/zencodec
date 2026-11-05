@@ -188,7 +188,7 @@ fn estimate_before_decoding() {
 
 #[test]
 fn encode_from_a_foreign_pixel_format() {
-    use zenpixels_convert::adapt::adapt_for_encode_cow;
+    use zenpixels_convert::PixelSliceConvertExt;
 
     let codecs = codecs();
 
@@ -204,17 +204,13 @@ fn encode_from_a_foreign_pixel_format() {
         .unwrap()
         .supported_descriptors();
 
-    // `adapt_for_encode_cow` picks the best supported target and converts into it
+    // `adapt_for_encode` picks the best supported target and converts into it
     // (it would borrow, zero-copy, if BGRA8 were already supported).
-    let adapted = adapt_for_encode_cow(
-        &bgra,
-        PixelDescriptor::BGRA8_SRGB,
-        W,
-        H,
-        W as usize * 4,
-        supported,
-    )
-    .unwrap();
+    let source = PixelSlice::new(&bgra, W, H, W as usize * 4, PixelDescriptor::BGRA8_SRGB).unwrap();
+    // Preserve the former helper's explicit permissive/discard policy.
+    let options = zenpixels::ConvertOptions::permissive()
+        .with_alpha_policy(zenpixels::AlphaPolicy::DiscardUnchecked);
+    let adapted = source.adapt_for_encode(supported, &options).unwrap();
 
     let file = codecs.encode(ImageFormat::Pnm, adapted.as_slice()).unwrap();
 
