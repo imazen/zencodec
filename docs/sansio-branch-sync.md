@@ -15,8 +15,9 @@ bench Clippy with the original CI flags and verified instrumented C++ enabled.
 Minimal HDR public-facade and existing fixture API migrations retain ICC,
 orientation, dimension and sample assertions. A real converter refusal retains
 the concrete ConvertError and original location trace through typed/erased
-codec envelopes. Complete release user-feature tests are running; full runtime,
-FFI, API snapshots and platforms remain open. Earlier dependency/compile
+codec envelopes. Complete release user/default/FFI/expert/recompress runtime
+gates, supported examples/doctests and full API snapshots now pass. Broad
+colorspace-oracle and platform gates remain open. Earlier dependency/compile
 failures remain history, not the current full-lint result. Default triangle
 remains whole-file backed and typed/erased factory promotion is unqualified.
 
@@ -100,3 +101,30 @@ step. Marker metadata remains retained; progressive input remains buffered.
 Neither a row interface nor early output establishes a whole-operation memory
 bound. No copy-cost, throughput, preemption or bounded cancellation-latency
 claim was measured in this lane.
+
+## Final graph and API qualification
+
+JPEG162a1f35 pins linear-srgb2969ee84, reusing the already-existing transfer
+feature ownership506004d9 and equivalent NaN/nonpositive predicatescb3ef992
+on frozen528. Later main numerical changes are not imported. Feature-off105
+and all-feature165 library tests, all3 existing tier-parity controls and strict
+feature-off/on library Clippy pass. Root and standalone locks change only the
+linear source identity relative to the preceding reviewed cohort.
+
+Complete API regeneration and strict checking pass with published API tool0.1.1
+and pinned nightly2026-07-13, including featureless zenyuv. The default/internal
+JPEG surfaces remain unchanged; only the review incremental decoder type,
+explicit constructor and trait implementation enter the feature snapshot.
+New recovery helpers remain private. Full original strict Clippy, default
+strict library/test/bench Clippy and all11 selected native controls pass again
+after these visibility/feature-ownership changes. Earlier full runtime gates
+used the same active arithmetic and unchanged numeric expectations.
+
+Complete FFI succeeds at6G/jobs2 with two test threads (83s, peakRSS1.39GiB).
+Kernel logs prove that the two earlier3G attempts hit their cgroup caps; their
+rc143 results and invalid zero-RSS receipts are retained as failures. This is
+validation-job resource usage, not a codec memory bound. JPEG's actual
+diagnostics WASM build and frozen legacy metric numeric controls pass while
+retaining0.2.7 profiles, weights and API. Core's separately pinned documentation
+graphs and whole UltraHDR workspace/platform gates remain open. Main and PR199
+remain distinct; no promotion or merge is implied.
