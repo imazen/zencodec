@@ -4,6 +4,14 @@
 
 ### Added
 
+- `negotiate_pixel_format_for_depth` prefers an acceptable output that retains source depth, preserving caller order among sufficient formats; legacy negotiation remains available.
+
+- `IccDisposition::SynthesizeGrayFrom(Cicp)`: a gray or gray-alpha source with only
+  non-default CICP now plans a GRAY-class ICC. It previously planned no color
+  description for gray, and an RGB-class profile for gray with alpha. Codecs lower it
+  through `SynthesizedIcc::for_gray_cicp`; one that falls through a wildcard arm behaves
+  as it did before for gray.
+
 - Testkit `check_metadata_retained` compares required resolved metadata against
   completed output inspection, without capability exemptions or payload logging.
 
