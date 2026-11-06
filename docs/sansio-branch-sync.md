@@ -128,3 +128,19 @@ diagnostics WASM build and frozen legacy metric numeric controls pass while
 retaining0.2.7 profiles, weights and API. Core's separately pinned documentation
 graphs and whole UltraHDR workspace/platform gates remain open. Main and PR199
 remain distinct; no promotion or merge is implied.
+
+UltraHDR full std follow-through is now review head6df45a2e: all three members,
+all-feature library/integration suites, four independent SDR/HDR/MPF/probe pixel
+controls, doctests and strict all-target Clippy pass. Default/minimal-std suites,
+all-feature core WASM and seeded standalone fuzz compilation pass too. API
+regeneration/check passes with only one already-existing function recaptured.
+Its root pins JPEG162a1f35; JPEG's independently qualified root still pins
+UltraHDR30249993, so these review graphs must not be described as identical.
+
+The genuine freestanding check exposes implicit thiserror/std, then43 missing
+float methods after making feature ownership explicit. Both freestanding and
+WASM without std remain failed. Portable math needs separate numeric review;
+no backend, arithmetic expression or threshold was changed to accept it.
+UltraHDR stays draft with that blocker and platform gates open. JPEG's broad
+color-model suite now passes all three independent readers with unchanged
+thresholds. PR199 remains open and unmerged at88fc5871.
