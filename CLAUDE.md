@@ -913,3 +913,13 @@ fingerprints even when public signatures are unchanged. The sibling cohort's
 runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
 gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
 the generator, ownership control, site build and all 27 Node tests pass locally.
+
+## Sans-I/O synchronization gates (2026-11-06)
+
+Core main and unmerged PR199 pass separate shared I/O/coroutine/testkit,
+strict-lint, WASM and freestanding graphs. Native PNG's frozen standalone probe
+fails before compilation on stable-only SIMD requirements; the recovered native
+JPEG candidate is review-only (JPEG PR258), with selected controls passing and
+full-workspace dependency resolution still failing. These do not establish
+full native, metadata/color or bounded-memory qualification. Current dispositions
+and commands: docs/sansio-branch-sync.md and just sansio-sync-core-check.
