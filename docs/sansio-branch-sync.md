@@ -23,9 +23,11 @@ SIMD admission from exact-content BT.2446 forwarding. The first feature-supplyin
 pixel commit is e70065f; a version0.3.1 label alone does not identify those
 contents. Main-cohort fde59b96 is pinned and the feature forwarded explicitly.
 Unchanged all-feature core unit/reference/SIMD tests pass on main and a distinct
-matching PR199 export; main strict library/test Clippy passes. Broader all-target
-Clippy fails the existing simd_xplat benchmark's mul_add deprecation. Numeric
-expectations remain unchanged; whole UltraHDR workspace/platform gates stay open.
+matching PR199 export; main strict library/test Clippy passes. A separate benchmark-only
+relaxed-alias migration preserves the exact beta.2 operation and runtime floors;
+main all-target strict Clippy and doctests now pass. Public API, rounding and
+numeric expectations remain unchanged; whole UltraHDR workspace/platform gates
+stay open.
 
 Core PR200's runtime workflows pass, while its native documentation/integration
 jobs fail stable-only SIMD resolution in their independently pinned graphs.
