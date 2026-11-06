@@ -920,3 +920,14 @@ fingerprints even when public signatures are unchanged. The sibling cohort's
 runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
 gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
 the generator, ownership control, site build and all 27 Node tests pass locally.
+
+
+## Known Bugs: native guide dependency resolution (2026-11-06)
+
+The four native guide/qualification jobs fail before compilation because their
+pinned codec graphs select stable-only archmage requirements while linear-srgb
+requires 0.9.31-beta.2. This reproduces on main Documentation run 42083036922
+and gray/depth review run 42147460867. The core workspace and all native platform
+CI jobs pass on the review revision; that does not qualify the native codec
+consumers. Keep their tests and dependency floors intact until a compatible
+published release or an explicitly reviewed cohort resolves the graph.
