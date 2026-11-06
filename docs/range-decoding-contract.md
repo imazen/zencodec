@@ -85,7 +85,7 @@ The driver loop, in full:
 let mut dec = job.dyn_incremental_decoder(&[])?;
 let mut input = Input::empty();
 loop {
-    let p = dec.step(input, &mut sink, &stop)?;
+    let p = dec.step(input, &mut sink, Some(&pulse))?;
     // the first p.consumed bytes of `input` are gone; the rest are still the driver's
     match p.event {
         Event::Need => { /* satisfy any one of dec.requested(); build the next Input */ }

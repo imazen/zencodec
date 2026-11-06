@@ -1932,3 +1932,16 @@ plane-main-check:
     cargo test --workspace --all-targets --all-features
     cargo test --workspace --doc --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+# Run in an isolated export with its generated Cargo.lock, under the host build lock.
+sansio-sync-core-check:
+    cargo test --locked -p zencodec-testkit --test sansio_checks
+    cargo test --locked -p zencodec-coroutine --lib --tests
+    cargo test --locked -p zencodec-io --all-features --lib --tests
+    cargo clippy --locked -p zencodec-io -p zencodec-coroutine --all-features --lib --tests -- -D warnings
+    cargo check --locked -p zencodec -p zencodec-coroutine -p zencodec-io --no-default-features --target wasm32-unknown-unknown
+    cargo check --locked -p zencodec -p zencodec-coroutine -p zencodec-io --no-default-features --target x86_64-unknown-none
+
+# Known dependency-resolution blocker is preserved by this standalone target.
+sansio-sync-png-check:
+    cargo test --manifest-path perf/sansio-sync-validation/Cargo.toml
