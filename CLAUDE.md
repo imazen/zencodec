@@ -256,6 +256,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed gray color loss (2026-11-05): `resolve_color_emit` returned `Drop` for gray
+  with CICP and no ICC, so a gray PQ or gamma 2.2 image was left undescribed and read
+  as sRGB. Gray with alpha (`channel_count` 2) took the RGB path, planning an RGB-class
+  profile that PNG forbids on color type 4. Both now plan `SynthesizeGrayFrom`. GRAY ICC remains alongside CICP where the target permits it; `Verbatim`
+  carries existing CICP without deriving an ICC. `zencodec-testkit/tests/gray_color_emit.rs` compares the plan with
+  the real synthesis over all code points. Codecs need a matching lowering arm.
+
 - Fixed by the `PixelStorage` adoption (2026-11-04): `to_owned_frame` allocated bytes with no
   room to align them, then `.expect`ed the wrap, so a wide format on an allocator returning an
   odd address panicked with `InsufficientData`. glibc hid it. `tests/odd_allocator.rs` runs under
@@ -913,3 +920,14 @@ fingerprints even when public signatures are unchanged. The sibling cohort's
 runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
 gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
 the generator, ownership control, site build and all 27 Node tests pass locally.
+
+
+## Known Bugs: native guide dependency resolution (2026-11-06)
+
+The four native guide/qualification jobs fail before compilation because their
+pinned codec graphs select stable-only archmage requirements while linear-srgb
+requires 0.9.31-beta.2. This reproduces on main Documentation run 42083036922
+and gray/depth review run 42147460867. The core workspace and all native platform
+CI jobs pass on the review revision; that does not qualify the native codec
+consumers. Keep their tests and dependency floors intact until a compatible
+published release or an explicitly reviewed cohort resolves the graph.

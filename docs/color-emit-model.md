@@ -32,7 +32,7 @@ pub fn resolve_color_emit(
 ) -> ColorEmitPlan;                   // { cicp: Option<Cicp>, icc: IccDisposition }
 
 pub enum ColorEmitPolicy { Compatibility, Balanced /*default*/, Compact, Verbatim, Custom(ColorEmitFields) }
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
+pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), SynthesizeGrayFrom(Cicp), Drop }
 pub struct ColorEmitFields { icc: IccRetention, cicp: CicpEmission }   // ::new(icc, cicp)
 pub enum CicpEmission { WhereValidCarrier /*default*/, WhereverSupported, Never }
 ```
@@ -41,7 +41,8 @@ Pure, `no_std`, **no CMS, no codec deps**. It emits a *plan*; the bytes are
 materialized one layer up. `SourceColor` is the type the pipeline actually
 produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
 `Metadata`). The resolver also handles the grayscale/CMYK terminal states
-(suppress CICP, keep ICC) and never emits a redundant `SynthesizeFrom(sRGB)`.
+(keep GRAY ICC plus supported CICP; CMYK stays ICC-only; a gray source with only non-default CICP gets
+`SynthesizeGrayFrom`) and never emits a redundant `SynthesizeFrom(sRGB)`.
 
 ### Capabilities (three flags drive it)
 
@@ -66,6 +67,12 @@ each codec maps the plan's fields onto its own container carriers:
   `Profile`; on `NotNeeded` (sRGB) / `NeedsCms` / `CmsUnsupported` embed no ICC
   and let `cicp` carry the colour. The bundled `const` set (no CMS) reaches
   Display-P3 and SDR BT.2020; the `cms-moxcms` feature generates the rest.
+- `IccDisposition::SynthesizeGrayFrom(cicp)` →
+  `zenpixels_convert::icc_profiles::SynthesizedIcc::for_gray_cicp(cicp)`, the
+  GRAY-class profile for pixels with one color channel, with or without alpha. PNG
+  requires it for color types 0 and 4, and an RGB-class profile there is invalid.
+  CICP may accompany the profile where permitted; retain the ICC obligation and refuse
+  on `NeedsCms` / `CmsUnsupported` rather than write pixels that read as sRGB.
 - `IccDisposition::Drop` → no ICC.
 
 **What this is not:** a type-enforced atomic step. zenpixels-convert does ship

@@ -2313,7 +2313,7 @@ pub enum ColorEmitPolicy { Compatibility, Balanced, Compact, Verbatim, Custom(Co
 pub struct ColorEmitPlan { pub cicp: Option<Cicp>, pub icc: IccDisposition }
 
 #[non_exhaustive]
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
+pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), SynthesizeGrayFrom(Cicp), Drop }
 ```
 
 - **`ColorEmitPolicy`** — `Balanced` (default) writes CICP where it's a *safe sole
@@ -2329,7 +2329,9 @@ pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
   `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
   CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled
   `const` profile or a CMS-generated one, never a mis-tagged TRC. The plan never emits
-  a redundant `SynthesizeFrom(sRGB)`.
+  a redundant `SynthesizeFrom(sRGB)`. `SynthesizeGrayFrom(cicp)` is its GRAY-class
+  counterpart, lowered via `SynthesizedIcc::for_gray_cicp`, for a source with one color
+  channel (`channel_count` 1 or 2) and only non-default CICP.
 
 The emit-direction names can't be confused with the decode-side `SourceColor`. Design
 and rejected alternatives: `docs/color-emit-model.md`; how the framework resolves
@@ -3151,3 +3153,13 @@ proving a single native pass.
 erased setter, or `operation::EncodeRequest::with_orientation_mode`. Defaults
 refuse until a codec implements the requirement; omitting it preserves existing
 behavior. See [the contract and native limits](encode-orientation.md).
+
+### Source-depth decode preference
+
+`decode::negotiate_pixel_format_for_depth(preferred, available, source_bits)`
+first selects acceptable formats with enough channel precision to retain the
+source codes, then applies caller order. When only narrower outputs are accepted,
+the existing ranked fallback applies. Empty preferences select the first
+sufficient available format. The helper returns actual available metadata and
+does not convert pixels. Its initial consumers are deep zenavif/heic output
+selection; native decoder adoption is qualified separately.

@@ -272,7 +272,9 @@ pub mod decode {
     pub use crate::sink::{DecodeRowSink, SinkError};
     pub use crate::traits::ByteRange;
 
-    pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
+    pub use crate::negotiate::{
+        is_format_available, negotiate_pixel_format, negotiate_pixel_format_for_depth,
+    };
 
     // Source encoding detection
     pub use crate::detect::SourceEncodingDetails;

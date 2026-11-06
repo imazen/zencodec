@@ -72,6 +72,66 @@ pub fn negotiate_pixel_format(
     Some(available[0])
 }
 
+/// Prefer an acceptable decoder output that retains the source's sample depth.
+///
+/// Unlike [`negotiate_pixel_format`], this first tries preferred/available
+/// matches whose channel precision is at least `source_bits`. Caller order
+/// wins among those sufficient matches. If the caller only accepts narrower
+/// formats, fall back to the existing ranked selection. An empty preference
+/// list chooses the first sufficiently precise available entry, then the
+/// decoder's first available format. Returned metadata always comes from the
+/// available descriptor; this function does not convert samples.
+///
+/// `source_bits` is the decoded source's meaningful precision (for example
+/// 10 for a 10-bit AVIF source), not its byte-container width. F16/F32/F64 have
+/// 11/24/53 precision bits. Zero or more than 64 returns `None`.
+/// Concrete consumers are the deep-output selection in zenavif and heic.
+///
+/// ```
+/// use zencodec::decode::negotiate_pixel_format_for_depth;
+/// use zenpixels::PixelDescriptor as D;
+/// let formats = [D::RGB8_SRGB, D::RGB16_SRGB];
+/// assert_eq!(negotiate_pixel_format_for_depth(&formats, &formats, 10), Some(D::RGB16_SRGB));
+/// ```
+pub fn negotiate_pixel_format_for_depth(
+    preferred: &[PixelDescriptor],
+    available: &[PixelDescriptor],
+    source_bits: u8,
+) -> Option<PixelDescriptor> {
+    use zenpixels::ChannelType;
+    if !(1..=64).contains(&source_bits) {
+        return None;
+    }
+    let precision = |descriptor: PixelDescriptor| match descriptor.channel_type() {
+        ChannelType::F16 => 11,
+        ChannelType::F32 => 24,
+        ChannelType::F64 => 53,
+        kind => (kind.byte_size() * 8) as u8,
+    };
+    let sufficient = |entry: &&PixelDescriptor| precision(**entry) >= source_bits;
+    if preferred.is_empty() {
+        return available
+            .iter()
+            .filter(sufficient)
+            .copied()
+            .next()
+            .or_else(|| available.first().copied());
+    }
+    for pref in preferred {
+        if let Some(exact) = available.iter().filter(sufficient).find(|a| **a == *pref) {
+            return Some(*exact);
+        }
+        if let Some(compatible) = available
+            .iter()
+            .filter(sufficient)
+            .find(|a| a.pixel_format() == pref.pixel_format())
+        {
+            return Some(*compatible);
+        }
+    }
+    negotiate_pixel_format(preferred, available)
+}
+
 /// Select the best encode format for given pixel data.
 ///
 /// Returns the first `supported` descriptor whose [`PixelFormat`] matches
@@ -237,5 +297,53 @@ mod tests {
             PixelDescriptor::RGBA8_SRGB.pixel_format(),
             available
         ));
+    }
+}
+
+#[cfg(test)]
+mod source_depth_tests {
+    use super::*;
+    use zenpixels::PixelDescriptor as D;
+    #[test]
+    fn deep_source_retains_its_codes_before_caller_order() {
+        let formats = [D::RGB8_SRGB, D::RGB16_SRGB];
+        for bits in [9, 10, 12, 16] {
+            assert_eq!(
+                negotiate_pixel_format_for_depth(&formats, &formats, bits),
+                Some(D::RGB16_SRGB)
+            );
+            assert_eq!(
+                negotiate_pixel_format_for_depth(&[], &formats, bits),
+                Some(D::RGB16_SRGB)
+            );
+        }
+        assert_eq!(
+            negotiate_pixel_format_for_depth(&formats, &formats, 8),
+            Some(D::RGB8_SRGB)
+        );
+        assert_eq!(
+            negotiate_pixel_format(&formats, &formats),
+            Some(D::RGB8_SRGB)
+        );
+    }
+    #[test]
+    fn equal_precision_keeps_preference_and_explicit_narrowing() {
+        let available = [D::RGB16_SRGB, D::RGBA16_SRGB, D::RGB8_SRGB];
+        let preferred = [D::RGBA16_SRGB, D::RGB16_SRGB];
+        assert_eq!(
+            negotiate_pixel_format_for_depth(&preferred, &available, 12),
+            Some(D::RGBA16_SRGB)
+        );
+        assert_eq!(
+            negotiate_pixel_format_for_depth(&[D::RGB8_SRGB], &available, 12),
+            Some(D::RGB8_SRGB)
+        );
+        assert_eq!(negotiate_pixel_format_for_depth(&preferred, &[], 12), None);
+        for invalid in [0, 65, 255] {
+            assert_eq!(
+                negotiate_pixel_format_for_depth(&preferred, &available, invalid),
+                None
+            );
+        }
     }
 }

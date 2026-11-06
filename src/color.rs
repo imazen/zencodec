@@ -65,6 +65,8 @@ use crate::metadata::IccRetention;
 ///   bundled `const` set (no CMS) reaches Display-P3 and SDR BT.2020; the
 ///   `cms-moxcms` feature generates the rest, including PQ/HLG. See
 ///   [`SynthesizeFrom`](IccDisposition::SynthesizeFrom) for the full contract.
+/// - [`IccDisposition::SynthesizeGrayFrom`]`(cicp)` → the same, through
+///   `zenpixels_convert::icc_profiles::SynthesizedIcc::for_gray_cicp(cicp)`.
 /// - [`IccDisposition::Drop`] → emit no ICC.
 ///
 /// Orientation/EXIF reconciliation is separate: when a pipeline bakes orientation
@@ -203,6 +205,26 @@ pub enum IccDisposition {
     /// description it can't bundle; prefer a CICP-carrying format or enable the
     /// feature when exact wide-gamut/HDR color must survive.
     SynthesizeFrom(Cicp),
+    /// Embed a **GRAY-class** ICC synthesized from this CICP. The pixels being
+    /// encoded are single-channel, with or without alpha, and a supported native CICP carrier may
+    /// accompany this profile.
+    ///
+    /// Do not lower this through `SynthesizedIcc::for_cicp`: its RGB-class profile
+    /// is invalid on gray pixels (PNG requires a greyscale profile for color types
+    /// 0 and 4, and libpng rejects the pairing).
+    ///
+    /// **Recommended lowering:** `zenpixels_convert::icc_profiles`'s
+    /// `SynthesizedIcc::for_gray_cicp(cicp)`:
+    /// - `Profile(bytes)` — embed them.
+    /// - `NotNeeded` — the sRGB default; embed nothing. The resolver doesn't emit
+    ///   this variant for those code points.
+    /// - `NeedsCms` / `CmsUnsupported` — no profile exists in this build, or for
+    ///   these code points. The ICC obligation remains, so a codec should
+    ///   refuse rather than write pixels that read as sRGB.
+    ///
+    /// A codec that can't honor this should say so: falling through a wildcard arm
+    /// leaves a gray image with no color description, which readers take as sRGB.
+    SynthesizeGrayFrom(Cicp),
     /// Emit no ICC profile.
     Drop,
 }
@@ -243,11 +265,30 @@ fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
     }
 }
 
+/// Whether `c` is the sRGB default, which has no ICC to synthesize.
+///
+/// The lowering (`zenpixels_convert::icc_profiles::SynthesizedIcc`'s `for_cicp` and
+/// `for_gray_cicp`) returns `NotNeeded` for primaries ∈ {BT.709(1), unspecified(2)}
+/// with transfer ∈ {unspecified(2), sRGB(13)}, and for unspecified primaries with
+/// the BT.709 transfer (nothing to state about the gamut). This mirrors that
+/// predicate, so a plan never asks for a synthesis that would lower to nothing.
+///
+/// BT.709 primaries with the BT.709 transfer (1, 1) is not the sRGB default: the
+/// BT.709 OETF and the sRGB curve differ across the whole range (encoded 0.5 is
+/// linear 0.2140 under sRGB, 0.2597 under BT.709), so an untagged (1, 1) image is
+/// read with the wrong curve (imazen/zenpixels#88).
+fn is_assumed_default(c: &Cicp) -> bool {
+    (matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 2 | 13))
+        || (c.color_primaries == 2 && c.transfer_characteristics == 1)
+}
+
 /// Reconcile a source's color description against a target's capabilities under
 /// a [`ColorEmitPolicy`], returning what to emit.
 ///
 /// Pure and `no_std`. Decides ICC vs CICP emission, including the grayscale /
-/// CMYK terminal states (where CICP is inapplicable and the ICC must be kept).
+/// CMYK's ICC-only state and gray's GRAY ICC plus supported CICP. A gray
+/// source with only non-default CICP receives a
+/// [synthesis request](IccDisposition::SynthesizeGrayFrom).
 pub fn resolve_color_emit(
     src: &SourceColor,
     target: &EncodeCapabilities,
@@ -256,21 +297,48 @@ pub fn resolve_color_emit(
     let fields = policy.fields();
     let src_has_icc = src.icc_profile.is_some();
 
-    // Grayscale / CMYK: CICP is RGB-centric and cannot describe these. Keep the
-    // ICC (the only valid color description) and suppress CICP — emitting an RGB
-    // CICP over gray/CMYK pixels would recolor them.
+    // Gray output retains its GRAY ICC and may also carry CICP when the target
+    // permits it. CMYK remains ICC-only.
     let model = src.icc_profile.as_deref().and_then(ColorModel::from_icc);
-    let is_gray = matches!(model, Some(ColorModel::Gray)) || src.channel_count == Some(1);
+    // Both 1 (gray) and 2 (gray with alpha) are single-channel color.
+    let is_gray =
+        matches!(model, Some(ColorModel::Gray)) || matches!(src.channel_count, Some(1 | 2));
     let is_cmyk = matches!(model, Some(ColorModel::Cmyk));
     if is_gray || is_cmyk {
-        return ColorEmitPlan {
-            cicp: None,
-            icc: if src_has_icc {
-                IccDisposition::KeepSource
-            } else {
-                IccDisposition::Drop
-            },
+        // Keep a GRAY source profile even on native-CICP targets. Its device
+        // class and transfer remain useful to ICC readers.
+        let icc = if src_has_icc {
+            IccDisposition::KeepSource
+        } else {
+            match representable_cicp(src) {
+                Some(cicp) if policy != ColorEmitPolicy::Verbatim && !is_assumed_default(&cicp) => {
+                    IccDisposition::SynthesizeGrayFrom(cicp)
+                }
+                _ => IccDisposition::Drop,
+            }
         };
+        let repr = representable_cicp(src);
+        let emit = is_gray
+            && !is_cmyk
+            && target.cicp()
+            && match policy {
+                ColorEmitPolicy::Verbatim => src.cicp.is_some(),
+                _ => match fields.cicp {
+                    CicpEmission::Never => false,
+                    CicpEmission::WhereValidCarrier => target.cicp_is_valid_carrier(),
+                    CicpEmission::WhereverSupported => true,
+                },
+            };
+        let cicp = if emit {
+            if policy == ColorEmitPolicy::Verbatim {
+                src.cicp
+            } else {
+                repr
+            }
+        } else {
+            None
+        };
+        return ColorEmitPlan { cicp, icc };
     }
 
     let repr_cicp = representable_cicp(src);
@@ -317,20 +385,6 @@ pub fn resolve_color_emit(
         _ => drop_by_rule,
     };
 
-    // The sRGB default has no ICC to synthesize: the lowering
-    // (`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp`) returns
-    // `NotNeeded` for primaries ∈ {BT.709(1), unspecified(2)} with transfer ∈
-    // {unspecified(2), sRGB(13)}, and for unspecified primaries with the BT.709
-    // transfer (nothing to state about the gamut). Mirror that predicate here so
-    // we never emit a `SynthesizeFrom` directive that would lower to nothing.
-    // BT.709 primaries with the BT.709 transfer (1, 1) is not the sRGB default:
-    // the BT.709 OETF and the sRGB curve differ across the whole range (encoded
-    // 0.5 is linear 0.2140 under sRGB, 0.2597 under BT.709), so an untagged
-    // (1, 1) image is read with the wrong curve (imazen/zenpixels#88).
-    let is_assumed_default = |c: &Cicp| {
-        (matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 2 | 13))
-            || (c.color_primaries == 2 && c.transfer_characteristics == 1)
-    };
     let synth_worthwhile = repr_cicp.is_some_and(|c| !is_assumed_default(&c));
 
     let icc = if src_has_icc {
@@ -486,13 +540,115 @@ mod tests {
 
     #[test]
     fn grayscale_keeps_icc_suppresses_cicp() {
-        // A 1-channel source: CICP is inapplicable; keep ICC, suppress CICP.
+        // A 1-channel source with no identifiable CICP retains its source ICC.
         let src = SourceColor::default()
             .with_icc_profile(alloc::vec![0u8; 132])
             .with_channel_count(1);
         let plan = resolve_color_emit(&src, &caps_avif(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, None);
         assert_eq!(plan.icc, IccDisposition::KeepSource);
+    }
+
+    /// Transfers no reader assumes, including the two named in the original report:
+    /// gray PQ (16) and gray gamma 2.2 (4). The list also holds HLG and the BT.709
+    /// OETF, which differs from the sRGB curve (imazen/zenpixels#88).
+    const GRAY_NON_DEFAULT: &[Cicp] = &[
+        Cicp::new(1, 16, 0, true),
+        Cicp::new(9, 16, 0, true),
+        Cicp::new(1, 4, 0, true),
+        Cicp::new(1, 18, 0, true),
+        Cicp::new(1, 1, 0, true),
+        Cicp::new(1, 8, 0, true),
+        Cicp::new(12, 13, 0, true),
+    ];
+
+    /// Every target, because the gray branch returns before looking at carriers.
+    fn all_caps() -> [EncodeCapabilities; 4] {
+        [caps_png(), caps_jpeg(), caps_jxl(), caps_avif()]
+    }
+
+    #[test]
+    fn gray_cicp_only_keeps_its_color_as_a_gray_profile() {
+        for &cicp in GRAY_NON_DEFAULT {
+            // 1 is gray and 2 is gray with alpha, per `SourceColor::channel_count`.
+            for channels in [1, 2] {
+                let src = src_cicp(cicp).with_channel_count(channels);
+                for caps in all_caps() {
+                    for policy in [
+                        ColorEmitPolicy::Compatibility,
+                        ColorEmitPolicy::Balanced,
+                        ColorEmitPolicy::Compact,
+                    ] {
+                        let plan = resolve_color_emit(&src, &caps, policy);
+                        assert_eq!(
+                            plan.icc,
+                            IccDisposition::SynthesizeGrayFrom(cicp),
+                            "{cicp:?} channels={channels} {policy:?}"
+                        );
+                        assert_eq!(
+                            plan.cicp,
+                            caps.cicp().then_some(cicp),
+                            "{cicp:?} channels={channels} {policy:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gray_alpha_never_receives_an_rgb_class_plan() {
+        // Two channels took the RGB path: an RGB-class profile on PNG color type 4,
+        // which the format forbids, beside an RGB CICP.
+        let src = src_cicp(Cicp::new(9, 16, 0, true)).with_channel_count(2);
+        let plan = resolve_color_emit(&src, &caps_png(), ColorEmitPolicy::Balanced);
+        assert!(!matches!(plan.icc, IccDisposition::SynthesizeFrom(_)));
+        assert_eq!(plan.cicp, Some(Cicp::new(9, 16, 0, true)));
+    }
+
+    #[test]
+    fn gray_srgb_default_needs_no_profile() {
+        // The same code points `SynthesizedIcc::for_gray_cicp` calls `NotNeeded`.
+        for cicp in [
+            Cicp::new(1, 13, 0, true),
+            Cicp::new(2, 13, 0, true),
+            Cicp::new(1, 2, 0, true),
+            Cicp::new(2, 2, 0, true),
+            Cicp::new(2, 1, 0, true),
+        ] {
+            let src = src_cicp(cicp).with_channel_count(1);
+            let plan = resolve_color_emit(&src, &caps_png(), ColorEmitPolicy::Balanced);
+            assert_eq!(plan.icc, IccDisposition::Drop, "{cicp:?}");
+        }
+    }
+
+    #[test]
+    fn gray_with_no_signal_stays_undescribed() {
+        for channels in [1, 2] {
+            let src = SourceColor::default().with_channel_count(channels);
+            let plan = resolve_color_emit(&src, &caps_png(), ColorEmitPolicy::Balanced);
+            assert_eq!(plan.icc, IccDisposition::Drop);
+            assert_eq!(plan.cicp, None);
+        }
+    }
+
+    #[test]
+    fn gray_with_a_source_profile_keeps_it_rather_than_synthesizing() {
+        for channels in [1, 2] {
+            let src = src_cicp(Cicp::new(1, 16, 0, true))
+                .with_icc_profile(alloc::vec![0u8; 132])
+                .with_channel_count(channels);
+            let plan = resolve_color_emit(&src, &caps_png(), ColorEmitPolicy::Balanced);
+            assert_eq!(plan.icc, IccDisposition::KeepSource);
+            assert_eq!(plan.cicp, Some(Cicp::new(1, 16, 0, true)));
+        }
+    }
+
+    #[test]
+    fn gray_verbatim_derives_nothing() {
+        let src = src_cicp(Cicp::new(1, 16, 0, true)).with_channel_count(1);
+        let plan = resolve_color_emit(&src, &caps_png(), ColorEmitPolicy::Verbatim);
+        assert_eq!(plan.icc, IccDisposition::Drop);
     }
 
     #[test]

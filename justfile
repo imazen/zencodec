@@ -1932,3 +1932,10 @@ plane-main-check:
     cargo test --workspace --all-targets --all-features
     cargo test --workspace --doc --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+# Qualified patch gates for gray carriers and source-depth preference.
+gray-depth-check:
+    cargo test --locked -p zencodec --lib color::tests
+    cargo test --locked -p zencodec --lib negotiate::
+    cargo test --locked -p zencodec-testkit --test gray_color_emit
+    cargo clippy --locked -p zencodec --lib -- -D warnings
