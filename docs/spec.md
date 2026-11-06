@@ -1376,7 +1376,7 @@ Use `Unsupported<E>` as the associated type for codecs without animation support
 ```rust
 trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: Option<&dyn Pulse>)
         -> Result<Progress, StepError<Self::Error>>;
     fn requested(&self) -> &[InputRequest];                         // after Event::Need, never empty
     fn info(&self) -> Option<&ImageInfo>;
