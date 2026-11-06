@@ -2,21 +2,23 @@
 
 ## Open gates
 
-The canonical PNG graph now resolves through the manifest-only
-[draft PR55](https://github.com/imazen/zenpng/pull/55), which preserves the
-existing floors and explicitly admits SIMD beta.2. Actual PNG controls and
-JPEG's complete locked Clippy graph fail the same three private pixel-helper
-calls at PNG codec.rs:1657/5340 and encode.rs:731. Source migration remains
-separately owned. No PNG source or arithmetic was edited by this lane.
-The temporary <=beta.2 caps exclude stable0.9.31; remove them after stable
-publication and unchanged numeric/full-feature qualification.
+The canonical PNG graph resolves through the manifest-only
+[draft PR55](https://github.com/imazen/zenpng/pull/55), preserving floors and
+explicitly admitting SIMD beta.2. Its owner's public-facade candidate6b740345
+is directly atop that repair and clears all three original private-helper errors.
+No PNG source or arithmetic was edited by this lane. Temporary <=beta.2 caps
+exclude stable0.9.31; replace them after stable publication and unchanged gates.
 
 The recovered JPEG implementation is [draft PR258](https://github.com/imazen/zenjpeg/pull/258).
-Its selected native graphs pass. Its complete root now pins reproducible remote
-cohort candidates, with a committed exact lock delta, but full qualification is
-blocked by PNG compilation. Default triangle remains whole-file backed, native
-resumption is partial, and full features, API snapshots and platforms remain
-open. Typed/erased factory promotion is explicitly unqualified.
+The exact remote PNG6b/HDR302 main cohort now passes full strict library/test/
+bench Clippy with the original CI flags and verified instrumented C++ enabled.
+Minimal HDR public-facade and existing fixture API migrations retain ICC,
+orientation, dimension and sample assertions. A real converter refusal retains
+the concrete ConvertError and original location trace through typed/erased
+codec envelopes. Complete release user-feature tests are running; full runtime,
+FFI, API snapshots and platforms remain open. Earlier dependency/compile
+failures remain history, not the current full-lint result. Default triangle
+remains whole-file backed and typed/erased factory promotion is unqualified.
 
 [UltraHDR draft PR43](https://github.com/imazen/ultrahdr/pull/43) separates
 SIMD admission from exact-content BT.2446 forwarding. The first feature-supplying
