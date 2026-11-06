@@ -2,18 +2,34 @@
 
 ## Open gates
 
-Native PNG at `a26cdc64` cannot resolve the canonical-plane cohort: its stable-only
-archmage/magetypes requirements reject the explicit beta.2 requirement of pixels
-`fde59b96`. The standalone probe in `perf/sansio-sync-validation` preserves this
-failure before compilation. It is not a passing native PNG receipt. PNG ownership
-and its gray/pixel changes remain separate from this synchronization.
+The canonical PNG graph now resolves through the manifest-only
+[draft PR55](https://github.com/imazen/zenpng/pull/55), which preserves the
+existing floors and explicitly admits SIMD beta.2. Actual PNG controls and
+JPEG's complete locked Clippy graph fail the same three private pixel-helper
+calls at PNG codec.rs:1657/5340 and encode.rs:731. Source migration remains
+separately owned. No PNG source or arithmetic was edited by this lane.
+The temporary <=beta.2 caps exclude stable0.9.31; remove them after stable
+publication and unchanged numeric/full-feature qualification.
 
 The recovered JPEG implementation is [draft PR258](https://github.com/imazen/zenjpeg/pull/258).
-Its selected native graph passes; the full JPEG workspace still fails resolution
-on optional UltraHDR SIMD's stable-only requirement. Default triangle remains
-whole-file backed, native resumption is partial, and full features, API snapshots
-and platform qualification remain open. Do not infer completion from shared core
-checks or promote the draft as a general native incremental decoder.
+Its selected native graphs pass. Its complete root now pins reproducible remote
+cohort candidates, with a committed exact lock delta, but full qualification is
+blocked by PNG compilation. Default triangle remains whole-file backed, native
+resumption is partial, and full features, API snapshots and platforms remain
+open. Typed/erased factory promotion is explicitly unqualified.
+
+[UltraHDR draft PR43](https://github.com/imazen/ultrahdr/pull/43) separates
+SIMD admission from exact-content BT.2446 forwarding. The first feature-supplying
+pixel commit is e70065f; a version0.3.1 label alone does not identify those
+contents. Main-cohort fde59b96 is pinned and the feature forwarded explicitly.
+Unchanged all-feature core unit/reference/SIMD tests pass on main and a distinct
+matching PR199 export; main strict library/test Clippy passes. Broader all-target
+Clippy fails the existing simd_xplat benchmark's mul_add deprecation. Numeric
+expectations remain unchanged; whole UltraHDR workspace/platform gates stay open.
+
+Core PR200's runtime workflows pass, while its native documentation/integration
+jobs fail stable-only SIMD resolution in their independently pinned graphs.
+Those failures remain gates; the focused checks below do not qualify them.
 
 ## Branch inventory and disposition
 
