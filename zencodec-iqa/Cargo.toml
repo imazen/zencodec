@@ -1,0 +1,21 @@
+[package]
+name = "zencodec-iqa"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Resolved codec output adapter for zenpsy-api"
+repository = "https://github.com/imazen/zencodec"
+publish = false
+[workspace]
+[features]
+default = []
+std = ["zenpsy-api/std", "zencodec/std"]
+[dependencies]
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6", version = "0.1.0" }
+zencodec = { path = "..", version = ">=0.2.0, <0.4.0", default-features = false }
+[patch.crates-io]
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6" }
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

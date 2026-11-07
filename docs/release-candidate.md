@@ -559,3 +559,25 @@ patches, rejects non-crates.io dependencies and runs the existing caller example
 against the published packages. Before publication it correctly refuses the
 unavailable core 0.2.0; the [receipt](../benchmarks/release_cohort_2026-10-30.md)
 keeps that failure separate from successful patched-package qualification.
+
+## Native guide dependency cohort — 2026-11-07
+
+[Documentation run 42327970455](https://github.com/imazen/zencodec/actions/runs/42327970455)
+refuses all four native/example jobs at dependency resolution, before the
+requested tests run. This does not qualify their numerical or runtime gates.
+The renamed IQA adapter and the ordinary codec CI pass independently.
+
+The standalone harness manifests and their recorded locks are unchanged from
+the main-branch cohort. Their conflicting requirements are:
+
+| Route | Requires archmage beta.2 | Incompatible pinned dependency |
+| --- | --- | --- |
+| Guide examples | Patched linear-srgb `52896f4b` | Registry zenpixels-convert 0.2.13 requires `^0.9.26`, locked to 0.9.30 |
+| JPEG | Patched linear-srgb `52896f4b` | zenjpeg `13a8a23b` requires `>=0.9.30, <=0.9.31-beta.1`, locked to 0.9.30 |
+| TIFF/JXL | zenpixels-convert `fde59b96` | jxl-encoder `554ad696` caps at 0.9.31-beta.1 |
+| AV1 | Patched linear-srgb `52896f4b` | rav1d-safe `b19aec65` caps at 0.9.31-beta.1 |
+
+A coordinated dependency cohort update needs its native gates rerun. This
+rename preserves the implementation pins, existing assertions and original
+failed observations; it does not substitute a new codec/kernel revision to
+obtain a resolving graph.

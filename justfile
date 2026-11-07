@@ -1898,6 +1898,25 @@ sample-encoding-compat-check:
     cargo test -p zencodec --test sample_encoding_compat
     cargo clippy -p zencodec --test sample_encoding_compat --locked -- -D warnings
 
+# Minimal IQA contract and optional mapped-output bridge; independent of codecs.
+iqa-check:
+    cargo fmt --manifest-path zencodec-iqa/Cargo.toml --check
+    cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features
+    cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
+    cargo clippy --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --all-targets -- -D warnings
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-unknown-unknown
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features std --target wasm32-unknown-unknown
+
+# Install the named toolchain/target first; separate from native CI gates.
+iqa-portability-check:
+    cargo +1.88.0 check --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
+    cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --no-deps
+
+# Run inside the standalone workspace so cross does not duplicate parent mounts.
+iqa-cross-check toolchain='':
+    cd zencodec-iqa && cross {{toolchain}} test --locked --all-features --target i686-unknown-linux-gnu
+
 # Shared sibling cohort: full workspace behavior and strict lint with one pixel source.
 sibling-cohort-check:
     cargo test --workspace --all-features --locked

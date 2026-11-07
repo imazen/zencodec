@@ -1,5 +1,34 @@
 # Changelog
 
+## zencodec-iqa
+
+### [Unreleased]
+
+### QUEUED BREAKING CHANGES
+
+None. This is a new unpublished review API.
+
+### Added
+
+- Add the unpublished standalone `zencodec-iqa` still-image scalar contract
+  and optional mapped-output bridge; no codec core API or metric implementation
+  changes (`73b2351b`). Source and contract checks are in the companion crate.
+
+### Changed
+
+- Move codec-independent still-image contracts to `zenpsy-api`; this
+  companion now provides only resolved packed-output mapping and re-exports
+  the shared contract as `iqa`. Native mapping causes and cancellation survive
+  the handoff. The review API remains unpublished.
+
+### Fixed
+
+- Make the IQA review API extensible through non-exhaustive records/enums and
+  constructors. Complete owned how-far phases with classified outcomes and
+  preserve whereat traces, typed native causes and mapping cancellation
+  (`c7666dba`).
+
+
 ## Native image selection (unreleased experiment)
 
 ### Added

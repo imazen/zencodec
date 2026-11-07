@@ -97,6 +97,13 @@ registered template.
 
 [`CodecSet`]: https://docs.rs/zencodec/latest/zencodec/struct.CodecSet.html
 
+## Image quality companion
+
+[`zencodec-iqa`](zencodec-iqa/) is an unpublished minimal still-image scoring
+contract. It keeps metric implementations separate and optionally borrows
+resolved packed `ImageOutput` pairs while both mapping guards are alive.
+See its README for supported inputs and deliberate limits.
+
 ## Crates in the zen\* family
 
 | Crate | Format | Repo |
