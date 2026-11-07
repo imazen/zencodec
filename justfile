@@ -1939,3 +1939,9 @@ gray-depth-check:
     cargo test --locked -p zencodec --lib negotiate::
     cargo test --locked -p zencodec-testkit --test gray_color_emit
     cargo clippy --locked -p zencodec --lib -- -D warnings
+
+# Frozen review source with stable dependencies; pixel expectations are unchanged.
+stable-cohort-check:
+    cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check
+    cargo test --locked --workspace --lib --tests
+    cargo clippy --locked --workspace --lib --tests -- -D warnings
