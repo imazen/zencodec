@@ -30,12 +30,12 @@ use zenpixels::{
 ///    target during decode. The descriptor reflects the target.
 /// 2. If `source_color` has CICP metadata, the descriptor uses the CICP
 ///    transfer function and primaries (pixels are in the source color space).
-/// 3. If `source_color` has an ICC profile, [`zenpixels::icc::identify_common`]
+/// 3. If `source_color` has an ICC profile, [`zenpixels::icc::IccIdentification::from_icc`]
 ///    is consulted. Unrecognized profiles yield `Unknown` transfer/primaries.
 /// 4. No color metadata at all: assumes sRGB (legacy format convention).
 ///
 /// `tolerance` is accepted for API compatibility but is currently a no-op:
-/// `zenpixels::icc::identify_common` uses its `Intent` tolerance internally,
+/// `zenpixels::icc::IccIdentification::from_icc` uses its `Intent` tolerance internally,
 /// which is indistinguishable from stricter tolerances at 8-bit and 10-bit
 /// output. See [`IccMatchTolerance`].
 ///
@@ -77,7 +77,7 @@ pub fn descriptor_for_decoded_pixels(
 ///    [`zenpixels::ColorContext::as_profile_source`] returns whichever
 ///    the codec declared canonical.
 /// 3. If the resolved `ColorProfileSource` is an ICC blob,
-///    [`zenpixels::icc::identify_common`] is consulted. Unrecognized
+///    [`zenpixels::icc::IccIdentification::from_icc`] is consulted. Unrecognized
 ///    profiles yield `Unknown` transfer/primaries.
 /// 4. No color metadata at all: assumes sRGB (legacy format convention).
 ///
@@ -108,7 +108,7 @@ pub fn descriptor_for_decoded_pixels_v2(
 /// 1. `corrected_to` if `Some`.
 /// 2. Authority-aware resolution via [`SourceColor::to_color_context`].
 ///    When an ICC blob is authoritative,
-///    [`zenpixels::icc::identify_common`] extracts primaries/transfer;
+///    [`zenpixels::icc::IccIdentification::from_icc`] extracts primaries/transfer;
 ///    unrecognized ICC returns `(Unknown, Unknown)`.
 /// 3. Assumed sRGB (Bt709 / Srgb) when no metadata is present.
 ///
@@ -137,7 +137,7 @@ fn resolve_profile_source(src: &ColorProfileSource<'_>) -> (ColorPrimaries, Tran
             TransferFunction::from_cicp(cicp.transfer_characteristics)
                 .unwrap_or(TransferFunction::Unknown),
         ),
-        ColorProfileSource::Icc(icc) => match zenpixels::icc::identify_common(icc) {
+        ColorProfileSource::Icc(icc) => match zenpixels::icc::IccIdentification::from_icc(icc) {
             Some(id) => (id.primaries, id.transfer),
             None => (ColorPrimaries::Unknown, TransferFunction::Unknown),
         },
@@ -156,7 +156,7 @@ fn resolve_profile_source(src: &ColorProfileSource<'_>) -> (ColorPrimaries, Tran
 
 /// Maximum u16 TRC error tolerance for ICC profile identification.
 ///
-/// **Deprecated placebo.** `zenpixels::icc::identify_common` uses its
+/// **Deprecated placebo.** `zenpixels::icc::IccIdentification::from_icc` uses its
 /// `Intent` tolerance internally; all variants here collapse to that.
 /// At 8-bit and 10-bit output the distinction is invisible (the worst
 /// case shifts a u8 by ≤0.22 of a step). Callers computing perceptual
@@ -165,7 +165,7 @@ fn resolve_profile_source(src: &ColorProfileSource<'_>) -> (ColorPrimaries, Tran
 #[must_use]
 #[deprecated(
     since = "0.1.16",
-    note = "zenpixels::icc::identify_common uses Intent tolerance; sub-Intent variants are placebo"
+    note = "zenpixels::icc::IccIdentification::from_icc uses Intent tolerance; sub-Intent variants are placebo"
 )]
 pub enum IccMatchTolerance {
     /// ±1 u16 max — parametric v4 profiles only.
@@ -180,26 +180,29 @@ pub enum IccMatchTolerance {
 
 /// Identify a well-known ICC profile by normalized hash lookup.
 ///
-/// Delegates to [`zenpixels::icc::identify_common`]. The `tolerance`
+/// Delegates to [`zenpixels::icc::IccIdentification::from_icc`]. The `tolerance`
 /// argument is accepted for backwards compatibility but ignored — see
 /// [`IccMatchTolerance`] for the rationale.
 #[deprecated(
     since = "0.1.16",
-    note = "use zenpixels::icc::identify_common — returns richer IccIdentification with valid_use"
+    note = "use zenpixels::icc::IccIdentification::from_icc — returns richer IccIdentification with valid_use"
 )]
 #[allow(deprecated)]
 pub fn identify_well_known_icc(
     icc_bytes: &[u8],
     _tolerance: IccMatchTolerance,
 ) -> Option<(ColorPrimaries, TransferFunction)> {
-    let id = zenpixels::icc::identify_common(icc_bytes)?;
+    let id = zenpixels::icc::IccIdentification::from_icc(icc_bytes)?;
     Some((id.primaries, id.transfer))
 }
 
 /// Check if an ICC profile is a known sRGB profile.
-#[deprecated(since = "0.1.16", note = "use zenpixels::icc::is_common_srgb")]
+#[deprecated(
+    since = "0.1.16",
+    note = "use zenpixels::icc::IccIdentification::is_common_srgb"
+)]
 pub fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
-    zenpixels::icc::is_common_srgb(icc_bytes)
+    zenpixels::icc::IccIdentification::is_common_srgb(icc_bytes)
 }
 
 #[cfg(test)]

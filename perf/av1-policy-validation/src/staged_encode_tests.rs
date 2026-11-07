@@ -11,6 +11,7 @@ use zencodec_media::{
     session::VideoEncoder,
     staged::{Stage as EncodeStage, StagedEncode},
 };
+use zenpixels::sample::ChromaSiting;
 
 struct OwnedEncoder {
     native: zenavif::media::Av1VideoEncoder,
@@ -90,7 +91,8 @@ impl Write for Writer<'_> {
 fn encoder(live: &Rc<Cell<bool>>) -> OwnedEncoder {
     live.set(true);
     let native =
-        zenavif::media::Av1VideoEncoder::new(settings(8, Subsampling::Yuv420, false), TB).unwrap();
+        zenavif::media::Av1VideoEncoder::new(settings(8, ChromaSubsampling::Yuv420, false), TB)
+            .unwrap();
     assert_eq!(
         native.output_fidelity(),
         None,
@@ -126,7 +128,7 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
             Some(&NoPulse),
         )
         .unwrap();
-        let settings = settings(8, Subsampling::Yuv420, false);
+        let settings = settings(8, ChromaSubsampling::Yuv420, false);
         let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
         for (index, input) in frames.iter().enumerate() {
             if index == 0 {
@@ -231,7 +233,7 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
             Some(&NoPulse),
         )
         .unwrap();
-        let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+        let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
         let target = input.interpretation().clone();
         let conversion = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -317,8 +319,8 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
         let encoded = StorageBudget::new(1 << 20, 64);
         let retained = Cell::new(0);
         let mut bytes = Vec::new();
-        let settings = settings(8, Subsampling::Yuv444, true)
-            .with_siting(zencodec::frame::ChromaSiting::Unknown);
+        let settings =
+            settings(8, ChromaSubsampling::Yuv444, true).with_siting(ChromaSiting::Unknown);
         let native = OwnedEncoder {
             native: zenavif::media::Av1VideoEncoder::new(settings.clone(), TB).unwrap(),
             live: live.clone(),
@@ -431,7 +433,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
 fn staged_native_disk_spool_preserves_output_and_refuses_before_destination_effects() {
     use zencodec::operation::StagingKind;
     use zencodec_media::staging::{DiskLimits, Staging};
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let mut expected_bytes = None;
     for mode in [
@@ -620,7 +622,7 @@ fn staged_native_late_spool_failure_retains_confirmed_output_progress() {
         Some(&NoPulse),
     )
     .unwrap();
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     for i in 0..3 {
         operation.push(frame(&settings, i), Some(&NoPulse)).unwrap();
     }
@@ -666,7 +668,7 @@ fn staged_native_schedule_requirements_use_the_owned_operation_guarantee() {
             Some(&NoPulse),
         )
         .unwrap();
-        let settings = settings(8, Subsampling::Yuv420, false);
+        let settings = settings(8, ChromaSubsampling::Yuv420, false);
         let input = frame(&settings, 0);
         let result = operation.push(input.clone(), Some(&NoPulse));
         assert_eq!(calls.get(), 0);

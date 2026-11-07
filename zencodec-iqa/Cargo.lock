@@ -117,22 +117,22 @@ name = "zencodec-iqa"
 version = "0.1.0"
 dependencies = [
  "zencodec",
- "zenpsychovisual-api",
+ "zenpsy-api",
 ]
 
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
+source = "git+https://github.com/imazen/zenpixels?rev=41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6#41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6"
 dependencies = [
  "bytemuck",
  "whereat",
 ]
 
 [[package]]
-name = "zenpsychovisual-api"
+name = "zenpsy-api"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
+source = "git+https://github.com/imazen/zenpixels?rev=41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6#41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6"
 dependencies = [
  "bytemuck",
  "how-far",

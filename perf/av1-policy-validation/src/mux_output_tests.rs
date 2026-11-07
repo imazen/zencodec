@@ -5,9 +5,9 @@ use zencodec::how_far::NoPulse;
 use zencodec::time::TimeBase;
 use zencodec_media::{
     container::{MuxFinish, Patch, PatchError},
-    frame::Subsampling,
     session::CodecConfig,
 };
+use zenpixels::sample::{ChromaSubsampling, SampleEncoding};
 
 fn root() -> PathBuf {
     let root = PathBuf::from(
@@ -183,7 +183,7 @@ fn write_exact<D: Destination>(destination: D, info: &TrackInfo, packets: &[Pack
 #[test]
 fn mux_native_exact_timing_preserves_variable_durations_decode_clocks_and_origins() {
     for bits in [8, 10] {
-        let settings = settings(bits, Subsampling::Yuv420, false);
+        let settings = settings(bits, ChromaSubsampling::Yuv420, false);
         let frames: Vec<_> = (0..6).map(|i| frame(&settings, i)).collect();
         let (config, original) = encode(settings.clone(), &frames);
         for scale in [1, 90] {
@@ -293,7 +293,7 @@ fn mux_native_exact_timing_preserves_variable_durations_decode_clocks_and_origin
 
 #[test]
 fn mux_native_exact_timing_packet_refusal_is_terminal_with_prior_progress() {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..2).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &frames);
     for invalid in [
@@ -350,7 +350,7 @@ impl<W: Seek> Seek for Short<W> {
 fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8) -> String {
     let root = root();
     let name = format!("mux-{extension}-{forward}-{bits}");
-    let settings = settings(bits, Subsampling::Yuv420, false);
+    let settings = settings(bits, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..6).map(|i| frame(&settings, i)).collect();
     // encode drains and drops the native encoder before the first writer call.
     let (config, packets) = encode(settings.clone(), &frames);
@@ -450,7 +450,7 @@ fn mux_native_network_and_prefixed_disk_preserve_av1_samples() {
 }
 
 fn mismatched<M: Muxer>(make: impl Fn() -> M) {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..2).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &frames);
     for epoch in [false, true] {
@@ -516,7 +516,7 @@ impl Write for Broken<'_> {
 }
 
 fn partial_header<M: Muxer>(make: impl Fn() -> M) {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let (config, _) = encode(settings.clone(), &[frame(&settings, 0)]);
     let mut bytes = Vec::new();
     let error = match Output::with_container_timing(
@@ -592,7 +592,7 @@ impl<M: Muxer> Muxer for BadFinish<M> {
 
 #[test]
 fn mux_native_invalid_final_patch_changes_neither_tail_nor_previous_bytes() {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..6).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &frames);
     let path = root().join("mux-invalid-patch.mp4");
@@ -623,7 +623,7 @@ fn mux_native_invalid_final_patch_changes_neither_tail_nor_previous_bytes() {
 }
 
 fn shifted_origin<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool) {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings.clone(), &frames);
     let packets: Vec<_> = packets
@@ -750,7 +750,7 @@ impl Write for TrippingWriter<'_> {
 
 #[test]
 fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let (config, packets) = encode(settings.clone(), &[frame(&settings, 0)]);
     for reason in [enough::StopReason::Cancelled, enough::StopReason::TimedOut] {
         let stop = StopAfterWrite {
@@ -802,7 +802,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         storage::StorageBudget,
         time::Timestamp,
     };
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &frames);
     let inputs = decode(
@@ -936,7 +936,7 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
         atomic::{AtomicUsize, Ordering},
     };
     use zencodec::{operation::PolicySet, storage::StorageBudget};
-    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
     let storage = StorageBudget::new(1 << 20, 64);
     let live = Arc::new(AtomicUsize::new(0));
     let mut operation = Candidate::new(
@@ -1004,7 +1004,7 @@ fn mux_native_coupled_destination_refusal_precedes_policy_and_conversion() {
         operation::{Decision, Question},
         storage::StorageBudget,
     };
-    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
     let calls = Cell::new(0usize);
     let live = Arc::new(AtomicUsize::new(0));
     let storage = StorageBudget::new(1 << 20, 64);
@@ -1065,7 +1065,7 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
         operation::{Decision, Decline, PolicyFailure, Question},
         storage::StorageBudget,
     };
-    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
     let prepared = Cell::new(false);
     let live = Arc::new(AtomicUsize::new(0));
     let storage = StorageBudget::new(1 << 20, 64);
@@ -1203,19 +1203,20 @@ fn rgb_frame(s: &zenavif::media::Av1EncodeSettings, rgb: &[u8]) -> zencodec_medi
     let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
     let planes = [1, 2, 0]
         .into_iter()
-        .map(|c| OwnedPlane {
-            data: PlaneData::U8(rgb.as_chunks::<3>().0.iter().map(|p| p[c]).collect()),
-            width: s.width as usize,
-            height: s.height as usize,
-            stride_bytes: s.width as usize,
+        .map(|c| {
+            let words: Vec<u8> = rgb.as_chunks::<3>().0.iter().map(|p| p[c]).collect();
+            let (width, height) = (s.width as usize, s.height as usize);
+            OwnedPlane::U8(zenpixels::plane::PlaneBuf::new(words, width, height, width).unwrap())
         })
         .collect();
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(s.width, s.height),
-        Subsampling::Yuv444,
-        s.siting,
-        encoding,
-        vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+        uniform_layout(
+            &[PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+            ChromaSubsampling::Yuv444,
+            s.siting,
+            encoding,
+        ),
     );
     interpretation.color = zencodec::frame::ColorClaim::new(None, None, Some(s.color));
     Frame::new(
@@ -1229,7 +1230,7 @@ fn rgb_frame(s: &zenavif::media::Av1EncodeSettings, rgb: &[u8]) -> zencodec_medi
 fn mux_native_raster_destination_negotiates_and_applies_real_ivf_count_patch() {
     use zencodec::{operation::PolicySet, storage::StorageBudget};
     use zencodec_io::row_encode::{self, Options, Raster};
-    let s = settings(8, Subsampling::Yuv444, true);
+    let s = settings(8, ChromaSubsampling::Yuv444, true);
     let stride = s.width as usize * 3 + 6;
     let mut data = vec![0xa5; stride * s.height as usize];
     let mut packed = Vec::new();

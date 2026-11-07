@@ -6,12 +6,15 @@ import { declarations } from './site/source.mjs';
 const [checkout,revision]=process.argv.slice(2);
 if(!checkout||!revision?.match(/^[0-9a-f]{40}$/))throw Error('usage: capture-output-api.mjs CHECKOUT FULL_COMMIT');
 const file='zenpixels-convert/src/output/plan.rs';
-const source=execFileSync('git',['-C',checkout,'show',`${revision}:${file}`],{encoding:'utf8'});
+const readSource=path=>checkout==='--github'
+  ? Buffer.from(JSON.parse(execFileSync('gh',['api',`repos/imazen/zenpixels/contents/${path}?ref=${revision}`],{encoding:'utf8',timeout:30000})).content,'base64').toString('utf8')
+  : execFileSync('git',['-C',checkout,'show',`${revision}:${path}`],{encoding:'utf8'});
+const source=readSource(file);
 const {code,line}=declarations(source,{scope:'impl OutputPlan {',methods:[
   'new','new_with_descriptor','new_preserving_samples','output_descriptor','metadata','prepare','borrow_rows','convert_rows',
 ]});
 const policyPath='zenpixels/src/policy.rs';
-const policySource=execFileSync('git',['-C',checkout,'show',`${revision}:${policyPath}`],{encoding:'utf8'});
+const policySource=readSource(policyPath);
 const policy=declarations(policySource,{scope:'impl ConvertOptions {',methods:['retain_channels','with_clip_out_of_gamut']});
 const surface=`use alloc::sync::Arc;
 use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut};

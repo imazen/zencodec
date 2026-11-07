@@ -1,16 +1,15 @@
 //! Shared workload for wall-clock and fixed-work profiling of the real policy API.
 use std::hint::black_box;
 use zencodec::{
-    frame::{
-        ChromaSiting, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, SampleEncoding,
-        Subsampling,
-    },
+    frame::{FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole},
     operation::{
         DecisionContext, DecisionRecord, OperationReport, PolicySet, PublicationOffer, Selection,
         resolve_frame,
     },
     time::{TimeBase, Timestamp},
 };
+use zenpixels::sample::SampleEncoding;
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 pub struct Workload {
     interpretation: FrameInterpretation,
@@ -20,10 +19,22 @@ impl Workload {
     pub fn new() -> Self {
         let interpretation = FrameInterpretation::new(
             FrameGeometry::full(1920, 1080),
-            Subsampling::Yuv420,
-            ChromaSiting::Unknown,
-            SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap(),
-            vec![PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr],
+            zenpixels::plane::PlanarLayout::new(
+                [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr]
+                    .into_iter()
+                    .map(|role| {
+                        zenpixels::plane::PlaneSpec::new(
+                            role,
+                            zenpixels::plane::PlaneEncoding::Code(
+                                SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap(),
+                            ),
+                        )
+                    })
+                    .collect(),
+                ChromaSubsampling::Yuv420,
+                ChromaSiting::Unknown,
+            )
+            .unwrap(),
         );
         let seed = resolve_frame(
             &interpretation,

@@ -270,6 +270,13 @@ CHANGELOGs. Full design context:
   and mapping cancellation controls run in `just iqa-check`. See
   `zencodec-iqa/README.md`; this does not qualify metric implementations.
 
+- Fixed by the `PixelStorage` adoption (2026-11-04): `to_owned_frame` allocated bytes with no
+  room to align them, then `.expect`ed the wrap, so a wide format on an allocator returning an
+  odd address panicked with `InsufficientData`. glibc hid it. `tests/odd_allocator.rs` runs under
+  such an allocator. `to_color_context` and `representable_cicp` now choose through
+  `SourceColor::authoritative`; `zencodecs/src/cms.rs:348` still needs to follow
+  (imazen/zenpipe#115).
+
 - Fixed container final-position cancellation (2026-10-29): output could flush
   after its final seek signalled a stop. The driver now checks before flush;
   testkit controls retain confirmed append counts and native seek error priority.

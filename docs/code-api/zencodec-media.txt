@@ -167,7 +167,6 @@ pub fn zencodec_media::container::apply_finish(file: &mut alloc::vec::Vec<u8>, f
 pub fn zencodec_media::container::erase_muxer<M: zencodec_media::container::Muxer + core::marker::Send + 'static>(m: M) -> alloc::boxed::Box<(dyn zencodec_media::container::DynMuxer + core::marker::Send)>
 pub type zencodec_media::container::Request = zencodec::traits::incremental::InputRequest
 pub mod zencodec_media::frame
-pub use zencodec_media::frame::ChromaSiting
 pub use zencodec_media::frame::ColorClaim
 pub use zencodec_media::frame::Crop
 pub use zencodec_media::frame::Frame
@@ -179,25 +178,27 @@ pub use zencodec_media::frame::MappedPlanes
 pub use zencodec_media::frame::Picture
 pub use zencodec_media::frame::PlaneError
 pub use zencodec_media::frame::PlaneRole
-pub use zencodec_media::frame::PlaneSamples
-pub use zencodec_media::frame::PlaneView
 pub use zencodec_media::frame::Presentation
-pub use zencodec_media::frame::SampleEncoding
-pub use zencodec_media::frame::SampleEncodingError
-pub use zencodec_media::frame::Subsampling
-pub enum zencodec_media::frame::PlaneData
-pub zencodec_media::frame::PlaneData::AccountedU16(zencodec::storage::SharedStorage<u16>)
-pub zencodec_media::frame::PlaneData::AccountedU8(zencodec::storage::SharedStorage<u8>)
-pub zencodec_media::frame::PlaneData::U16(alloc::vec::Vec<u16>)
-pub zencodec_media::frame::PlaneData::U8(alloc::vec::Vec<u8>)
-pub struct zencodec_media::frame::OwnedPlane
-pub zencodec_media::frame::OwnedPlane::data: zencodec_media::frame::PlaneData
-pub zencodec_media::frame::OwnedPlane::height: usize
-pub zencodec_media::frame::OwnedPlane::stride_bytes: usize
-pub zencodec_media::frame::OwnedPlane::width: usize
+#[non_exhaustive] pub enum zencodec_media::frame::OwnedPlane
+pub zencodec_media::frame::OwnedPlane::AccountedF32(zenpixels::plane::Plane<zencodec::storage::SharedStorage<f32>>)
+pub zencodec_media::frame::OwnedPlane::AccountedU16(zenpixels::plane::Plane<zencodec::storage::SharedStorage<u16>>)
+pub zencodec_media::frame::OwnedPlane::AccountedU8(zenpixels::plane::Plane<zencodec::storage::SharedStorage<u8>>)
+pub zencodec_media::frame::OwnedPlane::F32(zenpixels::plane::PlaneBuf<f32>)
+pub zencodec_media::frame::OwnedPlane::U16(zenpixels::plane::PlaneBuf<u16>)
+pub zencodec_media::frame::OwnedPlane::U8(zenpixels::plane::PlaneBuf<u8>)
+impl zencodec_media::frame::OwnedPlane
+pub fn zencodec_media::frame::OwnedPlane::view(&self) -> zenpixels::plane::AnyPlane<'_>
+#[non_exhaustive] pub enum zencodec_media::frame::OwnedPlanesError
+pub zencodec_media::frame::OwnedPlanesError::StorageMismatch
+pub zencodec_media::frame::OwnedPlanesError::StorageMismatch::index: usize
+impl core::error::Error for zencodec_media::frame::OwnedPlanesError
+impl core::fmt::Display for zencodec_media::frame::OwnedPlanesError
+pub fn zencodec_media::frame::OwnedPlanesError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct zencodec_media::frame::OwnedPlanes
 impl zencodec_media::frame::OwnedPlanes
-pub fn zencodec_media::frame::OwnedPlanes::new(planes: alloc::vec::Vec<zencodec_media::frame::OwnedPlane>, encoding: zencodec::frame::SampleEncoding) -> core::result::Result<Self, zencodec::frame_storage::PlaneError>
+pub fn zencodec_media::frame::OwnedPlanes::encoding(&self, index: usize) -> core::option::Option<zenpixels::plane::PlaneEncoding>
+pub fn zencodec_media::frame::OwnedPlanes::from_encoded_planes(planes: alloc::vec::Vec<(zencodec_media::frame::OwnedPlane, zenpixels::plane::PlaneEncoding)>) -> core::result::Result<Self, zencodec_media::frame::OwnedPlanesError>
+pub fn zencodec_media::frame::OwnedPlanes::new(planes: alloc::vec::Vec<zencodec_media::frame::OwnedPlane>, encoding: zenpixels::sample::SampleEncoding) -> core::result::Result<Self, zencodec_media::frame::OwnedPlanesError>
 impl zencodec::frame_storage::Picture for zencodec_media::frame::OwnedPlanes
 pub fn zencodec_media::frame::OwnedPlanes::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame_storage::MappedPlanes + '_)>, zencodec::frame_storage::MapError>
 pub mod zencodec_media::limits

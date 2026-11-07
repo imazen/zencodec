@@ -6,11 +6,13 @@
 //! The collection/discovery adapter is separate from this output contract.
 use crate::At;
 use crate::frame::{
-    Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, PlaneSamples,
-    PlaneView as CodePlane, Presentation, SampleEncoding,
+    Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, Presentation,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
+use zenpixels::plane::AnyPlane;
+use zenpixels::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
+use zenpixels::sample::SampleEncoding;
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = At<OutputError>;
 
@@ -328,21 +330,143 @@ pub enum Samples<'a> {
     Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
     Codes(CodePlane<'a>),
+    /// Floating component samples with their explicit value mapping.
+    Float {
+        /// Native-endian strided samples.
+        plane: PlaneRef<'a, f32>,
+        /// Value scale and offset, independent of color signaling.
+        encoding: FloatEncoding,
+    },
 }
+/// A mapped native plane with the code encoding its words carry. Built on
+/// [`zenpixels::plane::AnyPlane`]; the storage type is checked against the
+/// encoding at construction.
+#[derive(Clone, Copy, Debug)]
+pub struct CodePlane<'a> {
+    plane: AnyPlane<'a>,
+    encoding: SampleEncoding,
+    components: usize,
+}
+
+impl<'a> CodePlane<'a> {
+    /// Codes of `encoding` stored in `plane`.
+    ///
+    /// # Errors
+    ///
+    /// When the plane's storage type disagrees with `encoding`.
+    pub fn new(
+        plane: AnyPlane<'a>,
+        encoding: SampleEncoding,
+    ) -> Result<Self, zenpixels::sample::CodePlaneError> {
+        zenpixels::sample::CodePlane::new(plane, encoding)?;
+        Ok(Self {
+            plane,
+            encoding,
+            components: 1,
+        })
+    }
+
+    /// The native plane.
+    pub fn plane(&self) -> AnyPlane<'a> {
+        self.plane
+    }
+
+    /// Width in samples.
+    pub fn width(&self) -> usize {
+        self.plane.width()
+    }
+
+    /// Height in rows.
+    pub fn height(&self) -> usize {
+        self.plane.height()
+    }
+
+    /// The code encoding.
+    pub fn encoding(&self) -> SampleEncoding {
+        self.encoding
+    }
+
+    /// Distance between row starts in bytes.
+    pub fn stride_bytes(&self) -> usize {
+        match self.plane {
+            AnyPlane::U8(p) => p.stride(),
+            AnyPlane::U16(p) => p.stride() * 2,
+            AnyPlane::F32(p) => p.stride() * 4,
+            _ => 0,
+        }
+    }
+
+    /// Active row `y`, without padding.
+    pub fn row(&self, y: usize) -> Option<Row<'a>> {
+        fn span<T>(s: &[T], y: usize, width: usize, stride: usize) -> &[T] {
+            if width == 0 {
+                return &[];
+            }
+            &s[y * stride..y * stride + width]
+        }
+        if y >= self.height() {
+            return None;
+        }
+        match self.plane {
+            AnyPlane::U8(p) => Some(Row::Bytes(span(
+                p.into_strided_samples(),
+                y,
+                p.width(),
+                p.stride(),
+            ))),
+            AnyPlane::U16(p) => Some(Row::Words16(span(
+                p.into_strided_samples(),
+                y,
+                p.width(),
+                p.stride(),
+            ))),
+            _ => None,
+        }
+    }
+
+    /// Number of component words stored at each spatial position.
+    pub fn components(&self) -> usize {
+        self.components
+    }
+
+    /// Borrow one component using spatial coordinates, without copying.
+    /// Component order is the enclosing plane role's order (CbCr or CrCb).
+    pub fn component(
+        &self,
+        index: usize,
+    ) -> Result<zenpixels::sample::CodePlane<'a>, zenpixels::sample::CodePlaneError> {
+        zenpixels::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
+    }
+
+    /// Read a single-component plane at spatial `(x, y)`.
+    /// Interleaved planes return `None`: select `component(index)` explicitly.
+    pub fn code(&self, x: usize, y: usize) -> Option<u16> {
+        if self.components != 1 {
+            return None;
+        }
+        self.component(0).ok()?.code(x, y)
+    }
+}
+
 /// Active row storage, excluding padding. Read its type from the plane.
 pub enum Row<'a> {
     /// Bytes of packed pixels or values, or eight-bit component words.
     Bytes(&'a [u8]),
     /// Native-endian sixteen-bit component words; retain their code encoding.
     Words16(&'a [u16]),
+    /// Native-endian floating component samples.
+    Floats(&'a [f32]),
 }
 impl Samples<'_> {
-    /// Width and height of this emitted plane.
+    /// Width and height excluding padding: pixels for packed color, scalar
+    /// sample words for values and component planes. Semiplanar chroma has
+    /// two words per spatial position; its role records the order.
     pub fn dimensions(&self) -> (usize, usize) {
         match self {
             Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
             Self::Values(p) => (p.width as usize, p.height as usize),
             Self::Codes(p) => (p.width(), p.height()),
+            Self::Float { plane, .. } => (plane.width(), plane.height()),
         }
     }
     /// Storage sample type, not original precision or code depth.
@@ -351,6 +475,7 @@ impl Samples<'_> {
             Self::Pixels(p) => p.descriptor().channel_type(),
             Self::Values(p) => p.channel,
             Self::Codes(p) => p.encoding().storage(),
+            Self::Float { .. } => ChannelType::F32,
         }
     }
     /// Significant code bits for component words; absent for pixels/values.
@@ -366,6 +491,7 @@ impl Samples<'_> {
             Self::Pixels(p) => p.stride(),
             Self::Values(p) => p.stride,
             Self::Codes(p) => p.stride_bytes(),
+            Self::Float { plane, .. } => plane.stride() * core::mem::size_of::<f32>(),
         }
     }
     /// Active row, or `None` past the plane height.
@@ -378,10 +504,15 @@ impl Samples<'_> {
             Self::Values(p) => Row::Bytes(
                 &p.bytes[y * p.stride..y * p.stride + p.width as usize * p.channel.byte_size()],
             ),
-            Self::Codes(p) => match p.row(y)? {
-                PlaneSamples::U8(v) => Row::Bytes(v),
-                PlaneSamples::U16(v) => Row::Words16(v),
-            },
+            Self::Codes(p) => p.row(y)?,
+            Self::Float { plane, .. } => {
+                let start = if plane.width() == 0 {
+                    0
+                } else {
+                    y * plane.stride()
+                };
+                Row::Floats(&plane.strided_samples()[start..start + plane.width()])
+            }
         })
     }
 }
@@ -575,10 +706,10 @@ impl ImageOutput {
         Self {
             storage: Arc::new(Components {
                 roles: signal
-                    .roles
+                    .layout
+                    .planes()
                     .iter()
-                    .copied()
-                    .map(Meaning::Component)
+                    .map(|p| Meaning::Component(p.role()))
                     .collect(),
                 frame,
             }),
@@ -643,9 +774,9 @@ pub enum OutputError {
         /// Actual dimensions supplied by the native mapping.
         actual_dimensions: (usize, usize),
         /// Code encoding captured with the frame.
-        expected_encoding: SampleEncoding,
+        expected_encoding: PlaneEncoding,
         /// Code encoding supplied by the mapping.
-        actual_encoding: SampleEncoding,
+        actual_encoding: PlaneEncoding,
     },
     /// The packed-color convenience was requested for component codes.
     NotPackedColor,
@@ -862,14 +993,7 @@ impl ImageStorage for Components {
         }
         .validate()
         .map_err(|e| fail(OutputError::Region(e)))?;
-        if signal.roles.is_empty()
-            || signal
-                .roles
-                .iter()
-                .enumerate()
-                .any(|(i, role)| signal.roles[..i].contains(role))
-            || g.render.is_some_and(|(w, h)| w == 0 || h == 0)
-        {
+        if g.render.is_some_and(|(w, h)| w == 0 || h == 0) {
             return Err(fail(OutputError::Interpretation));
         }
         let native = self
@@ -899,29 +1023,47 @@ impl MappedImage for ComponentMap<'_> {
             .plane(index)
             .ok_or_else(|| fail(OutputError::MissingPlane))?;
         let g = self.signal.geometry;
-        let role = self.signal.roles[index];
-        let (w, h) = match role {
-            PlaneRole::Cb | PlaneRole::Cr => self
-                .signal
-                .subsampling
-                .chroma_size(g.coded_width, g.coded_height)
-                .ok_or_else(|| fail(OutputError::Interpretation))?,
-            _ => (g.coded_width, g.coded_height),
-        };
-        let expected_dimensions = (w as usize, h as usize);
+        let spec = self.signal.layout.planes()[index];
+        let (w, h) = self
+            .signal
+            .layout
+            .plane_size(index, g.coded_width, g.coded_height)
+            .ok_or_else(|| fail(OutputError::Interpretation))?;
+        let expected_dimensions = (
+            (w as usize)
+                .checked_mul(spec.role().components())
+                .ok_or_else(|| fail(OutputError::Geometry))?,
+            h as usize,
+        );
         let actual_dimensions = (samples.width(), samples.height());
-        if samples.encoding() != self.signal.encoding || actual_dimensions != expected_dimensions {
-            return Err(fail(OutputError::Component {
+        let expected_encoding = spec.encoding();
+        let actual_encoding = self.native.encoding(index).unwrap_or(expected_encoding);
+        let mismatch = || {
+            fail(OutputError::Component {
                 index,
                 expected_dimensions,
                 actual_dimensions,
-                expected_encoding: self.signal.encoding,
-                actual_encoding: samples.encoding(),
-            }));
+                expected_encoding,
+                actual_encoding,
+            })
+        };
+        if actual_dimensions != expected_dimensions
+            || actual_encoding != expected_encoding
+            || samples.channel_type() != expected_encoding.channel_type()
+        {
+            return Err(mismatch());
         }
-        Ok(Some(Plane {
-            meaning,
-            samples: Samples::Codes(samples),
-        }))
+        let samples = match (samples, expected_encoding) {
+            (plane, PlaneEncoding::Code(encoding)) => Samples::Codes({
+                let mut codes = CodePlane::new(plane, encoding).map_err(|_| mismatch())?;
+                codes.components = spec.role().components();
+                codes
+            }),
+            (zenpixels::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
+                Samples::Float { plane, encoding }
+            }
+            _ => return Err(fail(OutputError::Interpretation)),
+        };
+        Ok(Some(Plane { meaning, samples }))
     }
 }

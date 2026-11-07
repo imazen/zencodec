@@ -1375,11 +1375,10 @@ pub const fn zencodec::exif::ExifPolicy::with_thumbnail(self, r: zencodec::exif:
 pub const fn zencodec::exif::ExifPolicy::with_time_offsets(self, r: zencodec::exif::Retention) -> Self
 pub fn zencodec::exif::retain<'a>(src: &'a [u8], policy: &zencodec::exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
 pub mod zencodec::frame
-#[non_exhaustive] pub enum zencodec::frame::ChromaSiting
-pub zencodec::frame::ChromaSiting::Center
-pub zencodec::frame::ChromaSiting::Left
-pub zencodec::frame::ChromaSiting::TopLeft
-pub zencodec::frame::ChromaSiting::Unknown
+pub use zencodec::frame::AnyPlane
+pub use zencodec::frame::PlaneError
+pub use zencodec::frame::PlaneRef
+pub use zencodec::frame::PlaneRole
 #[non_exhaustive] pub enum zencodec::frame::MapError
 pub zencodec::frame::MapError::Backend(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>)
 pub zencodec::frame::MapError::Unavailable
@@ -1387,44 +1386,6 @@ impl core::error::Error for zencodec::frame::MapError
 pub fn zencodec::frame::MapError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Display for zencodec::frame::MapError
 pub fn zencodec::frame::MapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-#[non_exhaustive] pub enum zencodec::frame::PlaneError
-pub zencodec::frame::PlaneError::GeometryOverflow
-pub zencodec::frame::PlaneError::MisalignedStride
-pub zencodec::frame::PlaneError::ShortBuffer
-pub zencodec::frame::PlaneError::ShortStride
-pub zencodec::frame::PlaneError::StorageMismatch
-impl core::error::Error for zencodec::frame::PlaneError
-impl core::fmt::Display for zencodec::frame::PlaneError
-pub fn zencodec::frame::PlaneError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-#[non_exhaustive] pub enum zencodec::frame::PlaneRole
-pub zencodec::frame::PlaneRole::Alpha
-pub zencodec::frame::PlaneRole::Blue
-pub zencodec::frame::PlaneRole::Cb
-pub zencodec::frame::PlaneRole::Cr
-pub zencodec::frame::PlaneRole::Green
-pub zencodec::frame::PlaneRole::Luma
-pub zencodec::frame::PlaneRole::Red
-pub enum zencodec::frame::PlaneSamples<'a>
-pub zencodec::frame::PlaneSamples::U16(&'a [u16])
-pub zencodec::frame::PlaneSamples::U8(&'a [u8])
-impl zencodec::frame::PlaneSamples<'_>
-pub fn zencodec::frame::PlaneSamples<'_>::is_empty(&self) -> bool
-pub fn zencodec::frame::PlaneSamples<'_>::len(&self) -> usize
-pub fn zencodec::frame::PlaneSamples<'_>::storage(&self) -> zenpixels::descriptor::ChannelType
-#[non_exhaustive] pub enum zencodec::frame::SampleEncodingError
-pub zencodec::frame::SampleEncodingError::InvalidBitDepth
-pub zencodec::frame::SampleEncodingError::InvalidBitShift
-pub zencodec::frame::SampleEncodingError::UnsupportedStorage
-impl core::error::Error for zencodec::frame::SampleEncodingError
-impl core::fmt::Display for zencodec::frame::SampleEncodingError
-pub fn zencodec::frame::SampleEncodingError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-#[non_exhaustive] pub enum zencodec::frame::Subsampling
-pub zencodec::frame::Subsampling::Mono
-pub zencodec::frame::Subsampling::Yuv420
-pub zencodec::frame::Subsampling::Yuv422
-pub zencodec::frame::Subsampling::Yuv444
-impl zencodec::frame::Subsampling
-pub const fn zencodec::frame::Subsampling::chroma_size(self, width: u32, height: u32) -> core::option::Option<(u32, u32)>
 #[non_exhaustive] pub struct zencodec::frame::ColorClaim
 pub zencodec::frame::ColorClaim::bitstream: core::option::Option<zenpixels::cicp::Cicp>
 pub zencodec::frame::ColorClaim::container: core::option::Option<zenpixels::cicp::Cicp>
@@ -1458,13 +1419,11 @@ pub const fn zencodec::frame::FrameGeometry::full(width: u32, height: u32) -> Se
 #[non_exhaustive] pub struct zencodec::frame::FrameInterpretation
 pub zencodec::frame::FrameInterpretation::color: zencodec::frame::ColorClaim
 pub zencodec::frame::FrameInterpretation::config_epoch: u32
-pub zencodec::frame::FrameInterpretation::encoding: zencodec::frame::SampleEncoding
 pub zencodec::frame::FrameInterpretation::geometry: zencodec::frame::FrameGeometry
-pub zencodec::frame::FrameInterpretation::roles: alloc::vec::Vec<zencodec::frame::PlaneRole>
-pub zencodec::frame::FrameInterpretation::siting: zencodec::frame::ChromaSiting
-pub zencodec::frame::FrameInterpretation::subsampling: zencodec::frame::Subsampling
+pub zencodec::frame::FrameInterpretation::layout: zenpixels::plane::PlanarLayout
 impl zencodec::frame::FrameInterpretation
-pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, subsampling: zencodec::frame::Subsampling, siting: zencodec::frame::ChromaSiting, encoding: zencodec::frame::SampleEncoding, roles: alloc::vec::Vec<zencodec::frame::PlaneRole>) -> Self
+pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, layout: zenpixels::plane::PlanarLayout) -> Self
+pub fn zencodec::frame::FrameInterpretation::uniform_code_encoding(&self) -> core::option::Option<zenpixels::sample::SampleEncoding>
 pub fn zencodec::frame::FrameInterpretation::with_color(self, color: zencodec::frame::ColorClaim) -> Self
 pub fn zencodec::frame::FrameInterpretation::with_config_epoch(self, epoch: u32) -> Self
 #[non_exhaustive] pub struct zencodec::frame::FrameTiming
@@ -1476,32 +1435,15 @@ impl zencodec::frame::FrameTiming
 pub const fn zencodec::frame::FrameTiming::at(pts: zencodec::time::Timestamp) -> Self
 pub const fn zencodec::frame::FrameTiming::with_duration_ticks(self, ticks: u64) -> Self
 pub const fn zencodec::frame::FrameTiming::with_packet(self, ordinal: core::option::Option<u64>, offset: core::option::Option<u64>) -> Self
-pub struct zencodec::frame::PlaneView<'a>
-impl<'a> zencodec::frame::PlaneView<'a>
-pub fn zencodec::frame::PlaneView<'a>::as_strided_samples(&self) -> zencodec::frame::PlaneSamples<'a>
-pub fn zencodec::frame::PlaneView<'a>::code(&self, x: usize, y: usize) -> core::option::Option<u16>
-pub fn zencodec::frame::PlaneView<'a>::encoding(&self) -> zencodec::frame::SampleEncoding
-pub fn zencodec::frame::PlaneView<'a>::height(&self) -> usize
-pub fn zencodec::frame::PlaneView<'a>::new(samples: zencodec::frame::PlaneSamples<'a>, width: usize, height: usize, stride_bytes: usize, encoding: zencodec::frame::SampleEncoding) -> core::result::Result<Self, zencodec::frame::PlaneError>
-pub fn zencodec::frame::PlaneView<'a>::row(&self, y: usize) -> core::option::Option<zencodec::frame::PlaneSamples<'a>>
-pub fn zencodec::frame::PlaneView<'a>::stride_bytes(&self) -> usize
-pub fn zencodec::frame::PlaneView<'a>::width(&self) -> usize
 #[non_exhaustive] pub struct zencodec::frame::Presentation
 pub zencodec::frame::Presentation::keyframe: bool
 pub zencodec::frame::Presentation::show_existing: bool
 impl zencodec::frame::Presentation
 pub const zencodec::frame::Presentation::KEYFRAME: Self
 pub const zencodec::frame::Presentation::SHOW_EXISTING: Self
-pub struct zencodec::frame::SampleEncoding
-impl zencodec::frame::SampleEncoding
-pub const zencodec::frame::SampleEncoding::U8: Self
-pub const fn zencodec::frame::SampleEncoding::bit_shift(self) -> u8
-pub const fn zencodec::frame::SampleEncoding::bytes_per_sample(self) -> usize
-pub const fn zencodec::frame::SampleEncoding::code_bits(self) -> u8
-pub const fn zencodec::frame::SampleEncoding::new(storage: zenpixels::descriptor::ChannelType, code_bits: u8, bit_shift: u8) -> core::result::Result<Self, zencodec::frame::SampleEncodingError>
-pub const fn zencodec::frame::SampleEncoding::storage(self) -> zenpixels::descriptor::ChannelType
 pub trait zencodec::frame::MappedPlanes
-pub fn zencodec::frame::MappedPlanes::plane(&self, index: usize) -> core::option::Option<zencodec::frame::PlaneView<'_>>
+pub fn zencodec::frame::MappedPlanes::encoding(&self, index: usize) -> core::option::Option<zenpixels::plane::PlaneEncoding>
+pub fn zencodec::frame::MappedPlanes::plane(&self, index: usize) -> core::option::Option<zenpixels::plane::AnyPlane<'_>>
 pub fn zencodec::frame::MappedPlanes::plane_count(&self) -> usize
 pub trait zencodec::frame::Picture: core::marker::Send + core::marker::Sync
 pub fn zencodec::frame::Picture::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame::MappedPlanes + '_)>, zencodec::frame::MapError>
@@ -1679,7 +1621,7 @@ pub zencodec::image::ColorContribution::Separate
 pub enum zencodec::image::Meaning
 pub zencodec::image::Meaning::Auxiliary(zencodec::image::Auxiliary)
 pub zencodec::image::Meaning::Color
-pub zencodec::image::Meaning::Component(zencodec::frame::PlaneRole)
+pub zencodec::image::Meaning::Component(zenpixels::plane::PlaneRole)
 #[non_exhaustive] pub enum zencodec::image::OutputError
 pub zencodec::image::OutputError::AuxiliaryGrid
 pub zencodec::image::OutputError::AuxiliaryGrid::actual: zencodec::image::AuxiliaryGrid
@@ -1689,9 +1631,9 @@ pub zencodec::image::OutputError::AuxiliaryGrid::expected: zencodec::image::Auxi
 pub zencodec::image::OutputError::AuxiliaryGrid::index: usize
 pub zencodec::image::OutputError::Component
 pub zencodec::image::OutputError::Component::actual_dimensions: (usize, usize)
-pub zencodec::image::OutputError::Component::actual_encoding: zencodec::frame::SampleEncoding
+pub zencodec::image::OutputError::Component::actual_encoding: zenpixels::plane::PlaneEncoding
 pub zencodec::image::OutputError::Component::expected_dimensions: (usize, usize)
-pub zencodec::image::OutputError::Component::expected_encoding: zencodec::frame::SampleEncoding
+pub zencodec::image::OutputError::Component::expected_encoding: zenpixels::plane::PlaneEncoding
 pub zencodec::image::OutputError::Component::index: usize
 pub zencodec::image::OutputError::Composition
 pub zencodec::image::OutputError::Composition::actual: zencodec::collection::Composition
@@ -1719,14 +1661,18 @@ impl core::fmt::Display for zencodec::image::PlacementError
 pub fn zencodec::image::PlacementError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum zencodec::image::Row<'a>
 pub zencodec::image::Row::Bytes(&'a [u8])
+pub zencodec::image::Row::Floats(&'a [f32])
 pub zencodec::image::Row::Words16(&'a [u16])
 pub enum zencodec::image::Samples<'a>
-pub zencodec::image::Samples::Codes(zencodec::frame::PlaneView<'a>)
+pub zencodec::image::Samples::Codes(zencodec::image::CodePlane<'a>)
+pub zencodec::image::Samples::Float
+pub zencodec::image::Samples::Float::encoding: zenpixels::plane::FloatEncoding
+pub zencodec::image::Samples::Float::plane: zenpixels::plane::PlaneRef<'a, f32>
 pub zencodec::image::Samples::Pixels(zenpixels::buffer::PixelSlice<'a>)
 pub zencodec::image::Samples::Values(zencodec::image::ValueSlice<'a>)
 impl zencodec::image::Samples<'_>
 pub fn zencodec::image::Samples<'_>::channel_type(&self) -> zenpixels::descriptor::ChannelType
-pub fn zencodec::image::Samples<'_>::code_encoding(&self) -> core::option::Option<zencodec::frame::SampleEncoding>
+pub fn zencodec::image::Samples<'_>::code_encoding(&self) -> core::option::Option<zenpixels::sample::SampleEncoding>
 pub fn zencodec::image::Samples<'_>::dimensions(&self) -> (usize, usize)
 pub fn zencodec::image::Samples<'_>::row(&self, y: usize) -> core::option::Option<zencodec::image::Row<'_>>
 pub fn zencodec::image::Samples<'_>::stride_bytes(&self) -> usize
@@ -1742,6 +1688,18 @@ pub zencodec::image::Auxiliary::kind: zencodec::image::AuxiliaryKind
 pub zencodec::image::Auxiliary::name: alloc::string::String
 pub zencodec::image::Auxiliary::source_dim_shift: u32
 pub zencodec::image::Auxiliary::source_precision: zencodec::image::SourcePrecision
+pub struct zencodec::image::CodePlane<'a>
+impl<'a> zencodec::image::CodePlane<'a>
+pub fn zencodec::image::CodePlane<'a>::code(&self, x: usize, y: usize) -> core::option::Option<u16>
+pub fn zencodec::image::CodePlane<'a>::component(&self, index: usize) -> core::result::Result<zenpixels::sample::plane::CodePlane<'a>, zenpixels::sample::plane::CodePlaneError>
+pub fn zencodec::image::CodePlane<'a>::components(&self) -> usize
+pub fn zencodec::image::CodePlane<'a>::encoding(&self) -> zenpixels::sample::SampleEncoding
+pub fn zencodec::image::CodePlane<'a>::height(&self) -> usize
+pub fn zencodec::image::CodePlane<'a>::new(plane: zenpixels::plane::AnyPlane<'a>, encoding: zenpixels::sample::SampleEncoding) -> core::result::Result<Self, zenpixels::sample::plane::CodePlaneError>
+pub fn zencodec::image::CodePlane<'a>::plane(&self) -> zenpixels::plane::AnyPlane<'a>
+pub fn zencodec::image::CodePlane<'a>::row(&self, y: usize) -> core::option::Option<zencodec::image::Row<'a>>
+pub fn zencodec::image::CodePlane<'a>::stride_bytes(&self) -> usize
+pub fn zencodec::image::CodePlane<'a>::width(&self) -> usize
 pub struct zencodec::image::GeometryError
 pub zencodec::image::GeometryError::geometry: zencodec::image::ImageGeometry
 impl core::error::Error for zencodec::image::GeometryError
@@ -2301,7 +2259,7 @@ pub const fn zencodec::operation::EncodeRouteOffer::external_source_passes(&self
 pub const fn zencodec::operation::EncodeRouteOffer::new(acquisition: zencodec::operation::InputAcquisition, output: zencodec::operation::OutputScheduleOffer) -> Self
 #[non_exhaustive] pub struct zencodec::operation::FrameConversionOffer
 pub zencodec::operation::FrameConversionOffer::admitted_bytes: usize
-pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zencodec::frame::ChromaSiting>
+pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
 pub zencodec::operation::FrameConversionOffer::encoder_input: zencodec::operation::FrameFacts
 pub zencodec::operation::FrameConversionOffer::preserves_extended_range: bool
 pub zencodec::operation::FrameConversionOffer::preserves_samples: bool
@@ -2310,11 +2268,12 @@ pub const fn zencodec::operation::FrameConversionOffer::new(encoder_input: zenco
 #[non_exhaustive] pub struct zencodec::operation::FrameFacts
 pub zencodec::operation::FrameFacts::color: zencodec::frame::ColorClaim
 pub zencodec::operation::FrameFacts::config_epoch: u32
-pub zencodec::operation::FrameFacts::encoding: zencodec::frame::SampleEncoding
+pub zencodec::operation::FrameFacts::encoding: core::option::Option<zenpixels::sample::SampleEncoding>
 pub zencodec::operation::FrameFacts::geometry: zencodec::frame::FrameGeometry
+pub zencodec::operation::FrameFacts::plane_specs: [core::option::Option<zenpixels::plane::PlaneSpec>; 4]
 pub zencodec::operation::FrameFacts::planes: usize
-pub zencodec::operation::FrameFacts::siting: zencodec::frame::ChromaSiting
-pub zencodec::operation::FrameFacts::subsampling: zencodec::frame::Subsampling
+pub zencodec::operation::FrameFacts::siting: zenpixels::sample::plane::ChromaSiting
+pub zencodec::operation::FrameFacts::subsampling: zenpixels::sample::plane::ChromaSubsampling
 pub zencodec::operation::FrameFacts::timing: zencodec::frame::FrameTiming
 impl zencodec::operation::FrameFacts
 pub fn zencodec::operation::FrameFacts::new(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming) -> Self
@@ -2338,7 +2297,7 @@ pub zencodec::operation::FrameRouteState::output_committed: bool
 pub zencodec::operation::FrameRouteState::previous: core::option::Option<zencodec::operation::FrameFacts>
 #[non_exhaustive] pub struct zencodec::operation::ImageConversionOffer
 pub zencodec::operation::ImageConversionOffer::admitted_bytes: usize
-pub zencodec::operation::ImageConversionOffer::assumed_chroma_siting: core::option::Option<zencodec::frame::ChromaSiting>
+pub zencodec::operation::ImageConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
 pub zencodec::operation::ImageConversionOffer::geometry: zencodec::image::ImageGeometry
 pub zencodec::operation::ImageConversionOffer::orientation: zenpixels::orientation::Orientation
 pub zencodec::operation::ImageConversionOffer::output: zenpixels::descriptor::PixelDescriptor
@@ -3011,6 +2970,9 @@ pub fn zencodec::storage::SharedStorage<T>::charged_bytes(&self) -> usize
 pub fn zencodec::storage::SharedStorage<T>::is_empty(&self) -> bool
 pub fn zencodec::storage::SharedStorage<T>::len(&self) -> usize
 pub fn zencodec::storage::SharedStorage<T>::slice(&self, range: core::ops::range::Range<usize>) -> core::result::Result<Self, zencodec::storage::StorageError>
+impl<T: zenpixels::plane::PlaneSample> zenpixels::plane::SampleStorage for zencodec::storage::SharedStorage<T>
+pub type zencodec::storage::SharedStorage<T>::Sample = T
+pub fn zencodec::storage::SharedStorage<T>::samples(&self) -> &[T]
 impl<T> core::clone::Clone for zencodec::storage::SharedStorage<T>
 pub fn zencodec::storage::SharedStorage<T>::clone(&self) -> Self
 impl<T> core::fmt::Debug for zencodec::storage::SharedStorage<T>

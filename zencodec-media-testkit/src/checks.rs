@@ -21,7 +21,7 @@ use zencodec_media::adapt::{
 use zencodec_media::container::{
     DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer, SeekStatus, SeekTarget,
 };
-use zencodec_media::frame::{Frame, PlaneSamples};
+use zencodec_media::frame::Frame;
 use zencodec_media::packet::{Discard, Packet, RandomAccess};
 use zencodec_media::session::{
     CodecConfig, ProtocolViolation, Receive, SendStatus, SessionError, UnsupportedMedia,
@@ -29,6 +29,7 @@ use zencodec_media::session::{
 };
 use zencodec_media::track::{AudioTrackInfo, CodecId, TrackInfo, TrackKind, VideoTrackInfo};
 use zenpixels::PixelBuffer;
+use zenpixels::plane::AnyPlane;
 
 /// A broken rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,15 +73,16 @@ fn frame_pixels(frame: &Frame) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     for i in 0..mapped.plane_count() {
         let plane = mapped.plane(i).ok_or("plane disappeared")?;
-        for y in 0..plane.height() {
-            match plane.row(y).ok_or("row out of range")? {
-                PlaneSamples::U8(r) => out.extend_from_slice(r),
-                PlaneSamples::U16(r) => {
+        match plane {
+            AnyPlane::U8(p) => p.rows().for_each(|r| out.extend_from_slice(r)),
+            AnyPlane::U16(p) => {
+                for r in p.rows() {
                     for v in r {
                         out.extend_from_slice(&v.to_le_bytes());
                     }
                 }
             }
+            _ => return Err("unsupported plane sample type".into()),
         }
     }
     Ok(out)

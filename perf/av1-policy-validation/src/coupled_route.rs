@@ -11,20 +11,18 @@ use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
     encode::Fidelity,
-    frame::{
-        ChromaSiting, ColorClaim, Frame, FrameGeometry, FrameInterpretation, PlaneRole,
-        PlaneSamples, SampleEncoding, Subsampling,
-    },
+    frame::{ColorClaim, Frame, FrameGeometry, FrameInterpretation, PlaneRole},
     operation::{
         Decision, DecisionCode, FrameConversionOffer, FrameFacts, OperationPolicy, PolicyFailure,
         PolicySet, Question, Selection,
     },
     storage::StorageBudget,
 };
-use zencodec_media::frame::{OwnedPlane, OwnedPlanes, PlaneData};
+use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
 use zenpixels::{
     ChannelType, Cicp, PixelSliceMut,
-    sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
+    plane::Plane,
+    sample::{ChromaSiting, ChromaSubsampling, CodePlane, SampleEncoding},
 };
 use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 type Cause = Box<dyn Error + Send + Sync>;
@@ -83,40 +81,38 @@ pub(crate) fn push(
 ) -> Result<(), Cause> {
     let info = input.interpretation();
     if info.geometry != FrameGeometry::full(info.geometry.coded_width, info.geometry.coded_height)
-        || info.roles != [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr]
-        || !matches!(info.siting, ChromaSiting::Unknown | ChromaSiting::Center)
+        || !info.layout.planes().iter().map(|p| p.role()).eq([
+            PlaneRole::Luma,
+            PlaneRole::Cb,
+            PlaneRole::Cr,
+        ])
+        || !matches!(
+            info.layout.siting(),
+            ChromaSiting::Unknown | ChromaSiting::Center
+        )
     {
         return Err(std::io::Error::other("unqualified conversion interpretation").into());
     }
     let mapping = input.map()?;
-    let encoding = zenpixels::sample::SampleEncoding::new(
-        info.encoding.storage(),
-        info.encoding.code_bits(),
-        info.encoding.bit_shift(),
-    )?;
+    let encoding = info
+        .uniform_code_encoding()
+        .ok_or_else(|| std::io::Error::other("unqualified conversion interpretation"))?;
     let view = |i| -> Result<CodePlane<'_>, Cause> {
         let p = mapping
             .plane(i)
             .ok_or_else(|| std::io::Error::other("missing plane"))?;
-        Ok(match p.as_strided_samples() {
-            PlaneSamples::U8(s) => {
-                CodePlane::from_u8(s, p.width(), p.height(), p.stride_bytes(), encoding)?
-            }
-            PlaneSamples::U16(s) => {
-                CodePlane::from_u16(s, p.width(), p.height(), p.stride_bytes(), encoding)?
-            }
-        })
+        Ok(CodePlane::new(p, encoding)?)
     };
-    let sub = match info.subsampling {
-        Subsampling::Yuv444 => ChromaSubsampling::Yuv444,
-        Subsampling::Yuv422 => ChromaSubsampling::Yuv422,
-        Subsampling::Yuv420 => ChromaSubsampling::Yuv420,
+    let sub = match info.layout.subsampling() {
+        s @ (ChromaSubsampling::Yuv444 | ChromaSubsampling::Yuv422 | ChromaSubsampling::Yuv420) => {
+            s
+        }
         _ => return Err(std::io::Error::other("unsupported sampling").into()),
     };
     let plan = YcbcrToRgbF32::new(
         [view(0)?, view(1)?, view(2)?],
         sub,
-        PixelSiting::Center,
+        ChromaSiting::Center,
         info.color
             .resolved
             .ok_or_else(|| std::io::Error::other("unknown color"))?,
@@ -140,15 +136,17 @@ pub(crate) fn push(
     let output_encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
     let mut target = FrameInterpretation::new(
         info.geometry,
-        Subsampling::Yuv444,
-        ChromaSiting::Unknown,
-        output_encoding,
-        vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+        uniform_layout(
+            &[PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+            ChromaSubsampling::Yuv444,
+            ChromaSiting::Unknown,
+            output_encoding,
+        ),
     );
     target.color = ColorClaim::new(None, None, Some(Cicp::new(1, 13, 0, true)));
     let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
     offer.assumed_chroma_siting =
-        (info.siting == ChromaSiting::Unknown).then_some(ChromaSiting::Center);
+        (info.layout.siting() == ChromaSiting::Unknown).then_some(ChromaSiting::Center);
     offer.admitted_bytes =
         planes.iter().map(|p| p.reserved_bytes()).sum::<usize>() + row.reserved_bytes();
     // Float conversion followed by explicit round-to-nearest U8 saturation.
@@ -180,13 +178,8 @@ pub(crate) fn push(
         }
         let planes = planes
             .into_iter()
-            .map(|p| OwnedPlane {
-                data: PlaneData::AccountedU8(p.freeze()),
-                width: w,
-                height: h,
-                stride_bytes: stride,
-            })
-            .collect();
+            .map(|p| Plane::new(p.freeze(), w, h, stride).map(OwnedPlane::AccountedU8))
+            .collect::<Result<Vec<_>, _>>()?;
         let converted = Frame::new(
             Arc::new(OwnedPlanes::new(planes, output_encoding)?),
             output_target,
@@ -201,9 +194,9 @@ pub(crate) fn push(
 pub(crate) fn sources() -> Vec<Frame> {
     let mut result = Vec::new();
     for (i, (bits, sub, full)) in [
-        (8, Subsampling::Yuv420, true),
-        (10, Subsampling::Yuv422, false),
-        (12, Subsampling::Yuv444, true),
+        (8, ChromaSubsampling::Yuv420, true),
+        (10, ChromaSubsampling::Yuv422, false),
+        (12, ChromaSubsampling::Yuv444, true),
     ]
     .into_iter()
     .enumerate()
@@ -230,7 +223,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
         frame::FrameTiming,
         time::{TimeBase, Timestamp},
     };
-    let settings = settings(8, Subsampling::Yuv420, false);
+    let settings = settings(8, ChromaSubsampling::Yuv420, false);
     let originals: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
     let (config, packets) = encode(settings, &originals);
     let inputs = decode(

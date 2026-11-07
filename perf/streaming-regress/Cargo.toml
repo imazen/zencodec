@@ -40,9 +40,12 @@ lto = "thin"
 # the same path so main branches that pin zencodec by git rev unify with PR
 # heads that take it from crates.io.
 [patch.crates-io]
+# Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
+garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zencodec = { path = "vendor/zencodec" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
 # zenpng's StripCompressor (zenflate::png) is unpublished.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
 # zenjpeg needs unpublished zenanalyze 0.2.

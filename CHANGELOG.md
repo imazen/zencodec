@@ -16,7 +16,7 @@ None. This is a new unpublished review API.
 
 ### Changed
 
-- Move codec-independent still-image contracts to `zenpsychovisual-api`; this
+- Move codec-independent still-image contracts to `zenpsy-api`; this
   companion now provides only resolved packed-output mapping and re-exports
   the shared contract as `iqa`. Native mapping causes and cancellation survive
   the handoff. The review API remains unpublished.
@@ -158,6 +158,17 @@ None. This is a new unpublished review API.
   append/overwrite counts; adversarial controls cover both output schedules.
 
 ### QUEUED BREAKING CHANGES
+
+- Frame interpretation adopts zenpixels `PlanarLayout`; per-plane integer/float encodings replace frame-wide encoding and roles. Mapping exposes F32 and explicit interleaved component access; frame diagnostic uniform encoding becomes optional (51411aee, d2beb2dc).
+
+- Frame ablation candidate: remove `frame::Subsampling` and `frame::ChromaSiting`
+  (and their zencodec-media re-exports); signatures use
+  `zenpixels::sample::{ChromaSubsampling, ChromaSiting}`, which gained `Mono`,
+  `chroma_size`, `Hash` and `Default` (zenpixels PRs #99, #100). Rename
+  `Subsampling::X` to `ChromaSubsampling::X`; variants are unchanged.
+- Frame ablation candidate: remove core/media `SampleEncoding` and its error;
+  signatures now use `zenpixels::sample::SampleEncoding` directly. Import from
+  zenpixels; use `storage().byte_size()` for word size.
 
 - Borrowed operation controls use `Option<&dyn Pulse>` across core, I/O,
   coroutine, media, rendering and metadata services. `None` adds no per-call

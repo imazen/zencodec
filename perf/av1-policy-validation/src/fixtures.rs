@@ -1,14 +1,16 @@
 //! Native frame and IVF helpers adapted from zenavif ea055f7d's
 //! tests/media_session.rs and examples/media_ivf.rs. Test artifacts only.
 use std::{path::Path, process::Command, sync::Arc};
+use zenpixels::plane::{AnyPlane, PlanarLayout, PlaneBuf, PlaneEncoding, PlaneSpec};
+use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
 
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::how_far::NoPulse;
 use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
     frame::{
-        Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneData,
-        PlaneRole, PlaneSamples, Presentation, SampleEncoding, Subsampling,
+        Frame, FrameGeometry, FrameInterpretation, FrameTiming, OwnedPlane, OwnedPlanes, PlaneRole,
+        Presentation,
     },
     packet::Packet,
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoEncoder},
@@ -17,7 +19,7 @@ use zenpixels::{ChannelType, Cicp};
 
 pub const TB: TimeBase = TimeBase::MILLIS;
 
-pub fn settings(bits: u8, sub: Subsampling, identity: bool) -> Av1EncodeSettings {
+pub fn settings(bits: u8, sub: ChromaSubsampling, identity: bool) -> Av1EncodeSettings {
     Av1EncodeSettings::new(17, 13)
         .with_bit_depth(bits)
         .with_subsampling(sub)
@@ -28,17 +30,51 @@ pub fn settings(bits: u8, sub: Subsampling, identity: bool) -> Av1EncodeSettings
         .with_threads(1)
 }
 
+/// One integer encoding across `roles`, checked by the shared layout.
+pub fn uniform_layout(
+    roles: &[PlaneRole],
+    sub: ChromaSubsampling,
+    siting: ChromaSiting,
+    encoding: SampleEncoding,
+) -> PlanarLayout {
+    let planes = roles
+        .iter()
+        .map(|&role| PlaneSpec::new(role, PlaneEncoding::Code(encoding)))
+        .collect();
+    PlanarLayout::new(planes, sub, siting).unwrap()
+}
+
+/// Integer encoding the held layout gives plane `index`.
+pub fn code_encoding(info: &FrameInterpretation, index: usize) -> SampleEncoding {
+    match info.layout.planes()[index].encoding() {
+        PlaneEncoding::Code(encoding) => encoding,
+        other => panic!("AV1 plane {index} is not integer coded: {other:?}"),
+    }
+}
+
+/// Borrowed storage bytes and byte stride, for the byte-level model comparison.
+pub fn strided_bytes(plane: AnyPlane<'_>) -> (&[u8], usize) {
+    match plane {
+        AnyPlane::U8(p) => (p.into_strided_samples(), p.stride()),
+        AnyPlane::U16(p) => (
+            bytemuck::cast_slice(p.into_strided_samples()),
+            p.stride() * 2,
+        ),
+        other => panic!("unexpected AV1 storage {:?}", other.channel_type()),
+    }
+}
+
 pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
     let (w, h) = (s.width as usize, s.height as usize);
     let dims = match s.subsampling {
-        Subsampling::Mono => vec![(w, h)],
-        Subsampling::Yuv420 => vec![
+        ChromaSubsampling::Mono => vec![(w, h)],
+        ChromaSubsampling::Yuv420 => vec![
             (w, h),
             (w.div_ceil(2), h.div_ceil(2)),
             (w.div_ceil(2), h.div_ceil(2)),
         ],
-        Subsampling::Yuv422 => vec![(w, h), (w.div_ceil(2), h), (w.div_ceil(2), h)],
-        Subsampling::Yuv444 => vec![(w, h); 3],
+        ChromaSubsampling::Yuv422 => vec![(w, h), (w.div_ceil(2), h), (w.div_ceil(2), h)],
+        ChromaSubsampling::Yuv444 => vec![(w, h); 3],
         other => panic!("unsupported test layout {other:?}"),
     };
     let mask = (1u32 << s.bit_depth) - 1;
@@ -54,16 +90,11 @@ pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
                     words[y * stride + x] = ((seed.wrapping_mul(997) ^ (seed >> 2)) & mask) as u16;
                 }
             }
-            let data = if s.bit_depth == 8 {
-                PlaneData::U8(words.into_iter().map(|v| v as u8).collect())
+            if s.bit_depth == 8 {
+                let words: Vec<u8> = words.into_iter().map(|v| v as u8).collect();
+                OwnedPlane::U8(PlaneBuf::new(words, width, height, stride).unwrap())
             } else {
-                PlaneData::U16(words)
-            };
-            OwnedPlane {
-                data,
-                width,
-                height,
-                stride_bytes: stride * if s.bit_depth == 8 { 1 } else { 2 },
+                OwnedPlane::U16(PlaneBuf::new(words, width, height, stride).unwrap())
             }
         })
         .collect();
@@ -77,7 +108,7 @@ pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
         0,
     )
     .unwrap();
-    let roles = if s.subsampling == Subsampling::Mono {
+    let roles = if s.subsampling == ChromaSubsampling::Mono {
         vec![PlaneRole::Luma]
     } else if s.color.matrix_coefficients == 0 {
         vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red]
@@ -86,10 +117,7 @@ pub fn frame(s: &Av1EncodeSettings, index: usize) -> Frame {
     };
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(s.width, s.height),
-        s.subsampling,
-        s.siting,
-        encoding,
-        roles,
+        uniform_layout(&roles, s.subsampling, s.siting, encoding),
     );
     interpretation.color = zencodec::frame::ColorClaim::new(None, None, Some(s.color));
     Frame::new(
@@ -161,14 +189,13 @@ pub fn samples(frame: &Frame) -> Vec<u8> {
     let mapping = frame.map().unwrap();
     let mut bytes = Vec::new();
     for c in 0..mapping.plane_count() {
-        let plane = mapping.plane(c).unwrap();
-        for y in 0..plane.height() {
-            match plane.row(y).unwrap() {
-                PlaneSamples::U8(row) => bytes.extend_from_slice(row),
-                PlaneSamples::U16(row) => row
-                    .iter()
-                    .for_each(|word| bytes.extend_from_slice(&word.to_le_bytes())),
-            }
+        match mapping.plane(c).unwrap() {
+            AnyPlane::U8(plane) => plane.rows().for_each(|row| bytes.extend_from_slice(row)),
+            AnyPlane::U16(plane) => plane
+                .rows()
+                .flatten()
+                .for_each(|word| bytes.extend_from_slice(&word.to_le_bytes())),
+            other => panic!("unexpected AV1 storage {:?}", other.channel_type()),
         }
     }
     bytes
@@ -230,11 +257,11 @@ pub fn oracle_container(
     let decoded = dir.join("dav1d.raw");
     std::fs::write(&encoded, bytes).unwrap();
     let base = match (s.subsampling, s.color.matrix_coefficients) {
-        (Subsampling::Mono, _) => "gray",
-        (Subsampling::Yuv420, _) => "yuv420p",
-        (Subsampling::Yuv422, _) => "yuv422p",
-        (Subsampling::Yuv444, 0) => "gbrp",
-        (Subsampling::Yuv444, _) => "yuv444p",
+        (ChromaSubsampling::Mono, _) => "gray",
+        (ChromaSubsampling::Yuv420, _) => "yuv420p",
+        (ChromaSubsampling::Yuv422, _) => "yuv422p",
+        (ChromaSubsampling::Yuv444, 0) => "gbrp",
+        (ChromaSubsampling::Yuv444, _) => "yuv444p",
         _ => panic!("unsupported oracle layout"),
     };
     let fmt = if s.bit_depth == 8 {
