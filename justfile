@@ -1945,3 +1945,6 @@ stable-cohort-check:
     cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check
     cargo test --locked --workspace --lib --tests
     cargo clippy --locked --workspace --lib --tests -- -D warnings
+
+stable-cohort-docs:
+    cargo test --locked --workspace --doc
