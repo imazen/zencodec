@@ -573,7 +573,7 @@ the main-branch cohort. Their conflicting requirements are:
 | Route | Requires archmage beta.2 | Incompatible pinned dependency |
 | --- | --- | --- |
 | Guide examples | Patched linear-srgb `52896f4b` | Registry zenpixels-convert 0.2.13 requires `^0.9.26`, locked to 0.9.30 |
-| JPEG | Patched linear-srgb `52896f4b` | Pinned zenjpeg requires stable 0.9.30 |
+| JPEG | Patched linear-srgb `52896f4b` | zenjpeg `13a8a23b` requires `>=0.9.30, <=0.9.31-beta.1`, locked to 0.9.30 |
 | TIFF/JXL | zenpixels-convert `fde59b96` | jxl-encoder `554ad696` caps at 0.9.31-beta.1 |
 | AV1 | Patched linear-srgb `52896f4b` | rav1d-safe `b19aec65` caps at 0.9.31-beta.1 |
 

@@ -258,7 +258,7 @@ CHANGELOGs. Full design context:
 
 - Native guide qualification blocked before compilation (2026-11-07): the
   pinned converter and patched linear-srgb require archmage 0.9.31-beta.2,
-  while pinned JXL/AV1 codecs cap it at beta.1 and JPEG requires stable 0.9.30.
+  while the pinned JXL, AV1 and JPEG codecs cap it at beta.1.
   The four native/example jobs in Documentation run 42327970455 refuse
   dependency resolution. Package/IQA controls pass independently. Do not
   interpret those as native codec qualification or change the frozen cohort
