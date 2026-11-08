@@ -47,7 +47,8 @@ fn negotiated_output_must_not_be_rejected_by_native_prediction() {
 fn required_output_keeps_final_check_when_native_falls_back() {
     let bytes = fixtures::base(false);
     let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
-    let requested = PixelDescriptor::RGB16_SRGB;
+    // RGB16 is now a supported native output; CMYK16 still exercises fallback.
+    let requested = PixelDescriptor::CMYK16;
     let error = DecodeRequest::new()
         .with_output(requested)
         .decode(&codecs, &bytes)
@@ -68,6 +69,7 @@ fn required_native_layouts_preserve_samples_and_metadata_across_scan_modes() {
         bytes.extend_from_slice(&base[2..]);
         for requested in [
             PixelDescriptor::RGB8_SRGB,
+            PixelDescriptor::RGB16_SRGB,
             PixelDescriptor::RGBA8_SRGB,
             PixelDescriptor::BGRA8_SRGB,
             PixelDescriptor::RGBX8_SRGB,
