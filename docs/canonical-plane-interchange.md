@@ -91,3 +91,11 @@ API decisions: whether mapped owners must always state encoding, where direct
 access, and extensible sample enums. These are not qualified by the core tests.
 The concrete mixed-layout policy equality and alpha-as-gray findings have
 regression controls in `zencodec-media-testkit/tests/plane_layout.rs`.
+
+## Current pixel main review
+
+The [2026-11-09 adaptation review](pixel-main-adaptation-2026-11-09.md)
+compares the latest merged pixel contracts and current zencodec PR heads.
+It records the missing current planar color/alpha declaration, the proposed
+checked lending boundary and the measured gray-test migration blocker.
+These are proposed API changes; existing signatures have not been altered.
