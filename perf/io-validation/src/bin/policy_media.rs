@@ -245,10 +245,11 @@ mod tests {
         assert!(next_selection.applies(1, &next));
         drop(decoder);
         assert_eq!(retained.interpretation().config_epoch, 0);
-        assert_eq!(
-            retained.map().unwrap().plane(0).unwrap().code(1, 1),
-            Some(9)
-        );
+        let mapping = retained.map().unwrap();
+        let zenpixels::plane::AnyPlane::U8(plane) = mapping.plane(0).unwrap() else {
+            panic!("toy frame must retain its U8 plane");
+        };
+        assert_eq!(plane.row(1).unwrap().get(1).copied(), Some(9));
         assert_eq!(engine.records().count(), 2);
     }
 

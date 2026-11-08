@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent / "vendor"
 PINS = [
     ("imazen/zenavif", "94116d266299f347cfd10a75d440a5bc3b598d2c", ["zenmp4"]),
     ("imazen/zenextras", "403d46b9973a58b212def0602f4dd8cdee9560dc", ["zenivf", "zenwebm"]),
-    ("imazen/zenbitmaps", "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c", [""]),
+    ("imazen/zenbitmaps", "b446f830077a7153fe741bca3c9ad03da54c89ef", [""]),
 ]
 
 

@@ -126,13 +126,23 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"
 dependencies = [
  "bytemuck",
  "whereat",
 ]
 
 [[patch.unused]]
+name = "garb"
+version = "0.2.8"
+source = "git+https://github.com/imazen/garb?rev=605276d717ea0b31a1cd2a36ae05301383c7b8b5#605276d717ea0b31a1cd2a36ae05301383c7b8b5"
+
+[[patch.unused]]
+name = "linear-srgb"
+version = "0.6.12"
+source = "git+https://github.com/imazen/linear-srgb?rev=52896f4b24664315586bd60e5f048253b1f69052#52896f4b24664315586bd60e5f048253b1f69052"
+
+[[patch.unused]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"

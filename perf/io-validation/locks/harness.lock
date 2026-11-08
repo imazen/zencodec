@@ -99,9 +99,9 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
+checksum = "67dcf4e0bcce8da7704d177f604cf43299777de9d0f052ffe8822ab188de2820"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -110,9 +110,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
+checksum = "8ec18ef9ee506a934ab4f46f204f1d1d83528283d5400df800688748268b82bc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -312,9 +312,8 @@ dependencies = [
 
 [[package]]
 name = "garb"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=58ce9cad7b337418a7abe9b1f6e3e4bd1928b385#58ce9cad7b337418a7abe9b1f6e3e4bd1928b385"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -430,8 +429,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 [[package]]
 name = "linear-srgb"
 version = "0.6.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0e61c33d85bc56dcaf27cdf48ca32b8e34af7236584eb1d8a47316c49e0be1"
+source = "git+https://github.com/imazen/linear-srgb?rev=52896f4b24664315586bd60e5f048253b1f69052#52896f4b24664315586bd60e5f048253b1f69052"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -447,12 +445,11 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "magetypes"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
+checksum = "f509b5e651143f19077f1d3874e87d1f8ed617f7c257f60e38d58f27563e0f98"
 dependencies = [
  "archmage",
- "libm",
  "rustversion",
 ]
 
@@ -1197,7 +1194,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1208,7 +1205,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"
 dependencies = [
  "archmage",
  "bytemuck",
