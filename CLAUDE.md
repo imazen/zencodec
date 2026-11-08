@@ -931,3 +931,12 @@ and gray/depth review run 42147460867. The core workspace and all native platfor
 CI jobs pass on the review revision; that does not qualify the native codec
 consumers. Keep their tests and dependency floors intact until a compatible
 published release or an explicitly reviewed cohort resolves the graph.
+
+## Known Bugs: authoritative ICC code-point derivation (2026-11-08, review fix)
+
+`representable_cicp` accepted an extractable embedded tag as permission to
+replace an authoritative ICC. An unrecognized tagged profile could therefore
+cause PNG to derive PQ signaling, or a sole-safe carrier to drop the ICC.
+The separate review guard requires qualified matrix/TRC identification.
+The original failing witness is retained; all 27 color-policy controls pass
+without changing pre-existing expectations. See docs/color-emit-model.md.
