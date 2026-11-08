@@ -422,6 +422,56 @@ mod tests {
     use super::*;
     use zenpixels::ColorAuthority;
 
+    #[test]
+    fn hlg_uses_available_native_cicp_without_a_targetless_icc() {
+        let hlg = Cicp::new(9, 18, 0, true);
+        for channels in [1, 2, 3, 4] {
+            let source = src_cicp(hlg).with_channel_count(channels);
+            for caps in [caps_png(), caps_avif(), caps_jxl()] {
+                for policy in [
+                    ColorEmitPolicy::Balanced,
+                    ColorEmitPolicy::Compatibility,
+                    ColorEmitPolicy::Compact,
+                    ColorEmitPolicy::Verbatim,
+                ] {
+                    let plan = resolve_color_emit(&source, &caps, policy);
+                    assert_eq!(plan.cicp, Some(hlg), "channels{channels}, policy{policy:?}");
+                    assert_eq!(
+                        plan.icc,
+                        IccDisposition::Drop,
+                        "channels{channels}, policy{policy:?}"
+                    );
+                }
+            }
+            // An ICC-only target still requires an explicit solution; the
+            // lowering reports unsupported synthesis instead of losing color.
+            let plan = resolve_color_emit(&source, &caps_jpeg(), ColorEmitPolicy::Balanced);
+            assert_eq!(plan.cicp, None);
+            assert_eq!(
+                plan.icc,
+                if channels <= 2 {
+                    IccDisposition::SynthesizeGrayFrom(hlg)
+                } else {
+                    IccDisposition::SynthesizeFrom(hlg)
+                }
+            );
+            let policy = ColorEmitPolicy::Custom(ColorEmitFields::new(
+                IccRetention::Keep,
+                CicpEmission::Never,
+            ));
+            let plan = resolve_color_emit(&source, &caps_png(), policy);
+            assert_eq!(plan.cicp, None);
+            assert_eq!(
+                plan.icc,
+                if channels <= 2 {
+                    IccDisposition::SynthesizeGrayFrom(hlg)
+                } else {
+                    IccDisposition::SynthesizeFrom(hlg)
+                }
+            );
+        }
+    }
+
     // Capability fixtures matching the 2026 reliability findings.
     fn caps_jxl() -> EncodeCapabilities {
         EncodeCapabilities::new()
