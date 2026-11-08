@@ -86,3 +86,52 @@ scalar comparisons and the worst input/output vector are retained.
 Full spatial matrix with the new C 2.20 helper: **148 pass, 1 numerical failure,
 0 ignored**, rc101, 39s, peak RSS 0.48 GiB. Existing RGB color, native orientation,
 collection, TIFF and storage controls remain enabled; no other failure occurred.
+
+## Separate modern adapter graph
+
+`perf/spatial-lcms-validation` shares the exact native controls and changes only
+its validation graph to pixel/convert `af19bcdab06b0df55745288931a1bdfaa6232665`.
+It enables first-class `Lcms`, pinned by that converter to Rust LCMS
+`55b59476cf64920345e9ca32eb3a4678bf0bbece`. Production core signatures and
+backend defaults are unchanged. Frozen spatial pins and their failing gate remain.
+
+Reviewed converter source changes cover CMS adapters, errors/extensions, ICC
+profiles, synthesis and recognition; row/transfer/gamut/scan kernels are unchanged.
+The lock delta adds LCMS and pastey 0.2.3, changes the pixel source pair, moves
+MoxCMS 0.9.1 to the adapter's required 0.9.2, and renames the harness package.
+All other package versions/sources, including frozen native codecs, garb and
+linear-srgb, are unchanged.
+
+Same native input/profile/reference hashes above were reproduced. Results for
+all 786432 components, compared after the finalizer's specified clipping:
+
+| Explicit production backend | Maximum absolute error | Violations of <0.0013 |
+|---|---:|---:|
+| Rust LCMS55 | 0 | 0 |
+| MoxCMS 0.9.2 | 0.006689250469207764 | 937 |
+
+Both finalizers match their own direct backend byte-for-byte for every row,
+including destination guards. LCMS additionally passes the independent C 2.20
+comparison. All source/context/metadata/storage/no-CMS controls remain enabled.
+The modern combined CMYK run is **5 pass / 1 fail / 0 ignored**: only Mox's
+reference precision fails. No bound is relaxed or Mox result marked qualified.
+The existing legacy JXL accuracy test is unchanged.
+
+The focused LCMS gate passes (initial compile/run: rc0, 53s, peak RSS 0.86 GiB).
+After removing an unused test import, the complete six-control run returns rc101,
+18s, peak RSS 0.63 GiB, with the sole Mox failure above. These receipts are
+resource observations, not conversion throughput measurements. This establishes
+one native image/profile/target/intent route, not universal CMYK accuracy.
+
+Reproduce the positive route with
+`just spatial-lcms-check FRESH_ARTIFACTS OUTPUT/color-oracle`.
+The documentation workflow executes this separate gate before the unchanged
+frozen spatial gate, so the Mox failure remains visible. Full modern spatial
+qualification and product cohort adoption are not claimed.
+
+Final exact `spatial-lcms-check` recipe: rc0, 20s, peak RSS 0.63 GiB,
+including the positive test and strict all-target Clippy. Separate strict
+Clippy of both modern and frozen graphs passed (rc0, 7s, peak RSS 0.56 GiB).
+A mistaken Node wildcard also launched the browser test without its server
+and failed with connection refused; that orchestration receipt is preserved,
+and no new browser qualification is claimed.

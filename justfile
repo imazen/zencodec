@@ -666,6 +666,12 @@ spatial-cmyk-check artifacts oracle:
     SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_finalization -- --nocapture --test-threads=1
     just spatial-validation-lint cms_oracle,old_jpeg
 
+# Explicit modern adapter graph; the frozen Mox accuracy control remains unchanged.
+spatial-lcms-check artifacts oracle:
+    cp perf/spatial-lcms-validation/dependencies.lock perf/spatial-lcms-validation/Cargo.lock
+    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_lcms_finalization -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
+
 # Same complete native suite and test timeout as the documentation workflow.
 spatial-ci-check artifacts features="":
     #!/usr/bin/env bash

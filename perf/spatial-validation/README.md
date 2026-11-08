@@ -1602,3 +1602,9 @@ LCMS 2.17 and C 2.20 produce identical references. This is a strict failing
 qualification gate, not a refusal fallback or a threshold adjustment.
 
 [Exact inputs, receipts and reproduction](../../benchmarks/native_cmyk_finalization_2026-11-08.md).
+
+The separate [LCMS graph](../spatial-lcms-validation/README.md) qualifies the
+same native CMYK finalizer through explicit `Lcms`: zero error against C2.20
+after declared clipping on this witness. Its af19 Mox comparison still fails
+the original bound; this frozen graph and both numerical failures remain
+visible. No default backend or public signature changes.

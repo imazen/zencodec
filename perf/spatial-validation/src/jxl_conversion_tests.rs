@@ -185,6 +185,17 @@ fn native_cmyk_finalization_origin_cannot_replace_missing_current_profile() {
 #[cfg(feature = "cms_oracle")]
 #[test]
 fn native_cmyk_finalization_matches_independent_lcms_relative_bpc() {
+    cmyk_reference_control(&MoxCms, "native-cmyk-finalization");
+}
+
+#[cfg(all(feature = "cms_oracle", lcms_native))]
+#[test]
+fn native_cmyk_lcms_finalization_matches_independent_reference() {
+    cmyk_reference_control(&zenpixels_convert::Lcms, "native-cmyk-lcms");
+}
+
+#[cfg(feature = "cms_oracle")]
+fn cmyk_reference_control(backend: &dyn zenpixels_convert::cms::PluggableCms, artifact_name: &str) {
     use std::{fs, io::Write, path::PathBuf, process::Command};
     let oracle =
         std::env::var_os("SPATIAL_COLOR_ORACLE").expect("supply independent Little CMS executable");
@@ -192,7 +203,7 @@ fn native_cmyk_finalization_matches_independent_lcms_relative_bpc() {
         std::env::var_os("SPATIAL_COLOR_ARTIFACTS").expect("supply fresh color artifact directory"),
     );
     fs::create_dir_all(&root).unwrap();
-    let artifacts = root.join("native-cmyk-finalization");
+    let artifacts = root.join(artifact_name);
     fs::create_dir(&artifacts).unwrap();
     let (image, storage) = native_cmyk(Composition::Uncomposited);
     let buffer = image.with_pixels(stage_for_finalizer).unwrap();
@@ -218,15 +229,15 @@ fn native_cmyk_finalization_matches_independent_lcms_relative_bpc() {
         &origin,
         OutputProfile::Named(Cicp::SRGB),
         PixelFormat::RgbF32,
-        Some(&MoxCms),
+        Some(backend),
     )
     .unwrap();
     let output = ready.pixels();
     // An independent direct CMS call must match the finalizer bit-for-bit:
     // separate routing/striding errors from numerical backend disagreement.
-    use zenpixels_convert::{AlphaPolicy, ColorProfileSource, ConvertOptions, cms::PluggableCms};
+    use zenpixels_convert::{AlphaPolicy, ColorProfileSource, ConvertOptions};
     let options = ConvertOptions::permissive().with_alpha_policy(AlphaPolicy::DiscardUnchecked);
-    let mut direct = MoxCms
+    let mut direct = backend
         .build_source_transform(
             ColorProfileSource::Icc(&profile),
             ColorProfileSource::Cicp(Cicp::SRGB),
@@ -234,7 +245,7 @@ fn native_cmyk_finalization_matches_independent_lcms_relative_bpc() {
             PixelFormat::RgbF32,
             &options,
         )
-        .expect("MoxCMS must accept the same declared route")
+        .expect("selected CMS must accept the same declared route")
         .unwrap();
     for y in 0..buffer.height() {
         let bytes = buffer.width() as usize * 12;

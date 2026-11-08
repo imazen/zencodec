@@ -955,3 +955,13 @@ LCMS 2.17/2.20 comparisons now expose 1050/786432 samples exceeding the unchange
 agree bit-for-bit; no frozen kernel or threshold was changed. See
 benchmarks/native_cmyk_finalization_2026-11-08.md and
 benchmarks/native_graph_repair_2026-11-08.md for exact sources and original failures.
+
+## Separate native CMYK LCMS qualification (2026-11-08)
+
+The explicit af19/LCMS55 spatial validation graph matches C LCMS2.20 exactly
+for all 786432 components of the native inverted-F32 CMYK witness after declared
+clipping. Source pixels/context, metadata, striding, direct-backend parity and
+storage cleanup remain checked. Modern Mox0.9.2 still violates the unchanged
+0.0013 bound on 937 components; frozen Mox0.9.1 fails on 1050. Neither default
+backend nor frozen graph was changed. See the separate
+`just spatial-lcms-check` and benchmarks/native_cmyk_finalization_2026-11-08.md.
