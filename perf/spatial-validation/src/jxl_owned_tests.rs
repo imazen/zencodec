@@ -234,9 +234,8 @@ fn check_owner(name: &str) {
             let conversion =
                 zenpixels_convert::RowConverter::new(pixels.descriptor(), pixels.descriptor());
             if pixels.descriptor().layout() == ChannelLayout::Cmyk {
-                let error = conversion
-                    .err()
-                    .expect("CMYK path must retain its current typed CMS refusal");
+                let error =
+                    conversion.expect_err("CMYK path must retain its current typed CMS refusal");
                 assert!(matches!(
                     error.error(),
                     zenpixels_convert::ConvertError::NeedsCms { .. }

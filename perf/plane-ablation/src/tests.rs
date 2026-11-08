@@ -15,7 +15,13 @@ fn native_words_borrow_without_copy_and_codes_share_encoding() {
         words[3..].as_ptr()
     );
     let enc = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap();
-    let canonical = zenpixels::sample::CodePlane::from_u16(&words, 2, 2, 6, enc).unwrap();
+    let canonical = zenpixels::sample::CodePlane::new(
+        zenpixels::plane::AnyPlane::U16(
+            zenpixels::plane::PlaneRef::new(&words[..], 2, 2, 3).unwrap(),
+        ),
+        enc,
+    )
+    .unwrap();
     let codes = p.codes(enc).unwrap();
     for y in 0..2 {
         for x in 0..2 {

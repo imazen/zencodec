@@ -940,3 +940,13 @@ cause PNG to derive PQ signaling, or a sole-safe carrier to drop the ICC.
 The separate review guard requires qualified matrix/TRC identification.
 The original failing witness is retained; all 27 color-policy controls pass
 without changing pre-existing expectations. See docs/color-emit-model.md.
+
+## Native graph repair and remaining CMYK expectation (2026-11-08)
+
+PR201's AV1/spatial harnesses required frozen SIMD compatibility descendants and
+public pixel/plane facade migration. AV1's 70 controls and independent float/gamma
+checks pass. Spatial passes 146/147: the existing F32 CMYK refusal assertion now
+observes successful conversion with the already-declared pixels fde59b96 cohort.
+Keep the assertion pending owner approval and independent color qualification;
+do not equate newly supported conversion with correct output. See
+benchmarks/native_graph_repair_2026-11-08.md for exact sources and original failures.
