@@ -25,7 +25,7 @@ zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "6d6539dfaf3b9e09d74ad9ef7a56b4e4e7518dd0", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
-zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "f03224661f6912221f75dd7a43b1329431cc2e16", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "154e16b04aae2b6d3d9cef0663b5732f89bb7222", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
 # Frozen stable JPEG PR260 cohort; preserve its kernels and repeat root patches.
