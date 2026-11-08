@@ -1959,3 +1959,5 @@ hlg-carrier-check:
 icc-authority-check:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+    cargo test --manifest-path tools/icc-authority-validation/Cargo.toml --locked
+    cargo clippy --manifest-path tools/icc-authority-validation/Cargo.toml --all-targets --locked -- -D warnings

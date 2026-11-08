@@ -52,6 +52,10 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-features
 
+      - name: ICC authority with real profile permissions
+        if: matrix.name == 'Linux x64'
+        run: cargo test --locked --manifest-path tools/icc-authority-validation/Cargo.toml
+
       - name: Compare density helpers with exact rational arithmetic
         if: matrix.name == 'Linux x64'
         timeout-minutes: 2

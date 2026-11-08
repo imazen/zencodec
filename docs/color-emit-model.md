@@ -183,3 +183,10 @@ unrecognized ICC carrying an extractable tag. The same witness covers PNG,
 JPEG XL and AVIF under balanced and compact policies. All 27 color policy
 controls pass with the guard and no pre-existing expectation changed. This
 is a separate proposal from the native carrier dependency cohort.
+
+The standalone `tools/icc-authority-validation` graph uses the exact reviewed
+pixel corpus at 3ceb0500 without repinning this workspace's dependency. It
+checks a real recognized PQ ICC with `MetadataOnly` permission, a recognized
+Display P3 matrix/TRC positive control, and explicit CICP authority. All three
+controls pass; the real MetadataOnly control fails against the original core
+function. CI and `just icc-authority-check` include this separate graph.
