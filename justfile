@@ -661,6 +661,11 @@ collection-context-native artifacts:
     SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Native CMYK carrier/finalizer checks and independent LCMS relative+BPC oracle.
+spatial-cmyk-check artifacts oracle:
+    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_finalization -- --nocapture --test-threads=1
+    just spatial-validation-lint cms_oracle,old_jpeg
+
 # Same complete native suite and test timeout as the documentation workflow.
 spatial-ci-check artifacts features="":
     #!/usr/bin/env bash

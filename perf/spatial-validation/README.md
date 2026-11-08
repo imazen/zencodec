@@ -1076,8 +1076,10 @@ error for absent formats. The pixel dependency at `284a0598abf441dc886755b1e65c3
 adds conventional and inverted F32 CMYK. Native JXL uses the inverted variant:
 zero means full ink and one means no ink, including its separate black plane.
 Source ICC bytes describe conventional device values; they cannot silently
-relabel that native domain. Unqualified conversion, including polarity changes,
-refuses. The pixel suite preserves every sample bit and ICC context in both
+relabel that native domain. The initial integration refused unqualified conversion. The current frozen
+MoxCMS backend accepts F32 CMYK conversion, but the full native LCMS comparison
+fails the existing CMYK accuracy bound; see the qualification below. The pixel
+suite preserves every sample bit and ICC context in both
 formats without copying the owned allocation.
 
 Run `just spatial-layer-check <fresh-artifacts>` for the focused gate; the full
@@ -1588,3 +1590,15 @@ packages: only `zencodec-render` is added; no package version changes. Core
 zencodec gains no converter dependency. The companion is isolated while it needs
 the pinned converter review revision, and requires Rust 1.89 (verified).
 [Contract, reproduction and limits](../../docs/render-contract.md).
+
+## Native CMYK finalization qualification (2026-11-08)
+
+`just spatial-cmyk-check FRESH_ARTIFACTS COLOR_ORACLE` retains no-CMS refusal,
+source pixels/context and native storage charges, and compares every finalized
+RGB sample against independent LCMS relative colorimetric+BPC output. Direct
+MoxCMS and finalization agree bit-for-bit, but **1050 of 786432 samples exceed
+the unchanged 0.0013 CMYK bound**; maximum error is 0.006681680679321289.
+LCMS 2.17 and C 2.20 produce identical references. This is a strict failing
+qualification gate, not a refusal fallback or a threshold adjustment.
+
+[Exact inputs, receipts and reproduction](../../benchmarks/native_cmyk_finalization_2026-11-08.md).

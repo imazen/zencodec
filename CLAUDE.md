@@ -576,7 +576,9 @@ The follow-through uses zenpixels PR 93's conventional/inverted formats, fallibl
 adapter lookup, and explicit polarity on separate black. The selected-layer gate
 passes without changing sample bits or the native conformance threshold; the
 receipt retains the initial failure (`benchmarks/raw_collection_2026-10-26.json`).
-F32 CMYK color conversion is still unqualified and refuses at runtime. Source ICC
+F32 CMYK color conversion requires a CMS. The current frozen MoxCMS path accepts
+conversion but fails the independent numerical gate recorded in
+benchmarks/native_cmyk_finalization_2026-11-08.md. Source ICC
 bytes alone must never imply conventional polarity for inverted samples.
 
 ## Fixed frame-route preference regression (2026-10-27)
@@ -947,6 +949,9 @@ PR201's AV1/spatial harnesses required frozen SIMD compatibility descendants and
 public pixel/plane facade migration. AV1's 70 controls and independent float/gamma
 checks pass. Spatial passes 146/147: the existing F32 CMYK refusal assertion now
 observes successful conversion with the already-declared pixels fde59b96 cohort.
-Keep the assertion pending owner approval and independent color qualification;
-do not equate newly supported conversion with correct output. See
+The owner approved actual CMYK controls: no-CMS refusal is retained, while the
+LCMS 2.17/2.20 comparisons now expose 1050/786432 samples exceeding the unchanged
+0.0013 CMYK bound (maximum 0.006681680679321289). Direct MoxCMS and finalization
+agree bit-for-bit; no frozen kernel or threshold was changed. See
+benchmarks/native_cmyk_finalization_2026-11-08.md and
 benchmarks/native_graph_repair_2026-11-08.md for exact sources and original failures.
