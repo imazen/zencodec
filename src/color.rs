@@ -643,7 +643,7 @@ mod tests {
         Cicp::new(12, 13, 0, true),
     ];
 
-    /// Every target, because the gray branch returns before looking at carriers.
+    /// Native CICP carriers and an ICC-only target exercise both HLG routes.
     fn all_caps() -> [EncodeCapabilities; 4] {
         [caps_png(), caps_jpeg(), caps_jxl(), caps_avif()]
     }
@@ -663,7 +663,11 @@ mod tests {
                         let plan = resolve_color_emit(&src, &caps, policy);
                         assert_eq!(
                             plan.icc,
-                            IccDisposition::SynthesizeGrayFrom(cicp),
+                            if cicp.transfer_characteristics == 18 && plan.cicp.is_some() {
+                                IccDisposition::Drop
+                            } else {
+                                IccDisposition::SynthesizeGrayFrom(cicp)
+                            },
                             "{cicp:?} channels={channels} {policy:?}"
                         );
                         assert_eq!(

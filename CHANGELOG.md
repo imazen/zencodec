@@ -617,6 +617,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Preserve permitted native HLG CICP without synthesizing an ICC companion when
+  no rendering target is supplied. Apply the same rule to RGB, gray and gray-alpha;
+  retain existing ICCs under keeping policies and keep ICC-only output obligations
+  explicit. PQ/SDR behavior and dependency pins are unchanged.
+
 - Align the paired zenpixels/zenpixels-convert verifier to `fa836abf` across the
   workspace, fuzz and render graphs. The testkit refuses unknown non-exhaustive
   color authority values while retaining all existing ICC/CICP checks.

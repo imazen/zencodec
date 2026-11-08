@@ -119,6 +119,13 @@ same mutable implementation, and rejection must leave the job unchanged.
 These checks confirm policy support, not successful metadata delivery or
 lossless pixel fidelity. Those need codec-specific, content-dependent evidence.
 
+For a CICP-only HLG source, a permitted native carrier is retained without
+requesting an ICC companion: its full OOTF needs a rendering target absent from
+CICP alone. The rule applies to RGB, gray and gray-alpha. Source ICC retention
+still follows policy. If no native carrier will be emitted, keep the ICC
+obligation so unsupported synthesis fails explicitly. This changes the HLG
+companion expectation only; PQ and SDR companion behavior are unchanged.
+
 ## Gain-map HDR: signal on the buffer, envelope on the info
 
 A `PixelBuffer` is self-describing for the color **signal** — its descriptor
