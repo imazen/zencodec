@@ -338,6 +338,14 @@ pub fn resolve_color_emit(
         } else {
             None
         };
+        // A CICP-only HLG signal has no display/OOTF target from which to
+        // derive a faithful ICC. Preserve its native carrier instead of asking
+        // the lowering for a companion it must refuse. Supplied ICCs stay intact.
+        let icc = if !src_has_icc && cicp.is_some_and(|c| c.transfer_characteristics == 18) {
+            IccDisposition::Drop
+        } else {
+            icc
+        };
         return ColorEmitPlan { cicp, icc };
     }
 
@@ -393,6 +401,10 @@ pub fn resolve_color_emit(
         } else {
             IccDisposition::KeepSource
         }
+    } else if cicp_out.is_some_and(|c| c.transfer_characteristics == 18) {
+        // HLG's native signal is preserved without inventing an ICC rendering
+        // target. ICC-only targets still take the explicit synthesis/error path.
+        IccDisposition::Drop
     } else if !emit_cicp && synth_worthwhile && policy != ColorEmitPolicy::Verbatim {
         // No source ICC and CICP isn't carrying the color (target is ICC-only):
         // synthesize an ICC so the (non-default) color isn't lost.
@@ -469,6 +481,25 @@ mod tests {
                     IccDisposition::SynthesizeFrom(hlg)
                 }
             );
+        }
+    }
+
+    #[test]
+    fn hlg_source_icc_is_preserved_when_policy_keeps_it() {
+        let hlg = Cicp::new(9, 18, 0, true);
+        for channels in [1, 2, 3, 4] {
+            let source = src_cicp(hlg)
+                .with_channel_count(channels)
+                .with_icc_profile(alloc::vec![0u8;132]);
+            for policy in [
+                ColorEmitPolicy::Balanced,
+                ColorEmitPolicy::Compatibility,
+                ColorEmitPolicy::Verbatim,
+            ] {
+                let plan = resolve_color_emit(&source, &caps_png(), policy);
+                assert_eq!(plan.cicp, Some(hlg));
+                assert_eq!(plan.icc, IccDisposition::KeepSource);
+            }
         }
     }
 

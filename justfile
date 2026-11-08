@@ -1948,3 +1948,9 @@ stable-cohort-check:
 
 stable-cohort-docs:
     cargo test --locked --workspace --doc
+
+# HLG carrier policy and unchanged gray/depth controls, on the frozen review graph.
+hlg-carrier-check:
+    cargo test --locked -p zencodec --lib color::tests
+    cargo test --locked -p zencodec-testkit --test gray_color_emit
+    cargo clippy --locked -p zencodec --lib -p zencodec-testkit --test gray_color_emit -- -D warnings

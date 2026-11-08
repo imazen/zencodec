@@ -44,6 +44,17 @@ produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
 (keep GRAY ICC plus supported CICP; CMYK stays ICC-only; a gray source with only non-default CICP gets
 `SynthesizeGrayFrom`) and never emits a redundant `SynthesizeFrom(sRGB)`.
 
+### HLG without an ICC rendering target
+
+For CICP-only HLG, a permitted native carrier takes priority over requesting a
+synthesized ICC companion, including on PNG/AVIF under Balanced or Compatibility.
+CICP alone provides no display peak/viewing conditions for HLG's full RGB OOTF.
+The same rule applies to gray and gray-alpha. An existing ICC remains governed
+by the selected retention policy; this exception does not rewrite its bytes.
+If no native CICP will be emitted (an ICC-only format, or a policy forbidding
+CICP), the resolver retains the synthesis obligation. The lowering must refuse
+unsupported synthesis; it must not write an undescribed HLG image. PQ is unchanged.
+
 ### Capabilities (three flags drive it)
 
 - `cicp()` — has a CICP carrier slot at all.

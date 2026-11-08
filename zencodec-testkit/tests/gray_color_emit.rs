@@ -33,6 +33,15 @@ fn gray_plan_agrees_with_gray_synthesis_for_all_code_points() {
             let cicp = Cicp::new(primaries, transfer, 0, true);
             let synthesized = SynthesizedIcc::for_gray_cicp(cicp);
             for channels in [1, 2] {
+                if transfer == 18 {
+                    let source = SourceColor::default()
+                        .with_cicp(cicp)
+                        .with_channel_count(channels);
+                    let plan = resolve_color_emit(&source, &png_caps(), ColorEmitPolicy::Balanced);
+                    assert_eq!(plan.cicp, Some(cicp));
+                    assert_eq!(plan.icc, IccDisposition::Drop);
+                    continue;
+                }
                 match (&synthesized, plan_for(cicp, channels)) {
                     (SynthesizedIcc::NotNeeded, IccDisposition::Drop) => defaults += 1,
                     (SynthesizedIcc::Profile(_), IccDisposition::SynthesizeGrayFrom(asked)) => {
@@ -47,8 +56,8 @@ fn gray_plan_agrees_with_gray_synthesis_for_all_code_points() {
             }
         }
     }
-    // Gray serves 175 assigned non-default pairs and 5 default pairs (zenpixels-convert).
-    assert_eq!(profiles, 175 * 2);
+    // HLG uses native CICP: 164 other non-default pairs and 5 defaults.
+    assert_eq!(profiles, 164 * 2);
     assert_eq!(defaults, 5 * 2);
 }
 
