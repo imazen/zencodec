@@ -247,8 +247,8 @@ pub struct ColorEmitPlan {
 /// The CICP that describes this source's color as code points, if any.
 ///
 /// Authority-aware (per [`ColorAuthority`](zenpixels::ColorAuthority)): when the **ICC** is authoritative and
-/// present, the emittable CICP must *describe that ICC* — derived from its `cicp`
-/// tag, then the corpus — **not** a co-existing CICP, which the spec treats as a
+/// present, emittable CICP requires a qualified matrix/TRC identification of
+/// that ICC. An embedded `cicp` tag alone is insufficient — **not** a co-existing CICP, which the spec treats as a
 /// backwards-compat round-trip companion that "should NOT override the TRC." If the
 /// ICC isn't identifiable as code points, this returns `None`, so the resolver keeps
 /// the authoritative ICC rather than dropping it for a CICP that doesn't represent
@@ -256,8 +256,11 @@ pub struct ColorEmitPlan {
 /// (or ICC is absent), the explicit CICP wins, then the ICC-derived fallback.
 fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
     let from_icc = |icc_bytes: &[u8]| -> Option<Cicp> {
-        Cicp::from_icc(icc_bytes)
-            .or_else(|| icc::IccIdentification::from_icc(icc_bytes).and_then(|id| id.to_cicp()))
+        // Extractable code points are metadata, not proof that this ICC's
+        // complete transform can be replaced by a code-point transform.
+        icc::IccIdentification::from_icc(icc_bytes)
+            .filter(|id| id.valid_use == icc::IdentificationUse::MatrixTrcSubstitution)
+            .and_then(|id| id.to_cicp())
     };
     match src.authoritative()? {
         AuthoritativeColor::Icc(icc_bytes) => from_icc(icc_bytes),
@@ -554,6 +557,34 @@ mod tests {
         let plan = resolve_color_emit(&src, &caps_jxl(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::SRGB));
         assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn unqualified_embedded_cicp_cannot_replace_authoritative_icc() {
+        // A syntactically extractable tag says nothing about the profile's
+        // transforms. Keep the supplied bytes when substitution is unqualified.
+        let mut bytes = alloc::vec![0u8; 156];
+        bytes[..4].copy_from_slice(&156u32.to_be_bytes());
+        bytes[16..20].copy_from_slice(b"RGB ");
+        bytes[36..40].copy_from_slice(b"acsp");
+        bytes[128..132].copy_from_slice(&1u32.to_be_bytes());
+        bytes[132..136].copy_from_slice(b"cicp");
+        bytes[136..140].copy_from_slice(&144u32.to_be_bytes());
+        bytes[140..144].copy_from_slice(&12u32.to_be_bytes());
+        bytes[144..148].copy_from_slice(b"cicp");
+        bytes[152..156].copy_from_slice(&[9, 16, 0, 1]);
+        assert_eq!(Cicp::from_icc(&bytes), Some(Cicp::new(9, 16, 0, true)));
+        assert!(icc::IccIdentification::from_icc(&bytes).is_none());
+        let src = SourceColor::default()
+            .with_icc_profile(bytes)
+            .with_channel_count(3);
+        for caps in [caps_png(), caps_jxl(), caps_avif()] {
+            for policy in [ColorEmitPolicy::Balanced, ColorEmitPolicy::Compact] {
+                let plan = resolve_color_emit(&src, &caps, policy);
+                assert_eq!(plan.icc, IccDisposition::KeepSource);
+                assert_eq!(plan.cicp, None);
+            }
+        }
     }
 
     #[test]

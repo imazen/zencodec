@@ -169,3 +169,17 @@ survived the grounding, all small and all on the `resolve_color_emit` shape:
 The `SynthesizeFrom`-silently-drops-color critical dissolves under lowering —
 `icc_profile_for_primaries` always materializes a non-sRGB profile, never a CMS,
 never a silent drop.
+
+## Authoritative ICC and unqualified embedded code points
+
+An embedded ICC `cicp` tag describes metadata; it does not prove that the
+profile's complete transform can be replaced. For ICC-authoritative input,
+CICP derivation now requires `IccIdentification::valid_use` to permit
+matrix/TRC substitution. Otherwise retain the ICC and derive no new CICP.
+Explicitly CICP-authoritative sources retain their existing behavior.
+
+The regression first demonstrated PNG deriving PQ code points from an
+unrecognized ICC carrying an extractable tag. The same witness covers PNG,
+JPEG XL and AVIF under balanced and compact policies. All 27 color policy
+controls pass with the guard and no pre-existing expectation changed. This
+is a separate proposal from the native carrier dependency cohort.

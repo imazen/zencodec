@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+### Fixed
+
+- Preserve authoritative ICC when embedded code points do not have a qualified
+  matrix/TRC identification; an extractable tag alone cannot authorize CICP
+  derivation or ICC replacement.
+
 ### Added
 
 - `negotiate_pixel_format_for_depth` prefers an acceptable output that retains source depth, preserving caller order among sufficient formats; legacy negotiation remains available.
