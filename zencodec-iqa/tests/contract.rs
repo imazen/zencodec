@@ -32,6 +32,27 @@ impl Metric for Probe {
         Ok(ProbeResult)
     }
 }
+struct ImageProbe;
+impl NoReferenceMetric for ImageProbe {
+    type Output = ProbeResult;
+    fn id(&self) -> MetricId {
+        MetricId::new(
+            "image-probe",
+            Implementation::new("adapter-control", "1", 1),
+        )
+    }
+    fn evaluate_image(
+        &mut self,
+        _: &zenpixels::PixelSlice<'_>,
+        opts: EvalOpts<'_>,
+    ) -> MetricResult<ProbeResult> {
+        opts.checkpoint()?;
+        if opts.diagnostics() {
+            return fail(MetricError::new(ErrorKind::NoMap));
+        }
+        Ok(ProbeResult)
+    }
+}
 #[test]
 fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
     use zencodec::{
@@ -107,6 +128,25 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
     let result = zencodec_iqa::score_outputs(&mut erased, &good, &good, EvalOpts::new()).unwrap();
     assert!(result.native::<ProbeResult>().is_some());
     assert!(result.native::<ErasedEvaluation>().is_none());
+    let mut paired = Erased::new(PairedNoReference::new(ImageProbe));
+    let result = zencodec_iqa::score_outputs(&mut paired, &good, &good, EvalOpts::new()).unwrap();
+    assert!(result.native::<PairedEvaluation<ProbeResult>>().is_some());
+    assert_eq!(
+        result
+            .scores()
+            .map(|s| s.spec.key.as_ref())
+            .collect::<Vec<_>>(),
+        ["score", "score_ref"]
+    );
+    assert_eq!(result.maps().count(), 0);
+    assert_eq!(
+        zencodec_iqa::score_outputs(&mut paired, &good, &good, EvalOpts::new().with_native_map())
+            .err()
+            .unwrap()
+            .error()
+            .kind(),
+        ErrorKind::NoMap
+    );
     assert_eq!(
         result.scores().next().unwrap().value.to_bits(),
         1.0f64.to_bits()

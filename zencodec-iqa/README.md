@@ -11,6 +11,9 @@ oriented samples and holds both mapping guards for the complete evaluation.
 For heterogeneous collections, pass a boxed `iqa::DynMetric` containing an
 `iqa::Erased` wrapper. The bridge returns `iqa::ErasedEvaluation`; repeated
 wrapping preserves access to the original native assessment through `native`.
+The merged map/NR core is pinned together with its pixel types. A
+`PairedNoReference` metric can also pass through `score_outputs`, retaining both
+native one-image results, every named score and any candidate map views.
 Actual pixel contexts and row strides pass unchanged. Native mapping causes,
 whereat traces and cancellation classifications survive the bridge.
 
