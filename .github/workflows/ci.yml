@@ -52,6 +52,11 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-features
 
+      - name: Test minimal IQA contract and codec bridge
+        run: |
+          cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features
+          cargo test --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
+
       - name: Compare density helpers with exact rational arithmetic
         if: matrix.name == 'Linux x64'
         timeout-minutes: 2
@@ -91,6 +96,10 @@ jobs:
       - name: Test (i686/QEMU)
         run: cross test --workspace --all-features --target i686-unknown-linux-gnu
 
+      - name: Test IQA (i686/QEMU)
+        working-directory: zencodec-iqa
+        run: cross test --locked --all-features --target i686-unknown-linux-gnu
+
   # ==========================================================================
   # WASM check
   # ==========================================================================
@@ -111,6 +120,12 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+
+      - name: Check IQA WASM and freestanding core
+        run: |
+          cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target wasm32-wasip1
+          cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --features std --target wasm32-wasip1
+          cargo check --locked --manifest-path zencodec-iqa/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
 
       - name: Check zenmeta WASM feature set
         run: cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
@@ -144,6 +159,14 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: IQA strict Clippy and documentation
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: |
+          cargo clippy --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --all-targets -- -D warnings
+          cargo doc --locked --manifest-path zencodec-iqa/Cargo.toml --all-features --no-deps
+          cargo fmt --manifest-path zencodec-iqa/Cargo.toml --check
 
       - name: Default-feature documentation
         env:
@@ -189,7 +212,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check MSRV
-        run: cargo +1.88.0 check -p zencodec -p zenmeta --all-features
+        run: |
+          cargo +1.88.0 check -p zencodec -p zenmeta --all-features
+          cargo +1.88.0 check --locked --manifest-path zencodec-iqa/Cargo.toml --all-features
 
   # ==========================================================================
   # Semver check (API compatibility)

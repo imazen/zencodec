@@ -256,6 +256,28 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Native guide qualification blocked before compilation (2026-11-07): the
+  pinned converter and patched linear-srgb require archmage 0.9.31-beta.2,
+  while the pinned JXL, AV1 and JPEG codecs cap it at beta.1.
+  The four native/example jobs in Documentation run 42327970455 refuse
+  dependency resolution. Package/IQA controls pass independently. Do not
+  interpret those as native codec qualification or change the frozen cohort
+  without revalidating it; see `docs/release-candidate.md`.
+
+- Fixed standalone IQA cross invocation (2026-11-05): invoking cross from the
+  parent with `--manifest-path` duplicated a mount for the parent codec path
+  dependency. Run from `zencodec-iqa` instead. Native i686 tests and the
+  consumer doctest retain their assertions; see `just iqa-cross-check`.
+
+
+- Fixed IQA review-contract gaps (2026-11-04): exhaustive records/enums constrained
+  API extension, `At::wrap` captured no error location, and borrowed Pulse
+  checks did not hand off owned phase outcomes. The unpublished companion now
+  uses constructors/non-exhaustive types, located cause transfer and classified
+  child completion. Nested ownership, planning refusal, owned-worker reporting
+  and mapping cancellation controls run in `just iqa-check`. See
+  `zencodec-iqa/README.md`; this does not qualify metric implementations.
+
 - Fixed by the `PixelStorage` adoption (2026-11-04): `to_owned_frame` allocated bytes with no
   room to align them, then `.expect`ed the wrap, so a wide format on an allocator returning an
   odd address panicked with `InsufficientData`. glibc hid it. `tests/odd_allocator.rs` runs under

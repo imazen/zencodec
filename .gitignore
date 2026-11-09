@@ -68,3 +68,6 @@ apidoc/target/
 # Built documentation artifact
 docs/_site/
 __pycache__/
+
+# Reproducible dependency identity for the unpublished IQA review crate.
+!zencodec-iqa/Cargo.lock

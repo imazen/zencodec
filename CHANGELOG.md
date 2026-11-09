@@ -1,5 +1,45 @@
 # Changelog
 
+## zencodec-iqa
+
+### [Unreleased]
+
+- Pin the merged map/NR core and pixel source together; validate paired
+  no-reference results and unsupported-map propagation through codec mapping
+  (`4d690f6c`).
+
+- Accept boxed and stacked erased metrics through the existing output bridge,
+  retaining the original concrete native result; core pin and focused native,
+  strict lint and portability checks updated (`004706da`).
+
+- Return typed native IQA assessments from resolved codec output scoring; retain
+  named scalar outputs, native diagnostic data and nested error/progress control.
+
+### QUEUED BREAKING CHANGES
+
+None. This is a new unpublished review API.
+
+### Added
+
+- Add the unpublished standalone `zencodec-iqa` still-image scalar contract
+  and optional mapped-output bridge; no codec core API or metric implementation
+  changes (`73b2351b`). Source and contract checks are in the companion crate.
+
+### Changed
+
+- Move codec-independent still-image contracts to `zenpsy-api`; this
+  companion now provides only resolved packed-output mapping and re-exports
+  the shared contract as `iqa`. Native mapping causes and cancellation survive
+  the handoff. The review API remains unpublished.
+
+### Fixed
+
+- Make the IQA review API extensible through non-exhaustive records/enums and
+  constructors. Complete owned how-far phases with classified outcomes and
+  preserve whereat traces, typed native causes and mapping cancellation
+  (`c7666dba`).
+
+
 ## Native image selection (unreleased experiment)
 
 ### Added
