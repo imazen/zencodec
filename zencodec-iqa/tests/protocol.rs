@@ -343,7 +343,7 @@ fn rich_results_and_nested_completion_survive_output_mapping() {
     assert_eq!(
         result
             .scores()
-            .map(|s| (s.spec.key.as_ref(), s.value))
+            .map(|s| (s.spec.key(), s.value))
             .collect::<Vec<_>>(),
         [("score", 1.0), ("feature", 7.0)]
     );

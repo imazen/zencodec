@@ -132,10 +132,7 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
     let result = zencodec_iqa::score_outputs(&mut paired, &good, &good, EvalOpts::new()).unwrap();
     assert!(result.native::<PairedEvaluation<ProbeResult>>().is_some());
     assert_eq!(
-        result
-            .scores()
-            .map(|s| s.spec.key.as_ref())
-            .collect::<Vec<_>>(),
+        result.scores().map(|s| s.spec.key()).collect::<Vec<_>>(),
         ["score", "score_ref"]
     );
     assert_eq!(result.maps().count(), 0);

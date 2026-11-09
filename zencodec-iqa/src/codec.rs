@@ -93,7 +93,7 @@ fn operation<T>(
     work: impl FnOnce(EvalOpts<'_>) -> MetricResult<T>,
 ) -> MetricResult<T> {
     let mut stages = Stages::new(
-        opts.pulse,
+        opts.pulse(),
         &[PhaseSpec::new("score decoded outputs", 1, Total::Unknown)],
     );
     let result = stages.run_classified(iqa::is_stopped, |pulse| work(opts.with_pulse(pulse)));

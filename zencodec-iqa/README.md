@@ -27,3 +27,9 @@ pins the reviewed IQA/pixel source together; publication is a separate decision.
 Core protocol and real-metric controls belong to the core and its separate
 zenmetrics validation harness. Adapter controls cover unresolved geometry,
 actual color context and native mapping error/stop propagation.
+
+The shared unpublished core uses constructor-built metadata and checked map
+grids. This adapter reads its operation Pulse through the accessor and keeps
+returning the metric's native structured output. Its packed codec-output
+signature is unchanged; native planar encoder loops use the optional shared
+core extension directly.

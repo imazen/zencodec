@@ -12,10 +12,10 @@ publish = false
 default = []
 std = ["zenpsy-api/std", "zencodec/std"]
 [dependencies]
-zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "d234f3c63efca06d5d7d52cb39b6c1f92961e98f", version = "0.1.0" }
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "20cbfe10cfed18b90ce9c6d986d6aed4e7510b24", version = "0.1.0" }
 zencodec = { path = "..", version = ">=0.2.0, <0.4.0", default-features = false }
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "d234f3c63efca06d5d7d52cb39b6c1f92961e98f" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "20cbfe10cfed18b90ce9c6d986d6aed4e7510b24" }
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"
