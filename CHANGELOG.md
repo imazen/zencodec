@@ -4,6 +4,10 @@
 
 ### [Unreleased]
 
+- Pin the merged map/NR core and pixel source together; validate paired
+  no-reference results and unsupported-map propagation through codec mapping
+  (`4d690f6c`).
+
 - Accept boxed and stacked erased metrics through the existing output bridge,
   retaining the original concrete native result; core pin and focused native,
   strict lint and portability checks updated (`004706da`).
