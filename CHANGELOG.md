@@ -4,6 +4,10 @@
 
 ### [Unreleased]
 
+- Accept boxed and stacked erased metrics through the existing output bridge,
+  retaining the original concrete native result; core pin and focused native,
+  strict lint and portability checks updated (`004706da`).
+
 - Return typed native IQA assessments from resolved codec output scoring; retain
   named scalar outputs, native diagnostic data and nested error/progress control.
 
