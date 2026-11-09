@@ -6,18 +6,18 @@
 //!
 //! ```
 //! use zencodec::image::ImageOutput;
-//! use zencodec_iqa::iqa::{Metric, EvalOpts, Evaluated, MetricResult};
-//! fn compare_decoded(
-//!     metric: &mut dyn Metric,
+//! use zencodec_iqa::iqa::{Metric, EvalOpts, MetricResult};
+//! fn compare_decoded<M: Metric>(
+//!     metric: &mut M,
 //!     reference: &ImageOutput,
 //!     candidate: &ImageOutput,
-//! ) -> MetricResult<Evaluated> {
+//! ) -> MetricResult<M::Output> {
 //!     zencodec_iqa::score_outputs(metric, reference, candidate,
 //!         EvalOpts::new().with_max_pixels(16_000_000))
 //! }
 //! ```
 
-use crate::iqa::{self, ErrorKind, EvalOpts, Evaluated, Metric, MetricError, MetricResult};
+use crate::iqa::{self, ErrorKind, EvalOpts, Metric, MetricError, MetricResult};
 use iqa::how_far::{Complete, PhaseSpec, Stages, Total};
 use iqa::whereat::{At, ResultAtExt};
 use iqa::zenpixels::Orientation;
@@ -54,12 +54,12 @@ fn admit(image: &ImageOutput) -> MetricResult<()> {
 /// does not decode, transform pixels, certify a renderer, or budget native
 /// mapping allocations. Mapping failures retain their original cause.
 #[track_caller]
-pub fn score_outputs(
-    metric: &mut dyn Metric,
+pub fn score_outputs<M: Metric>(
+    metric: &mut M,
     reference: &ImageOutput,
     candidate: &ImageOutput,
     opts: EvalOpts<'_>,
-) -> MetricResult<Evaluated> {
+) -> MetricResult<M::Output> {
     operation(opts, |opts| {
         opts.checkpoint().at()?;
         admit(reference).at()?;
@@ -67,9 +67,7 @@ pub fn score_outputs(
         reference
             .with_pixels(|reference| {
                 candidate
-                    .with_pixels(|candidate| {
-                        iqa::score(metric, reference.into(), candidate.into(), opts)
-                    })
+                    .with_pixels(|candidate| iqa::score(metric, &reference, &candidate, opts))
                     .map_err(mapping_error)
                     .at()?
             })

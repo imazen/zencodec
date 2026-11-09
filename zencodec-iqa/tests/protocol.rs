@@ -142,29 +142,34 @@ impl std::fmt::Display for Native {
     }
 }
 impl std::error::Error for Native {}
+#[derive(Debug)]
+struct ProbeResult;
+impl Evaluation for ProbeResult {
+    fn scores(&self) -> impl Iterator<Item = Score<'_>> {
+        static SPEC: ScoreSpec = ScoreSpec::new("score", Direction::Unordered);
+        core::iter::once(Score::new(&SPEC, 1.0))
+    }
+}
 struct Probe {
     calls: usize,
 }
 impl Metric for Probe {
+    type Output = ProbeResult;
     fn id(&self) -> MetricId {
         MetricId::new("probe", Implementation::new("adapter-control", "1", 1))
     }
-    fn outputs(&self) -> std::borrow::Cow<'static, [ScoreSpec]> {
-        std::borrow::Cow::Owned(vec![ScoreSpec::new("score", ScoreKind::Feature)])
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        is_rgb8_srgb(f)
-    }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &zenpixels::PixelSlice<'_>,
+        d: &zenpixels::PixelSlice<'_>,
         _: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
+    ) -> MetricResult<ProbeResult> {
         self.calls += 1;
-        let (r, d) = rgb8_pair(&r, &d)?;
-        assert_eq!((r.width, r.height), (d.width, d.height));
-        Ok(Box::new(ScalarEval::single("score", 1.0)))
+        if r.color_context().is_some() || d.color_context().is_some() {
+            return fail(MetricError::new(ErrorKind::UnsupportedInput));
+        }
+        assert_eq!((r.width(), r.rows()), (d.width(), d.rows()));
+        Ok(ProbeResult)
     }
 }
 #[test]
@@ -272,55 +277,38 @@ fn rich_results_and_nested_completion_survive_output_mapping() {
     use zenpixels::{Orientation, PixelBuffer};
     struct Rich;
     struct NativeResult {
-        scalars: ScalarEval,
-        map: PixelBuffer,
+        scalars: [f64; 2],
+        map: [f32; 4],
     }
     impl Evaluation for NativeResult {
-        fn score(&self) -> f64 {
-            self.scalars.score()
-        }
-        fn scores(&self) -> Scores<'_> {
-            self.scalars.scores()
-        }
-        fn map(&self) -> Option<MapView<'_>> {
-            Some(
-                MapView::new(
-                    "native",
-                    self.map.as_slice(),
-                    MapPolarity::Difference,
-                    MapGeometry::identity(2, 2),
-                )
-                .unwrap(),
-            )
-        }
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
+        fn scores(&self) -> impl Iterator<Item = Score<'_>> {
+            static SPECS: [ScoreSpec; 2] = [
+                ScoreSpec::new("score", Direction::Lower),
+                ScoreSpec::new("feature", Direction::Unordered),
+            ];
+            SPECS
+                .iter()
+                .zip(self.scalars)
+                .map(|(s, v)| Score::new(s, v))
         }
     }
     impl Metric for Rich {
+        type Output = NativeResult;
         fn id(&self) -> MetricId {
             MetricId::new("rich", Implementation::new("adapter-control", "1", 1))
         }
-        fn outputs(&self) -> std::borrow::Cow<'static, [ScoreSpec]> {
-            std::borrow::Cow::Owned(vec![
-                ScoreSpec::new("score", ScoreKind::Difference),
-                ScoreSpec::new("feature", ScoreKind::Feature),
-            ])
-        }
-        fn accepts(&self, f: &InputFormat) -> bool {
-            is_rgb8_srgb(f)
-        }
         fn evaluate(
             &mut self,
-            r: Image<'_>,
-            d: Image<'_>,
-            _: EvalOpts<'_>,
-        ) -> MetricResult<Box<dyn Evaluation>> {
-            rgb8_pair(&r, &d)?;
-            Ok(Box::new(NativeResult {
-                scalars: ScalarEval::single("score", 1.0).with("feature", 7.0),
-                map: gray_f32_buffer(&[1.0, 2.0, 3.0, 4.0], 2, 2)?,
-            }))
+            r: &zenpixels::PixelSlice<'_>,
+            d: &zenpixels::PixelSlice<'_>,
+            opts: EvalOpts<'_>,
+        ) -> MetricResult<NativeResult> {
+            assert_eq!(r.descriptor(), d.descriptor());
+            assert!(opts.diagnostics());
+            Ok(NativeResult {
+                scalars: [1.0, 7.0],
+                map: [1.0, 2.0, 3.0, 4.0],
+            })
         }
     }
     let mut interpretation = ImageInterpretation::packed(
@@ -353,14 +341,14 @@ fn rich_results_and_nested_completion_survive_output_mapping() {
     )
     .unwrap();
     assert_eq!(
-        result.result.scores().collect::<Vec<_>>(),
-        vec![("score".into(), 1.0), ("feature".into(), 7.0)]
+        result
+            .scores()
+            .map(|s| (s.spec.key.as_ref(), s.value))
+            .collect::<Vec<_>>(),
+        [("score", 1.0), ("feature", 7.0)]
     );
-    assert!(result.result.as_any().is::<NativeResult>());
-    assert_eq!(
-        result.result.map().unwrap().values().as_ref(),
-        &[1.0, 2.0, 3.0, 4.0]
-    );
+    let _: &NativeResult = &result;
+    assert_eq!(result.map, [1.0, 2.0, 3.0, 4.0]);
     assert_eq!(
         *log.outcomes.lock().unwrap(),
         BTreeMap::from([

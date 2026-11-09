@@ -4,6 +4,9 @@
 
 ### [Unreleased]
 
+- Return typed native IQA assessments from resolved codec output scoring; retain
+  named scalar outputs, native diagnostic data and nested error/progress control.
+
 ### QUEUED BREAKING CHANGES
 
 None. This is a new unpublished review API.

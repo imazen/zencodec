@@ -2,29 +2,34 @@
 use std::sync::Arc;
 use zencodec_iqa::iqa::zenpixels::{self, ColorContext, PixelDescriptor};
 use zencodec_iqa::iqa::*;
+#[derive(Debug)]
+struct ProbeResult;
+impl Evaluation for ProbeResult {
+    fn scores(&self) -> impl Iterator<Item = Score<'_>> {
+        static SPEC: ScoreSpec = ScoreSpec::new("score", Direction::Unordered);
+        core::iter::once(Score::new(&SPEC, 1.0))
+    }
+}
 struct Probe {
     calls: usize,
 }
 impl Metric for Probe {
+    type Output = ProbeResult;
     fn id(&self) -> MetricId {
         MetricId::new("probe", Implementation::new("adapter-control", "1", 1))
     }
-    fn outputs(&self) -> std::borrow::Cow<'static, [ScoreSpec]> {
-        std::borrow::Cow::Owned(vec![ScoreSpec::new("score", ScoreKind::Feature)])
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        is_rgb8_srgb(f)
-    }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &zenpixels::PixelSlice<'_>,
+        d: &zenpixels::PixelSlice<'_>,
         _: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
+    ) -> MetricResult<ProbeResult> {
         self.calls += 1;
-        let (r, d) = rgb8_pair(&r, &d)?;
-        assert_eq!((r.width, r.height), (d.width, d.height));
-        Ok(Box::new(ScalarEval::single("score", 1.0)))
+        if r.color_context().is_some() || d.color_context().is_some() {
+            return fail(MetricError::new(ErrorKind::UnsupportedInput));
+        }
+        assert_eq!((r.width(), r.rows()), (d.width(), d.rows()));
+        Ok(ProbeResult)
     }
 }
 #[test]
@@ -65,8 +70,10 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
     assert_eq!(
         zencodec_iqa::score_outputs(&mut metric, &good, &good, EvalOpts::default())
             .unwrap()
-            .result
-            .score(),
+            .scores()
+            .next()
+            .unwrap()
+            .value,
         1.0
     );
     for bad in [
