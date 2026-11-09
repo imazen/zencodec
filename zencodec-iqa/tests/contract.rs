@@ -103,4 +103,12 @@ fn codec_bridge_requires_resolved_geometry_and_preserves_context() {
         ErrorKind::UnsupportedInput
     );
     assert_eq!(metric.calls, 2);
+    let mut erased: Box<DynMetric<'_>> = Box::new(Erased::new(Erased::new(Probe { calls: 0 })));
+    let result = zencodec_iqa::score_outputs(&mut erased, &good, &good, EvalOpts::new()).unwrap();
+    assert!(result.native::<ProbeResult>().is_some());
+    assert!(result.native::<ErasedEvaluation>().is_none());
+    assert_eq!(
+        result.scores().next().unwrap().value.to_bits(),
+        1.0f64.to_bits()
+    );
 }

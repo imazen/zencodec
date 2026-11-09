@@ -8,6 +8,9 @@ this crate re-exports it as `iqa` without defining a second metric hierarchy.
 `score_outputs` maps a reference/candidate `ImageOutput` pair into the core's
 checked `score` call, returning the metric's concrete structured output. It requires packed, full-canvas, composited, already
 oriented samples and holds both mapping guards for the complete evaluation.
+For heterogeneous collections, pass a boxed `iqa::DynMetric` containing an
+`iqa::Erased` wrapper. The bridge returns `iqa::ErasedEvaluation`; repeated
+wrapping preserves access to the original native assessment through `native`.
 Actual pixel contexts and row strides pass unchanged. Native mapping causes,
 whereat traces and cancellation classifications survive the bridge.
 
