@@ -14,6 +14,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  frame-interchange:
+    name: Qualify current native frame interchange
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: 2
+      RAYON_NUM_THREADS: 2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/frame-native-validation
+      - name: Install independent sample reader
+        run: sudo timeout 180s apt-get install -y --no-install-recommends ffmpeg
+      - name: Validate the current source family and native mappings
+        run: |
+          mkdir -p "$HOME/tmp/frame-contract-inputs"
+          timeout 180s python3 tools/frame-native-validation/prepare.py "$HOME/tmp/frame-contract-inputs"
+          cp tools/frame-native-validation/dependencies.lock tools/frame-native-validation/Cargo.lock
+          cargo metadata --manifest-path tools/frame-native-validation/Cargo.toml --locked --format-version 1 > "$HOME/tmp/frame-contract-graph.json"
+          python3 scripts/check-codec-graph.py "$HOME/tmp/frame-contract-graph.json"
+          FRAME_NATIVE_INPUTS="$HOME/tmp/frame-contract-inputs" timeout 300s cargo test --manifest-path tools/frame-native-validation/Cargo.toml --locked -- --test-threads=1
+          timeout 180s cargo clippy --manifest-path tools/frame-native-validation/Cargo.toml --all-targets --locked -- -D warnings
+
   examples:
     name: Execute guide examples
     runs-on: ubuntu-latest

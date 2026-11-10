@@ -10,7 +10,7 @@ API proposals. Core remains unpublished pending the normal release gates.
 | 2. Complete frame interpretation and checked lending | [PR204](https://github.com/imazen/zencodec/pull/204) | Current color/alpha, explicit mapped encoding and shared validation; direct/image/lent consumers share refusal checks. Core1440 tests +33 doctests pass/39 existing ignores; strict all-target Clippy, core no-default and renderer controls pass. |
 | 3. Evidence and late decisions | [PR205](https://github.com/imazen/zencodec/pull/205) | Runtime conversion choices retain the exact current target; report snapshots stay payload-free. Shared controls inspect opaque targets, reject context/alpha/timing drift, preserve ordinary successful admission and verify report cleanup. |
 | 4. Exact media presentation | [PR206](https://github.com/imazen/zencodec/pull/206) | Ordered exact timelines, default-refusing typed/erased mux admission, known-program fallback refusal, separate presentation facts and complete conformance comparison. |
-| 5. Shared conformance, migration and guide | Final stacked PR | Reusable direct/image/planar and full session comparisons; real AV1/TIFF witnesses, compiled code-first page and compiler/Rustdoc reference. |
+| 5. Shared conformance, migration and guide | [PR208](https://github.com/imazen/zencodec/pull/208) | Reusable direct/image/planar and full session comparisons; real AV1/TIFF witnesses, compiled code-first page and compiler/Rustdoc reference. |
 
 Layer1's independent source-export gate is `just core-stack-check OUTPUT TARGET REVISION`
 under run-heavy. Both early renderer dependency-resolution failures are retained:
@@ -82,3 +82,20 @@ or enabling a broad codec rollout. The new minimal graph demonstrates the frame
 contract against real native storage while preserving that limitation.
 
 No crate has been published and main is unchanged by this review series.
+
+
+Final combined gate: [committed receipt](../benchmarks/core_contract_stack_2026-11-10.json).
+Core1451 tests,33 doctests/39 existing ignores, renderer8+1, native2, real-ICC3,
+all strict Clippy gates and no-default core check pass. The compiler catalog,
+all-eight-crate strict Rustdoc,28 site checks and full browser suite pass,
+including the new page at390/768/1440px. run-heavy rc0,152s,peak RSS0.98GiB.
+The effective export's1011 tracked blobs match public94ac77d6 byte-for-byte;
+its ICC lock was resolved before testing and then committed in that descendant.
+
+The new browser assertion first caught a768px overflow. The fix contains bare
+code blocks without hiding any examples; assertions remain unchanged. The actual
+real-profile tool also now selects the current pixel source and passes all3
+controls. Four older Documentation native jobs remain blocked on the historical
+cohorts; [issue207](https://github.com/imazen/zencodec/issues/207) is the explicit
+pre-landing integration gate. PR208 is ready for API review; the stack does not
+claim release readiness or complete native edited-playback correctness.

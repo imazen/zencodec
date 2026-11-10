@@ -1,0 +1,281 @@
+{
+  "public_revision": "94ac77d67e346dbfac6f6777d29793c27993e161",
+  "qualified_export_revision": "303693ebda14bf993f77e72cde2ae9884f9fb7f5",
+  "source_identity": {
+    "revision": "94ac77d67e346dbfac6f6777d29793c27993e161",
+    "tracked_blobs": 1011,
+    "excluded_gitlinks": [],
+    "differences": []
+  },
+  "status": "passed",
+  "gates": [
+    {
+      "label": "core-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "Cargo.toml",
+        "--format-version",
+        "1",
+        "--all-features"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "core-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--all-features",
+        "--lib",
+        "--tests",
+        "--locked"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "core-docs",
+      "command": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--all-features",
+        "--doc",
+        "--locked"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "core-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-features",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "core-no-default",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "zencodec",
+        "--no-default-features",
+        "--locked"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "render-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "zencodec-render/Cargo.toml",
+        "--format-version",
+        "1",
+        "--all-features"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "render-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "zencodec-render/Cargo.toml",
+        "--locked"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "render-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "zencodec-render/Cargo.toml",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "native-prepare",
+      "command": [
+        "python3",
+        "tools/frame-native-validation/prepare.py",
+        "/home/lilith/tmp/zencodec-contract-stack-20261110/native-inputs"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "native-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "tools/frame-native-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "native-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "tools/frame-native-validation/Cargo.toml",
+        "--locked",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "native-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "tools/frame-native-validation/Cargo.toml",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "icc-authority-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "tools/icc-authority-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "icc-authority-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "tools/icc-authority-validation/Cargo.toml",
+        "--locked"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "docs-install",
+      "command": [
+        "npm",
+        "ci",
+        "--prefix",
+        "docs"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "docs-catalog",
+      "command": [
+        "env",
+        "RUSTUP_TOOLCHAIN=nightly-2026-10-06",
+        "python3",
+        "docs/generate-code-catalog.py",
+        "$EXPORT"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "docs-reference",
+      "command": [
+        "python3",
+        "docs/build-reference.py"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "docs-browser",
+      "command": [
+        "just",
+        "docs-site-browser-check",
+        "3547"
+      ],
+      "status": "passed",
+      "returncode": 0
+    }
+  ],
+  "counts": {
+    "workspace_tests_passed": 1451,
+    "doctests_passed": 33,
+    "existing_doctest_ignores": 39,
+    "renderer_integration_tests": 8,
+    "renderer_doctests": 1,
+    "real_icc_tests": 3,
+    "native_mapping_tests": 2,
+    "site_tests": 28
+  },
+  "resource_receipt": {
+    "memory_cap": "4G",
+    "jobs": 2,
+    "returncode": 0,
+    "elapsed_seconds": 152,
+    "peak_rss_gib": 0.98,
+    "minimum_available_mib": 12528,
+    "peak_load": 2.09
+  },
+  "scope": [
+    "No runtime source bytes differ between the public revision and the effective qualified export. The public revision commits the ICC lock already resolved and tested in that export.",
+    "AV1 native mapping: immutable guarded picture after decoder drop; selected U8 odd geometry and U16 10-bit outputs exactly match independent FFmpeg sample bytes.",
+    "TIFF native mapping: two decoded pages of different odd widths/depths run the same checker. This does not qualify general collection/SubIFD or edited playback.",
+    "F32/NaN/signed-zero, mixed-depth alpha, MSB10 and LSB12 controls are shared software-owner cases.",
+    "Compiler catalogs and all-eight-crate strict Rustdoc, full site and browser checks passed.",
+    "Earlier failed fixture/lint/orchestration/browser receipts are retained; no threshold or established assertion was relaxed.",
+    "Full historical native JPEG/AV1/spatial/guide cohorts still need source-identity migration; issue207 blocks whole-repository CI and broad rollout."
+  ],
+  "command_path_note": "The recorded commands replace the export directory with $EXPORT; full original command logs remain preserved.",
+  "public_reference_rerun": {
+    "revision": "94ac77d67e346dbfac6f6777d29793c27993e161",
+    "returncode": 0,
+    "elapsed_seconds": 71,
+    "peak_rss_gib": 0.34,
+    "scope": "strict eight-crate Rustdoc plus complete site and browser checks with public source links"
+  }
+}
