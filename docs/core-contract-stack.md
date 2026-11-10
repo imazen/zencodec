@@ -97,7 +97,7 @@ code blocks without hiding any examples; assertions remain unchanged. The actual
 real-profile tool also now selects the current pixel source and passes all3
 controls. Four older Documentation native jobs remain blocked on the historical
 cohorts; [issue207](https://github.com/imazen/zencodec/issues/207) is the explicit
-pre-landing integration gate. PR208 is ready for API review; the stack does not
+pre-landing integration gate. PR208 remains draft pending full native qualification; the stack does not
 claim release readiness or complete native edited-playback correctness.
 
 
@@ -109,3 +109,27 @@ advanced.html, and migration notes stay there. Dark styling is the default.
 new protocol or adapter implementation. A unified short render operation across
 still images, collections, animation and video remains an explicit convenience
 gap. That gap must not be presented as solved by a plane-count example.
+
+
+## Review readiness correction (2026-11-10)
+
+The complete release stack is **not ready for final review or merge**. Its local
+shared/native-mapping gates pass, but four full Documentation jobs fail on PR208:
+guide examples, JPEG, AV1 and TIFF/JXL. Their older pixel cohorts lack current
+plane APIs. Issue207 is unfinished required integration, not a waived release
+gate. Previous "ready for API review" language did not make this clear enough.
+
+The twelve open PRs are not twelve independent release review requests:
+
+- PR201/204/205/206/208 are one five-layer implementation stack. Hold final review
+  until its complete native validation is green; intermediate heads include
+  known failures subsequently repaired by descendants.
+- PR199/200 are earlier overlapping work. Reconcile their remaining useful
+  content before marking them superseded; do not ask for duplicate reviews.
+- PR188/189/196/158/157 are separate presentation experiments, publication work,
+  assessment mapping, optional HDR capability and C2PA work respectively.
+  Green checks alone do not certify that each proposal's design was reviewed.
+
+All currently failing proposals are held in draft. Main and publication remain
+unchanged. The next release-critical work is the actual cohort migration and full
+native tests, rather than more API surface or presentation changes.
