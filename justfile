@@ -2008,3 +2008,16 @@ native-cohort-runtime output target roots="jpeg av1 spatial lcms io" filter="" r
 # Refresh catalogs/reference/site without rerunning unchanged native behavior.
 core-stack-docs output target revision="HEAD":
     python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --docs --docs-only
+
+# Inspect the exact native artifacts with the existing CI numerical/model gates.
+native-ci-artifact-check source av1 output target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{output}}"
+    cd "{{source}}"
+    export CARGO_TARGET_DIR="{{target}}"
+    cargo run --quiet --manifest-path perf/io-validation/Cargo.toml --bin transport_contracts --locked > "{{output}}/transport.csv"
+    diff -u benchmarks/io_transport_model_2026-10-25.csv "{{output}}/transport.csv"
+    just av1-planar-float-verify "{{av1}}" "{{output}}/av1-rgb"
+    just av1-gamma-verify "{{av1}}" "{{output}}/independent-gamma.json"
+    python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py
