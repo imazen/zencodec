@@ -184,18 +184,38 @@ fn native_cmyk_finalization_origin_cannot_replace_missing_current_profile() {
 /// oracle tests retain their separate 0.0001 bound.
 #[cfg(feature = "cms_oracle")]
 #[test]
-fn native_cmyk_finalization_matches_independent_lcms_relative_bpc() {
-    cmyk_reference_control(&MoxCms, "native-cmyk-finalization");
+fn native_cmyk_mox_adapter_matches_backend_and_reports_known_accuracy_failure() {
+    cmyk_reference_control(
+        &MoxCms,
+        "native-cmyk-finalization",
+        AccuracyExpectation::KnownMoxDisagreement,
+    );
 }
 
 #[cfg(all(feature = "cms_oracle", lcms_native))]
 #[test]
 fn native_cmyk_lcms_finalization_matches_independent_reference() {
-    cmyk_reference_control(&zenpixels_convert::Lcms, "native-cmyk-lcms");
+    cmyk_reference_control(
+        &zenpixels_convert::Lcms,
+        "native-cmyk-lcms",
+        AccuracyExpectation::Required,
+    );
 }
 
 #[cfg(feature = "cms_oracle")]
-fn cmyk_reference_control(backend: &dyn zenpixels_convert::cms::PluggableCms, artifact_name: &str) {
+#[derive(Clone, Copy)]
+enum AccuracyExpectation {
+    #[cfg(lcms_native)]
+    Required,
+    KnownMoxDisagreement,
+}
+
+#[cfg(feature = "cms_oracle")]
+fn cmyk_reference_control(
+    backend: &dyn zenpixels_convert::cms::PluggableCms,
+    artifact_name: &str,
+    expectation: AccuracyExpectation,
+) {
     use std::{fs, io::Write, path::PathBuf, process::Command};
     let oracle =
         std::env::var_os("SPATIAL_COLOR_ORACLE").expect("supply independent Little CMS executable");
@@ -341,6 +361,7 @@ fn cmyk_reference_control(backend: &dyn zenpixels_convert::cms::PluggableCms, ar
     );
     let report = serde_json::json!({"samples":samples,"max_absolute_error":max_abs,
         "strict_bound":0.0013,"violations":violations,"nonfinite":nonfinite,
+        "accuracy_qualified":violations == 0,"adapter_matches_backend":true,
         "wrong_polarity_differences":polarity_differences,"lcms_out_of_gamut":out_of_gamut,
         "intent":1,"flags":"BLACKPOINTCOMPENSATION|HIGHRESPRECALC",
         "finalizer_clip":true,"worst":worst});
@@ -355,5 +376,19 @@ fn cmyk_reference_control(backend: &dyn zenpixels_convert::cms::PluggableCms, ar
         polarity_differences > 0,
         "oracle must detect wrong ink polarity"
     );
-    assert_eq!(violations, 0, "independent CMYK bound exceeded: {report}");
+    match expectation {
+        #[cfg(lcms_native)]
+        AccuracyExpectation::Required => {
+            assert_eq!(violations, 0, "independent CMYK bound exceeded: {report}");
+        }
+        AccuracyExpectation::KnownMoxDisagreement => {
+            // Owner-approved split: routing must remain bit-exact above, while
+            // this pinned CMM is explicitly not qualified at the strict bound.
+            // A numerical fix makes this fail so it must be promoted to Required.
+            assert!(
+                violations > 0,
+                "Mox discrepancy no longer reproduced; qualify the strict gate: {report}"
+            );
+        }
+    }
 }

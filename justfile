@@ -663,10 +663,10 @@ collection-context-native artifacts:
 
 # Native CMYK carrier/finalizer checks and independent LCMS relative+BPC oracle.
 spatial-cmyk-check artifacts oracle:
-    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_finalization -- --nocapture --test-threads=1
+    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_ -- --nocapture --test-threads=1
     just spatial-validation-lint cms_oracle,old_jpeg
 
-# Explicit modern adapter graph; the frozen Mox accuracy control remains unchanged.
+# Strict independent accuracy gate; the Mox route retains its explicit known discrepancy.
 spatial-lcms-check artifacts oracle:
     cp perf/spatial-lcms-validation/dependencies.lock perf/spatial-lcms-validation/Cargo.lock
     SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_lcms_finalization -- --nocapture --test-threads=1
