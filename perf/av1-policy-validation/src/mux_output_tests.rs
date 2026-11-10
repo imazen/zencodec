@@ -798,7 +798,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
     use zencodec::{
         At,
         frame::FrameTiming,
-        operation::{Decision, FrameConversionOffer, FrameFacts, Question},
+        operation::{Decision, FrameConversionOffer, Question},
         storage::StorageBudget,
         time::Timestamp,
     };

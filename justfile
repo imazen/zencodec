@@ -1988,3 +1988,15 @@ frame-interchange-native-check inputs:
 # One immutable source export for runtime/native/reference/site acceptance.
 core-contract-release-check output target inputs revision="HEAD":
     python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --native-inputs "{{inputs}}" --docs
+
+# Compile each full native CI consumer against the selected shared cohort.
+validation-cohort-check:
+    python3 scripts/sync-validation-cohort.py
+
+native-cohort-compile output target revision="HEAD":
+    python3 scripts/qualify-native-cohort.py "{{output}}" --revision "{{revision}}" --target "{{target}}"
+
+# Capture public converter signatures from the same source used by native tests.
+capture-conversion-api checkout revision:
+    node docs/capture-output-api.mjs "{{checkout}}" "{{revision}}"
+    node docs/capture-ycbcr-api.mjs "{{checkout}}" "{{revision}}"

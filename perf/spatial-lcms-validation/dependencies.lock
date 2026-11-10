@@ -292,8 +292,8 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "garb"
-version = "0.2.8"
-source = "git+https://github.com/imazen/garb?rev=8f9aa10d09f84bb0a1e3fdbd1773f610eec1b784#8f9aa10d09f84bb0a1e3fdbd1773f610eec1b784"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=58ce9cad7b337418a7abe9b1f6e3e4bd1928b385#58ce9cad7b337418a7abe9b1f6e3e4bd1928b385"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1006,6 +1006,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenhash"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenhash?rev=98c385a4e54a#98c385a4e54a1d41870610e13a614295c538275c"
+dependencies = [
+ "archmage",
+ "whereat",
+]
+
+[[package]]
 name = "zenjxl"
 version = "0.3.0"
 source = "git+https://github.com/imazen/zenjxl?rev=8b86f9a2bcfee893ece89f7976b9132bfd88d315#8b86f9a2bcfee893ece89f7976b9132bfd88d315"
@@ -1074,20 +1083,22 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=af19bcdab06b0df55745288931a1bdfaa6232665#af19bcdab06b0df55745288931a1bdfaa6232665"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "bytemuck",
  "rgb",
  "whereat",
+ "zenhash",
 ]
 
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=af19bcdab06b0df55745288931a1bdfaa6232665#af19bcdab06b0df55745288931a1bdfaa6232665"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "archmage",
  "bytemuck",
+ "enough",
  "garb",
  "lcms",
  "libm",

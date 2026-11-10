@@ -19,12 +19,12 @@ rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec656120
 
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zenmeta = { path = "../../../zenmeta" }
 zencodec = { path = "../../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 
 [patch."https://github.com/imazen/zencodec"]

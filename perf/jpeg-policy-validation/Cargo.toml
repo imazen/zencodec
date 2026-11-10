@@ -33,7 +33,7 @@ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5c5fe0d53b8264
 zenblend = { git = "https://github.com/imazen/zenblend", rev = "d477b29c4ffbbcf8bb5f20070b44dac2caf6cf26" }
 zentone = { git = "https://github.com/imazen/zentone", rev = "2598054c140bad5cdbe66205dacedc49150dea3d" }
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "8f9aa10d09f84bb0a1e3fdbd1773f610eec1b784" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "2969ee846e92a4f00f34ab447edaf1eb6857ebe0" }
 # Paired PNG requires the unpublished 0.4 DEFLATE family.
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "a2c7d540fc8f044f7c75398f1c49775560021862" }
@@ -48,8 +48,8 @@ zenmeta = { path = "../../zenmeta" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "5a3b158c35cdabc5e9de1ef4fb79e0242c99b815" }
 # Paired exact-depth/conversion revision used by the qualified optional-control
 # native codecs and zenpipe checked-publication candidate.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

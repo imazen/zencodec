@@ -351,7 +351,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 let offer = choice.value();
                 assert!(offer.destination.unwrap().exact_timing);
                 assert_eq!(offer.fidelity, Some(zencodec::encode::Fidelity::Lossless));
-                let conversion = offer.conversion.unwrap();
+                let conversion = offer.conversion.as_ref().unwrap();
                 assert!(!conversion.preserves_samples);
                 assert!(!conversion.preserves_extended_range);
                 assert_eq!(
@@ -407,7 +407,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 let Some(Selection::FrameRoute(offer)) = record.selected else {
                     panic!()
                 };
-                assert!(!offer.conversion.unwrap().preserves_samples);
+                assert!(!offer.conversion.as_ref().unwrap().preserves_samples);
                 assert!(offer.destination.unwrap().exact_timing);
             }
             oracle_container(

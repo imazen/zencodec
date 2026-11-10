@@ -7,5 +7,5 @@ publish = false
 [workspace]
 
 [dependencies]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078", default-features = false }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510", default-features = false }
 bytemuck = { version = "1.21.0", default-features = false }
