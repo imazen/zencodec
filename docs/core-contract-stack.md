@@ -1,5 +1,10 @@
 # Core contract implementation stack
 
+Current review target: [PR208 against main](https://github.com/imazen/zencodec/pull/208).
+The full selected native runtime/lint gates and guide/reference/browser checks
+pass. [Review order and remaining scopes](review-batch.md) and the final dated
+qualification below supersede the intermediate failure reports retained here.
+
 The owner authorized this five-layer series on 2026-11-10. Each layer has one
 review target and shares the preceding implementation; it is not five competing
 API proposals. Core remains unpublished pending the normal release gates.
@@ -110,7 +115,7 @@ gap. That gap must not be presented as solved by a plane-count example.
 
 ## Review readiness correction (2026-11-10)
 
-The complete release stack is **not ready for final review or merge**. At the start of this pass, its local
+Before the native repairs below, the complete stack was **not ready for final review or merge**. At the start of this pass, its local
 shared/native-mapping gates passed, but four full Documentation jobs failed on
 PR208: guide examples, JPEG, AV1 and TIFF/JXL. Those older pixel cohorts lacked
 current plane APIs. The update below records the subsequent compile repair and
@@ -169,7 +174,50 @@ remaining failures are:
 
 The TIFF/JXL job was still running at this update. No full-runtime pass is
 claimed for it or the separate LCMS root. Historical Mox CMYK precision failures
-remain unwaived. The five-layer stack remains draft; reconciling the seven other
-open proposals and completing native runtime qualification are unfinished.
+remain unwaived. At that intermediate checkpoint the five-layer stack remained draft; the final
+consolidation and qualification update below supersedes that status.
 The next bounded gate is one replay of the exact failing commands with existing
 assertions and frozen codec kernels, stopping on substantive correctness failures.
+
+
+## Consolidated review qualification (2026-11-10)
+
+The complete implementation is now reviewed through **PR208 against main**;
+PR201/204/205/206 are superseded layer views whose commits remain intact.
+PR199/200/189 are incorporated predecessors. PR188's declaration changes are
+incorporated while its remaining native playback experiments stay preserved
+for issue187. [Review order and all proposal/issue dispositions](review-batch.md).
+
+All previously failing native roots now pass their selected **runtime and strict
+all-target Clippy** gates: all eight I/O integration targets and both bins;
+complete JPEG68 and AV170 controls; complete TIFF/JXL149 controls. Native JPEG
+preflight also passes on its feature-enabled graph. The separate LCMS control
+passes the strict0.0013 accuracy bound and all-target lint after the shared test
+change. Existing independent float/Gamma22 checks, source-transport controls and
+the exact transport-model CSV comparison pass. This is scope-specific native
+qualification, not proof that every codec configuration or edited timeline works.
+
+The JPEG guide now explicitly provides MoxCms where authoritative ICC conversion
+needs a CMS; the original failure retains its typed NeedsCms cause. Frozen muxer
+functions retain scalar compatibility via four count-checked, function-scoped
+lint annotations, with upstream/derived hashes in sources.json. Their runtime
+source and known edit-list limitations are unchanged. A separate diagnostic's
+scalar use is likewise explicitly marked compatibility-only.
+
+The owner approved replacing the failing Mox accuracy expectation with an
+explicit known-discrepancy regression: every direct-backend/finalizer sample,
+source/context/storage assertion, finite check and polarity control remains.
+The original independent0.0013 comparison is still computed and reported as
+unqualified (937/786432 violations,max0.006689250469207764). LCMS retains the
+strict passing reference gate. [zenpixels157](https://github.com/imazen/zenpixels/issues/157)
+tracks minimal upstream-report preparation; no MoxCMS issue was opened.
+
+Compiler catalogs, all-eight-crate strict Rustdoc and the full source/browser
+site gate pass after the publication-manifest update. Core runtime source is
+unchanged from the passing Linux x64/ARM, Windows x64/ARM, macOS ARM, i686,
+MSRV,WASM,lint and fuzz CI at c83798f6; only I/O's publication manifest changed.
+No platform claim relies on an unexecuted new backend path.
+
+[Exact commands, source identities and resource receipts](../benchmarks/review_batch_2026-11-10.json)
+retain the original failures separately. Main remains unchanged. This batch is
+for API review, not approval to publish or a claim that all roadmap issues close.

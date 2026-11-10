@@ -48,8 +48,9 @@ The batch does not close every product or codec roadmap item. The owning issues
 retain these distinct scopes:
 
 - **Current integration gate:**207 (standalone graphs),194 (old perf roots),198
-  (canonical-plane API friction). Complete native qualification is required
-  before declaring this batch ready.
+  (canonical-plane API friction). The full selected runtime/lint gates pass; exact scope and receipts are
+  recorded in core-contract-stack.md. These integration findings can close
+  after the qualified batch lands.
 - **Shared requirements already exercised, remaining rollout tracked:**173
   (mandatory requirements),172 (container timing/layout admission),170 (canvas
   rendering),169 (physical resolution),161 (input budgets),160 (fairness versus
