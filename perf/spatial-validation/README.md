@@ -1612,11 +1612,11 @@ visible. No default backend or public signature changes.
 
 ## Current shared cohort and CMYK gate split (2026-11-10)
 
-The native graphs now select pixel/converter76005fc9 and MoxCMS0.9.2. Full-row
+The native graphs now select pixel/converter76005fc9 and MoxCMS 0.9.2. Full-row
 finalizer/direct-backend parity remains bit-exact. The independent comparison
-still finds937 of786432 components outside the unchanged0.0013 accuracy bound,
+still finds 937 of 786432 components outside the unchanged0.0013 accuracy bound,
 with maximum error0.006689250469207764. The original failing CI receipt and
-historical0.9.1 measurements above are preserved.
+historical 0.9.1 measurements above are preserved.
 
 The owner approved separating adapter correctness from CMM accuracy:
 `native_cmyk_mox_adapter_matches_backend_and_reports_known_accuracy_failure`
@@ -1624,7 +1624,7 @@ retains every source/context/storage/polarity/finite/direct-row assertion,
 computes the original independent bound, and explicitly requires the known
 numerical discrepancy to remain visible. Its report marks accuracy unqualified.
 If the discrepancy disappears, the regression fails and requires promotion to
-the strict accuracy gate. This test does not certify MoxCMS at0.0013.
+the strict accuracy gate. This test does not certify MoxCMS at 0.0013.
 
 The separate LCMS graph continues to require zero components outside0.0013;
 its focused native test and all-target strict Clippy pass on this cohort.

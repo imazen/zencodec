@@ -143,7 +143,7 @@ native tests, rather than more API surface or presentation changes.
 PR208 commit `c83798f6` synchronizes fifteen standalone manifests with the root
 pixel/converter and garb sources, updates their tracked seed locks, and migrates
 native harness ownership/exhaustiveness calls. Codec and linear-sRGB revisions
-stay fixed. The converter requires MoxCMS0.9.2; the affected JPEG/spatial locks
+stay fixed. The converter requires MoxCMS 0.9.2; the affected JPEG/spatial locks
 therefore move from0.9.1 to0.9.2. Existing pixel assertions and quality bounds
 are unchanged. `just validation-cohort-check` now detects source-pin drift.
 
@@ -190,9 +190,9 @@ for issue187. [Review order and all proposal/issue dispositions](review-batch.md
 
 All previously failing native roots now pass their selected **runtime and strict
 all-target Clippy** gates: all eight I/O integration targets and both bins;
-complete JPEG68 and AV170 controls; complete TIFF/JXL149 controls. Native JPEG
+complete JPEG 68 and AV1 70 controls; complete TIFF/JXL 149 controls. Native JPEG
 preflight also passes on its feature-enabled graph. The separate LCMS control
-passes the strict0.0013 accuracy bound and all-target lint after the shared test
+passes the strict 0.0013 accuracy bound and all-target lint after the shared test
 change. Existing independent float/Gamma22 checks, source-transport controls and
 the exact transport-model CSV comparison pass. This is scope-specific native
 qualification, not proof that every codec configuration or edited timeline works.
@@ -207,8 +207,8 @@ scalar use is likewise explicitly marked compatibility-only.
 The owner approved replacing the failing Mox accuracy expectation with an
 explicit known-discrepancy regression: every direct-backend/finalizer sample,
 source/context/storage assertion, finite check and polarity control remains.
-The original independent0.0013 comparison is still computed and reported as
-unqualified (937/786432 violations,max0.006689250469207764). LCMS retains the
+The original independent 0.0013 comparison is still computed and reported as
+unqualified (937/786432 violations, max0.006689250469207764). LCMS retains the
 strict passing reference gate. [zenpixels157](https://github.com/imazen/zenpixels/issues/157)
 tracks minimal upstream-report preparation; no MoxCMS issue was opened.
 
