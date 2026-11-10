@@ -978,3 +978,14 @@ and retain explicit-authority/qualified positive controls. This review changes
 no behavioral test. Current PR heads, the optional IQA test receipt, planar
 context/alpha gaps and migration order are in
 [the adaptation review](docs/pixel-main-adaptation-2026-11-09.md).
+
+## Pixel adoption status (2026-11-10)
+
+The current [adoption ledger](docs/zenpixels-adoption-status-2026-11-10.md)
+inventories 63 open PR heads across 16 repositories and distinguishes main pins,
+retained review graphs and current-core checks. Pixel124c5dc4 fixes the earlier
+alpha/predicate/canonical-normalization findings; issue150 still has consumer
+evidence work, and allocation151/PR153 remains scoped. Core9058 with that pixel
+main compiles std/all-feature all-target and passes the eight renderer integration
+tests, but the workspace std run still fails the documented gray permission
+expectation. No API/pin migration or merge was performed by the status review.

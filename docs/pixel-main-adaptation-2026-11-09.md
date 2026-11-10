@@ -1,5 +1,10 @@
 # Adapting zencodec to current zenpixels
 
+Current adoption and PR dispositions are tracked in
+[the 2026-11-10 status review](zenpixels-adoption-status-2026-11-10.md).
+The f2d2bfde findings below are source-pinned history; pixel main has since
+fixed the alpha/predicate/normalization findings and started allocation hardening.
+
 Source review and isolated compatibility checks, 2026-11-09. This is a proposed
 migration, not an implemented API change or release approval.
 
