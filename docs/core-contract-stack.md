@@ -221,3 +221,13 @@ No platform claim relies on an unexecuted new backend path.
 [Exact commands, source identities and resource receipts](../benchmarks/review_batch_2026-11-10.json)
 retain the original failures separately. Main remains unchanged. This batch is
 for API review, not approval to publish or a claim that all roadmap issues close.
+
+
+Hosted replay correction: the complete native JPEG/AV1/TIFF/JXL and guide/browser
+jobs subsequently passed. Two additional CI steps exposed a stale standalone
+policy-portability lock and an Azure FFmpeg download timeout before frame tests.
+The policy seed now changes only its pixel source identity, with no package
+version moves; both WASM and freestanding ARM checks, host test and strict lint
+pass locally using the exact CI commands. The frame job now uses the same
+bounded signed archive mirror as the other independent oracle jobs. No test
+selection, assertion or numerical kernel changed for these repairs.

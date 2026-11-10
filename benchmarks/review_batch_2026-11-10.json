@@ -412,5 +412,90 @@
     "Incremental API compatibility does not prove row output before EOF or a whole-operation memory bound.",
     "MoxCMS does not meet the strict CMYK reference bound.",
     "Optional IQA and C2PA proposals remain separate reviews."
-  ]
+  ],
+  "hosted_integration_repairs": {
+    "policy_lock_delta": "zenpixels source only: fde59b96 ->76005fc9; no package version moves",
+    "policy_portability": {
+      "revision": "f389e1603923c07153368c7f62af0dc0b9c29758",
+      "status": "passed",
+      "steps": [
+        {
+          "label": "policy-metadata",
+          "command": [
+            "cargo",
+            "metadata",
+            "--manifest-path",
+            "perf/policy-check/Cargo.toml",
+            "--format-version",
+            "1"
+          ],
+          "status": "passed",
+          "returncode": 0
+        },
+        {
+          "label": "policy-wasm32-unknown-unknown",
+          "command": [
+            "cargo",
+            "check",
+            "--manifest-path",
+            "perf/policy-check/Cargo.toml",
+            "--locked",
+            "--target",
+            "wasm32-unknown-unknown"
+          ],
+          "status": "passed",
+          "returncode": 0
+        },
+        {
+          "label": "policy-thumbv7em-none-eabihf",
+          "command": [
+            "cargo",
+            "check",
+            "--manifest-path",
+            "perf/policy-check/Cargo.toml",
+            "--locked",
+            "--target",
+            "thumbv7em-none-eabihf",
+            "--no-default-features"
+          ],
+          "status": "passed",
+          "returncode": 0
+        },
+        {
+          "label": "policy-runtime",
+          "command": [
+            "cargo",
+            "test",
+            "--manifest-path",
+            "perf/policy-check/Cargo.toml",
+            "--locked",
+            "--no-default-features",
+            "--lib"
+          ],
+          "status": "passed",
+          "returncode": 0
+        },
+        {
+          "label": "policy-lint",
+          "command": [
+            "cargo",
+            "clippy",
+            "--manifest-path",
+            "perf/policy-check/Cargo.toml",
+            "--locked",
+            "--no-default-features",
+            "--lib",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "status": "passed",
+          "returncode": 0
+        }
+      ],
+      "stage": "policy-lint"
+    },
+    "resource_receipt": "run-heavy: done rc=0 7s | peak-RSS 0.26GiB | min-avail 16884MiB | peak-load 0.30",
+    "frame_oracle_transport": "The unchanged frame job timed out during Azure apt download before tests; now uses bounded signed archive mirror like AV1/spatial."
+  }
 }
