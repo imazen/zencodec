@@ -261,3 +261,96 @@ No full test-suite, native codec, platform or release qualification is implied.
 
 This targets the hard data contract first. It does not require a new I/O runtime,
 a global policy engine in zenpixels, or a second plane representation.
+
+## Design red flags before freezing the pixel API
+
+This follow-up inspects the same pixel main, f2d2bfde. It changes no behavior.
+
+### 1. Planar alpha has a contradictory accepted declaration
+
+`PlanarSlice::new` checks whether an alpha role and `Option<AlphaMode>` are
+both present. It does not check `AlphaMode::has_alpha()`. Consequently:
+
+```rust,ignore
+// A valid one-pixel Luma + Alpha layout, with independent U8 planes.
+let view = PlanarSlice::new(&planes, &layout, 1, 1, &color,
+    Some(AlphaMode::Undefined));
+assert!(view.is_err()); // FAILS on f2d2bfde: constructor returns Ok.
+```
+
+`AlphaMode::Undefined` explicitly means undefined padding (RGBX/BGRX), while
+`PlaneRole::Alpha` declares an alpha component. Choose a coherent contract:
+reject padding as real alpha, or explicitly model a padding role. Do not
+make individual metrics/encoders guess. Straight, premultiplied and opaque
+alpha must remain distinct. No downstream wrong-pixel result is claimed here.
+
+### 2. Current color has competing interpretations
+
+This executable witness passes on the current code:
+
+```rust
+let context = ColorContext::from_icc(&b"opaque ICC declaration"[..])
+    .with_cicp(Cicp::SRGB);
+assert!(context.is_srgb());
+assert!(matches!(context.as_profile_source(), Some(ColorProfileSource::Icc(_))));
+```
+
+The bytes are deliberately opaque; this checks declaration behavior, not ICC
+parsing. `is_srgb` consults CICP alone, whereas profile selection prefers ICC.
+A non-sRGB authoritative ICC and sRGB companion has the same contradictory
+public predicates. Current production source has no call site to this context
+predicate beyond its own tests, so this is a demonstrated API inconsistency,
+not a reproduced conversion failure. Make current authority unambiguous and
+make predicates honor it. A current-context constructor should normalize or
+reject conflicting declarations; original dual-carrier claims belong in source
+provenance. This does not require merging ColorOrigin with ColorContext.
+
+The two native witnesses above report one failed alpha expectation and one
+passing authority-disagreement witness, rc101, 3s, peak RSS 0.23 GiB, using
+no-default-features core. These are contract tests, not a performance study.
+
+### 3. Source depth can be mistaken for processing fidelity
+
+`SourcePrecision` describes original source information but also feeds
+`ConversionEffect`, is joined during composition, and is mutated by
+`after_conversion`. Its docs explicitly retain an eight-bit source depth after
+resizing. Averaging adjacent U8 values in F32 creates values that do not lie on
+the U8 grid: an original-depth fact cannot establish a preserving U8 exit.
+
+The current module correctly disclaims pixel equality, and
+`preserves_modeled_capacity` is an improvement over `is_lossless`. Nevertheless,
+a preset named KeepPrecision and fields named bits_kept/bits_dropped remain
+easy to overinterpret. Keep immutable origin depth separate from current
+processing requirements; invalidate exactness after arithmetic. Do not use
+this capacity model to discharge a zencodec sample-preservation requirement.
+No failing processing path was executed in this follow-up.
+
+### 4. ICC substitution evidence lacks a caller-visible error contract
+
+`MatrixTrcSubstitution` promises equivalence within an identification tolerance,
+but the returned identification does not carry that numerical bound or its
+sample domain. Recognition and normalization also use normalized FNV64 keys;
+`normalize_known_icc` checks hash and length, without normalized byte equality.
+Neither is an exact equivalence proof. PR148's permission revocation is useful,
+but does not retroactively qualify every historical table entry.
+
+Keep permissive approximate substitution separate from exact preservation.
+For the four canonical profiles whose bytes are already available, compare
+normalized bytes before calling a replacement exact. A strict path should
+retain the actual profile/use the chosen CMS unless its required guarantee is
+established. This recommendation does not require requalifying the entire ICC
+corpus before shipping paths that preserve the source profile.
+
+### 5. Chain cost is narrower than operation memory
+
+`ChainPlan::peak_bytes` is the maximum of selected node declarations. That is
+valid only for the scope represented by those declarations. It does not account
+for overlapping input/output lifetimes, decoder/encoder ownership, worker
+multiplicity, queued strips or CMS caches automatically. Keep this expressly
+node-local or require offers to cover a common operation scope; zencodec must
+not treat this scalar as whole-operation admission. No memory undercount was
+measured here.
+
+These are bounded follow-ups: alpha validation, consistent current authority,
+precision/evidence semantics, qualified ICC guarantees and memory scope. The
+underlying storage/layout/owner split does not need another general hierarchy.
