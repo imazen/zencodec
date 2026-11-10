@@ -144,6 +144,10 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Add the `advanced` authoring namespace as aliases of existing contracts;
+  ordinary applications continue to use `CodecSet`. No parallel protocol or
+  second set of implementations is introduced. (`caller simplicity review`)
+
 - Media decoder conformance compares complete immutable interpretation, timing
   and presentation across paths. The reusable frame interchange check covers
   direct, image and planar access including F32 payload bits. (`core-contracts layer5`)

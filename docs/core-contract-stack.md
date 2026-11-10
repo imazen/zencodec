@@ -99,3 +99,13 @@ controls. Four older Documentation native jobs remain blocked on the historical
 cohorts; [issue207](https://github.com/imazen/zencodec/issues/207) is the explicit
 pre-landing integration gate. PR208 is ready for API review; the stack does not
 claim release readiness or complete native edited-playback correctness.
+
+
+Caller simplicity follow-up: the homepage now leads with the actual two-line
+CodecSet pixel conversion, independently compiled and round-trip tested. The
+older journey reference remains at journeys.html, detailed frame contracts at
+advanced.html, and migration notes stay there. Dark styling is the default.
+`zencodec::advanced` supplies aliases for existing authoring contracts; it adds no
+new protocol or adapter implementation. A unified short render operation across
+still images, collections, animation and video remains an explicit convenience
+gap. That gap must not be presented as solved by a plane-count example.

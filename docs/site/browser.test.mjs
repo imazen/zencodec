@@ -13,7 +13,7 @@ const policyExamples=await readFile(new URL('../examples/policy.rs',import.meta.
 const jpegExamples=await readFile(new URL('../examples/jpeg_policy.rs',import.meta.url),'utf8');
 const pixelExamples=await readFile(new URL('../examples/pixel_conversion.rs',import.meta.url),'utf8');
 const sources={'docs/examples/journeys.rs':examples,'docs/examples/policy.rs':policyExamples,'docs/examples/jpeg_policy.rs':jpegExamples,'docs/examples/pixel_conversion.rs':pixelExamples};
-const url=process.env.SITE_URL || 'http://127.0.0.1:3537/';
+const url=new URL('journeys.html',process.env.SITE_URL || 'http://127.0.0.1:3537/').href;
 const output=process.env.SITE_SCREENSHOTS;
 if(output) await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});
@@ -153,6 +153,12 @@ try {
   await checkCodeFirst(browser,url,output);
   console.log('Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.');
   await page.goto(new URL('contracts.html',url).href);
+  for(const width of [1440,768,390]) {
+    await page.setViewportSize({width,height:1000});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`caller page overflows at ${width}`);
+  }
+  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark');
+  await page.goto(new URL('advanced.html',url).href);
   assert.equal(await page.locator('.code-panel[data-example]').count(),4);
   for(const role of ['consumer','adapter','implementor']) assert.equal(await page.locator('#'+role).count(),1);
   for(const width of [1440,768,390]) {

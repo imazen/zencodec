@@ -5,7 +5,7 @@ import { lanes } from './content.mjs';
 import { migrations } from './migration-data.mjs';
 import { improvements } from './improvements.mjs';
 const root=new URL('../_site/',import.meta.url);
-const html=await readFile(new URL('index.html',root),'utf8');
+const html=await readFile(new URL('journeys.html',root),'utf8');
 test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   assert.equal(new Set(ids).size,ids.length,'duplicate IDs break navigation and accessible SVG titles');
@@ -120,10 +120,18 @@ test('checked API page links executable examples and actual signatures for each 
 
 
 test('current frame contracts show compiled scopes and separate three API roles',async()=>{
-  const html=await readFile(new URL('../_site/contracts.html',import.meta.url),'utf8');
+  const html=await readFile(new URL('../_site/advanced.html',import.meta.url),'utf8');
   for(const role of ['consumer','adapter','implementor'])assert.ok(html.includes(`id="${role}"`));
   for(const name of ['frame_inspect','frame_policy_target','frame_conversion','frame_native_loan'])assert.ok(html.includes(`data-example="${name}"`));
   for(const text of ['FrameConversionOffer','MappedPlanes','preserving_presentation','Approximate quality','not yet merged or published'])assert.ok(html.includes(text));
   assert.equal((html.match(/data-example-source="docs\/examples\/frame_contracts.rs"/g)||[]).length,4);
   assert.ok(!html.includes('<details class="code-context"'),'short examples and setup stay visible');
+});
+
+test('caller guide leads with two-line pixel conversion and keeps implementation detail separate',async()=>{
+ const html=await readFile(new URL('../_site/contracts.html',import.meta.url),'utf8');
+ for(const text of ['codecs.decode(bytes)','codecs.encode(format'])assert.ok(html.replace(/<[^>]+>/g,'').includes(text));
+ assert.ok(html.includes('href="advanced.html"'));
+ assert.ok(!html.includes('native words'));
+ assert.ok(!html.includes('Migration in one pass'));
 });

@@ -46,6 +46,7 @@ extern crate std;
 
 whereat::define_at_crate_info!();
 
+pub mod advanced;
 pub mod animation;
 mod capabilities;
 pub mod collection;

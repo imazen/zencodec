@@ -1,11 +1,11 @@
 import { createHighlighter } from 'shiki';
 
 // Build-time only: no grammar, highlighter or WASM is shipped to readers.
-const rust = await createHighlighter({ themes: ['github-light'], langs: ['rust'] });
+const rust = await createHighlighter({ themes: ['github-dark-default'], langs: ['rust'] });
 const escape = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
 export function highlight(code) {
-  const { tokens } = rust.codeToTokens(code, { lang: 'rust', theme: 'github-light' });
+  const { tokens } = rust.codeToTokens(code, { lang: 'rust', theme: 'github-dark-default' });
   return tokens.map(line => line.map(token => {
     const styles = [`color:${token.color}`];
     if (token.fontStyle & 1) styles.push('font-style:italic');

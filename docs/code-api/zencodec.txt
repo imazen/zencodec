@@ -15,6 +15,1456 @@ pub use zencodec::Unstoppable
 pub use zencodec::enough
 pub use zencodec::how_far
 pub use zencodec::whereat
+pub mod zencodec::advanced
+pub mod zencodec::advanced::collection
+#[non_exhaustive] pub enum zencodec::advanced::collection::CollectionError
+pub zencodec::advanced::collection::CollectionError::Backend(zencodec::collection::Cause)
+pub zencodec::advanced::collection::CollectionError::Requirement(zencodec::collection::SelectionError)
+impl zencodec::collection::CollectionError
+pub fn zencodec::collection::CollectionError::located(error: zencodec::collection::Cause) -> whereat::at::At<Self>
+impl core::error::Error for zencodec::collection::CollectionError
+pub fn zencodec::collection::CollectionError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for zencodec::collection::CollectionError
+pub fn zencodec::collection::CollectionError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for zencodec::collection::CollectionError
+pub fn zencodec::collection::CollectionError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::advanced::collection::CollectionOpenError
+pub zencodec::advanced::collection::CollectionOpenError::NotRegistered(zencodec::ImageFormat)
+pub zencodec::advanced::collection::CollectionOpenError::ResidentInputRequired
+pub zencodec::advanced::collection::CollectionOpenError::UnsupportedDecodePolicy
+pub zencodec::advanced::collection::CollectionOpenError::UnsupportedDecodePolicy::unsupported: zencodec::decode::DecodePolicy
+pub zencodec::advanced::collection::CollectionOpenError::UnsupportedLimits
+pub zencodec::advanced::collection::CollectionOpenError::UnsupportedLimits::unsupported: zencodec::ResourceLimits
+pub zencodec::advanced::collection::CollectionOpenError::UnsupportedOutputStorage
+impl core::error::Error for zencodec::collection::CollectionOpenError
+impl core::fmt::Display for zencodec::collection::CollectionOpenError
+pub fn zencodec::collection::CollectionOpenError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::advanced::collection::Composition
+pub zencodec::advanced::collection::Composition::Composited
+pub zencodec::advanced::collection::Composition::Uncomposited
+#[non_exhaustive] pub enum zencodec::advanced::collection::DiscoveryMethod
+pub zencodec::advanced::collection::DiscoveryMethod::Children
+pub zencodec::advanced::collection::DiscoveryMethod::Describe
+pub zencodec::advanced::collection::DiscoveryMethod::Images
+pub zencodec::advanced::collection::DiscoveryMethod::Next
+#[non_exhaustive] pub enum zencodec::advanced::collection::RegionRequest
+pub zencodec::advanced::collection::RegionRequest::Full
+pub zencodec::advanced::collection::RegionRequest::Stored(zencodec::image::Rect)
+impl zencodec::collection::RegionRequest
+pub fn zencodec::collection::RegionRequest::resolve(self, width: u32, height: u32) -> core::result::Result<zencodec::image::Rect, zencodec::collection::SelectionError>
+impl core::convert::From<zencodec::image::Rect> for zencodec::collection::RegionRequest
+pub fn zencodec::collection::RegionRequest::from(rect: zencodec::image::Rect) -> Self
+#[non_exhaustive] pub enum zencodec::advanced::collection::SelectionError
+pub zencodec::advanced::collection::SelectionError::Cycle
+pub zencodec::advanced::collection::SelectionError::DiscoveryLimit
+pub zencodec::advanced::collection::SelectionError::ForeignCursor
+pub zencodec::advanced::collection::SelectionError::ForeignImage
+pub zencodec::advanced::collection::SelectionError::InvalidRegion
+pub zencodec::advanced::collection::SelectionError::InvalidRegion::height: u32
+pub zencodec::advanced::collection::SelectionError::InvalidRegion::requested: zencodec::image::Rect
+pub zencodec::advanced::collection::SelectionError::InvalidRegion::width: u32
+pub zencodec::advanced::collection::SelectionError::UnsupportedChildren
+pub zencodec::advanced::collection::SelectionError::UnsupportedComposition
+pub zencodec::advanced::collection::SelectionError::UnsupportedDescription
+pub zencodec::advanced::collection::SelectionError::UnsupportedRegion
+impl core::error::Error for zencodec::collection::SelectionError
+impl core::fmt::Display for zencodec::collection::SelectionError
+pub fn zencodec::collection::SelectionError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::collection::CollectionOpenContext
+pub zencodec::advanced::collection::CollectionOpenContext::format: zencodec::ImageFormat
+pub zencodec::advanced::collection::CollectionOpenContext::limits: core::option::Option<zencodec::ResourceLimits>
+pub zencodec::advanced::collection::CollectionOpenContext::output_storage: core::option::Option<zencodec::storage::StorageBudget>
+pub zencodec::advanced::collection::CollectionOpenContext::policy: core::option::Option<zencodec::decode::DecodePolicy>
+pub zencodec::advanced::collection::CollectionOpenContext::pulse: how_far::pulse::SharedPulse
+pub zencodec::advanced::collection::CollectionOpenContext::view: zencodec::collection::Composition
+impl zencodec::collection::CollectionOpenContext
+pub fn zencodec::collection::CollectionOpenContext::new(format: zencodec::ImageFormat, view: zencodec::collection::Composition, pulse: how_far::pulse::SharedPulse) -> Self
+pub struct zencodec::advanced::collection::Discovery<C>
+impl<C> zencodec::collection::Discovery<C>
+pub fn zencodec::collection::Discovery<C>::new(collection: C, attempts: u64) -> Self
+pub fn zencodec::collection::Discovery<C>::usage(&self) -> zencodec::collection::DiscoveryUsage
+impl<C: zencodec::collection::Collection> zencodec::collection::Collection for zencodec::collection::Discovery<C>
+pub type zencodec::collection::Discovery<C>::Cursor = <C as zencodec::collection::Collection>::Cursor
+pub fn zencodec::collection::Discovery<C>::children(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::decode(&mut self, image: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::image::ImageOutput, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::describe(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ImageDescription, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::next(&mut self, cursor: &mut Self::Cursor) -> core::result::Result<core::option::Option<zencodec::collection::ImageId>, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::view(&self) -> zencodec::collection::Composition
+#[non_exhaustive] pub struct zencodec::advanced::collection::DiscoveryExhausted
+pub zencodec::advanced::collection::DiscoveryExhausted::limit: u64
+pub zencodec::advanced::collection::DiscoveryExhausted::method: zencodec::collection::DiscoveryMethod
+pub zencodec::advanced::collection::DiscoveryExhausted::used: zencodec::collection::DiscoveryUsage
+impl core::error::Error for zencodec::collection::DiscoveryExhausted
+impl core::fmt::Display for zencodec::collection::DiscoveryExhausted
+pub fn zencodec::collection::DiscoveryExhausted::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::collection::DiscoveryUsage
+pub zencodec::advanced::collection::DiscoveryUsage::attempts: u64
+pub zencodec::advanced::collection::DiscoveryUsage::backend_errors: u64
+pub zencodec::advanced::collection::DiscoveryUsage::exhausted_cursors: u64
+pub zencodec::advanced::collection::DiscoveryUsage::returned_descriptions: u64
+pub zencodec::advanced::collection::DiscoveryUsage::returned_ids: u64
+pub struct zencodec::advanced::collection::ErasedCollection<'a>(_)
+impl<'a> zencodec::collection::ErasedCollection<'a>
+pub fn zencodec::collection::ErasedCollection<'a>::new<C: zencodec::collection::Collection + 'a>(collection: C) -> Self where <C as zencodec::collection::Collection>::Cursor: 'static
+impl zencodec::collection::Collection for zencodec::collection::ErasedCollection<'_>
+pub type zencodec::collection::ErasedCollection<'_>::Cursor = zencodec::collection::ErasedCursor
+pub fn zencodec::collection::ErasedCollection<'_>::children(&mut self, id: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ErasedCursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::decode(&mut self, id: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::image::ImageOutput, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::describe(&mut self, id: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ImageDescription, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::images(&mut self) -> core::result::Result<zencodec::collection::ErasedCursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::next(&mut self, cursor: &mut zencodec::collection::ErasedCursor) -> core::result::Result<core::option::Option<zencodec::collection::ImageId>, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::view(&self) -> zencodec::collection::Composition
+pub struct zencodec::advanced::collection::ErasedCursor
+#[non_exhaustive] pub struct zencodec::advanced::collection::ImageDescription
+pub zencodec::advanced::collection::ImageDescription::placement: core::option::Option<zencodec::image::Placement>
+pub zencodec::advanced::collection::ImageDescription::stored_orientation: core::option::Option<zenpixels::orientation::Orientation>
+pub zencodec::advanced::collection::ImageDescription::stored_size: (u32, u32)
+impl zencodec::collection::ImageDescription
+pub const fn zencodec::collection::ImageDescription::new(stored_size: (u32, u32)) -> Self
+pub fn zencodec::collection::ImageDescription::validate(&self) -> core::result::Result<(), whereat::at::At<zencodec::collection::CollectionError>>
+pub const fn zencodec::collection::ImageDescription::with_orientation(self, orientation: zenpixels::orientation::Orientation) -> Self
+pub const fn zencodec::collection::ImageDescription::with_placement(self, placement: zencodec::image::Placement) -> Self
+pub struct zencodec::advanced::collection::ImageGeometry
+pub zencodec::advanced::collection::ImageGeometry::canvas_height: u32
+pub zencodec::advanced::collection::ImageGeometry::canvas_width: u32
+pub zencodec::advanced::collection::ImageGeometry::region: zencodec::image::Rect
+impl zencodec::image::ImageGeometry
+pub fn zencodec::image::ImageGeometry::validate(self) -> core::result::Result<(), zencodec::image::GeometryError>
+pub struct zencodec::advanced::collection::ImageId
+impl core::cmp::Eq for zencodec::collection::ImageId
+impl core::cmp::PartialEq for zencodec::collection::ImageId
+pub fn zencodec::collection::ImageId::eq(&self, other: &Self) -> bool
+impl core::hash::Hash for zencodec::collection::ImageId
+pub fn zencodec::collection::ImageId::hash<H: core::hash::Hasher>(&self, state: &mut H)
+#[non_exhaustive] pub struct zencodec::advanced::collection::ImageRequest
+pub zencodec::advanced::collection::ImageRequest::region: zencodec::collection::RegionRequest
+impl zencodec::collection::ImageRequest
+pub const fn zencodec::collection::ImageRequest::new() -> Self
+pub fn zencodec::collection::ImageRequest::with_region(self, region: impl core::convert::Into<zencodec::collection::RegionRequest>) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::collection::OpenRequest
+pub zencodec::advanced::collection::OpenRequest::discovery_attempts: u64
+pub zencodec::advanced::collection::OpenRequest::output_storage: core::option::Option<zencodec::storage::StorageBudget>
+pub zencodec::advanced::collection::OpenRequest::view: zencodec::collection::Composition
+impl zencodec::collection::OpenRequest
+pub const fn zencodec::collection::OpenRequest::new(view: zencodec::collection::Composition, discovery_attempts: u64) -> Self
+pub fn zencodec::collection::OpenRequest::with_output_storage(self, storage: zencodec::storage::StorageBudget) -> Self
+pub struct zencodec::advanced::collection::Origin(_)
+impl zencodec::collection::Origin
+pub fn zencodec::collection::Origin::image(&self, key: u64) -> zencodec::collection::ImageId
+pub fn zencodec::collection::Origin::key(&self, id: &zencodec::collection::ImageId) -> core::result::Result<u64, zencodec::collection::SelectionError>
+pub fn zencodec::collection::Origin::new() -> Self
+pub struct zencodec::advanced::collection::Rect
+pub zencodec::advanced::collection::Rect::height: u32
+pub zencodec::advanced::collection::Rect::width: u32
+pub zencodec::advanced::collection::Rect::x: u32
+pub zencodec::advanced::collection::Rect::y: u32
+impl core::convert::From<zencodec::image::Rect> for zencodec::collection::RegionRequest
+pub fn zencodec::collection::RegionRequest::from(rect: zencodec::image::Rect) -> Self
+pub trait zencodec::advanced::collection::Collection
+pub type zencodec::advanced::collection::Collection::Cursor
+pub fn zencodec::advanced::collection::Collection::children(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::advanced::collection::Collection::decode(&mut self, image: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::image::ImageOutput, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::advanced::collection::Collection::describe(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ImageDescription, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::advanced::collection::Collection::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::advanced::collection::Collection::next(&mut self, cursor: &mut Self::Cursor) -> core::result::Result<core::option::Option<zencodec::collection::ImageId>, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::advanced::collection::Collection::view(&self) -> zencodec::collection::Composition
+impl zencodec::collection::Collection for zencodec::collection::ErasedCollection<'_>
+pub type zencodec::collection::ErasedCollection<'_>::Cursor = zencodec::collection::ErasedCursor
+pub fn zencodec::collection::ErasedCollection<'_>::children(&mut self, id: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ErasedCursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::decode(&mut self, id: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::image::ImageOutput, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::describe(&mut self, id: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ImageDescription, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::images(&mut self) -> core::result::Result<zencodec::collection::ErasedCursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::next(&mut self, cursor: &mut zencodec::collection::ErasedCursor) -> core::result::Result<core::option::Option<zencodec::collection::ImageId>, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::ErasedCollection<'_>::view(&self) -> zencodec::collection::Composition
+impl<C: zencodec::collection::Collection> zencodec::collection::Collection for zencodec::collection::Discovery<C>
+pub type zencodec::collection::Discovery<C>::Cursor = <C as zencodec::collection::Collection>::Cursor
+pub fn zencodec::collection::Discovery<C>::children(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::decode(&mut self, image: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::image::ImageOutput, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::describe(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<zencodec::collection::ImageDescription, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::next(&mut self, cursor: &mut Self::Cursor) -> core::result::Result<core::option::Option<zencodec::collection::ImageId>, whereat::at::At<zencodec::collection::CollectionError>>
+pub fn zencodec::collection::Discovery<C>::view(&self) -> zencodec::collection::Composition
+pub trait zencodec::advanced::collection::CollectionFactory: core::marker::Send + core::marker::Sync
+pub fn zencodec::advanced::collection::CollectionFactory::formats(&self) -> &[zencodec::ImageFormat]
+pub fn zencodec::advanced::collection::CollectionFactory::open_with<'a>(&self, source: &'a mut dyn zencodec::source::DynReadAt, context: zencodec::collection::CollectionOpenContext) -> core::result::Result<zencodec::collection::ErasedCollection<'a>, zencodec::collection::Cause>
+pub type zencodec::advanced::collection::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>
+pub mod zencodec::advanced::decode
+#[non_exhaustive] pub enum zencodec::advanced::decode::BoundaryAction
+pub zencodec::advanced::decode::BoundaryAction::AdoptInterpretation
+pub zencodec::advanced::decode::BoundaryAction::ContinueReading
+impl zencodec::decode::BoundaryAction
+pub const fn zencodec::decode::BoundaryAction::permits(self, facts: zencodec::decode::InterpretationFacts) -> bool
+#[non_exhaustive] pub enum zencodec::advanced::decode::ControlError
+pub zencodec::advanced::decode::ControlError::FinalInterpretationChanged
+pub zencodec::advanced::decode::ControlError::IdentityExhausted
+pub zencodec::advanced::decode::ControlError::InconsistentFacts
+pub zencodec::advanced::decode::ControlError::InvalidReply
+pub zencodec::advanced::decode::ControlError::NotControlled
+pub zencodec::advanced::decode::ControlError::OutputBeforeInterpretation
+pub zencodec::advanced::decode::ControlError::UnhandledBoundary
+impl core::error::Error for zencodec::decode::ControlError
+impl core::fmt::Display for zencodec::decode::ControlError
+pub fn zencodec::decode::ControlError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum zencodec::advanced::decode::ControlledProgress
+pub zencodec::advanced::decode::ControlledProgress::Decode(zencodec::decode::Progress)
+pub zencodec::advanced::decode::ControlledProgress::Suspended
+pub zencodec::advanced::decode::ControlledProgress::Suspended::boundary: zencodec::decode::DecodeBoundary
+pub zencodec::advanced::decode::ControlledProgress::Suspended::consumed: usize
+impl zencodec::decode::ControlledProgress
+pub const fn zencodec::decode::ControlledProgress::consumed(&self) -> usize
+impl core::convert::From<zencodec::decode::Progress> for zencodec::decode::ControlledProgress
+pub fn zencodec::decode::ControlledProgress::from(progress: zencodec::decode::Progress) -> Self
+#[non_exhaustive] pub enum zencodec::advanced::decode::Event
+pub zencodec::advanced::decode::Event::Done(zencodec::decode::OutputInfo)
+pub zencodec::advanced::decode::Event::Metadata(zencodec::decode::MetadataUpdate)
+pub zencodec::advanced::decode::Event::Need
+pub zencodec::advanced::decode::Event::Rows
+pub zencodec::advanced::decode::Event::Rows::meta: zencodec::decode::BatchMeta
+pub zencodec::advanced::decode::Event::Rows::rows: u32
+impl zencodec::decode::Event
+pub const fn zencodec::decode::Event::is_done(&self) -> bool
+#[non_exhaustive] pub enum zencodec::advanced::decode::GainMapRender
+pub zencodec::advanced::decode::GainMapRender::BaseOnly
+pub zencodec::advanced::decode::GainMapRender::Components
+pub zencodec::advanced::decode::GainMapRender::ReconstructHdr
+pub zencodec::advanced::decode::GainMapRender::ReconstructHdr::target_headroom: core::option::Option<f32>
+#[non_exhaustive] pub enum zencodec::advanced::decode::InputRequest
+pub zencodec::advanced::decode::InputRequest::AtLeast
+pub zencodec::advanced::decode::InputRequest::AtLeast::min_len: usize
+pub zencodec::advanced::decode::InputRequest::AtLeast::offset: u64
+pub zencodec::advanced::decode::InputRequest::Len
+pub zencodec::advanced::decode::InputRequest::Range(zencodec::decode::ByteRange)
+impl zencodec::decode::InputRequest
+pub const fn zencodec::decode::InputRequest::at_least(offset: u64, min_len: usize) -> Self
+pub fn zencodec::decode::InputRequest::is_satisfied_by(&self, input: &zencodec::decode::Input<'_>) -> bool
+pub const fn zencodec::decode::InputRequest::offset(&self) -> core::option::Option<u64>
+pub const fn zencodec::decode::InputRequest::range(offset: u64, length: u64) -> Self
+#[non_exhaustive] pub enum zencodec::advanced::decode::InterpretationState
+pub zencodec::advanced::decode::InterpretationState::Final
+pub zencodec::advanced::decode::InterpretationState::Pending
+pub zencodec::advanced::decode::InterpretationState::Provisional
+pub zencodec::advanced::decode::InterpretationState::Unavailable
+#[non_exhaustive] pub enum zencodec::advanced::decode::InterpretationUnavailable
+pub zencodec::advanced::decode::InterpretationUnavailable::ForbiddenColorMetadata
+pub zencodec::advanced::decode::InterpretationUnavailable::IncompleteColorMetadata
+pub zencodec::advanced::decode::InterpretationUnavailable::LateColorMetadata
+pub zencodec::advanced::decode::InterpretationUnavailable::UnqualifiedOutput
+pub zencodec::advanced::decode::InterpretationUnavailable::UnsupportedColor
+#[non_exhaustive] pub enum zencodec::advanced::decode::MetadataUpdate
+pub zencodec::advanced::decode::MetadataUpdate::ColorReady
+pub zencodec::advanced::decode::MetadataUpdate::HeaderReady
+pub zencodec::advanced::decode::MetadataUpdate::Updated
+impl zencodec::decode::MetadataUpdate
+pub const fn zencodec::decode::MetadataUpdate::is_header_ready(&self) -> bool
+#[non_exhaustive] pub enum zencodec::advanced::decode::StepError<E>
+pub zencodec::advanced::decode::StepError::Cancelled(enough::reason::StopReason)
+pub zencodec::advanced::decode::StepError::Codec(E)
+pub zencodec::advanced::decode::StepError::Control(zencodec::decode::ControlError)
+pub zencodec::advanced::decode::StepError::Finished
+pub zencodec::advanced::decode::StepError::Sink(zencodec::decode::SinkError)
+impl zencodec::decode::StepError<zencodec::decode::ErasedError>
+pub fn zencodec::decode::StepError<zencodec::decode::ErasedError>::into_boxed(self) -> zencodec::encode::BoxedError
+impl<E> zencodec::decode::StepError<E>
+pub fn zencodec::decode::StepError<E>::map_codec<F>(self, f: impl core::ops::function::FnOnce(E) -> F) -> zencodec::decode::StepError<F>
+impl<E: core::error::Error + 'static> core::error::Error for zencodec::decode::StepError<E>
+pub fn zencodec::decode::StepError<E>::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl<E: core::fmt::Display> core::fmt::Display for zencodec::decode::StepError<E>
+pub fn zencodec::decode::StepError<E>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<E> core::convert::From<enough::reason::StopReason> for zencodec::decode::StepError<E>
+pub fn zencodec::decode::StepError<E>::from(r: enough::reason::StopReason) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::AnimationFrame<'a>
+impl<'a> zencodec::AnimationFrame<'a>
+pub fn zencodec::AnimationFrame<'a>::duration(&self) -> zencodec::animation::FrameDuration
+pub fn zencodec::AnimationFrame<'a>::duration_ms(&self) -> u32
+pub fn zencodec::AnimationFrame<'a>::frame_index(&self) -> u32
+pub fn zencodec::AnimationFrame<'a>::new(pixels: zenpixels::buffer::PixelSlice<'a>, duration_ms: u32, frame_index: u32) -> Self
+pub fn zencodec::AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn zencodec::AnimationFrame<'a>::pts(&self) -> core::option::Option<zencodec::time::Timestamp>
+pub fn zencodec::AnimationFrame<'a>::to_owned_frame(&self) -> zencodec::OwnedAnimationFrame
+pub fn zencodec::AnimationFrame<'a>::with_duration(pixels: zenpixels::buffer::PixelSlice<'a>, duration: zencodec::animation::FrameDuration, frame_index: u32) -> Self
+pub fn zencodec::AnimationFrame<'a>::with_pts(self, pts: core::option::Option<zencodec::time::Timestamp>) -> Self
+impl core::fmt::Debug for zencodec::AnimationFrame<'_>
+pub fn zencodec::AnimationFrame<'_>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::decode::BatchMeta
+pub zencodec::advanced::decode::BatchMeta::is_final: bool
+pub zencodec::advanced::decode::BatchMeta::pass: u16
+pub zencodec::advanced::decode::BatchMeta::y: u32
+impl zencodec::decode::BatchMeta
+pub const fn zencodec::decode::BatchMeta::final_rows(y: u32) -> Self
+pub const fn zencodec::decode::BatchMeta::new(y: u32, is_final: bool) -> Self
+pub const fn zencodec::decode::BatchMeta::with_pass(self, pass: u16) -> Self
+pub struct zencodec::advanced::decode::BoundaryId(_)
+#[non_exhaustive] pub struct zencodec::advanced::decode::ByteRange
+pub zencodec::advanced::decode::ByteRange::length: u64
+pub zencodec::advanced::decode::ByteRange::offset: u64
+impl zencodec::decode::ByteRange
+pub const fn zencodec::decode::ByteRange::contains(&self, target_offset: u64) -> bool
+pub const fn zencodec::decode::ByteRange::end(&self) -> u64
+pub const fn zencodec::decode::ByteRange::is_empty(&self) -> bool
+pub const fn zencodec::decode::ByteRange::new(offset: u64, length: u64) -> Self
+pub struct zencodec::advanced::decode::DecodeBoundary
+impl zencodec::decode::DecodeBoundary
+pub const fn zencodec::decode::DecodeBoundary::facts(self) -> zencodec::decode::InterpretationFacts
+pub const fn zencodec::decode::DecodeBoundary::id(self) -> zencodec::decode::BoundaryId
+pub fn zencodec::decode::DecodeBoundary::new(facts: zencodec::decode::InterpretationFacts) -> core::result::Result<Self, zencodec::decode::ControlError>
+#[non_exhaustive] pub struct zencodec::advanced::decode::DecodeCapabilities
+impl zencodec::decode::DecodeCapabilities
+pub const zencodec::decode::DecodeCapabilities::EMPTY: Self
+pub const fn zencodec::decode::DecodeCapabilities::access_pattern(&self) -> zencodec::source::AccessPattern
+pub const fn zencodec::decode::DecodeCapabilities::animation(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::cheap_probe(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::cicp(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::decode_into(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::enforces_max_input_bytes(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::enforces_max_memory(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::enforces_max_pixels(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::exif(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::gain_map(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::hdr(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::icc(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::incremental(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::inventory(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::multi_image(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::native_16bit(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::native_alpha(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::native_f32(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::native_gray(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::new() -> Self
+pub const fn zencodec::decode::DecodeCapabilities::reconstructs_hdr(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::seekable(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::stop(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::streaming(&self) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::supports(&self, op: zencodec::UnsupportedOperation) -> bool
+pub const fn zencodec::decode::DecodeCapabilities::threads_supported_range(&self) -> (u16, u16)
+pub const fn zencodec::decode::DecodeCapabilities::with_access_pattern(self, v: zencodec::source::AccessPattern) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_animation(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_cheap_probe(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_cicp(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_decode_into(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_enforces_max_input_bytes(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_enforces_max_memory(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_enforces_max_pixels(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_exif(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_gain_map(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_hdr(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_icc(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_incremental(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_inventory(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_multi_image(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_native_16bit(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_native_alpha(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_native_f32(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_native_gray(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_reconstructs_hdr(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_seekable(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_stop(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_streaming(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_threads_supported_range(self, min: u16, max: u16) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::with_xmp(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodeCapabilities::xmp(&self) -> bool
+impl core::default::Default for zencodec::decode::DecodeCapabilities
+pub fn zencodec::decode::DecodeCapabilities::default() -> Self
+impl core::fmt::Debug for zencodec::decode::DecodeCapabilities
+pub fn zencodec::decode::DecodeCapabilities::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::decode::DecodeDetails
+pub zencodec::advanced::decode::DecodeDetails::extensions: zencodec::Extensions
+pub zencodec::advanced::decode::DecodeDetails::info: zencodec::ImageInfo
+pub zencodec::advanced::decode::DecodeDetails::source_encoding: core::option::Option<alloc::boxed::Box<dyn zencodec::SourceEncodingDetails>>
+impl zencodec::decode::DecodeDetails
+pub fn zencodec::decode::DecodeDetails::new(info: zencodec::ImageInfo) -> Self
+impl core::fmt::Debug for zencodec::decode::DecodeDetails
+pub fn zencodec::decode::DecodeDetails::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::decode::DecodeOutput
+impl zencodec::decode::DecodeOutput
+pub fn zencodec::decode::DecodeOutput::descriptor(&self) -> zenpixels::descriptor::PixelDescriptor
+pub fn zencodec::decode::DecodeOutput::extensions(&self) -> &zencodec::Extensions
+pub fn zencodec::decode::DecodeOutput::extensions_mut(&mut self) -> &mut zencodec::Extensions
+pub fn zencodec::decode::DecodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn zencodec::decode::DecodeOutput::format(&self) -> zencodec::ImageFormat
+pub fn zencodec::decode::DecodeOutput::from_parts(pixels: zenpixels::buffer::PixelBuffer, details: zencodec::decode::DecodeDetails) -> Self
+pub fn zencodec::decode::DecodeOutput::has_alpha(&self) -> bool
+pub fn zencodec::decode::DecodeOutput::height(&self) -> u32
+pub fn zencodec::decode::DecodeOutput::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::decode::DecodeOutput::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn zencodec::decode::DecodeOutput::into_parts(self) -> (zenpixels::buffer::PixelBuffer, zencodec::decode::DecodeDetails)
+pub fn zencodec::decode::DecodeOutput::metadata(&self) -> zencodec::Metadata
+pub fn zencodec::decode::DecodeOutput::new(pixels: zenpixels::buffer::PixelBuffer, info: zencodec::ImageInfo) -> Self
+pub fn zencodec::decode::DecodeOutput::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn zencodec::decode::DecodeOutput::source_encoding_details(&self) -> core::option::Option<&dyn zencodec::SourceEncodingDetails>
+pub fn zencodec::decode::DecodeOutput::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn zencodec::decode::DecodeOutput::take_source_encoding_details(&mut self) -> core::option::Option<alloc::boxed::Box<dyn zencodec::SourceEncodingDetails>>
+pub fn zencodec::decode::DecodeOutput::width(&self) -> u32
+pub fn zencodec::decode::DecodeOutput::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, extras: T) -> Self
+pub fn zencodec::decode::DecodeOutput::with_source_encoding_details<T: zencodec::SourceEncodingDetails + 'static>(self, details: T) -> Self
+impl core::fmt::Debug for zencodec::decode::DecodeOutput
+pub fn zencodec::decode::DecodeOutput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::decode::DecodePolicy
+pub zencodec::advanced::decode::DecodePolicy::allow_animation: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::allow_exif: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::allow_icc: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::allow_progressive: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::allow_truncated: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::allow_xmp: core::option::Option<bool>
+pub zencodec::advanced::decode::DecodePolicy::strict: core::option::Option<bool>
+impl zencodec::decode::DecodePolicy
+pub const fn zencodec::decode::DecodePolicy::none() -> Self
+pub const fn zencodec::decode::DecodePolicy::permissive() -> Self
+pub const fn zencodec::decode::DecodePolicy::resolve_animation(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_exif(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_icc(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_progressive(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_strict(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_truncated(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::resolve_xmp(&self, default: bool) -> bool
+pub const fn zencodec::decode::DecodePolicy::strict() -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_animation(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_exif(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_icc(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_progressive(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_truncated(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_allow_xmp(self, v: bool) -> Self
+pub const fn zencodec::decode::DecodePolicy::with_strict(self, v: bool) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::DecodedGainMap
+pub zencodec::advanced::decode::DecodedGainMap::metadata: zencodec::gainmap::GainMapInfo
+pub zencodec::advanced::decode::DecodedGainMap::pixels: zenpixels::buffer::PixelBuffer
+impl zencodec::gainmap::DecodedGainMap
+pub fn zencodec::gainmap::DecodedGainMap::channels(&self) -> u8
+pub fn zencodec::gainmap::DecodedGainMap::height(&self) -> u32
+pub fn zencodec::gainmap::DecodedGainMap::new(pixels: zenpixels::buffer::PixelBuffer, metadata: zencodec::gainmap::GainMapInfo) -> Self
+pub fn zencodec::gainmap::DecodedGainMap::width(&self) -> u32
+#[non_exhaustive] pub struct zencodec::advanced::decode::EmbeddedMetadata
+pub zencodec::advanced::decode::EmbeddedMetadata::exif: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub zencodec::advanced::decode::EmbeddedMetadata::xmp: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+impl zencodec::decode::EmbeddedMetadata
+pub fn zencodec::decode::EmbeddedMetadata::is_empty(&self) -> bool
+pub fn zencodec::decode::EmbeddedMetadata::with_exif(self, exif: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn zencodec::decode::EmbeddedMetadata::with_xmp(self, xmp: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub struct zencodec::advanced::decode::ErasedError(_)
+impl zencodec::decode::ErasedError
+pub fn zencodec::decode::ErasedError::get_ref(&self) -> &(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)
+pub fn zencodec::decode::ErasedError::into_inner(self) -> zencodec::encode::BoxedError
+pub fn zencodec::decode::ErasedError::new(err: zencodec::encode::BoxedError) -> Self
+impl core::error::Error for zencodec::decode::ErasedError
+pub fn zencodec::decode::ErasedError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for zencodec::decode::ErasedError
+pub fn zencodec::decode::ErasedError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for zencodec::decode::ErasedError
+pub fn zencodec::decode::ErasedError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::decode::Fused<D>
+impl<D> zencodec::decode::Fused<D>
+pub fn zencodec::decode::Fused<D>::get_ref(&self) -> &D
+pub fn zencodec::decode::Fused<D>::into_inner(self) -> D
+pub const fn zencodec::decode::Fused<D>::new(inner: D) -> Self
+impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode for zencodec::decode::Fused<D>
+pub fn zencodec::decode::Fused<D>::resume(&mut self, id: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::Fused<D>
+pub type zencodec::decode::Fused<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
+pub fn zencodec::decode::Fused<D>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::decode::Fused<D>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::decode::Fused<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::decode::Fused<D>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::decode::Fused<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+pub struct zencodec::advanced::decode::IncrementalDecoderShim<D>(pub D)
+impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
+pub type zencodec::decode::IncrementalDecoderShim<D>::Error = zencodec::decode::ErasedError
+pub fn zencodec::decode::IncrementalDecoderShim<D>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::decode::IncrementalDecoderShim<D>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::decode::IncrementalDecoderShim<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+#[non_exhaustive] pub struct zencodec::advanced::decode::Input<'a>
+pub zencodec::advanced::decode::Input::bytes: &'a [u8]
+pub zencodec::advanced::decode::Input::offset: u64
+pub zencodec::advanced::decode::Input::total_len: core::option::Option<u64>
+impl<'a> zencodec::decode::Input<'a>
+pub const fn zencodec::decode::Input<'a>::empty() -> Self
+pub const fn zencodec::decode::Input<'a>::end(&self) -> u64
+pub const fn zencodec::decode::Input<'a>::new(offset: u64, bytes: &'a [u8]) -> Self
+pub fn zencodec::decode::Input<'a>::reaches_end(&self) -> bool
+pub const fn zencodec::decode::Input<'a>::with_total_len(self, total_len: u64) -> Self
+pub const fn zencodec::decode::Input<'a>::with_total_len_opt(self, total_len: core::option::Option<u64>) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::InterpretationFacts
+pub zencodec::advanced::decode::InterpretationFacts::descriptor: core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub zencodec::advanced::decode::InterpretationFacts::height: u32
+pub zencodec::advanced::decode::InterpretationFacts::state: zencodec::decode::InterpretationState
+pub zencodec::advanced::decode::InterpretationFacts::unavailable: core::option::Option<zencodec::decode::InterpretationUnavailable>
+pub zencodec::advanced::decode::InterpretationFacts::width: u32
+impl zencodec::decode::InterpretationFacts
+pub const fn zencodec::decode::InterpretationFacts::new(width: u32, height: u32, descriptor: core::option::Option<zenpixels::descriptor::PixelDescriptor>, state: zencodec::decode::InterpretationState) -> Self
+pub const fn zencodec::decode::InterpretationFacts::with_unavailable(self, reason: zencodec::decode::InterpretationUnavailable) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::OutputInfo
+pub zencodec::advanced::decode::OutputInfo::crop_applied: core::option::Option<[u32; 4]>
+pub zencodec::advanced::decode::OutputInfo::has_alpha: bool
+pub zencodec::advanced::decode::OutputInfo::height: u32
+pub zencodec::advanced::decode::OutputInfo::native_format: zenpixels::descriptor::PixelDescriptor
+pub zencodec::advanced::decode::OutputInfo::orientation_applied: zenpixels::orientation::Orientation
+pub zencodec::advanced::decode::OutputInfo::width: u32
+impl zencodec::decode::OutputInfo
+pub fn zencodec::decode::OutputInfo::buffer_size(&self) -> u64
+pub fn zencodec::decode::OutputInfo::full_decode(width: u32, height: u32, native_format: zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn zencodec::decode::OutputInfo::pixel_count(&self) -> u64
+pub fn zencodec::decode::OutputInfo::with_alpha(self, has_alpha: bool) -> Self
+pub fn zencodec::decode::OutputInfo::with_crop_applied(self, rect: [u32; 4]) -> Self
+pub fn zencodec::decode::OutputInfo::with_orientation_applied(self, o: zenpixels::orientation::Orientation) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::OwnedAnimationFrame
+impl zencodec::OwnedAnimationFrame
+pub fn zencodec::OwnedAnimationFrame::as_animation_frame(&self) -> zencodec::AnimationFrame<'_>
+pub fn zencodec::OwnedAnimationFrame::duration(&self) -> zencodec::animation::FrameDuration
+pub fn zencodec::OwnedAnimationFrame::duration_ms(&self) -> u32
+pub fn zencodec::OwnedAnimationFrame::extensions(&self) -> &zencodec::Extensions
+pub fn zencodec::OwnedAnimationFrame::extensions_mut(&mut self) -> &mut zencodec::Extensions
+pub fn zencodec::OwnedAnimationFrame::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn zencodec::OwnedAnimationFrame::frame_index(&self) -> u32
+pub fn zencodec::OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn zencodec::OwnedAnimationFrame::new(pixels: zenpixels::buffer::PixelBuffer, duration_ms: u32, frame_index: u32) -> Self
+pub fn zencodec::OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn zencodec::OwnedAnimationFrame::pts(&self) -> core::option::Option<zencodec::time::Timestamp>
+pub fn zencodec::OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn zencodec::OwnedAnimationFrame::with_duration(pixels: zenpixels::buffer::PixelBuffer, duration: zencodec::animation::FrameDuration, frame_index: u32) -> Self
+pub fn zencodec::OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, extras: T) -> Self
+pub fn zencodec::OwnedAnimationFrame::with_pts(self, pts: core::option::Option<zencodec::time::Timestamp>) -> Self
+impl core::fmt::Debug for zencodec::OwnedAnimationFrame
+pub fn zencodec::OwnedAnimationFrame::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::decode::Progress
+pub zencodec::advanced::decode::Progress::consumed: usize
+pub zencodec::advanced::decode::Progress::event: zencodec::decode::Event
+impl zencodec::decode::Progress
+pub const fn zencodec::decode::Progress::need(consumed: usize) -> Self
+pub const fn zencodec::decode::Progress::new(consumed: usize, event: zencodec::decode::Event) -> Self
+impl core::convert::From<zencodec::decode::Progress> for zencodec::decode::ControlledProgress
+pub fn zencodec::decode::ControlledProgress::from(progress: zencodec::decode::Progress) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::decode::SourceColor
+pub zencodec::advanced::decode::SourceColor::bit_depth: core::option::Option<u8>
+pub zencodec::advanced::decode::SourceColor::channel_count: core::option::Option<u8>
+pub zencodec::advanced::decode::SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub zencodec::advanced::decode::SourceColor::color_authority: zenpixels::color::ColorAuthority
+pub zencodec::advanced::decode::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub zencodec::advanced::decode::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
+pub zencodec::advanced::decode::SourceColor::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub zencodec::advanced::decode::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
+impl zencodec::SourceColor
+pub fn zencodec::SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
+pub fn zencodec::SourceColor::has_hdr_transfer(&self) -> bool
+pub fn zencodec::SourceColor::to_color_context(&self) -> zenpixels::color::ColorContext
+pub fn zencodec::SourceColor::transfer_function(&self) -> zenpixels::descriptor::TransferFunction
+pub fn zencodec::SourceColor::with_bit_depth(self, bit_depth: u8) -> Self
+pub fn zencodec::SourceColor::with_channel_count(self, channel_count: u8) -> Self
+pub fn zencodec::SourceColor::with_cicp(self, cicp: zenpixels::cicp::Cicp) -> Self
+pub fn zencodec::SourceColor::with_color_authority(self, authority: zenpixels::color::ColorAuthority) -> Self
+pub fn zencodec::SourceColor::with_content_light_level(self, clli: zenpixels::hdr::ContentLightLevel) -> Self
+pub fn zencodec::SourceColor::with_icc_profile(self, icc: impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn zencodec::SourceColor::with_mastering_display(self, mdcv: zenpixels::hdr::MasteringDisplay) -> Self
+pub trait zencodec::advanced::decode::AnimationFrameDecoder: core::marker::Sized
+pub type zencodec::advanced::decode::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::render_next_frame(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::AnimationFrame<'_>>, Self::Error>
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::render_next_frame_owned(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::OwnedAnimationFrame>, Self::Error>
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, sink: &mut dyn zencodec::decode::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::decode::OutputInfo>, Self::Error>
+pub fn zencodec::advanced::decode::AnimationFrameDecoder::wrap_sink_error(err: zencodec::decode::SinkError) -> Self::Error
+impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::AnimationFrameDecoder for zencodec::Unsupported<E>
+pub type zencodec::Unsupported<E>::Error = E
+pub fn zencodec::Unsupported<E>::frame_count(&self) -> core::option::Option<u32>
+pub fn zencodec::Unsupported<E>::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::Unsupported<E>::loop_count(&self) -> core::option::Option<u32>
+pub fn zencodec::Unsupported<E>::render_next_frame(&mut self, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::AnimationFrame<'_>>, E>
+pub fn zencodec::Unsupported<E>::render_next_frame_owned(&mut self, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::OwnedAnimationFrame>, E>
+pub fn zencodec::Unsupported<E>::render_next_frame_to_sink(&mut self, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>, _sink: &mut dyn zencodec::decode::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::decode::OutputInfo>, E>
+pub fn zencodec::Unsupported<E>::wrap_sink_error(_err: zencodec::decode::SinkError) -> E
+pub trait zencodec::advanced::decode::ControlledIncrementalDecode: zencodec::decode::IncrementalDecode
+pub fn zencodec::advanced::decode::ControlledIncrementalDecode::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::advanced::decode::ControlledIncrementalDecode::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<Self::Error>>
+impl<D: zencodec::decode::ControlledIncrementalDecode + ?core::marker::Sized> zencodec::decode::ControlledIncrementalDecode for &mut D
+pub fn &mut D::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<Self::Error>>
+pub fn &mut D::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<Self::Error>>
+impl<D: zencodec::decode::ControlledIncrementalDecode + ?core::marker::Sized> zencodec::decode::ControlledIncrementalDecode for alloc::boxed::Box<D>
+pub fn alloc::boxed::Box<D>::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<Self::Error>>
+pub fn alloc::boxed::Box<D>::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<Self::Error>>
+impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode for zencodec::decode::Fused<D>
+pub fn zencodec::decode::Fused<D>::resume(&mut self, id: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+impl<D: zencodec::decode::ControlledIncrementalDecode> zencodec::decode::ControlledIncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::resume(&mut self, boundary: zencodec::decode::BoundaryId, action: zencodec::decode::BoundaryAction, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::step_controlled(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::ControlledProgress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub trait zencodec::advanced::decode::Decode: core::marker::Sized
+pub type zencodec::advanced::decode::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::decode::Decode::decode(self) -> core::result::Result<zencodec::decode::DecodeOutput, Self::Error>
+pub fn zencodec::advanced::decode::Decode::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, Self::Error>
+pub trait zencodec::advanced::decode::DecodeJob<'a>: core::marker::Sized
+pub type zencodec::advanced::decode::DecodeJob::AnimationFrameDec: zencodec::decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
+pub type zencodec::advanced::decode::DecodeJob::Dec: zencodec::decode::Decode<Error = Self::Error>
+pub type zencodec::advanced::decode::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type zencodec::advanced::decode::DecodeJob::StreamDec: zencodec::decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn zencodec::advanced::decode::DecodeJob::animation_frame_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::dyn_animation_frame_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn zencodec::decode::DynAnimationFrameDecoder>, zencodec::encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
+pub fn zencodec::advanced::decode::DecodeJob::dyn_controlled_decoder(self, preferred: &[zenpixels::descriptor::PixelDescriptor], storage: zencodec::storage::StorageBudget) -> core::result::Result<alloc::boxed::Box<zencodec::decode::DynControlledDecoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DecodeJob::dyn_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::decode::DynDecoder + 'a)>, zencodec::encode::BoxedError> where Self: 'a
+pub fn zencodec::advanced::decode::DecodeJob::dyn_incremental_decoder(self, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<zencodec::decode::DynIncrementalDecoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DecodeJob::dyn_streaming_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::decode::DynStreamingDecoder + 'a)>, zencodec::encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
+pub fn zencodec::advanced::decode::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn zencodec::advanced::decode::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::advanced::decode::DecodeJob::inventory(&self, data: &[u8]) -> core::result::Result<zencodec::inventory::Inventory, whereat::at::At<zencodec::CodecError>>
+pub fn zencodec::advanced::decode::DecodeJob::output_info(&self, data: &[u8]) -> core::result::Result<zencodec::decode::OutputInfo, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::probe(&self, data: &[u8]) -> core::result::Result<zencodec::ImageInfo, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::probe_full(&self, data: &[u8]) -> core::result::Result<zencodec::ImageInfo, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::push_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, sink: &mut dyn zencodec::decode::DecodeRowSink, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<zencodec::decode::OutputInfo, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::push_decoder_from_source(self, source: &mut dyn zencodec::source::DynReadAt, sink: &mut dyn zencodec::decode::DecodeRowSink, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<zencodec::decode::OutputInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DecodeJob::streaming_decoder(self, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn zencodec::advanced::decode::DecodeJob::try_set_policy(&mut self, policy: zencodec::decode::DecodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::decode::DecodeJob::try_with_policy(self, policy: zencodec::decode::DecodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::decode::DecodeJob::with_crop_hint(self, _x: u32, _y: u32, _width: u32, _height: u32) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_extract_gain_map(self, _extract: bool) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_gain_map_render(self, _render: zencodec::gainmap::GainMapRender) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_limits(self, limits: zencodec::ResourceLimits) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_orientation(self, _hint: zencodec::OrientationHint) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_policy(self, _policy: zencodec::decode::DecodePolicy) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_pulse(self, pulse: how_far::pulse::SharedPulse) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_start_frame_index(self, _index: u32) -> Self
+pub fn zencodec::advanced::decode::DecodeJob::with_stop(self, stop: almost_enough::stop_token::StopToken) -> Self
+pub trait zencodec::advanced::decode::DecodeRowSink
+pub fn zencodec::advanced::decode::DecodeRowSink::accepts_provisional(&self) -> bool
+pub fn zencodec::advanced::decode::DecodeRowSink::begin(&mut self, _width: u32, _height: u32, _descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), zencodec::decode::SinkError>
+pub fn zencodec::advanced::decode::DecodeRowSink::finish(&mut self) -> core::result::Result<(), zencodec::decode::SinkError>
+pub fn zencodec::advanced::decode::DecodeRowSink::max_buffer_rows(&self) -> core::num::nonzero::NonZeroU32
+pub fn zencodec::advanced::decode::DecodeRowSink::provide_next_buffer(&mut self, y: u32, height: u32, width: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zenpixels::buffer::PixelSliceMut<'_>, zencodec::decode::SinkError>
+pub fn zencodec::advanced::decode::DecodeRowSink::provide_pass_buffer(&mut self, meta: zencodec::decode::BatchMeta, height: u32, width: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zenpixels::buffer::PixelSliceMut<'_>, zencodec::decode::SinkError>
+pub trait zencodec::advanced::decode::DecoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync
+pub type zencodec::advanced::decode::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type zencodec::advanced::decode::DecoderConfig::Job<'a>: zencodec::decode::DecodeJob<'a, Error = Self::Error> + 'static
+pub fn zencodec::advanced::decode::DecoderConfig::capabilities() -> &'static zencodec::decode::DecodeCapabilities
+pub fn zencodec::advanced::decode::DecoderConfig::decode(self, data: &[u8]) -> core::result::Result<zencodec::decode::DecodeOutput, Self::Error> where Self: core::marker::Sized
+pub fn zencodec::advanced::decode::DecoderConfig::estimate_decode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn zencodec::advanced::decode::DecoderConfig::formats() -> &'static [zencodec::ImageFormat]
+pub fn zencodec::advanced::decode::DecoderConfig::job<'a>(self) -> Self::Job
+pub fn zencodec::advanced::decode::DecoderConfig::probe(&self, data: &[u8]) -> core::result::Result<zencodec::ImageInfo, Self::Error> where Self: core::marker::Sized
+pub fn zencodec::advanced::decode::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait zencodec::advanced::decode::DynAnimationFrameDecoder: core::marker::Send
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::as_any(&self) -> &dyn core::any::Any
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::into_any(self: alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::OwnedAnimationFrame>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, sink: &mut dyn zencodec::decode::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::decode::OutputInfo>, zencodec::encode::BoxedError>
+pub trait zencodec::advanced::decode::DynDecodeJob<'a>
+pub fn zencodec::advanced::decode::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn zencodec::advanced::decode::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::advanced::decode::DynDecodeJob::into_animation_frame_decoder(self: alloc::boxed::Box<Self>, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn zencodec::decode::DynAnimationFrameDecoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::into_controlled_decoder(self: alloc::boxed::Box<Self>, preferred: &[zenpixels::descriptor::PixelDescriptor], storage: zencodec::storage::StorageBudget) -> core::result::Result<alloc::boxed::Box<zencodec::decode::DynControlledDecoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::into_decoder(self: alloc::boxed::Box<Self>, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::decode::DynDecoder + 'a)>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::into_incremental_decoder(self: alloc::boxed::Box<Self>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<zencodec::decode::DynIncrementalDecoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::into_streaming_decoder(self: alloc::boxed::Box<Self>, data: alloc::borrow::Cow<'a, [u8]>, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::decode::DynStreamingDecoder + 'a)>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::inventory(&self, data: &[u8]) -> core::result::Result<zencodec::inventory::Inventory, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::output_info(&self, data: &[u8]) -> core::result::Result<zencodec::decode::OutputInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::probe(&self, data: &[u8]) -> core::result::Result<zencodec::ImageInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::probe_full(&self, data: &[u8]) -> core::result::Result<zencodec::ImageInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::push_decode(self: alloc::boxed::Box<Self>, data: alloc::borrow::Cow<'a, [u8]>, sink: &mut dyn zencodec::decode::DecodeRowSink, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<zencodec::decode::OutputInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::push_decoder_from_source(self: alloc::boxed::Box<Self>, source: &mut dyn zencodec::source::DynReadAt, sink: &mut dyn zencodec::decode::DecodeRowSink, preferred: &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<zencodec::decode::OutputInfo, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecodeJob::set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_extract_gain_map(&mut self, _extract: bool)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_gain_map_render(&mut self, _render: zencodec::gainmap::GainMapRender)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_limits(&mut self, limits: zencodec::ResourceLimits)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_orientation(&mut self, hint: zencodec::OrientationHint)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_policy(&mut self, policy: zencodec::decode::DecodePolicy)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_pulse(&mut self, pulse: how_far::pulse::SharedPulse)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_start_frame_index(&mut self, index: u32)
+pub fn zencodec::advanced::decode::DynDecodeJob::set_stop(&mut self, pulse: almost_enough::stop_token::StopToken)
+pub fn zencodec::advanced::decode::DynDecodeJob::try_set_policy(&mut self, policy: zencodec::decode::DecodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub trait zencodec::advanced::decode::DynDecoder
+pub fn zencodec::advanced::decode::DynDecoder::decode(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::decode::DecodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::decode::DynDecoder::prepare_output(&mut self) -> core::result::Result<core::option::Option<zenpixels::descriptor::PixelDescriptor>, zencodec::encode::BoxedError>
+pub trait zencodec::advanced::decode::DynDecoderConfig: core::marker::Send + core::marker::Sync
+pub fn zencodec::advanced::decode::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn zencodec::advanced::decode::DynDecoderConfig::capabilities(&self) -> &'static zencodec::decode::DecodeCapabilities
+pub fn zencodec::advanced::decode::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn zencodec::decode::DynDecodeJob<'_> + '_)>
+pub fn zencodec::advanced::decode::DynDecoderConfig::estimate_decode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn zencodec::advanced::decode::DynDecoderConfig::formats(&self) -> &'static [zencodec::ImageFormat]
+pub fn zencodec::advanced::decode::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+impl<C> zencodec::decode::DynDecoderConfig for C where C: zencodec::decode::DecoderConfig + 'static
+pub fn C::as_any(&self) -> &dyn core::any::Any
+pub fn C::capabilities(&self) -> &'static zencodec::decode::DecodeCapabilities
+pub fn C::dyn_job(&self) -> alloc::boxed::Box<(dyn zencodec::decode::DynDecodeJob<'_> + '_)>
+pub fn C::estimate_decode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn C::formats(&self) -> &'static [zencodec::ImageFormat]
+pub fn C::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait zencodec::advanced::decode::DynStreamingDecoder: core::marker::Send
+pub fn zencodec::advanced::decode::DynStreamingDecoder::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::advanced::decode::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, zencodec::encode::BoxedError>
+pub trait zencodec::advanced::decode::IncrementalDecode
+pub type zencodec::advanced::decode::IncrementalDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::decode::IncrementalDecode::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::advanced::decode::IncrementalDecode::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::advanced::decode::IncrementalDecode::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::advanced::decode::IncrementalDecode::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::advanced::decode::IncrementalDecode::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::advanced::decode::IncrementalDecode::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl zencodec::decode::IncrementalDecode for zencodec::CodecSetIncrementalDecoder
+pub type zencodec::CodecSetIncrementalDecoder::Error = zencodec::CodecSetError
+pub fn zencodec::CodecSetIncrementalDecoder::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::CodecSetIncrementalDecoder::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::CodecSetIncrementalDecoder::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::CodecSetIncrementalDecoder::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::CodecSetIncrementalDecoder::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::CodecSetError>>
+pub fn zencodec::CodecSetIncrementalDecoder::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for &mut D
+pub type &mut D::Error = <D as zencodec::decode::IncrementalDecode>::Error
+pub fn &mut D::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn &mut D::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn &mut D::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn &mut D::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn &mut D::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn &mut D::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<D: zencodec::decode::IncrementalDecode + ?core::marker::Sized> zencodec::decode::IncrementalDecode for alloc::boxed::Box<D>
+pub type alloc::boxed::Box<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
+pub fn alloc::boxed::Box<D>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn alloc::boxed::Box<D>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn alloc::boxed::Box<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn alloc::boxed::Box<D>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn alloc::boxed::Box<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn alloc::boxed::Box<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::Fused<D>
+pub type zencodec::decode::Fused<D>::Error = <D as zencodec::decode::IncrementalDecode>::Error
+pub fn zencodec::decode::Fused<D>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::decode::Fused<D>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::decode::Fused<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::decode::Fused<D>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::decode::Fused<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<<D as zencodec::decode::IncrementalDecode>::Error>>
+pub fn zencodec::decode::Fused<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<D: zencodec::decode::IncrementalDecode> zencodec::decode::IncrementalDecode for zencodec::decode::IncrementalDecoderShim<D>
+pub type zencodec::decode::IncrementalDecoderShim<D>::Error = zencodec::decode::ErasedError
+pub fn zencodec::decode::IncrementalDecoderShim<D>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::decode::IncrementalDecoderShim<D>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::decode::IncrementalDecoderShim<D>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<zencodec::decode::ErasedError>>
+pub fn zencodec::decode::IncrementalDecoderShim<D>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::IncrementalDecode for zencodec::Unsupported<E>
+pub type zencodec::Unsupported<E>::Error = E
+pub fn zencodec::Unsupported<E>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::Unsupported<E>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::Unsupported<E>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::Unsupported<E>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::Unsupported<E>::step(&mut self, _input: zencodec::decode::Input<'_>, _sink: &mut dyn zencodec::decode::DecodeRowSink, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<E>>
+pub fn zencodec::Unsupported<E>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+impl<J, E> zencodec::decode::IncrementalDecode for zencodec::helpers::WholeFileIncremental<J> where J: for<'a> zencodec::decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type zencodec::helpers::WholeFileIncremental<J>::Error = E
+pub fn zencodec::helpers::WholeFileIncremental<J>::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn zencodec::helpers::WholeFileIncremental<J>::info(&self) -> core::option::Option<&zencodec::ImageInfo>
+pub fn zencodec::helpers::WholeFileIncremental<J>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::helpers::WholeFileIncremental<J>::requested(&self) -> &[zencodec::decode::InputRequest]
+pub fn zencodec::helpers::WholeFileIncremental<J>::step(&mut self, input: zencodec::decode::Input<'_>, sink: &mut dyn zencodec::decode::DecodeRowSink, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::decode::Progress, zencodec::decode::StepError<Self::Error>>
+pub fn zencodec::helpers::WholeFileIncremental<J>::take_details(&mut self) -> core::option::Option<zencodec::decode::DecodeDetails>
+pub trait zencodec::advanced::decode::SourceEncodingDetails: core::any::Any + core::marker::Send + core::marker::Sync
+pub fn zencodec::advanced::decode::SourceEncodingDetails::is_lossless(&self) -> bool
+pub fn zencodec::advanced::decode::SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
+pub trait zencodec::advanced::decode::StreamingDecode
+pub type zencodec::advanced::decode::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::decode::StreamingDecode::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::advanced::decode::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
+impl<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static> zencodec::decode::StreamingDecode for zencodec::Unsupported<E>
+pub type zencodec::Unsupported<E>::Error = E
+pub fn zencodec::Unsupported<E>::info(&self) -> &zencodec::ImageInfo
+pub fn zencodec::Unsupported<E>::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, E>
+pub fn zencodec::advanced::decode::erase_controlled<D: zencodec::decode::ControlledIncrementalDecode + core::marker::Send + 'static>(decoder: D) -> alloc::boxed::Box<zencodec::decode::DynControlledDecoder>
+pub fn zencodec::advanced::decode::erase_incremental<D>(decoder: D) -> alloc::boxed::Box<zencodec::decode::DynIncrementalDecoder> where D: zencodec::decode::IncrementalDecode + core::marker::Send + 'static
+pub fn zencodec::advanced::decode::is_format_available(target: zenpixels::descriptor::PixelFormat, available: &[zenpixels::descriptor::PixelDescriptor]) -> bool
+pub fn zencodec::advanced::decode::negotiate_pixel_format(preferred: &[zenpixels::descriptor::PixelDescriptor], available: &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn zencodec::advanced::decode::negotiate_pixel_format_for_depth(preferred: &[zenpixels::descriptor::PixelDescriptor], available: &[zenpixels::descriptor::PixelDescriptor], source_bits: u8) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub type zencodec::advanced::decode::BoxedError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
+pub type zencodec::advanced::decode::DynControlledDecoder = (dyn zencodec::decode::ControlledIncrementalDecode<Error = zencodec::decode::ErasedError> + core::marker::Send)
+pub type zencodec::advanced::decode::DynIncrementalDecoder = (dyn zencodec::decode::IncrementalDecode<Error = zencodec::decode::ErasedError> + core::marker::Send)
+pub type zencodec::advanced::decode::Request = zencodec::decode::InputRequest
+pub type zencodec::advanced::decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
+pub mod zencodec::advanced::encode
+#[non_exhaustive] pub enum zencodec::advanced::encode::EncodeOrientation
+pub zencodec::advanced::encode::EncodeOrientation::Bake
+pub zencodec::advanced::encode::EncodeOrientation::PreserveStored
+#[non_exhaustive] pub enum zencodec::advanced::encode::EncodePlanError
+pub zencodec::advanced::encode::EncodePlanError::Changed
+pub zencodec::advanced::encode::EncodePlanError::DestinationAccess
+pub zencodec::advanced::encode::EncodePlanError::Dimensions
+pub zencodec::advanced::encode::EncodePlanError::ExactDepth
+pub zencodec::advanced::encode::EncodePlanError::InputProtocol
+pub zencodec::advanced::encode::EncodePlanError::Orientation
+pub zencodec::advanced::encode::EncodePlanError::OutputLag
+pub zencodec::advanced::encode::EncodePlanError::PassRange
+impl core::error::Error for zencodec::encode::EncodePlanError
+impl core::fmt::Display for zencodec::encode::EncodePlanError
+pub fn zencodec::encode::EncodePlanError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::advanced::encode::Fidelity
+pub zencodec::advanced::encode::Fidelity::Lossless
+pub zencodec::advanced::encode::Fidelity::Lossy(zencodec::encode::LossyTarget)
+impl zencodec::encode::Fidelity
+pub const fn zencodec::encode::Fidelity::butteraugli(distance: f32) -> Self
+pub const fn zencodec::encode::Fidelity::codec_quality(q: f32) -> Self
+pub const fn zencodec::encode::Fidelity::is_lossless(self) -> bool
+pub const fn zencodec::encode::Fidelity::ssim2(score: f32) -> Self
+pub const fn zencodec::encode::Fidelity::zensim_a(score: f32) -> Self
+pub const fn zencodec::encode::Fidelity::zensim_b(score: f32) -> Self
+#[non_exhaustive] pub enum zencodec::advanced::encode::FidelitySelectionError
+pub zencodec::advanced::encode::FidelitySelectionError::AllocationFailed
+pub zencodec::advanced::encode::FidelitySelectionError::Empty
+pub zencodec::advanced::encode::FidelitySelectionError::InvalidPreference
+pub zencodec::advanced::encode::FidelitySelectionError::InvalidPreference::index: usize
+pub zencodec::advanced::encode::FidelitySelectionError::InvalidPreference::reason: zencodec::encode::FidelityTargetError
+pub zencodec::advanced::encode::FidelitySelectionError::Rejected(alloc::vec::Vec<zencodec::encode::FidelityRejection>)
+impl core::error::Error for zencodec::encode::FidelitySelectionError
+impl core::fmt::Display for zencodec::encode::FidelitySelectionError
+pub fn zencodec::encode::FidelitySelectionError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::advanced::encode::FidelityTargetError
+pub zencodec::advanced::encode::FidelityTargetError::NonFinite
+pub zencodec::advanced::encode::FidelityTargetError::Substituted
+pub zencodec::advanced::encode::FidelityTargetError::Substituted::resolved: zencodec::encode::Fidelity
+pub zencodec::advanced::encode::FidelityTargetError::Unreported
+impl core::error::Error for zencodec::encode::FidelityTargetError
+impl core::fmt::Display for zencodec::encode::FidelityTargetError
+pub fn zencodec::encode::FidelityTargetError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::advanced::encode::InputRequirement
+pub zencodec::advanced::encode::InputRequirement::Replay(zencodec::encode::SourcePasses)
+pub zencodec::advanced::encode::InputRequirement::Rows
+pub zencodec::advanced::encode::InputRequirement::WholeRaster
+#[non_exhaustive] pub enum zencodec::advanced::encode::LossyTarget
+pub zencodec::advanced::encode::LossyTarget::ApproxButteraugli(f32)
+pub zencodec::advanced::encode::LossyTarget::ApproxSsim2(f32)
+pub zencodec::advanced::encode::LossyTarget::ApproxZensimA(f32)
+pub zencodec::advanced::encode::LossyTarget::ApproxZensimB(f32)
+pub zencodec::advanced::encode::LossyTarget::CodecSpecificQuality(f32)
+#[non_exhaustive] pub enum zencodec::advanced::encode::OutputPhase
+pub zencodec::advanced::encode::OutputPhase::AnyPass
+pub zencodec::advanced::encode::OutputPhase::FinalPass
+#[non_exhaustive] pub enum zencodec::advanced::encode::PullProgress
+pub zencodec::advanced::encode::PullProgress::Done
+pub zencodec::advanced::encode::PullProgress::Filled
+pub struct zencodec::advanced::encode::AnimationOutputTiming
+impl zencodec::encode::AnimationOutputTiming
+pub const zencodec::encode::AnimationOutputTiming::AT_FINISH: Self
+pub const fn zencodec::encode::AnimationOutputTiming::lag_frames(&self) -> core::option::Option<u32>
+pub const fn zencodec::encode::AnimationOutputTiming::streaming(lag_frames: u32) -> Self
+pub const fn zencodec::encode::AnimationOutputTiming::streams(&self) -> bool
+impl core::default::Default for zencodec::encode::AnimationOutputTiming
+pub fn zencodec::encode::AnimationOutputTiming::default() -> Self
+#[non_exhaustive] pub struct zencodec::advanced::encode::ColorCarriers
+pub zencodec::advanced::encode::ColorCarriers::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub zencodec::advanced::encode::ColorCarriers::icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+impl zencodec::encode::ColorCarriers
+pub fn zencodec::encode::ColorCarriers::new(icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>, cicp: core::option::Option<zenpixels::cicp::Cicp>) -> Self
+impl core::fmt::Debug for zencodec::encode::ColorCarriers
+pub fn zencodec::encode::ColorCarriers::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::encode::EncodeCapabilities
+impl zencodec::encode::EncodeCapabilities
+pub const zencodec::encode::EncodeCapabilities::EMPTY: Self
+pub const fn zencodec::encode::EncodeCapabilities::animation(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::animation_timing(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::cicp(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::cicp_is_valid_carrier(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::cicp_safe_sole_carrier(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::effort_range(&self) -> core::option::Option<[i32; 2]>
+pub const fn zencodec::encode::EncodeCapabilities::encode_from(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::enforces_max_memory(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::enforces_max_pixels(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::exif(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::gain_map(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::hdr(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::icc(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::lossless(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::lossy(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::native_16bit(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::native_alpha(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::native_f32(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::native_gray(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::new() -> Self
+pub const fn zencodec::encode::EncodeCapabilities::push_rows(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::quality_range(&self) -> core::option::Option<[f32; 2]>
+pub const fn zencodec::encode::EncodeCapabilities::stop(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::streaming_output(&self) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::supports(&self, op: zencodec::UnsupportedOperation) -> bool
+pub const fn zencodec::encode::EncodeCapabilities::threads_supported_range(&self) -> (u16, u16)
+pub const fn zencodec::encode::EncodeCapabilities::with_animation(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_animation_timing(self, enabled: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_cicp(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_cicp_is_valid_carrier(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_cicp_safe_sole_carrier(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_effort_range(self, min: i32, max: i32) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_encode_from(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_enforces_max_memory(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_enforces_max_pixels(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_exif(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_gain_map(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_hdr(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_icc(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_lossless(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_lossy(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_native_16bit(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_native_alpha(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_native_f32(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_native_gray(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_push_rows(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_quality_range(self, min: f32, max: f32) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_stop(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_streaming_output(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_threads_supported_range(self, min: u16, max: u16) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::with_xmp(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodeCapabilities::xmp(&self) -> bool
+impl core::default::Default for zencodec::encode::EncodeCapabilities
+pub fn zencodec::encode::EncodeCapabilities::default() -> Self
+impl core::fmt::Debug for zencodec::encode::EncodeCapabilities
+pub fn zencodec::encode::EncodeCapabilities::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::encode::EncodeDeclaration<'a>
+pub zencodec::advanced::encode::EncodeDeclaration::access: zencodec::output_patch::OutputAccess
+pub zencodec::advanced::encode::EncodeDeclaration::color: core::option::Option<&'a zenpixels::color::ColorContext>
+pub zencodec::advanced::encode::EncodeDeclaration::descriptor: zenpixels::descriptor::PixelDescriptor
+pub zencodec::advanced::encode::EncodeDeclaration::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
+pub zencodec::advanced::encode::EncodeDeclaration::height: u32
+pub zencodec::advanced::encode::EncodeDeclaration::width: u32
+impl<'a> zencodec::encode::EncodeDeclaration<'a>
+pub const fn zencodec::encode::EncodeDeclaration<'a>::new(width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn zencodec::encode::EncodeDeclaration<'a>::validate_exact_depth(&self) -> core::result::Result<(), zenpixels::sample::exact::ExactDepthError>
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_access(self, access: zencodec::output_patch::OutputAccess) -> Self
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_color(self, color: &'a zenpixels::color::ColorContext) -> Self
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_exact_depth(self, exact: zenpixels::sample::exact::ExactDepth) -> Self
+impl core::fmt::Debug for zencodec::encode::EncodeDeclaration<'_>
+pub fn zencodec::encode::EncodeDeclaration<'_>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::encode::EncodeOutput
+impl zencodec::encode::EncodeOutput
+pub fn zencodec::encode::EncodeOutput::data(&self) -> &[u8]
+pub fn zencodec::encode::EncodeOutput::extension(&self) -> &'static str
+pub fn zencodec::encode::EncodeOutput::extensions(&self) -> &zencodec::Extensions
+pub fn zencodec::encode::EncodeOutput::extensions_mut(&mut self) -> &mut zencodec::Extensions
+pub fn zencodec::encode::EncodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn zencodec::encode::EncodeOutput::format(&self) -> zencodec::ImageFormat
+pub fn zencodec::encode::EncodeOutput::into_vec(self) -> alloc::vec::Vec<u8>
+pub fn zencodec::encode::EncodeOutput::is_empty(&self) -> bool
+pub fn zencodec::encode::EncodeOutput::len(&self) -> usize
+pub fn zencodec::encode::EncodeOutput::mime_type(&self) -> &'static str
+pub fn zencodec::encode::EncodeOutput::new(data: alloc::vec::Vec<u8>, format: zencodec::ImageFormat) -> Self
+pub fn zencodec::encode::EncodeOutput::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn zencodec::encode::EncodeOutput::with_extension(self, extension: &'static str) -> Self
+pub fn zencodec::encode::EncodeOutput::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, extras: T) -> Self
+pub fn zencodec::encode::EncodeOutput::with_mime_type(self, mime_type: &'static str) -> Self
+impl core::clone::Clone for zencodec::encode::EncodeOutput
+pub fn zencodec::encode::EncodeOutput::clone(&self) -> Self
+impl core::cmp::Eq for zencodec::encode::EncodeOutput
+impl core::cmp::PartialEq for zencodec::encode::EncodeOutput
+pub fn zencodec::encode::EncodeOutput::eq(&self, other: &Self) -> bool
+impl core::convert::AsRef<[u8]> for zencodec::encode::EncodeOutput
+pub fn zencodec::encode::EncodeOutput::as_ref(&self) -> &[u8]
+impl core::fmt::Debug for zencodec::encode::EncodeOutput
+pub fn zencodec::encode::EncodeOutput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::encode::EncodePlan
+pub zencodec::advanced::encode::EncodePlan::carriers: core::option::Option<zencodec::encode::ColorCarriers>
+pub zencodec::advanced::encode::EncodePlan::input: zencodec::encode::InputRequirement
+pub zencodec::advanced::encode::EncodePlan::orientation: core::option::Option<zencodec::encode::OrientationPlan>
+pub zencodec::advanced::encode::EncodePlan::output_phase: zencodec::encode::OutputPhase
+pub zencodec::advanced::encode::EncodePlan::timing: zencodec::encode::OutputTiming
+impl zencodec::encode::EncodePlan
+pub const fn zencodec::encode::EncodePlan::replay(passes: zencodec::encode::SourcePasses, timing: zencodec::encode::OutputTiming, output_phase: zencodec::encode::OutputPhase) -> Self
+pub const fn zencodec::encode::EncodePlan::rows(timing: zencodec::encode::OutputTiming) -> Self
+pub fn zencodec::encode::EncodePlan::validate(&self, declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<(), zencodec::encode::EncodePlanError>
+pub fn zencodec::encode::EncodePlan::validate_started(&self, observed: &Self) -> core::result::Result<(), zencodec::encode::EncodePlanError>
+pub const fn zencodec::encode::EncodePlan::whole_raster() -> Self
+pub fn zencodec::encode::EncodePlan::with_carriers(self, carriers: zencodec::encode::ColorCarriers) -> Self
+pub const fn zencodec::encode::EncodePlan::with_orientation(self, orientation: zencodec::encode::OrientationPlan) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::encode::EncodePolicy
+pub zencodec::advanced::encode::EncodePolicy::color: core::option::Option<zencodec::ColorEmitPolicy>
+pub zencodec::advanced::encode::EncodePolicy::embed_exif: core::option::Option<bool>
+pub zencodec::advanced::encode::EncodePolicy::embed_icc: core::option::Option<bool>
+pub zencodec::advanced::encode::EncodePolicy::embed_xmp: core::option::Option<bool>
+pub zencodec::advanced::encode::EncodePolicy::strict: core::option::Option<bool>
+impl zencodec::encode::EncodePolicy
+pub const fn zencodec::encode::EncodePolicy::none() -> Self
+pub const fn zencodec::encode::EncodePolicy::preserve_all() -> Self
+pub const fn zencodec::encode::EncodePolicy::resolve_color(&self, default: zencodec::ColorEmitPolicy) -> zencodec::ColorEmitPolicy
+pub const fn zencodec::encode::EncodePolicy::resolve_exif(&self, default: bool) -> bool
+pub const fn zencodec::encode::EncodePolicy::resolve_icc(&self, default: bool) -> bool
+pub const fn zencodec::encode::EncodePolicy::resolve_strict(&self, default: bool) -> bool
+pub const fn zencodec::encode::EncodePolicy::resolve_xmp(&self, default: bool) -> bool
+pub const fn zencodec::encode::EncodePolicy::strip_all() -> Self
+pub const fn zencodec::encode::EncodePolicy::with_color(self, policy: zencodec::ColorEmitPolicy) -> Self
+pub const fn zencodec::encode::EncodePolicy::with_embed_exif(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodePolicy::with_embed_icc(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodePolicy::with_embed_xmp(self, v: bool) -> Self
+pub const fn zencodec::encode::EncodePolicy::with_strict(self, v: bool) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::encode::FidelityRejection
+pub zencodec::advanced::encode::FidelityRejection::index: usize
+pub zencodec::advanced::encode::FidelityRejection::reason: zencodec::encode::FidelityTargetError
+pub zencodec::advanced::encode::FidelityRejection::target: zencodec::encode::Fidelity
+#[non_exhaustive] pub struct zencodec::advanced::encode::OrientationPlan
+pub zencodec::advanced::encode::OrientationPlan::applied: zenpixels::orientation::Orientation
+pub zencodec::advanced::encode::OrientationPlan::input: zenpixels::orientation::Orientation
+pub zencodec::advanced::encode::OrientationPlan::output: zenpixels::orientation::Orientation
+impl zencodec::encode::OrientationPlan
+pub const fn zencodec::encode::OrientationPlan::baked(input: zenpixels::orientation::Orientation) -> Self
+pub const fn zencodec::encode::OrientationPlan::preserved(input: zenpixels::orientation::Orientation) -> Self
+pub const fn zencodec::encode::OrientationPlan::stored_dimensions(self, width: u32, height: u32) -> (u32, u32)
+pub fn zencodec::encode::OrientationPlan::validate(self) -> core::result::Result<(), zencodec::encode::EncodePlanError>
+pub struct zencodec::advanced::encode::OutputBuffer
+impl zencodec::encode::OutputBuffer
+pub fn zencodec::encode::OutputBuffer::consume(&mut self, n: usize)
+pub fn zencodec::encode::OutputBuffer::handed_out(&self) -> u64
+pub fn zencodec::encode::OutputBuffer::into_remaining(self) -> alloc::vec::Vec<u8>
+pub fn zencodec::encode::OutputBuffer::is_empty(&self) -> bool
+pub fn zencodec::encode::OutputBuffer::len(&self) -> usize
+pub const fn zencodec::encode::OutputBuffer::new() -> Self
+pub fn zencodec::encode::OutputBuffer::pending(&self) -> &[u8]
+pub fn zencodec::encode::OutputBuffer::push(&mut self, bytes: &[u8])
+pub fn zencodec::encode::OutputBuffer::take_into(&mut self, into: &mut alloc::vec::Vec<u8>)
+pub fn zencodec::encode::OutputBuffer::total(&self) -> u64
+pub fn zencodec::encode::OutputBuffer::try_reserve(&mut self, additional: usize) -> core::result::Result<(), alloc::collections::TryReserveError>
+pub fn zencodec::encode::OutputBuffer::vec_mut(&mut self) -> &mut alloc::vec::Vec<u8>
+pub fn zencodec::encode::OutputBuffer::with_capacity(capacity: usize) -> Self
+pub struct zencodec::advanced::encode::OutputTiming
+impl zencodec::encode::OutputTiming
+pub const zencodec::encode::OutputTiming::AT_FINISH: Self
+pub const fn zencodec::encode::OutputTiming::lag_rows(&self) -> core::option::Option<u32>
+pub const fn zencodec::encode::OutputTiming::patches_at_finish(&self) -> bool
+pub const fn zencodec::encode::OutputTiming::streaming(lag_rows: u32) -> Self
+pub const fn zencodec::encode::OutputTiming::streams(&self) -> bool
+pub const fn zencodec::encode::OutputTiming::with_patches(self) -> Self
+impl core::default::Default for zencodec::encode::OutputTiming
+pub fn zencodec::encode::OutputTiming::default() -> Self
+#[non_exhaustive] pub struct zencodec::advanced::encode::RowDemand<'a>
+pub zencodec::advanced::encode::RowDemand::final_pass: bool
+pub zencodec::advanced::encode::RowDemand::first: u32
+pub zencodec::advanced::encode::RowDemand::label: u8
+pub zencodec::advanced::encode::RowDemand::pass: u32
+pub zencodec::advanced::encode::RowDemand::rows: zenpixels::buffer::PixelSliceMut<'a>
+impl<'a> zencodec::encode::RowDemand<'a>
+pub fn zencodec::encode::RowDemand<'a>::new(pass: u32, first: u32, rows: zenpixels::buffer::PixelSliceMut<'a>) -> Self
+pub const fn zencodec::encode::RowDemand<'a>::with_final_pass(self, final_pass: bool) -> Self
+pub const fn zencodec::encode::RowDemand<'a>::with_label(self, label: u8) -> Self
+pub struct zencodec::advanced::encode::RowFillError
+impl core::error::Error for zencodec::encode::RowFillError
+impl core::fmt::Display for zencodec::encode::RowFillError
+pub fn zencodec::encode::RowFillError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::encode::SourcePasses
+impl zencodec::encode::SourcePasses
+pub const zencodec::encode::SourcePasses::ONCE: Self
+pub const fn zencodec::encode::SourcePasses::fits(self, budget: u32) -> bool
+pub const fn zencodec::encode::SourcePasses::max(self) -> core::option::Option<u32>
+pub const fn zencodec::encode::SourcePasses::min(self) -> u32
+pub const fn zencodec::encode::SourcePasses::new(min: u32, max: core::option::Option<u32>) -> core::result::Result<Self, zencodec::encode::EncodePlanError>
+pub trait zencodec::advanced::encode::AnimationFrameEncoder: core::marker::Sized
+pub type zencodec::advanced::encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, frame_count: core::option::Option<u32>) -> core::result::Result<zencodec::encode::AnimationOutputTiming, Self::Error>
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::consume_output(&mut self, n: usize)
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::finish(self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::pending_output(&self) -> &[u8]
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::push_frame(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration_ms: u32, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::push_frame_exact(&mut self, _pixels: zenpixels::buffer::PixelSlice<'_>, _duration: zencodec::animation::FrameDuration, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::push_frame_timed(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::animation::FrameDuration, Self::Error>
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::reject(op: zencodec::UnsupportedOperation) -> Self::Error
+pub fn zencodec::advanced::encode::AnimationFrameEncoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
+impl zencodec::encode::AnimationFrameEncoder for ()
+pub type ()::Error = zencodec::UnsupportedOperation
+pub fn ()::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, frame_count: core::option::Option<u32>) -> core::result::Result<zencodec::encode::AnimationOutputTiming, Self::Error>
+pub fn ()::consume_output(&mut self, n: usize)
+pub fn ()::finish(self, _: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn ()::pending_output(&self) -> &[u8]
+pub fn ()::push_frame(&mut self, _: zenpixels::buffer::PixelSlice<'_>, _: u32, _: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
+pub fn ()::push_frame_exact(&mut self, _pixels: zenpixels::buffer::PixelSlice<'_>, _duration: zencodec::animation::FrameDuration, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
+pub fn ()::push_frame_timed(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::animation::FrameDuration, Self::Error>
+pub fn ()::reject(op: zencodec::UnsupportedOperation) -> Self::Error
+pub fn ()::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
+pub trait zencodec::advanced::encode::DynAnimationFrameEncoder: core::marker::Send
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, frame_count: core::option::Option<u32>) -> core::result::Result<zencodec::encode::AnimationOutputTiming, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::consume_output(&mut self, n: usize)
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::finish(self: alloc::boxed::Box<Self>, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::into_any(self: alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::pending_output(&self) -> &[u8]
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::push_frame(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration_ms: u32, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::push_frame_exact(&mut self, _pixels: zenpixels::buffer::PixelSlice<'_>, _duration: zencodec::animation::FrameDuration, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::push_frame_timed(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::animation::FrameDuration, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynAnimationFrameEncoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
+pub trait zencodec::advanced::encode::DynEncodeJob
+pub fn zencodec::advanced::encode::DynEncodeJob::encode(self: alloc::boxed::Box<Self>, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn zencodec::advanced::encode::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::advanced::encode::DynEncodeJob::into_animation_frame_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::into_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncoder>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::set_canvas_size(&mut self, width: u32, height: u32)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_limits(&mut self, limits: zencodec::ResourceLimits)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_loop_count(&mut self, count: core::option::Option<u32>)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_metadata(&mut self, meta: zencodec::Metadata)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_metadata_policy(&mut self, meta: zencodec::Metadata, policy: zencodec::MetadataPolicy)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_policy(&mut self, policy: zencodec::encode::EncodePolicy)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_pulse(&mut self, pulse: how_far::pulse::SharedPulse)
+pub fn zencodec::advanced::encode::DynEncodeJob::set_stop(&mut self, pulse: almost_enough::stop_token::StopToken)
+pub fn zencodec::advanced::encode::DynEncodeJob::try_set_metadata_policy(&mut self, _meta: zencodec::Metadata, _policy: zencodec::MetadataPolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub trait zencodec::advanced::encode::DynEncoder: core::marker::Send
+pub fn zencodec::advanced::encode::DynEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::consume_output(&mut self, n: usize)
+pub fn zencodec::advanced::encode::DynEncoder::encode(self: alloc::boxed::Box<Self>, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::encode_from(self: alloc::boxed::Box<Self>, source: &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::encode_srgba8(self: alloc::boxed::Box<Self>, data: &mut [u8], make_opaque: bool, width: u32, height: u32, stride_pixels: u32) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::finish(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::finish_output(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::pending_output(&self) -> &[u8]
+pub fn zencodec::advanced::encode::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::advanced::encode::DynEncoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::encode::PullProgress, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::push_rows(&mut self, rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::DynEncoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
+pub trait zencodec::advanced::encode::DynEncoderConfig: core::marker::Send + core::marker::Sync
+pub fn zencodec::advanced::encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn zencodec::advanced::encode::DynEncoderConfig::capabilities(&self) -> &'static zencodec::encode::EncodeCapabilities
+pub fn zencodec::advanced::encode::DynEncoderConfig::check_fidelity_target(&self, target: zencodec::encode::Fidelity) -> core::result::Result<(), zencodec::encode::FidelityTargetError>
+pub fn zencodec::advanced::encode::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + 'static)>
+pub fn zencodec::advanced::encode::DynEncoderConfig::estimate_encode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn zencodec::advanced::encode::DynEncoderConfig::format(&self) -> zencodec::ImageFormat
+pub fn zencodec::advanced::encode::DynEncoderConfig::select_fidelity_job(&self, preferences: &[zencodec::encode::Fidelity]) -> core::result::Result<(usize, alloc::boxed::Box<dyn zencodec::encode::DynEncodeJob>), zencodec::encode::FidelitySelectionError>
+pub fn zencodec::advanced::encode::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn zencodec::advanced::encode::DynEncoderConfig::try_fidelity_job(&self, target: zencodec::encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncodeJob>, zencodec::encode::FidelityTargetError>
+impl<C> zencodec::encode::DynEncoderConfig for C where C: zencodec::encode::EncoderConfig + 'static, <<C as zencodec::encode::EncoderConfig>::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + core::marker::Send, <<C as zencodec::encode::EncoderConfig>::Job as zencodec::encode::EncodeJob>::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
+pub fn C::as_any(&self) -> &dyn core::any::Any
+pub fn C::capabilities(&self) -> &'static zencodec::encode::EncodeCapabilities
+pub fn C::check_fidelity_target(&self, target: zencodec::encode::Fidelity) -> core::result::Result<(), zencodec::encode::FidelityTargetError>
+pub fn C::dyn_job(&self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + 'static)>
+pub fn C::estimate_encode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn C::format(&self) -> zencodec::ImageFormat
+pub fn C::select_fidelity_job(&self, preferences: &[zencodec::encode::Fidelity]) -> core::result::Result<(usize, alloc::boxed::Box<dyn zencodec::encode::DynEncodeJob>), zencodec::encode::FidelitySelectionError>
+pub fn C::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn C::try_fidelity_job(&self, target: zencodec::encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncodeJob>, zencodec::encode::FidelityTargetError>
+pub trait zencodec::advanced::encode::EncodeJob: core::marker::Sized
+pub type zencodec::advanced::encode::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
+pub type zencodec::advanced::encode::EncodeJob::Enc: core::marker::Sized + 'static
+pub type zencodec::advanced::encode::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::encode::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
+pub fn zencodec::advanced::encode::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>, zencodec::encode::BoxedError> where Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder + core::marker::Send
+pub fn zencodec::advanced::encode::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncoder>, zencodec::encode::BoxedError> where Self::Enc: zencodec::encode::Encoder + core::marker::Send
+pub fn zencodec::advanced::encode::EncodeJob::encode(self, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error> where Self::Enc: zencodec::encode::Encoder<Error = Self::Error>
+pub fn zencodec::advanced::encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
+pub fn zencodec::advanced::encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn zencodec::advanced::encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::advanced::encode::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: zencodec::encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
+pub fn zencodec::advanced::encode::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::EncodeJob::try_set_metadata_policy(&mut self, _meta: zencodec::Metadata, _policy: zencodec::MetadataPolicy) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::EncodeJob::try_set_orientation_mode(&mut self, _mode: zencodec::encode::EncodeOrientation) -> core::result::Result<(), zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::encode::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::encode::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
+pub fn zencodec::advanced::encode::EncodeJob::try_with_metadata_policy(self, meta: zencodec::Metadata, policy: zencodec::MetadataPolicy) -> core::result::Result<Self, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::encode::EncodeJob::try_with_orientation_mode(self, mode: zencodec::encode::EncodeOrientation) -> core::result::Result<Self, zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::encode::EncodeJob::try_with_policy(self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
+pub fn zencodec::advanced::encode::EncodeJob::try_with_resolution(self, resolution: zencodec::Resolution) -> core::result::Result<Self, zencodec::ResolutionError>
+pub fn zencodec::advanced::encode::EncodeJob::with_canvas_size(self, _width: u32, _height: u32) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_gain_map_encoded(self, _gain_map: zencodec::gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: zencodec::encode::Encoder<Error = Self::Error>
+pub fn zencodec::advanced::encode::EncodeJob::with_gain_map_pixels(self, _gain_map: zencodec::gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: zencodec::encode::Encoder<Error = Self::Error>
+pub fn zencodec::advanced::encode::EncodeJob::with_limits(self, limits: zencodec::ResourceLimits) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_loop_count(self, _count: core::option::Option<u32>) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_metadata(self, meta: zencodec::Metadata) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_metadata_policy(self, meta: zencodec::Metadata, policy: zencodec::MetadataPolicy) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_policy(self, _policy: zencodec::encode::EncodePolicy) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_pulse(self, pulse: how_far::pulse::SharedPulse) -> Self
+pub fn zencodec::advanced::encode::EncodeJob::with_stop(self, stop: almost_enough::stop_token::StopToken) -> Self
+pub trait zencodec::advanced::encode::EncodeRows
+pub fn zencodec::advanced::encode::EncodeRows::fill(&mut self, demand: zencodec::encode::RowDemand<'_>) -> core::result::Result<(), zencodec::encode::RowFillError>
+pub trait zencodec::advanced::encode::Encoder: core::marker::Sized
+pub type zencodec::advanced::encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::encode::Encoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::consume_output(&mut self, n: usize)
+pub fn zencodec::advanced::encode::Encoder::encode(self, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::encode_from(self, _source: &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::encode_srgba8(self, data: &mut [u8], make_opaque: bool, width: u32, height: u32, stride_pixels: u32) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::finish(self) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::finish_output(self) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::pending_output(&self) -> &[u8]
+pub fn zencodec::advanced::encode::Encoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::advanced::encode::Encoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::encode::PullProgress, Self::Error>
+pub fn zencodec::advanced::encode::Encoder::push_rows(&mut self, _rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
+pub fn zencodec::advanced::encode::Encoder::reject(op: zencodec::UnsupportedOperation) -> Self::Error
+pub fn zencodec::advanced::encode::Encoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
+pub trait zencodec::advanced::encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync
+pub type zencodec::advanced::encode::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type zencodec::advanced::encode::EncoderConfig::Job: zencodec::encode::EncodeJob<Error = Self::Error>
+pub fn zencodec::advanced::encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
+pub fn zencodec::advanced::encode::EncoderConfig::capabilities() -> &'static zencodec::encode::EncodeCapabilities
+pub fn zencodec::advanced::encode::EncoderConfig::check_fidelity_target(&self, target: zencodec::encode::Fidelity) -> core::result::Result<(), zencodec::encode::FidelityTargetError>
+pub fn zencodec::advanced::encode::EncoderConfig::encode(self, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder<Error = Self::Error>
+pub fn zencodec::advanced::encode::EncoderConfig::estimate_encode_resources(&self, image: &zencodec::estimate::ImageCharacteristics, compute: &zencodec::estimate::ComputeEnvironment) -> zencodec::estimate::ResourceEstimate
+pub fn zencodec::advanced::encode::EncoderConfig::format() -> zencodec::ImageFormat
+pub fn zencodec::advanced::encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
+pub fn zencodec::advanced::encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
+pub fn zencodec::advanced::encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
+pub fn zencodec::advanced::encode::EncoderConfig::job(self) -> Self::Job
+pub fn zencodec::advanced::encode::EncoderConfig::prefers_streaming(&self) -> core::option::Option<bool>
+pub fn zencodec::advanced::encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<zencodec::encode::Fidelity>
+pub fn zencodec::advanced::encode::EncoderConfig::select_fidelity(&self, preferences: &[zencodec::encode::Fidelity]) -> core::result::Result<(usize, Self), zencodec::encode::FidelitySelectionError>
+pub fn zencodec::advanced::encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn zencodec::advanced::encode::EncoderConfig::try_with_fidelity(self, target: zencodec::encode::Fidelity) -> core::result::Result<Self, zencodec::encode::FidelityTargetError>
+pub fn zencodec::advanced::encode::EncoderConfig::with_alpha_quality(self, _quality: f32) -> Self
+pub fn zencodec::advanced::encode::EncoderConfig::with_fidelity(self, fidelity: zencodec::encode::Fidelity) -> Self
+pub fn zencodec::advanced::encode::EncoderConfig::with_generic_effort(self, _effort: i32) -> Self
+pub fn zencodec::advanced::encode::EncoderConfig::with_generic_quality(self, _quality: f32) -> Self
+pub fn zencodec::advanced::encode::EncoderConfig::with_lossless(self, _lossless: bool) -> Self
+pub fn zencodec::advanced::encode::EncoderConfig::with_prefer_streaming(self, _prefer: bool) -> Self
+pub fn zencodec::advanced::encode::best_encode_format(source: zenpixels::descriptor::PixelDescriptor, supported: &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub type zencodec::advanced::encode::BoxedError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
+pub mod zencodec::advanced::frame
+pub use zencodec::advanced::frame::AnyPlane
+pub use zencodec::advanced::frame::PlaneError
+pub use zencodec::advanced::frame::PlaneRef
+pub use zencodec::advanced::frame::PlaneRole
+#[non_exhaustive] pub enum zencodec::advanced::frame::MapError
+pub zencodec::advanced::frame::MapError::AllocationFailed
+pub zencodec::advanced::frame::MapError::Backend(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>)
+pub zencodec::advanced::frame::MapError::Component
+pub zencodec::advanced::frame::MapError::Component::actual_dimensions: (usize, usize)
+pub zencodec::advanced::frame::MapError::Component::actual_encoding: core::option::Option<zenpixels::plane::PlaneEncoding>
+pub zencodec::advanced::frame::MapError::Component::actual_storage: zenpixels::descriptor::ChannelType
+pub zencodec::advanced::frame::MapError::Component::expected_dimensions: (usize, usize)
+pub zencodec::advanced::frame::MapError::Component::expected_encoding: zenpixels::plane::PlaneEncoding
+pub zencodec::advanced::frame::MapError::Component::index: usize
+pub zencodec::advanced::frame::MapError::InvalidGeometry
+pub zencodec::advanced::frame::MapError::Layout(zenpixels::plane::LayoutError)
+pub zencodec::advanced::frame::MapError::Unavailable
+impl core::error::Error for zencodec::frame::MapError
+pub fn zencodec::frame::MapError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for zencodec::frame::MapError
+pub fn zencodec::frame::MapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for zencodec::frame::MapError
+pub fn zencodec::frame::MapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::frame::ColorClaim
+pub zencodec::advanced::frame::ColorClaim::bitstream: core::option::Option<zenpixels::cicp::Cicp>
+pub zencodec::advanced::frame::ColorClaim::container: core::option::Option<zenpixels::cicp::Cicp>
+pub zencodec::advanced::frame::ColorClaim::resolved: core::option::Option<zenpixels::cicp::Cicp>
+impl zencodec::frame::ColorClaim
+pub const fn zencodec::frame::ColorClaim::new(bitstream: core::option::Option<zenpixels::cicp::Cicp>, container: core::option::Option<zenpixels::cicp::Cicp>, resolved: core::option::Option<zenpixels::cicp::Cicp>) -> Self
+pub struct zencodec::advanced::frame::Crop
+pub zencodec::advanced::frame::Crop::height: u32
+pub zencodec::advanced::frame::Crop::width: u32
+pub zencodec::advanced::frame::Crop::x: u32
+pub zencodec::advanced::frame::Crop::y: u32
+pub struct zencodec::advanced::frame::Frame
+impl zencodec::frame::Frame
+pub fn zencodec::frame::Frame::interpretation(&self) -> &alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
+pub fn zencodec::frame::Frame::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame::MappedPlanes + '_)>, zencodec::frame::MapError>
+pub fn zencodec::frame::Frame::new(picture: alloc::rcs::arc::Arc<dyn zencodec::frame::Picture>, interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
+pub fn zencodec::frame::Frame::picture(&self) -> &alloc::rcs::arc::Arc<dyn zencodec::frame::Picture>
+pub fn zencodec::frame::Frame::presentation(&self) -> zencodec::frame::Presentation
+pub fn zencodec::frame::Frame::represent(&self, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
+pub fn zencodec::frame::Frame::shares_picture(&self, other: &zencodec::frame::Frame) -> bool
+pub fn zencodec::frame::Frame::timing(&self) -> zencodec::frame::FrameTiming
+pub fn zencodec::frame::Frame::with_planar<T>(&self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, callback: impl core::ops::function::FnOnce(zenpixels::plane::PlanarSlice<'_>) -> T) -> core::result::Result<T, zencodec::frame::MapError>
+impl core::fmt::Debug for zencodec::frame::Frame
+pub fn zencodec::frame::Frame::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::frame::FrameGeometry
+pub zencodec::advanced::frame::FrameGeometry::coded_height: u32
+pub zencodec::advanced::frame::FrameGeometry::coded_width: u32
+pub zencodec::advanced::frame::FrameGeometry::crop: zencodec::frame::Crop
+pub zencodec::advanced::frame::FrameGeometry::render: core::option::Option<(u32, u32)>
+impl zencodec::frame::FrameGeometry
+pub const fn zencodec::frame::FrameGeometry::full(width: u32, height: u32) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::frame::FrameInterpretation
+pub zencodec::advanced::frame::FrameInterpretation::alpha_mode: core::option::Option<zenpixels::descriptor::AlphaMode>
+pub zencodec::advanced::frame::FrameInterpretation::color: zencodec::frame::ColorClaim
+pub zencodec::advanced::frame::FrameInterpretation::color_context: core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
+pub zencodec::advanced::frame::FrameInterpretation::config_epoch: u32
+pub zencodec::advanced::frame::FrameInterpretation::geometry: zencodec::frame::FrameGeometry
+pub zencodec::advanced::frame::FrameInterpretation::layout: zenpixels::plane::PlanarLayout
+impl zencodec::frame::FrameInterpretation
+pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, layout: zenpixels::plane::PlanarLayout) -> Self
+pub fn zencodec::frame::FrameInterpretation::uniform_code_encoding(&self) -> core::option::Option<zenpixels::sample::SampleEncoding>
+pub fn zencodec::frame::FrameInterpretation::with_alpha_mode(self, alpha: zenpixels::descriptor::AlphaMode) -> Self
+pub fn zencodec::frame::FrameInterpretation::with_color(self, color: zencodec::frame::ColorClaim) -> Self
+pub fn zencodec::frame::FrameInterpretation::with_color_context(self, context: alloc::rcs::arc::Arc<zenpixels::color::ColorContext>) -> Self
+pub fn zencodec::frame::FrameInterpretation::with_config_epoch(self, epoch: u32) -> Self
+impl core::fmt::Debug for zencodec::frame::FrameInterpretation
+pub fn zencodec::frame::FrameInterpretation::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::advanced::frame::FrameTiming
+pub zencodec::advanced::frame::FrameTiming::duration_ticks: core::option::Option<u64>
+pub zencodec::advanced::frame::FrameTiming::input_offset: core::option::Option<u64>
+pub zencodec::advanced::frame::FrameTiming::packet_ordinal: core::option::Option<u64>
+pub zencodec::advanced::frame::FrameTiming::pts: core::option::Option<zencodec::time::Timestamp>
+impl zencodec::frame::FrameTiming
+pub const fn zencodec::frame::FrameTiming::at(pts: zencodec::time::Timestamp) -> Self
+pub const fn zencodec::frame::FrameTiming::with_duration_ticks(self, ticks: u64) -> Self
+pub const fn zencodec::frame::FrameTiming::with_packet(self, ordinal: core::option::Option<u64>, offset: core::option::Option<u64>) -> Self
+#[non_exhaustive] pub struct zencodec::advanced::frame::Presentation
+pub zencodec::advanced::frame::Presentation::keyframe: bool
+pub zencodec::advanced::frame::Presentation::show_existing: bool
+impl zencodec::frame::Presentation
+pub const zencodec::frame::Presentation::KEYFRAME: Self
+pub const zencodec::frame::Presentation::SHOW_EXISTING: Self
+pub trait zencodec::advanced::frame::MappedPlanes
+pub fn zencodec::advanced::frame::MappedPlanes::encoding(&self, index: usize) -> core::option::Option<zenpixels::plane::PlaneEncoding>
+pub fn zencodec::advanced::frame::MappedPlanes::plane(&self, index: usize) -> core::option::Option<zenpixels::plane::AnyPlane<'_>>
+pub fn zencodec::advanced::frame::MappedPlanes::plane_count(&self) -> usize
+pub trait zencodec::advanced::frame::Picture: core::marker::Send + core::marker::Sync
+pub fn zencodec::advanced::frame::Picture::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn zencodec::frame::MappedPlanes + '_)>, zencodec::frame::MapError>
+pub mod zencodec::advanced::source
+#[non_exhaustive] pub enum zencodec::advanced::source::AccessPattern
+pub zencodec::advanced::source::AccessPattern::BoundedBacktrack
+pub zencodec::advanced::source::AccessPattern::BoundedBacktrack::window_bytes: u64
+pub zencodec::advanced::source::AccessPattern::RandomAccess
+pub zencodec::advanced::source::AccessPattern::Sequential
+impl zencodec::source::AccessPattern
+pub const fn zencodec::source::AccessPattern::most_demanding(self, other: Self) -> Self
+#[non_exhaustive] pub enum zencodec::advanced::source::SourceError
+pub zencodec::advanced::source::SourceError::BeyondLimit
+pub zencodec::advanced::source::SourceError::BeyondLimit::limit: u64
+pub zencodec::advanced::source::SourceError::BeyondLimit::needed: u64
+pub zencodec::advanced::source::SourceError::BeyondWindow
+pub zencodec::advanced::source::SourceError::BeyondWindow::offset: u64
+pub zencodec::advanced::source::SourceError::BeyondWindow::oldest_retained: u64
+pub zencodec::advanced::source::SourceError::Io
+pub zencodec::advanced::source::SourceError::Io::message: alloc::string::String
+pub zencodec::advanced::source::SourceError::UnexpectedEof
+pub zencodec::advanced::source::SourceError::UnexpectedEof::len: u64
+pub zencodec::advanced::source::SourceError::UnexpectedEof::offset: u64
+pub zencodec::advanced::source::SourceError::UnexpectedEof::total: core::option::Option<u64>
+impl core::error::Error for zencodec::source::SourceError
+impl core::fmt::Display for zencodec::source::SourceError
+pub fn zencodec::source::SourceError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::source::ReadAtShim<S>(pub S)
+impl<S: zencodec::source::ReadAt> zencodec::source::DynReadAt for zencodec::source::ReadAtShim<S>
+pub fn zencodec::source::ReadAtShim<S>::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::source::ReadAtShim<S>::is_empty(&mut self) -> core::result::Result<bool, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::len(&mut self) -> core::result::Result<u64, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::source::ReadAtShim<S>::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub struct zencodec::advanced::source::SliceReadAt<'a>
+impl<'a> zencodec::source::SliceReadAt<'a>
+pub const fn zencodec::source::SliceReadAt<'a>::new(bytes: &'a [u8]) -> Self
+impl zencodec::source::ReadAt for zencodec::source::SliceReadAt<'_>
+pub type zencodec::source::SliceReadAt<'_>::Error = zencodec::source::SourceError
+pub fn zencodec::source::SliceReadAt<'_>::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::source::SliceReadAt<'_>::is_empty(&mut self) -> core::result::Result<bool, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::len(&mut self) -> core::result::Result<u64, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::source::SliceReadAt<'_>::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), Self::Error>
+pub trait zencodec::advanced::source::DynReadAt
+pub fn zencodec::advanced::source::DynReadAt::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::advanced::source::DynReadAt::is_empty(&mut self) -> core::result::Result<bool, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::source::DynReadAt::len(&mut self) -> core::result::Result<u64, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::source::DynReadAt::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::advanced::source::DynReadAt::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, zencodec::encode::BoxedError>
+pub fn zencodec::advanced::source::DynReadAt::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::advanced::source::DynReadAt::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), zencodec::encode::BoxedError>
+impl<S: zencodec::source::DynReadAt + ?core::marker::Sized> zencodec::source::DynReadAt for &mut S
+pub fn &mut S::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn &mut S::is_empty(&mut self) -> core::result::Result<bool, zencodec::encode::BoxedError>
+pub fn &mut S::len(&mut self) -> core::result::Result<u64, zencodec::encode::BoxedError>
+pub fn &mut S::len_hint(&self) -> core::option::Option<u64>
+pub fn &mut S::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, zencodec::encode::BoxedError>
+pub fn &mut S::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn &mut S::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), zencodec::encode::BoxedError>
+impl<S: zencodec::source::DynReadAt + ?core::marker::Sized> zencodec::source::DynReadAt for alloc::boxed::Box<S>
+pub fn alloc::boxed::Box<S>::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn alloc::boxed::Box<S>::is_empty(&mut self) -> core::result::Result<bool, zencodec::encode::BoxedError>
+pub fn alloc::boxed::Box<S>::len(&mut self) -> core::result::Result<u64, zencodec::encode::BoxedError>
+pub fn alloc::boxed::Box<S>::len_hint(&self) -> core::option::Option<u64>
+pub fn alloc::boxed::Box<S>::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, zencodec::encode::BoxedError>
+pub fn alloc::boxed::Box<S>::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn alloc::boxed::Box<S>::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), zencodec::encode::BoxedError>
+impl<S: zencodec::source::ReadAt> zencodec::source::DynReadAt for zencodec::source::ReadAtShim<S>
+pub fn zencodec::source::ReadAtShim<S>::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::source::ReadAtShim<S>::is_empty(&mut self) -> core::result::Result<bool, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::len(&mut self) -> core::result::Result<u64, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::source::ReadAtShim<S>::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub fn zencodec::source::ReadAtShim<S>::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), zencodec::encode::BoxedError>
+pub trait zencodec::advanced::source::ReadAt
+pub type zencodec::advanced::source::ReadAt::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::advanced::source::ReadAt::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::advanced::source::ReadAt::is_empty(&mut self) -> core::result::Result<bool, Self::Error>
+pub fn zencodec::advanced::source::ReadAt::len(&mut self) -> core::result::Result<u64, Self::Error>
+pub fn zencodec::advanced::source::ReadAt::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::advanced::source::ReadAt::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, Self::Error>
+pub fn zencodec::advanced::source::ReadAt::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn zencodec::advanced::source::ReadAt::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), Self::Error>
+impl zencodec::source::ReadAt for zencodec::source::SliceReadAt<'_>
+pub type zencodec::source::SliceReadAt<'_>::Error = zencodec::source::SourceError
+pub fn zencodec::source::SliceReadAt<'_>::as_slice(&self) -> core::option::Option<&[u8]>
+pub fn zencodec::source::SliceReadAt<'_>::is_empty(&mut self) -> core::result::Result<bool, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::len(&mut self) -> core::result::Result<u64, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::len_hint(&self) -> core::option::Option<u64>
+pub fn zencodec::source::SliceReadAt<'_>::read_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<usize, Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn zencodec::source::SliceReadAt<'_>::read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> core::result::Result<(), Self::Error>
+pub mod zencodec::advanced::storage
+#[non_exhaustive] pub enum zencodec::advanced::storage::StorageError
+pub zencodec::advanced::storage::StorageError::Allocation(alloc::collections::TryReserveError)
+pub zencodec::advanced::storage::StorageError::Bytes
+pub zencodec::advanced::storage::StorageError::Bytes::limit: usize
+pub zencodec::advanced::storage::StorageError::Bytes::requested: usize
+pub zencodec::advanced::storage::StorageError::Capacity
+pub zencodec::advanced::storage::StorageError::Capacity::actual: usize
+pub zencodec::advanced::storage::StorageError::Capacity::admitted: usize
+pub zencodec::advanced::storage::StorageError::Objects
+pub zencodec::advanced::storage::StorageError::Objects::limit: usize
+pub zencodec::advanced::storage::StorageError::Range
+pub zencodec::advanced::storage::StorageError::SizeOverflow
+impl core::error::Error for zencodec::storage::StorageError
+pub fn zencodec::storage::StorageError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Display for zencodec::storage::StorageError
+pub fn zencodec::storage::StorageError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::storage::OwnedStorage<T>
+impl<T> zencodec::storage::OwnedStorage<T>
+pub fn zencodec::storage::OwnedStorage<T>::as_mut_slice(&mut self) -> &mut [T]
+pub fn zencodec::storage::OwnedStorage<T>::as_slice(&self) -> &[T]
+pub fn zencodec::storage::OwnedStorage<T>::freeze(self) -> zencodec::storage::SharedStorage<T>
+pub fn zencodec::storage::OwnedStorage<T>::is_empty(&self) -> bool
+pub fn zencodec::storage::OwnedStorage<T>::len(&self) -> usize
+impl<T> core::fmt::Debug for zencodec::storage::OwnedStorage<T>
+pub fn zencodec::storage::OwnedStorage<T>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::storage::PreparedStorage<T>
+impl<T: core::marker::Copy> zencodec::storage::PreparedStorage<T>
+pub fn zencodec::storage::PreparedStorage<T>::allocate(self) -> core::result::Result<zencodec::storage::OwnedStorage<T>, zencodec::storage::StorageError>
+impl<T> zencodec::storage::PreparedStorage<T>
+pub fn zencodec::storage::PreparedStorage<T>::reserved_bytes(&self) -> usize
+impl<T> core::fmt::Debug for zencodec::storage::PreparedStorage<T>
+pub fn zencodec::storage::PreparedStorage<T>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::storage::SharedStorage<T>
+impl<T> zencodec::storage::SharedStorage<T>
+pub fn zencodec::storage::SharedStorage<T>::as_slice(&self) -> &[T]
+pub fn zencodec::storage::SharedStorage<T>::charged_bytes(&self) -> usize
+pub fn zencodec::storage::SharedStorage<T>::is_empty(&self) -> bool
+pub fn zencodec::storage::SharedStorage<T>::len(&self) -> usize
+pub fn zencodec::storage::SharedStorage<T>::slice(&self, range: core::ops::range::Range<usize>) -> core::result::Result<Self, zencodec::storage::StorageError>
+impl<T: zenpixels::plane::PlaneSample> zenpixels::plane::SampleStorage for zencodec::storage::SharedStorage<T>
+pub type zencodec::storage::SharedStorage<T>::Sample = T
+pub fn zencodec::storage::SharedStorage<T>::samples(&self) -> &[T]
+impl<T> core::clone::Clone for zencodec::storage::SharedStorage<T>
+pub fn zencodec::storage::SharedStorage<T>::clone(&self) -> Self
+impl<T> core::fmt::Debug for zencodec::storage::SharedStorage<T>
+pub fn zencodec::storage::SharedStorage<T>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec::advanced::storage::StorageBudget(_)
+impl zencodec::storage::StorageBudget
+pub fn zencodec::storage::StorageBudget::bytes(&self, len: usize) -> core::result::Result<zencodec::storage::OwnedStorage<u8>, zencodec::storage::StorageError>
+pub fn zencodec::storage::StorageBudget::filled<T: core::marker::Copy>(&self, len: usize, value: T) -> core::result::Result<zencodec::storage::OwnedStorage<T>, zencodec::storage::StorageError>
+pub fn zencodec::storage::StorageBudget::floats(&self, len: usize) -> core::result::Result<zencodec::storage::OwnedStorage<f32>, zencodec::storage::StorageError>
+pub fn zencodec::storage::StorageBudget::max_bytes(&self) -> usize
+pub fn zencodec::storage::StorageBudget::max_objects(&self) -> usize
+pub fn zencodec::storage::StorageBudget::new(max_bytes: usize, max_objects: usize) -> Self
+pub fn zencodec::storage::StorageBudget::prepare_filled<T: core::marker::Copy>(&self, len: usize, value: T) -> core::result::Result<zencodec::storage::PreparedStorage<T>, zencodec::storage::StorageError>
+pub fn zencodec::storage::StorageBudget::reserved_bytes(&self) -> usize
+pub fn zencodec::storage::StorageBudget::reserved_objects(&self) -> usize
+pub fn zencodec::storage::StorageBudget::words(&self, len: usize) -> core::result::Result<zencodec::storage::OwnedStorage<u16>, zencodec::storage::StorageError>
+impl core::fmt::Debug for zencodec::storage::StorageBudget
+pub fn zencodec::storage::StorageBudget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod zencodec::animation
 #[non_exhaustive] pub enum zencodec::animation::TimingError
 pub zencodec::animation::TimingError::Inexact
