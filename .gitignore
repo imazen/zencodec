@@ -68,3 +68,6 @@ apidoc/target/
 # Built documentation artifact
 docs/_site/
 __pycache__/
+
+# Build-only documentation catalogs and preserved local cache generations.
+/docs/.cache/
