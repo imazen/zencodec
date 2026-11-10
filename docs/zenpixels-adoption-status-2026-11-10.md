@@ -236,3 +236,106 @@ IQA refinement, restoration, SIMD experiments and optional hash adoption need
 not delay the common codec API. They must keep explicit supported scopes. This
 review does not authorize dropping the requested frame/video contracts to make
 the release appear complete.
+
+## Core landings before the codec rollout
+
+The next core integration should be a small ordered series. Existing main
+already supplies sans-I/O, optional Pulse, retained encoder planning, exact-depth
+assertions and operation-policy binding. Do not start another implementation of
+those mechanisms to adopt pixels.
+
+### 1. Current pixel cohort plus the existing color review
+
+Update the core integration root and standalone workspaces to one selected
+current pixel source, including the now-merged PR153 allocation changes
+(pixel main76005fc9 at verification). Combine the useful PR199/HLG/PR201 changes
+once: gray-class ICC, native HLG CICP without targetless ICC synthesis, qualified
+ICC substitution and source-depth selection. Migrate the gray roundtrip test
+from extraction to permission without weakening its source-ICC retention.
+
+This is existing implementation needing integration, not a new public model.
+Keep named frozen numerical failures as separate controls. Passing core and
+render tests must precede moving the main bookmark.
+
+### 2. Complete frame interpretation and mapping together
+
+This is the main new signature/data review, continuing issue198:
+
+- Retain the full current ColorContext and explicit alpha association with each
+  immutable frame interpretation; source carrier claims stay provenance.
+- Require native mapped owners to state encoding. A missing declaration must
+  not silently inherit the layout as though independently confirmed.
+- Use shared layout/type/geometry/encoding checks for direct Frame consumers
+  and ImageOutput consumers, preserving original typed errors and traces.
+- Provide scoped checked PlanarSlice lending under the native mapping guard.
+  Never return a view borrowing a locally assembled handle list.
+- Preserve coded crop, odd chroma phase, render geometry, timing and epoch.
+  Native interchange does not silently crop oversized layers into a canvas;
+  explicit rendering supplies the display canvas.
+- Make Samples/Row extensible and keep pixel types owned by zenpixels. Keep
+  arbitrary auxiliary/CMYK/spot/depth meaning separate from RGB/YUV layout.
+
+Prove the shape first with shared owned planes plus representative native video
+and collection adapters, both typed and erased. Those small validation adapters
+are necessary before broad delegation; all codec implementations need not be
+completed before this core contract lands.
+
+### 3. Freeze evidence and late-decision behavior on existing APIs
+
+Reuse EncodeDeclaration.exact_depth, retained plans and OperationPolicy. Make
+these obligations executable in shared controls:
+
+- Origin bit depth and modeled capacity never prove lossless processing.
+  Current exactness ends after resize/filter/CMS/composition unless verified or
+  preserved by the specific operation. Canonical U16 differs from native shifted
+  10/12-bit codes; no relabeling or false exactness certificate.
+- Encoder planning binds actual current color and carrier obligations before
+  native begin. Descriptive metadata cannot overwrite it.
+- Late color/metadata decisions use the same callback at real suspension points
+  before affected effects. Requirements filter choices; ordinary callers get
+  supported best-effort routes when they did not require strict preservation.
+- Unknown workspace stays unknown. Driver/node estimates cannot become an
+  operation bound through naming or a preset. Keep input acquisition/replay
+  separate from output timing and backpressure.
+- Required metadata must either be retained with evidence or produce a named
+  typed refusal. Optional HDR capability flags from PR158, if adopted, describe
+  complete channels and remain advisory; callers must not coordinate queries
+  before every operation.
+
+Much of this exists already. Land concrete gaps and shared tests, not a new
+precision history engine, policy hierarchy or mandatory capability handshake.
+
+### 4. Land the media presentation declaration delta
+
+Rebase PR188's TrackTimeline/EditList/exact-presentation admission onto the
+current frame/core contract. Preserve Unknown/Unedited/Edited, ordered segments,
+clock/rate/extents and refusal of conflicting legacy/full declarations. Deprecate
+scalar-only projections for exact presentation. Mux defaults must refuse exact
+preservation they cannot execute before publishing output.
+
+The core declaration/default-refusal contract should precede the muxer/decoder
+migration. Positive playback correctness remains native qualification; retained
+timestamps or edit records alone must not be advertised as that proof. Keep
+unpublished media outside the first package batch if its execution gates remain
+open, without pretending the video contract is solved.
+
+### 5. Ship the migration target and its reusable acceptance suite
+
+Land testkit controls with the contracts: padded/minimal-final-row/mixed-depth
+planes, alpha, odd crops, current versus source color, owner lifetime/cleanup,
+late metadata, strict refusal and ordinary successful fallback, typed/erased
+error parity, and cancellation through optional Pulse. A codec migration should
+implement one documented signature set and run this same suite, adding its own
+independent reader/native precision cases.
+
+Update spec, compiler API catalog, code-first guide, conveniences and deprecation
+map in the same series. A minimal consumer must not assemble a matrix of
+capability queries. PR200's useful docs/probe can be folded here; PR196's optional
+IQA bridge can follow the checked view. PR189 publication preparation and PR157
+C2PA are not reasons to enlarge this contract series. Publication still requires
+its separate approval and package/platform gates.
+
+Exit criterion: one main revision exposes the reviewed interchange/policy/time
+contract, passes the shared gates and representative native witnesses, and gives
+every codec lane the same imports, signatures and expected outcomes. Broader
+codec/backend coverage, tuning, restoration and metric loops follow that target.
