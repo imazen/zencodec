@@ -72,14 +72,11 @@ The compiler catalog and all-eight-crate strict Rustdoc reference also generate.
 
 ### Remaining integration gate before landing the complete stack
 
-The legacy full AV1 harness still selects pixel fde59b96. A fresh locked build
-against this core fails with six core diagnostics: absent PlanarSlice and new
-layout/stride checking APIs. Its frozen spatial Mox/LCMS comparisons likewise
-remain historical cohorts, not current-core qualification. Do not change an old
-numeric receipt's source identity or relax the preserved Mox CMYK bound. Migrate
-these standalone consumer graphs explicitly before claiming whole-repository CI
-or enabling a broad codec rollout. The new minimal graph demonstrates the frame
-contract against real native storage while preserving that limitation.
+The full native roots now select the same current pixel source as core. Their
+selected no-run builds pass; runtime and strict lint qualification remain
+separate gates. The preserved historical numerical receipts retain their
+original source identities and bounds. See the dated native-cohort update below
+for exact target coverage and remaining CI failures.
 
 No crate has been published and main is unchanged by this review series.
 
@@ -113,10 +110,11 @@ gap. That gap must not be presented as solved by a plane-count example.
 
 ## Review readiness correction (2026-11-10)
 
-The complete release stack is **not ready for final review or merge**. Its local
-shared/native-mapping gates pass, but four full Documentation jobs fail on PR208:
-guide examples, JPEG, AV1 and TIFF/JXL. Their older pixel cohorts lack current
-plane APIs. Issue207 is unfinished required integration, not a waived release
+The complete release stack is **not ready for final review or merge**. At the start of this pass, its local
+shared/native-mapping gates passed, but four full Documentation jobs failed on
+PR208: guide examples, JPEG, AV1 and TIFF/JXL. Those older pixel cohorts lacked
+current plane APIs. The update below records the subsequent compile repair and
+remaining runtime/lint failures. Issue207 is unfinished required integration, not a waived release
 gate. Previous "ready for API review" language did not make this clear enough.
 
 The twelve open PRs are not twelve independent release review requests:
@@ -133,3 +131,45 @@ The twelve open PRs are not twelve independent release review requests:
 All currently failing proposals are held in draft. Main and publication remain
 unchanged. The next release-critical work is the actual cohort migration and full
 native tests, rather than more API surface or presentation changes.
+
+
+## Native cohort update (2026-11-10)
+
+PR208 commit `c83798f6` synchronizes fifteen standalone manifests with the root
+pixel/converter and garb sources, updates their tracked seed locks, and migrates
+native harness ownership/exhaustiveness calls. Codec and linear-sRGB revisions
+stay fixed. The converter requires MoxCMS0.9.2; the affected JPEG/spatial locks
+therefore move from0.9.1 to0.9.2. Existing pixel assertions and quality bounds
+are unchanged. `just validation-cohort-check` now detects source-pin drift.
+
+The isolated no-run gate at `49a12cc7` passes all five selected native roots:
+guide I/O, JPEG, AV1, TIFF/JXL and LCMS. Its I/O selection covered seven of the
+eight CI integration targets plus both bins; `policy_execution` was omitted.
+The committed runner now includes all eight, and its source test compares the
+selection with CI. That corrected selection has not been rerun locally.
+The other roots compiled their libraries and tests; this is not an all-target
+strict lint or runtime result. The wrapper reports rc0,74s,peak RSS0.72GiB.
+The small [compile receipt](../benchmarks/native_cohort_compile_2026-11-10.json)
+records the exact source and command coverage.
+
+CI on `c83798f6` confirms core platform tests, MSRV, WASM, lint, fuzz,
+current native frame interchange and the guide/browser job pass. Its concrete
+remaining failures are:
+
+- Guide examples execute successfully, then strict lint fails on deprecated
+  scalar edit-delay calls in pinned zenwebm/zenmp4 dependencies. Migrating those
+  callers must preserve the edited-presentation limitations; a scalar is not a
+  complete timeline.
+- JPEG reports67 passing controls and one failure in
+  `public_guide_executes_all_transport_and_policy_recipes`: its end-to-end checked
+  transcode returns a Plan-stage error. This remains a runtime blocker.
+- AV1 strict lint fails on the edit-list example's deprecated scalar accessor
+  and two redundant Arc conversions. Its no-run success did not qualify examples
+  or strict lint.
+
+The TIFF/JXL job was still running at this update. No full-runtime pass is
+claimed for it or the separate LCMS root. Historical Mox CMYK precision failures
+remain unwaived. The five-layer stack remains draft; reconciling the seven other
+open proposals and completing native runtime qualification are unfinished.
+The next bounded gate is one replay of the exact failing commands with existing
+assertions and frozen codec kernels, stopping on substantive correctness failures.
