@@ -19,6 +19,7 @@ ROOTS = {
     'av1': 'perf/av1-policy-validation',
     'spatial': 'perf/spatial-validation',
     'lcms': 'perf/spatial-lcms-validation',
+    'policy': 'perf/policy-check',
 }
 IO_TESTS = ['site_examples','encoder_retention','policy_resolution','policy_engine','policy_execution','policy_native','policy_disclosure','policy_stream']
 IO_BINS = ['policy_media','transport_contracts']
@@ -29,7 +30,7 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--target', type=Path, required=True)
-    parser.add_argument('--roots', nargs='+', choices=ROOTS, default=list(ROOTS))
+    parser.add_argument('--roots', nargs='+', choices=ROOTS, default=['io','jpeg','av1','spatial','lcms'])
     parser.add_argument('--execute', action='store_true', help='Run the selected native tests, not only compile')
     parser.add_argument('--test-filter', default='')
     parser.add_argument('--lint', action='store_true', help='Run strict all-target Clippy after successful tests')
@@ -56,6 +57,13 @@ def main():
         if name=='io' and not run('io-sources',['python3',directory+'/setup.py']):continue
         if name=='jpeg' and not run('jpeg-mox-update',['cargo','update','--manifest-path',manifest,'-p','moxcms','--precise','0.9.2']):continue
         if not run(name+'-metadata',['cargo','metadata','--manifest-path',manifest,'--format-version','1']):continue
+        if name=='policy':
+            for target,extra in [('wasm32-unknown-unknown',[]),('thumbv7em-none-eabihf',['--no-default-features'])]:
+                if not run('policy-'+target,['cargo','check','--manifest-path',manifest,'--locked','--target',target,*extra]):break
+            else:
+                if run('policy-runtime',['cargo','test','--manifest-path',manifest,'--locked','--no-default-features','--lib']):
+                    run('policy-lint',['cargo','clippy','--manifest-path',manifest,'--locked','--no-default-features','--lib','--','-D','warnings'])
+            continue
         command=['cargo','test','--manifest-path',manifest,'--locked']
         if not args.execute:command+=['--no-run']
         if name=='io':

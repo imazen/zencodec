@@ -30,7 +30,12 @@ jobs:
         with:
           workspaces: tools/frame-native-validation
       - name: Install independent sample reader
-        run: sudo timeout 180s apt-get install -y --no-install-recommends ffmpeg
+        timeout-minutes: 6
+        run: |
+          # Use the signed archive mirror, as in the AV1/spatial oracle jobs.
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
       - name: Validate the current source family and native mappings
         run: |
           mkdir -p "$HOME/tmp/frame-contract-inputs"
