@@ -498,6 +498,11 @@
     "resource_receipt": "run-heavy: done rc=0 7s | peak-RSS 0.26GiB | min-avail 16884MiB | peak-load 0.30",
     "frame_oracle_transport": "The unchanged frame job timed out during Azure apt download before tests; now uses bounded signed archive mirror like AV1/spatial.",
     "spatial_oracle_environment": "A restored Cargo target contained partial pip; bootstrap now uses an absent per-attempt venv outside Cargo target, with the same pinned Pillow13.0.0.",
-    "spatial_oracle_environment_failure": "https://github.com/imazen/zencodec/actions/runs/42809160014/job/129806077564"
+    "spatial_oracle_environment_failure": "https://github.com/imazen/zencodec/actions/runs/42809160014/job/129806077564",
+    "workflow_validation": {
+      "tool": "actionlint v1.7.12",
+      "result": "passed",
+      "note": "Fresh venv path uses github.workspace in job-level env; runner.temp was rejected there. No native gate changed."
+    }
   }
 }

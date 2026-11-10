@@ -2027,3 +2027,7 @@ spatial-oracle-bootstrap directory:
     test ! -e "{{directory}}"
     timeout 30s python3 -m venv "{{directory}}"
     timeout 120s "{{directory}}/bin/python" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
+
+# Validate GitHub expression contexts and shell syntax before changing docs CI.
+docs-workflow-lint binary="actionlint":
+    "{{binary}}" -oneline .github/workflows/docs.yml
