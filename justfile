@@ -2021,3 +2021,9 @@ native-ci-artifact-check source av1 output target:
     just av1-planar-float-verify "{{av1}}" "{{output}}/av1-rgb"
     just av1-gamma-verify "{{av1}}" "{{output}}/independent-gamma.json"
     python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py
+
+# Fresh oracle environment; never overlay a cached partial Python installation.
+spatial-oracle-bootstrap directory:
+    test ! -e "{{directory}}"
+    timeout 30s python3 -m venv "{{directory}}"
+    timeout 120s "{{directory}}/bin/python" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0

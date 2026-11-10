@@ -231,3 +231,8 @@ version moves; both WASM and freestanding ARM checks, host test and strict lint
 pass locally using the exact CI commands. The frame job now uses the same
 bounded signed archive mirror as the other independent oracle jobs. No test
 selection, assertion or numerical kernel changed for these repairs.
+
+The next hosted replay passed both repaired I/O and frame jobs, then exposed a
+partially restored Python oracle environment (missing pip.__main__) inside the
+Cargo cache. Oracle bootstrap now uses a fresh per-attempt environment outside
+that cache, retaining the same pinned Pillow13.0.0 and complete native gates.

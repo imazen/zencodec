@@ -190,7 +190,7 @@ jobs:
       SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
       SPATIAL_PROJECTION_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-projection
       SPATIAL_INVENTORY_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-inventory
-      SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
+      SPATIAL_ORACLE_PYTHON: ${{ runner.temp }}/spatial-oracle-python-${{ github.run_id }}-${{ github.run_attempt }}/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
       JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
       SPATIAL_COLOR_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-cms/color-oracle
@@ -206,7 +206,10 @@ jobs:
       - name: Install pinned independent libtiff oracle
         timeout-minutes: 3
         run: |
-          timeout --kill-after=10s 30s python3 -m venv perf/spatial-validation/target/oracle-python
+          # Cargo caches may retain an incomplete Python package tree. Bootstrap
+          # a fresh per-attempt oracle environment outside the Cargo target.
+          test ! -e "${SPATIAL_ORACLE_PYTHON%/bin/python}"
+          timeout --kill-after=10s 30s python3 -m venv "${SPATIAL_ORACLE_PYTHON%/bin/python}"
           timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
       - name: Build pinned independent libjxl oracles
         timeout-minutes: 8
