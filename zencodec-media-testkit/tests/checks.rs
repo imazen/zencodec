@@ -435,9 +435,17 @@ impl WindowDependentTracks {
             4 => builder.with_config_epoch(7),
             5 => builder.with_codec_delay(FrameDuration::new(1, 48000).unwrap()),
             6 => builder.with_seek_preroll(FrameDuration::new(80, 1000).unwrap()),
-            7 => builder.with_edit_delay_ticks(-17),
+            7 => {
+                #[allow(deprecated)] // Mutation control for the legacy fact.
+                let builder = builder.with_edit_delay_ticks(-17);
+                builder
+            }
             8 => builder.with_declared_packets(42),
             9 => builder.with_declared_duration_ticks(1234),
+            10 => builder.with_timeline(zencodec_media::timeline::TrackTimeline::Unedited),
+            11 => builder.with_timeline(zencodec_media::timeline::TrackTimeline::Edited(Arc::new(
+                zencodec_media::timeline::EditList::new(Timestamp::new(0, tb()), vec![]).unwrap(),
+            ))),
             _ => builder,
         };
         self.tracks = vec![builder.build().unwrap()];
@@ -496,6 +504,21 @@ fn demuxer_conformance_detects_track_facts_that_depend_on_input_window() {
                 error.detail.contains("different events"),
                 "field {field}, late {late}: {error}"
             );
+        }
+    }
+}
+
+#[test]
+fn demuxer_conformance_compares_complete_presentation_declarations() {
+    let file = toy_file(9, 3, false);
+    for late in [false, true] {
+        for field in [10, 11] {
+            let error = check_demuxer_contract(
+                || WindowDependentTracks::new(file.len() / 2, field, late),
+                &file,
+            )
+            .expect_err("timeline changes across input windows must be detected");
+            assert!(error.detail.contains("different events"), "{error}");
         }
     }
 }

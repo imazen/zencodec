@@ -1,5 +1,10 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  checkedFrameAccess: {path:'zencodec::frame::Frame',file:'src/frame_storage.rs',scope:'impl Frame {',methods:['map','with_planar','interpretation','represent']},
+  currentFrameInterpretation: {path:'zencodec::frame::FrameInterpretation',file:'src/frame.rs',scope:'impl FrameInterpretation {',methods:['new','with_color_context','with_alpha_mode']},
+  currentConversionOffer: {path:'zencodec::operation::FrameConversionOffer',file:'src/operation/transition.rs',scope:'impl FrameConversionOffer {',methods:['new']},
+  stagedConversion: {path:'zencodec_media::staged::StagedEncode',file:'zencodec-media/src/staged.rs',scope:'impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R> {',methods:['push_converted']},
+  presentationPreparation: {path:'zencodec_media::output::PreparedOutput',file:'zencodec-media/src/output.rs',scope:'impl<M: Muxer, D: Destination> PreparedOutput<M, D> {',methods:['preserving_presentation','publish','facts']},
   encodeOrientation: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_orientation_mode','try_with_orientation_mode']},
   encodeDeclaration: {path:'zencodec::encode::EncodeDeclaration',file:'src/encode_plan.rs',scope:"pub struct EncodeDeclaration<'a>",methods:[],item:true},
   encodePlan: {path:'zencodec::encode::EncodePlan',file:'src/encode_plan.rs',scope:'pub struct EncodePlan {',methods:[],item:true},

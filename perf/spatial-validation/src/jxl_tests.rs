@@ -594,3 +594,49 @@ fn common_jxl_region_requirement_refuses_without_substituting_full_output() {
         Some(&SelectionError::ForeignImage)
     );
 }
+
+#[test]
+fn frozen_jxl_adapter_orientation_preserves_every_sample() {
+    use std::borrow::Cow;
+    use zencodec::OrientationHint;
+    use zencodec::decode::{Decode, DecodeJob, DecoderConfig};
+    use zenpixels::Orientation;
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let decode = |hint| {
+        zenjxl::JxlDecoderConfig::new()
+            .job()
+            .with_orientation(hint)
+            .decoder(Cow::Borrowed(&data), &[])
+            .unwrap()
+            .decode()
+            .unwrap()
+    };
+    let source = decode(OrientationHint::Preserve);
+    let src = source.pixels();
+    let bpp = src.descriptor().bytes_per_pixel();
+    for orientation in [Orientation::FlipH, Orientation::Rotate90] {
+        let output = decode(OrientationHint::ExactTransform(orientation));
+        let dst = output.pixels();
+        let dims = if orientation == Orientation::Rotate90 {
+            (src.rows(), src.width())
+        } else {
+            (src.width(), src.rows())
+        };
+        assert_eq!((dst.width(), dst.rows()), dims);
+        assert_eq!(dst.descriptor(), src.descriptor());
+        assert_eq!(dst.color_context(), src.color_context());
+        for y in 0..src.rows() {
+            for x in 0..src.width() {
+                let (dx, dy) = if orientation == Orientation::Rotate90 {
+                    (src.rows() - 1 - y, x)
+                } else {
+                    (src.width() - 1 - x, y)
+                };
+                assert_eq!(
+                    &dst.row(dy)[dx as usize * bpp..(dx as usize + 1) * bpp],
+                    &src.row(y)[x as usize * bpp..(x as usize + 1) * bpp]
+                );
+            }
+        }
+    }
+}

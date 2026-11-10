@@ -798,7 +798,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
     use zencodec::{
         At,
         frame::FrameTiming,
-        operation::{Decision, FrameConversionOffer, FrameFacts, Question},
+        operation::{Decision, FrameConversionOffer, Question},
         storage::StorageBudget,
         time::Timestamp,
     };
@@ -836,7 +836,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
             assert!(!destination.patches_at_finish);
             assert!(destination.exact_timing);
             assert_eq!(
-                choice.value().conversion.unwrap().encoder_input.timing,
+                choice.value().conversion.as_ref().unwrap().timing,
                 timings[i]
             );
             calls.set(i + 1);
@@ -852,8 +852,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
     let mut destination: Option<Output<ExactMp4, Forward<Short<&mut Vec<u8>>>>> = None;
     let mut expected = Vec::new();
     for (i, input) in inputs.iter().enumerate() {
-        let mut offer =
-            FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
+        let mut offer = FrameConversionOffer::new(input.interpretation().clone(), timings[i]);
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
         let prepared = operation

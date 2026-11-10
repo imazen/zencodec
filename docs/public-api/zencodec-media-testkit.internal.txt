@@ -1,0 +1,24 @@
+# zencodec-media-testkit public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                            1
+#   trait roster entries (type × trait)         1
+#
+# per-module pub lines:
+#   checks                            1
+
+## items (1 lines)
+
+pub fn checks::Failure::assert_fields_are_eq(&self)
+
+## trait impls (1 types)
+
+toy::ToyError: TrivialClone

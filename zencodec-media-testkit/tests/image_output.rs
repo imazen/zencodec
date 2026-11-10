@@ -260,18 +260,18 @@ fn native_codes_keep_active_rows_and_refuse_conflicting_claims() {
     assert!(mapping.plane(1).unwrap().is_none());
     for (width, bits) in [(3, 12), (2, 10), (2, 12)] {
         let incorrect = frame(native.clone(), width, bits);
-        let mapped = incorrect.map().unwrap();
-        let error = match mapped.plane(0) {
+        let error = match incorrect.map() {
             Err(error) => error,
             Ok(_) => panic!("conflicting native interpretation was accepted"),
         };
-        let OutputError::Component {
+        let Some(MapError::Component {
             index,
             expected_dimensions,
             actual_dimensions,
             expected_encoding,
             actual_encoding,
-        } = error.error()
+            ..
+        }) = zencodec::find_cause::<MapError>(&error)
         else {
             panic!("wrong refusal: {error:?}");
         };
@@ -284,7 +284,7 @@ fn native_codes_keep_active_rows_and_refuse_conflicting_claims() {
         );
         assert_eq!(
             *actual_encoding,
-            zenpixels::plane::PlaneEncoding::Code(encoding(10))
+            Some(zenpixels::plane::PlaneEncoding::Code(encoding(10)))
         );
     }
 }
@@ -320,7 +320,8 @@ fn missing_planes_and_invalid_canvas_refuse_before_exposing_samples() {
     let missing = OwnedPlanes::new(vec![], encoding(10)).unwrap();
     let output = frame(Arc::new(missing), 3, 10);
     assert!(
-        matches!(output.map(), Err(error) if matches!(error.error(), OutputError::MissingPlane))
+        matches!(output.map(), Err(error) if matches!(zencodec::find_cause::<MapError>(&error),
+            Some(MapError::Layout(zenpixels::plane::LayoutError::PlaneCount { expected: 1, actual: 0 }))))
     );
     let invalid = frame(Arc::new(Refusing), 0, 10);
     // Geometry is rejected before entering the deliberately refusing backend.

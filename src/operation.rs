@@ -46,8 +46,9 @@ pub use scheduling::{
 };
 pub use transcode::{MetadataTransfer, TranscodeOffer, resolve_transcode};
 pub use transition::{
-    DestinationFacts, FrameConversionOffer, FrameRoute, FrameRouteFacts, FrameRouteOffer,
-    FrameRouteState, StagingFacts, StagingKind, resolve_frame_route,
+    DestinationFacts, FrameConversionFacts, FrameConversionOffer, FrameRoute, FrameRouteFacts,
+    FrameRouteOffer, FrameRouteState, FrameRouteSummary, StagingFacts, StagingKind,
+    resolve_frame_route,
 };
 
 /// Successful output and the decisions that selected its permitted contract.

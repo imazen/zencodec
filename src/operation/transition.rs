@@ -8,6 +8,7 @@ use crate::{
     encode::Fidelity,
     frame::{FrameInterpretation, FrameTiming},
 };
+use alloc::sync::Arc;
 use zenpixels::sample::ChromaSiting;
 
 /// Output continuity supplied by a prepared adapter route. This does not grant
@@ -62,6 +63,9 @@ pub struct DestinationFacts {
     /// The retained muxer guarantees exact supplied packet timing or fails.
     /// False means no such guarantee, not permission to discard timing.
     pub exact_timing: bool,
+    /// Complete declared track presentation was admitted by this retained muxer.
+    /// Packet timing alone does not establish this guarantee.
+    pub exact_presentation: bool,
 }
 impl DestinationFacts {
     /// Describe a successfully prepared container/writer pair. Adapters must
@@ -77,6 +81,7 @@ impl DestinationFacts {
             streams,
             patches_at_finish,
             exact_timing,
+            exact_presentation: false,
         }
     }
 }
@@ -116,7 +121,7 @@ impl StagingFacts {
 /// A prepared route for the destination encoder registration fixed by the
 /// request. The adapter retains its encoder/configuration and held input while
 /// policy runs. This question selects continuity, not an arbitrary output codec.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FrameRouteOffer {
     /// Qualified output continuity. Unsupported destination transitions must
@@ -160,12 +165,14 @@ impl FrameRouteOffer {
 
 /// Evidence for the conversion retained together with a frame encoder.
 /// These are adapter guarantees, not instructions to reconstruct a plan.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FrameConversionOffer {
     /// Interpretation and timing actually delivered to the encoder. Original
     /// input facts remain in the question; output epochs are independent.
-    pub encoder_input: FrameFacts,
+    pub encoder_input: Arc<FrameInterpretation>,
+    /// Presentation timing actually delivered to the encoder.
+    pub timing: FrameTiming,
     /// True only for a qualified sample-preserving route; false includes
     /// arithmetic, quantization, clipping and unknown preservation.
     pub preserves_samples: bool,
@@ -180,13 +187,83 @@ pub struct FrameConversionOffer {
 }
 impl FrameConversionOffer {
     /// Target facts with preservation unqualified until the adapter proves it.
-    pub const fn new(encoder_input: FrameFacts) -> Self {
+    pub fn new(encoder_input: Arc<FrameInterpretation>, timing: FrameTiming) -> Self {
         Self {
             encoder_input,
+            timing,
             preserves_samples: false,
             preserves_extended_range: false,
             assumed_chroma_siting: None,
             admitted_bytes: 0,
+        }
+    }
+    /// Copy diagnostics; opaque profiles and interpretation owners are not retained.
+    pub fn facts(&self) -> FrameConversionFacts {
+        FrameConversionFacts {
+            encoder_input: FrameFacts::new(&self.encoder_input, self.timing),
+            preserves_samples: self.preserves_samples,
+            preserves_extended_range: self.preserves_extended_range,
+            assumed_chroma_siting: self.assumed_chroma_siting,
+            admitted_bytes: self.admitted_bytes,
+        }
+    }
+}
+
+/// Bounded diagnostic summary of the selected prepared frame route.
+/// Never an executable offer or proof that two interpretations are equivalent.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct FrameRouteSummary {
+    /// Qualified output continuity. Unsupported destination transitions must
+    /// not appear in the choices, even when policy would select one.
+    pub route: FrameRoute,
+    /// Fidelity established by the prepared encoder configuration.
+    pub fidelity: Option<Fidelity>,
+    /// Effects and target of the retained conversion before this encoder.
+    /// None means unqualified, not identity or sample preservation. Encoder
+    /// fidelity alone never establishes end-to-end transcode fidelity.
+    pub conversion: Option<FrameConversionFacts>,
+    /// Actual retained destination evidence. None means unqualified; it does
+    /// not imply forward-only, seekable, staged or safe encoder backpressure.
+    pub destination: Option<DestinationFacts>,
+    /// Actual compressed store; None means unqualified. Disk may block while
+    /// raw encoder state is retained, independently of final writer access.
+    pub staging: Option<StagingFacts>,
+    /// Actual final-destination scheduling guarantee. None is unqualified.
+    pub output_schedule: Option<super::OutputScheduleOffer>,
+    /// Currently admitted encoded staging held by the operation. This excludes
+    /// native input/reference/work buffers and is not a whole-operation bound.
+    pub admitted_encoded_bytes: usize,
+    /// Qualified additional codec/conversion workspace bound; unknown is not zero.
+    pub workspace_upper_bound: Option<u64>,
+}
+/// Bounded conversion effects without retained profiles or native owners.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct FrameConversionFacts {
+    /// Diagnostic target summary; full target remains in the runtime offer.
+    pub encoder_input: FrameFacts,
+    /// Adapter's sample-preservation guarantee.
+    pub preserves_samples: bool,
+    /// Adapter's extended-range preservation guarantee.
+    pub preserves_extended_range: bool,
+    /// Qualified fallback for undeclared chroma siting.
+    pub assumed_chroma_siting: Option<ChromaSiting>,
+    /// Admitted managed conversion storage.
+    pub admitted_bytes: usize,
+}
+impl FrameRouteOffer {
+    /// Copy only bounded diagnostics into the operation report.
+    pub fn summary(&self) -> FrameRouteSummary {
+        FrameRouteSummary {
+            route: self.route,
+            fidelity: self.fidelity,
+            conversion: self.conversion.as_ref().map(FrameConversionOffer::facts),
+            destination: self.destination,
+            staging: self.staging,
+            output_schedule: self.output_schedule,
+            admitted_encoded_bytes: self.admitted_encoded_bytes,
+            workspace_upper_bound: self.workspace_upper_bound,
         }
     }
 }
@@ -221,7 +298,7 @@ pub fn resolve_frame_route<R: OperationPolicy + ?Sized>(
             facts: &facts,
             choices,
         },
-        Selection::FrameRoute,
+        |offer| Selection::FrameRoute(offer.summary()),
         resolver,
         preset,
         pulse,

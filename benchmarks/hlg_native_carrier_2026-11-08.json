@@ -1,0 +1,24 @@
+{
+  "source": "74d81f0753cc6e5cdce10945b89e58ccefe03be9",
+  "base": "9c0df9ad89de675af83b66083ceeb330e84bf399",
+  "commands": [
+    "just hlg-carrier-check",
+    "just metadata-check"
+  ],
+  "workspace_test_totals": {
+    "passed": 1466,
+    "failed": 0,
+    "old_ignored": 39
+  },
+  "focused": "26 color policy tests and2 gray lowering tests pass",
+  "frozen_dependency_identities": "167/167 names, versions and sources match prior core199 qualification",
+  "run_heavy": "rc0 123s peak-RSS0.50GiB min-avail26925MiB peak-load10.08",
+  "original_failures": [
+    "before.log: absent lock; did not execute test",
+    "before-with-frozen-lock.log: new HLG policy regression fails",
+    "after-carrier.log: invalid stale binary from archive mtimes; excluded",
+    "after-carrier-fresh.log: existing HLG companion contract requires approved update"
+  ],
+  "log_sha256": "b1986c6a91d76d9ea9895523a962ce26c453f472c5ec60aa9ddc303a646e6e35",
+  "limits": "No native codec/container roundtrip claimed. Root owns push/integration; no existing review ref or dependency pin changed."
+}

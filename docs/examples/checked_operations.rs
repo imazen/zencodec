@@ -45,10 +45,15 @@ mod automatic {
     use zencodec::{At, CodecSet, ImageFormat, encode::EncodeOutput, operation::Outcome};
     use zencodecs::checked_transcode::{Error, TranscodeRequest};
 
+    use zenpixels_convert::cms_moxcms::MoxCms;
+
     pub fn derivative(codecs: &CodecSet, bytes: &[u8]) -> Result<Outcome<EncodeOutput>, At<Error>> {
         // ANCHOR: checked_default
-        let output = TranscodeRequest::new(ImageFormat::Png).transcode(codecs, bytes)?;
+        let output = TranscodeRequest::new(ImageFormat::Png)
+            .with_cms(&MoxCms)
+            .transcode(codecs, bytes)?;
         // END: checked_default
+        // The CMS handles authoritative ICC profiles; absent a backend, those routes may refuse.
         // The built-in policy selects a permitted route without a custom callback.
         // Default retention can refuse when the target cannot preserve a reported field.
         // No file or HTTP body has been written by this operation.

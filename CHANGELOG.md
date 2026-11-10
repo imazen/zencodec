@@ -2,7 +2,26 @@
 
 ## Native image selection (unreleased experiment)
 
+### Fixed
+
+- Preserve authoritative ICC when embedded code points do not have a qualified
+  matrix/TRC identification; an extractable tag alone cannot authorize CICP
+  derivation or ICC replacement.
+
 ### Added
+
+- Add the `advanced` authoring namespace as aliases of existing contracts;
+  ordinary applications continue to use `CodecSet`. No parallel protocol or
+  second set of implementations is introduced. (`caller simplicity review`)
+
+
+- `negotiate_pixel_format_for_depth` prefers an acceptable output that retains source depth, preserving caller order among sufficient formats; legacy negotiation remains available.
+
+- `IccDisposition::SynthesizeGrayFrom(Cicp)`: a gray or gray-alpha source with only
+  non-default CICP now plans a GRAY-class ICC. It previously planned no color
+  description for gray, and an RGB-class profile for gray with alpha. Codecs lower it
+  through `SynthesizedIcc::for_gray_cicp`; one that falls through a wildcard arm behaves
+  as it did before for gray.
 
 - Testkit `check_metadata_retained` compares required resolved metadata against
   completed output inspection, without capability exemptions or payload logging.
@@ -129,6 +148,20 @@
   append/overwrite counts; adversarial controls cover both output schedules.
 
 ### QUEUED BREAKING CHANGES
+
+- Media decoder conformance compares complete immutable interpretation, timing
+  and presentation across paths. The reusable frame interchange check covers
+  direct, image and planar access including F32 payload bits. (`core-contracts layer5`)
+
+- Media tracks retain full `TrackTimeline`/`EditList` declarations. Known complete
+  programs require exact-presentation mux admission; unsupported defaults and
+  animation projections refuse before effects. Scalar edit-delay projection and
+  builder are deprecated. (`core-contracts layer4`)
+
+- Frame conversion offers retain the actual target interpretation and timing;
+  staged conversion takes that single authority. Selection reports use bounded
+  summaries and never retain opaque profile owners. Runtime offers are Clone,
+  no longer Copy. (`core-contracts layer3`)
 
 - Frame interpretation adopts zenpixels `PlanarLayout`; per-plane integer/float encodings replace frame-wide encoding and roles. Mapping exposes F32 and explicit interleaved component access; frame diagnostic uniform encoding becomes optional (51411aee, d2beb2dc).
 
@@ -609,6 +642,31 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Workspace contract stack
+
+- Frame interpretations retain current color and alpha; checked native mapping
+  validates encoding, layout and geometry before lending. `with_planar` retains
+  the mapping loan and optional Pulse boundary. `Samples`/`Row` are extensible.
+
+### QUEUED BREAKING CHANGES
+
+- Unreleased `MappedPlanes::encoding` is now required and mapping refuses absent
+  or contradictory evidence before returning a view. Image mapping retains the
+  detailed `MapError::Component` cause; missing/contradictory frames refuse earlier.
+
+### Workspace cohort and fidelity
+
+- Select the current zenpixels allocation/interpretation cohort in core, render
+  and fuzz roots. Gray ICC roundtrip checks distinguish extraction from qualified
+  substitution; source ICC retention remains required.
+- Add generation-A `LossyTarget::ApproxZensimA` and `Fidelity::zensim_a` alongside
+  generation B. These are requested calibrated targets, not measured guarantees.
+
+- Preserve permitted native HLG CICP without synthesizing an ICC companion when
+  no rendering target is supplied. Apply the same rule to RGB, gray and gray-alpha;
+  retain existing ICCs under keeping policies and keep ICC-only output obligations
+  explicit. PQ/SDR behavior and dependency pins are unchanged.
+
 - Align the paired zenpixels/zenpixels-convert verifier to `fa836abf` across the
   workspace, fuzz and render graphs. The testkit refuses unknown non-exhaustive
   color authority values while retaining all existing ICC/CICP checks.
@@ -844,6 +902,8 @@ removes that whole class).
 ## zencodec-io
 
 ### [Unreleased]
+
+- Prepare the owner-approved crates.io publication switch; publication remains a separate manual release action.
 
 - Align image factory admission with video's `try_new(factory, policy, pulse)`:
   check cancellation before and after construction, drop cancelled native owners,

@@ -32,6 +32,11 @@ pub struct FrameFacts {
     pub planes: usize,
     /// Bitstream, container and selected color declarations.
     pub color: ColorClaim,
+    /// Whether current color interpretation was retained. Presence is not privacy
+    /// or equivalence evidence; opaque profiles remain outside reports.
+    pub has_color_context: bool,
+    /// Actual alpha association, not a source/container hint.
+    pub alpha_mode: Option<zenpixels::AlphaMode>,
     /// Configuration captured when the native input was accepted.
     pub config_epoch: u32,
     /// Presentation timing and packet provenance captured by the native adapter.
@@ -48,6 +53,8 @@ impl FrameFacts {
             plane_specs: core::array::from_fn(|i| interpretation.layout.planes().get(i).copied()),
             planes: interpretation.layout.planes().len(),
             color: interpretation.color,
+            has_color_context: interpretation.color_context.is_some(),
+            alpha_mode: interpretation.alpha_mode,
             config_epoch: interpretation.config_epoch,
             timing,
         }

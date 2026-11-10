@@ -1,0 +1,28 @@
+[package]
+name = "frame-native-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+zencodec = { path = "../..", features = ["std"] }
+zencodec-media = { path = "../../zencodec-media" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
+zenpixels = { version = ">=0.3.1, <0.5.0", default-features = false }
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "68e499ec455dc6bc29ee4b69abd64022a6099411", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "b0901f3c87ce414012d6a8c933765c183c94e588" }
+tiff = { git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5", version = "0.11.3", default-features = false }
+[patch.crates-io]
+zencodec = { path = "../.." }
+zencodec-io = { path = "../../zencodec-io" }
+zencodec-media = { path = "../../zencodec-media" }
+zenmeta = { path = "../../zenmeta" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
+[profile.test]
+opt-level = 1
+debug = 0
+debug-assertions = true
+overflow-checks = true

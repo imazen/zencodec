@@ -14,6 +14,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  frame-interchange:
+    name: Qualify current native frame interchange
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: 2
+      RAYON_NUM_THREADS: 2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/frame-native-validation
+      - name: Install independent sample reader
+        timeout-minutes: 6
+        run: |
+          # Use the signed archive mirror, as in the AV1/spatial oracle jobs.
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
+      - name: Validate the current source family and native mappings
+        run: |
+          mkdir -p "$HOME/tmp/frame-contract-inputs"
+          timeout 180s python3 tools/frame-native-validation/prepare.py "$HOME/tmp/frame-contract-inputs"
+          cp tools/frame-native-validation/dependencies.lock tools/frame-native-validation/Cargo.lock
+          cargo metadata --manifest-path tools/frame-native-validation/Cargo.toml --locked --format-version 1 > "$HOME/tmp/frame-contract-graph.json"
+          python3 scripts/check-codec-graph.py "$HOME/tmp/frame-contract-graph.json"
+          FRAME_NATIVE_INPUTS="$HOME/tmp/frame-contract-inputs" timeout 300s cargo test --manifest-path tools/frame-native-validation/Cargo.toml --locked -- --test-threads=1
+          timeout 180s cargo clippy --manifest-path tools/frame-native-validation/Cargo.toml --all-targets --locked -- -D warnings
+
   examples:
     name: Execute guide examples
     runs-on: ubuntu-latest
@@ -158,7 +190,7 @@ jobs:
       SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
       SPATIAL_PROJECTION_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-projection
       SPATIAL_INVENTORY_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-inventory
-      SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
+      SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/.ci-oracles/spatial-python-${{ github.run_id }}-${{ github.run_attempt }}/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
       JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
       SPATIAL_COLOR_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-cms/color-oracle
@@ -174,7 +206,10 @@ jobs:
       - name: Install pinned independent libtiff oracle
         timeout-minutes: 3
         run: |
-          timeout --kill-after=10s 30s python3 -m venv perf/spatial-validation/target/oracle-python
+          # Cargo caches may retain an incomplete Python package tree. Bootstrap
+          # a fresh per-attempt oracle environment outside the Cargo target.
+          test ! -e "${SPATIAL_ORACLE_PYTHON%/bin/python}"
+          timeout --kill-after=10s 30s python3 -m venv "${SPATIAL_ORACLE_PYTHON%/bin/python}"
           timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
       - name: Build pinned independent libjxl oracles
         timeout-minutes: 8
@@ -185,6 +220,11 @@ jobs:
           sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
           timeout --kill-after=15s 6m python3 perf/spatial-validation/build_jxl_oracles.py "$(dirname "$JXL_SELECTION_ORACLE")"
           timeout --kill-after=10s 1m python3 perf/spatial-validation/build_color_oracle.py "$(dirname "$SPATIAL_COLOR_ORACLE")"
+      - name: Qualify explicit LCMS native CMYK graph
+        run: |
+          cp perf/spatial-lcms-validation/dependencies.lock perf/spatial-lcms-validation/Cargo.lock
+          SPATIAL_COLOR_ARTIFACTS="${SPATIAL_COLOR_ARTIFACTS}-lcms" timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_lcms_finalization -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
       - name: Execute native spatial selection and exact guide example
         run: |
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
@@ -213,6 +253,7 @@ jobs:
             perf/spatial-validation/target/oracle-*-layers/**/stderr.txt
             perf/spatial-validation/target/oracle-*-cms/provenance.json
             perf/spatial-validation/target/oracle-*-color/**/comparison.json
+            perf/spatial-validation/target/oracle-*-color-lcms/**/comparison.json
             perf/spatial-validation/target/oracle-*-color/**/publication.json
             perf/spatial-validation/target/oracle-*-projection/**/*.json
             perf/spatial-validation/target/oracle-*-projection/**/*.txt
@@ -223,6 +264,8 @@ jobs:
   build:
     name: Build and exercise guide
     runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: 2
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -232,6 +275,24 @@ jobs:
           cache-dependency-path: docs/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned catalog toolchain
+        run: rustup toolchain install nightly-2026-10-06 --profile minimal
+      - name: Install catalog CLI
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api@0.52.0
+      - name: Check zenutils API text snapshots
+        timeout-minutes: 10
+        env:
+          ZEN_API_DOC: check
+          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-06
+          CARGO_BUILD_JOBS: 2
+        run: cargo +stable test --manifest-path apidoc/Cargo.toml
+      - name: Cache generated signature-browser data
+        uses: actions/cache@v6
+        with:
+          path: docs/.cache/code-api
+          key: catalog-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.rs', '**/Cargo.toml', '**/README.md', '**/dependencies.lock', 'docs/generate-code-catalog.py') }}
       - name: Build the matching Rustdoc reference
         timeout-minutes: 5
         env:

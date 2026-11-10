@@ -95,3 +95,9 @@ it; the documentation workflow and `just docs-site-check` retain this control.
 Regenerate all eight catalogs after changes to crate source, manifests or
 READMEs. Rebuild Rustdoc and the guide from the same revision before browser
 checks; a stale reference is deliberately refused.
+
+`contracts.html` presents the current five-layer core review target. Its snippets
+come from `docs/examples/frame_contracts.rs`, compiled by
+`zencodec-media-testkit/tests/guide_frame_contracts.rs`. All example contents and
+short return statements stay visible. Compiler signatures remain in the searchable
+catalog and all-feature Rustdoc reference; native support stays separately scoped.

@@ -323,6 +323,7 @@ fn check_auxiliary_grid(
 }
 
 /// Borrowed samples tied to the mapping and their declared interpretation.
+#[non_exhaustive]
 pub enum Samples<'a> {
     /// Packed color with native stride and color metadata.
     Pixels(PixelSlice<'a>),
@@ -449,6 +450,7 @@ impl<'a> CodePlane<'a> {
 }
 
 /// Active row storage, excluding padding. Read its type from the plane.
+#[non_exhaustive]
 pub enum Row<'a> {
     /// Bytes of packed pixels or values, or eight-bit component words.
     Bytes(&'a [u8]),
@@ -1022,37 +1024,9 @@ impl MappedImage for ComponentMap<'_> {
             .native
             .plane(index)
             .ok_or_else(|| fail(OutputError::MissingPlane))?;
-        let g = self.signal.geometry;
         let spec = self.signal.layout.planes()[index];
-        let (w, h) = self
-            .signal
-            .layout
-            .plane_size(index, g.coded_width, g.coded_height)
-            .ok_or_else(|| fail(OutputError::Interpretation))?;
-        let expected_dimensions = (
-            (w as usize)
-                .checked_mul(spec.role().components())
-                .ok_or_else(|| fail(OutputError::Geometry))?,
-            h as usize,
-        );
-        let actual_dimensions = (samples.width(), samples.height());
         let expected_encoding = spec.encoding();
-        let actual_encoding = self.native.encoding(index).unwrap_or(expected_encoding);
-        let mismatch = || {
-            fail(OutputError::Component {
-                index,
-                expected_dimensions,
-                actual_dimensions,
-                expected_encoding,
-                actual_encoding,
-            })
-        };
-        if actual_dimensions != expected_dimensions
-            || actual_encoding != expected_encoding
-            || samples.channel_type() != expected_encoding.channel_type()
-        {
-            return Err(mismatch());
-        }
+        let mismatch = || fail(OutputError::Interpretation);
         let samples = match (samples, expected_encoding) {
             (plane, PlaneEncoding::Code(encoding)) => Samples::Codes({
                 let mut codes = CodePlane::new(plane, encoding).map_err(|_| mismatch())?;

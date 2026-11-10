@@ -243,7 +243,7 @@ fn qualify_gamma(samples: &[[f32; 3]], width: u32, rows: u32) -> GammaTrace {
 
 pub(super) fn qualify(source: PixelSlice<'_>) -> Measurements {
     let linear = convert(source.clone(), true, false, source.rows()).active();
-    assert!(ConvertOptions::retain_channels().clip_out_of_gamut);
+    assert!(ConvertOptions::retain_channels().clip_out_of_gamut());
     let clipped = convert(source.clone(), true, true, source.rows()).active();
     assert!(clipped.iter().flatten().all(|v| (0.0..=1.0).contains(v)));
     for batch in [1, 2, 4] {

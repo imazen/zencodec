@@ -1076,8 +1076,10 @@ error for absent formats. The pixel dependency at `284a0598abf441dc886755b1e65c3
 adds conventional and inverted F32 CMYK. Native JXL uses the inverted variant:
 zero means full ink and one means no ink, including its separate black plane.
 Source ICC bytes describe conventional device values; they cannot silently
-relabel that native domain. Unqualified conversion, including polarity changes,
-refuses. The pixel suite preserves every sample bit and ICC context in both
+relabel that native domain. The initial integration refused unqualified conversion. The current frozen
+MoxCMS backend accepts F32 CMYK conversion, but the full native LCMS comparison
+fails the existing CMYK accuracy bound; see the qualification below. The pixel
+suite preserves every sample bit and ICC context in both
 formats without copying the owned allocation.
 
 Run `just spatial-layer-check <fresh-artifacts>` for the focused gate; the full
@@ -1588,3 +1590,43 @@ packages: only `zencodec-render` is added; no package version changes. Core
 zencodec gains no converter dependency. The companion is isolated while it needs
 the pinned converter review revision, and requires Rust 1.89 (verified).
 [Contract, reproduction and limits](../../docs/render-contract.md).
+
+## Native CMYK finalization qualification (2026-11-08)
+
+`just spatial-cmyk-check FRESH_ARTIFACTS COLOR_ORACLE` retains no-CMS refusal,
+source pixels/context and native storage charges, and compares every finalized
+RGB sample against independent LCMS relative colorimetric+BPC output. Direct
+MoxCMS and finalization agree bit-for-bit, but **1050 of 786432 samples exceed
+the unchanged 0.0013 CMYK bound**; maximum error is 0.006681680679321289.
+LCMS 2.17 and C 2.20 produce identical references. This is a strict failing
+qualification gate, not a refusal fallback or a threshold adjustment.
+
+[Exact inputs, receipts and reproduction](../../benchmarks/native_cmyk_finalization_2026-11-08.md).
+
+The separate [LCMS graph](../spatial-lcms-validation/README.md) qualifies the
+same native CMYK finalizer through explicit `Lcms`: zero error against C2.20
+after declared clipping on this witness. Its af19 Mox comparison still fails
+the original bound; this frozen graph and both numerical failures remain
+visible. No default backend or public signature changes.
+
+
+## Current shared cohort and CMYK gate split (2026-11-10)
+
+The native graphs now select pixel/converter76005fc9 and MoxCMS 0.9.2. Full-row
+finalizer/direct-backend parity remains bit-exact. The independent comparison
+still finds 937 of 786432 components outside the unchanged0.0013 accuracy bound,
+with maximum error0.006689250469207764. The original failing CI receipt and
+historical 0.9.1 measurements above are preserved.
+
+The owner approved separating adapter correctness from CMM accuracy:
+`native_cmyk_mox_adapter_matches_backend_and_reports_known_accuracy_failure`
+retains every source/context/storage/polarity/finite/direct-row assertion,
+computes the original independent bound, and explicitly requires the known
+numerical discrepancy to remain visible. Its report marks accuracy unqualified.
+If the discrepancy disappears, the regression fails and requires promotion to
+the strict accuracy gate. This test does not certify MoxCMS at 0.0013.
+
+The separate LCMS graph continues to require zero components outside0.0013;
+its focused native test and all-target strict Clippy pass on this cohort.
+[zenpixels157](https://github.com/imazen/zenpixels/issues/157) owns the reduced
+upstream-report preparation. No MoxCMS issue has been opened.

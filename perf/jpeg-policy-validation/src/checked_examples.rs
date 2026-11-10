@@ -45,7 +45,15 @@ fn public_guide_executes_all_transport_and_policy_recipes() {
     let codecs = guide::gallery_codecs();
     for progressive in [false, true] {
         let source = fixtures::fixture(progressive, fixtures::Placement::Header);
-        let png = guide::derivative(&codecs, &source).unwrap();
+        let png = guide::derivative(&codecs, &source).unwrap_or_else(|error| {
+            let mut detail = format!("{error:?}");
+            let mut cause = std::error::Error::source(&error);
+            while let Some(e) = cause {
+                detail.push_str(&format!("\nCaused by: {e:?}"));
+                cause = e.source();
+            }
+            panic!("{detail}")
+        });
         for (format, source) in [("jpeg", source.as_slice()), ("png", png.data())] {
             let preview = guide::preview(&codecs, source).unwrap();
             assert_eq!(

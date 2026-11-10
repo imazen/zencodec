@@ -19,9 +19,9 @@ zencodec-io = { path = "../../zencodec-io", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media" }
 zenmeta = { path = "../../zenmeta", features = ["inventory"], optional = true }
 tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5", default-features = false, features = ["lzw", "deflate"] }
-zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6", default-features = false }
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "a76ac76d080295b754d970a3392eed8f964de490", default-features = false, features = ["collections"] }
-jxl-encoder = { version = "0.4.0", git = "https://github.com/imazen/jxl-encoder", rev = "554ad6966771bc2b6f79d6a6c569f55ce155644a", default-features = false, features = ["std"] }
+zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "1514ee496526d6fadd518ff109a658acf135aa07", default-features = false }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "8b86f9a2bcfee893ece89f7976b9132bfd88d315", default-features = false, features = ["collections"] }
+jxl-encoder = { version = "0.4.0", git = "https://github.com/imazen/jxl-encoder", rev = "754699f734bea9d9642834e2d21ccf792ed8ea74", default-features = false, features = ["std"] }
 codec-corpus = "1.1.0"
 bytemuck = "1.25.2"
 serde_json = "1.0.151"
@@ -32,13 +32,13 @@ rustix = { version = "1.1.5", features = ["fs"], optional = true }
 
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zencodec = { path = "../.." }
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "1514ee496526d6fadd518ff109a658acf135aa07" }
 # Combined output planning and native sample carriage from zenpixels PRs 92/93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
 
 [profile.release]
 debug = 1
@@ -51,3 +51,6 @@ opt-level = 1
 debug = 1
 debug-assertions = true
 overflow-checks = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(lcms_native)"] }

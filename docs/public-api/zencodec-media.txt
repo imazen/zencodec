@@ -1,0 +1,544 @@
+# zencodec-media public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec-media.txt 499 lines (supported surface) | zencodec-media.features.txt 100 added (features: std) | zencodec-media.internal.txt 50 lines (50 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                10
+#   pub types (struct/enum/trait/alias)        71
+#   pub consts/statics                         38
+#   free functions                              8
+#   inherent methods                          127
+#   struct fields                              45
+#   enum variants                             104
+#   re-exports                                 20
+#   trait roster entries (type × trait)       215
+#   conditional trait impls (verbatim)          3
+#   auto-trait-complete types                  43
+#   auto-trait exceptions                      14
+#
+# per-module pub lines:
+#   (root)                           45
+#   adapt                            26
+#   container                        74
+#   frame                            27
+#   limits                           16
+#   packet                           55
+#   policy                           10
+#   session                          85
+#   timeline                         22
+#   track                            63
+
+## items (423 lines)
+
+pub mod zencodec_media
+pub mod adapt
+#[non_exhaustive] pub enum adapt::AdaptError<A, B>
+pub adapt::AdaptError::Convert(zencodec::traits::BoxedError)
+pub adapt::AdaptError::Decode(session::SessionError<B>)
+pub adapt::AdaptError::Demux(zencodec_io::stepper::DriveFailure<session::SessionError<A>, core::convert::Infallible>)
+pub adapt::AdaptError::Encode(session::SessionError<A>)
+pub adapt::AdaptError::FrameCountMismatch
+pub adapt::AdaptError::Map(zencodec::frame_storage::MapError)
+pub adapt::AdaptError::MissingTimestamp
+pub adapt::AdaptError::Mux(session::SessionError<B>)
+pub adapt::AdaptError::PatchesNotAllowed
+pub adapt::AdaptError::Shape
+pub adapt::AdaptError::Sink(zencodec::sink::SinkError)
+pub adapt::AdaptError::Time(zencodec::animation::TimingError)
+pub adapt::AdaptError::Unsupported(zencodec::capabilities::UnsupportedOperation)
+pub struct adapt::AnimationVideoEncoder<E, M, P>
+pub fn adapt::AnimationVideoEncoder<E, M, P>::new(E, M, P, u32) -> core::result::Result<Self, adapt::AdaptError<<E as session::VideoEncoder>::Error, <M as container::Muxer>::Error>>
+pub struct adapt::Gray8
+pub struct adapt::VideoAnimationDecoder<D, C, R>
+pub fn adapt::VideoAnimationDecoder<D, C, R>::demuxer(&self) -> &D
+pub fn adapt::VideoAnimationDecoder<D, C, R>::frames_decoded(&self) -> u64
+pub fn adapt::VideoAnimationDecoder<D, C, R>::new(alloc::rcs::arc::Arc<[u8]>, D, C, R, zencodec::animation::FrameDuration, usize) -> Self
+pub trait adapt::CaptureFrame
+pub fn adapt::CaptureFrame::capture(&mut self, &zenpixels::buffer::PixelSlice<'_>, &session::CodecConfig, zencodec::frame::FrameTiming) -> core::result::Result<zencodec::frame_storage::Frame, zencodec::traits::BoxedError>
+pub trait adapt::RenderFrame
+pub fn adapt::RenderFrame::canvas_descriptor(&self, &track::TrackInfo) -> core::result::Result<zenpixels::descriptor::PixelDescriptor, zencodec::traits::BoxedError>
+pub fn adapt::RenderFrame::render(&mut self, &zencodec::frame_storage::Frame, &mut zenpixels::buffer::PixelSliceMut<'_>) -> core::result::Result<(), zencodec::traits::BoxedError>
+pub mod container
+pub use container::AccessPattern
+pub use container::ByteRange
+pub use container::Input
+pub use container::InputRequest
+pub use container::MuxFinish
+pub use container::Patch
+pub use container::PatchError
+#[non_exhaustive] pub enum container::DemuxEvent
+pub container::DemuxEvent::ConfigChanged
+pub container::DemuxEvent::ConfigChanged::epoch: u32
+pub container::DemuxEvent::ConfigChanged::track: u32
+pub container::DemuxEvent::Done
+pub container::DemuxEvent::Headers
+pub container::DemuxEvent::Need
+pub container::DemuxEvent::Packet(packet::Packet)
+pub container::DemuxEvent::Seeked(container::SeekResult)
+#[non_exhaustive] pub enum container::SeekMode
+pub container::SeekMode::AtOrAfter
+pub container::SeekMode::AtOrBefore
+pub container::SeekMode::Nearest
+#[non_exhaustive] pub enum container::SeekScope
+pub container::SeekScope::Any
+pub container::SeekScope::RandomAccessPoints
+#[non_exhaustive] pub enum container::SeekStatus
+pub container::SeekStatus::Positioned(container::SeekResult)
+pub container::SeekStatus::Scanning
+pub struct container::DemuxProgress
+pub container::DemuxProgress::consumed: usize
+pub container::DemuxProgress::event: container::DemuxEvent
+pub const fn container::DemuxProgress::need(usize) -> Self
+pub const fn container::DemuxProgress::new(usize, container::DemuxEvent) -> Self
+pub struct container::DemuxStage<'a, D: ?core::marker::Sized>(pub &'a mut D)
+#[non_exhaustive] pub struct container::MuxHint
+pub container::MuxHint::forward_only: bool
+pub const fn container::MuxHint::forward_only() -> Self
+pub struct container::MuxTiming
+pub const container::MuxTiming::AT_FINISH: Self
+pub const fn container::MuxTiming::patches_at_finish(&self) -> bool
+pub const fn container::MuxTiming::streaming() -> Self
+pub const fn container::MuxTiming::streaming_with_patches() -> Self
+pub const fn container::MuxTiming::streams(&self) -> bool
+pub struct container::MuxerShim<M>(pub M)
+#[non_exhaustive] pub struct container::SeekResult
+pub container::SeekResult::config_epoch: u32
+pub container::SeekResult::ordinal: u64
+pub container::SeekResult::pts: zencodec::time::Timestamp
+pub container::SeekResult::random_access: packet::RandomAccess
+pub const fn container::SeekResult::new(zencodec::time::Timestamp, u64, packet::RandomAccess, u32) -> Self
+#[non_exhaustive] pub struct container::SeekTarget
+pub container::SeekTarget::mode: container::SeekMode
+pub container::SeekTarget::scope: container::SeekScope
+pub container::SeekTarget::time: zencodec::time::Timestamp
+pub container::SeekTarget::track: u32
+pub const fn container::SeekTarget::new(u32, zencodec::time::Timestamp, container::SeekMode, container::SeekScope) -> Self
+pub trait container::Demuxer
+pub type container::Demuxer::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn container::Demuxer::access_pattern(&self) -> zencodec::source::AccessPattern
+pub fn container::Demuxer::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
+pub fn container::Demuxer::seek(&mut self, &container::SeekTarget) -> core::result::Result<container::SeekStatus, session::SessionError<Self::Error>>
+pub fn container::Demuxer::step(&mut self, zencodec::traits::incremental::Input<'_>, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<container::DemuxProgress, session::SessionError<Self::Error>>
+pub fn container::Demuxer::tracks(&self) -> &[track::TrackInfo]
+pub trait container::DynMuxer
+pub fn container::DynMuxer::begin(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn container::DynMuxer::begin_exact_presentation(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn container::DynMuxer::begin_exact_timing(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn container::DynMuxer::consume_output(&mut self, usize)
+pub fn container::DynMuxer::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub fn container::DynMuxer::pending_output(&self) -> &[u8]
+pub fn container::DynMuxer::take_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn container::DynMuxer::write_packet(&mut self, packet::Packet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), session::SessionError<zencodec::traits::incremental::ErasedError>>
+pub trait container::Muxer
+pub type container::Muxer::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn container::Muxer::begin(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<Self::Error>>
+pub fn container::Muxer::begin_exact_presentation(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<Self::Error>>
+pub fn container::Muxer::begin_exact_timing(&mut self, &[track::TrackInfo], container::MuxHint) -> core::result::Result<container::MuxTiming, session::SessionError<Self::Error>>
+pub fn container::Muxer::consume_output(&mut self, usize)
+pub fn container::Muxer::finish(self, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output_patch::OutputFinish, session::SessionError<Self::Error>> where Self: core::marker::Sized
+pub fn container::Muxer::pending_output(&self) -> &[u8]
+pub fn container::Muxer::take_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn container::Muxer::write_packet(&mut self, packet::Packet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), session::SessionError<Self::Error>>
+pub fn container::apply_finish(&mut alloc::vec::Vec<u8>, zencodec::output_patch::OutputFinish) -> core::result::Result<(), zencodec::output_patch::PatchError>
+pub fn container::erase_muxer<M: container::Muxer + core::marker::Send + 'static>(M) -> alloc::boxed::Box<(dyn container::DynMuxer + core::marker::Send)>
+pub type container::Request = zencodec::traits::incremental::InputRequest
+pub mod frame
+pub use frame::ColorClaim
+pub use frame::Crop
+pub use frame::Frame
+pub use frame::FrameGeometry
+pub use frame::FrameInterpretation
+pub use frame::FrameTiming
+pub use frame::MapError
+pub use frame::MappedPlanes
+pub use frame::Picture
+pub use frame::PlaneError
+pub use frame::PlaneRole
+pub use frame::Presentation
+#[non_exhaustive] pub enum frame::OwnedPlane
+pub frame::OwnedPlane::AccountedF32(zenpixels::plane::Plane<zencodec::storage::SharedStorage<f32>>)
+pub frame::OwnedPlane::AccountedU16(zenpixels::plane::Plane<zencodec::storage::SharedStorage<u16>>)
+pub frame::OwnedPlane::AccountedU8(zenpixels::plane::Plane<zencodec::storage::SharedStorage<u8>>)
+pub frame::OwnedPlane::F32(zenpixels::plane::PlaneBuf<f32>)
+pub frame::OwnedPlane::U16(zenpixels::plane::PlaneBuf<u16>)
+pub frame::OwnedPlane::U8(zenpixels::plane::PlaneBuf<u8>)
+pub fn frame::OwnedPlane::view(&self) -> zenpixels::plane::AnyPlane<'_>
+#[non_exhaustive] pub enum frame::OwnedPlanesError
+pub frame::OwnedPlanesError::StorageMismatch
+pub frame::OwnedPlanesError::StorageMismatch::index: usize
+pub struct frame::OwnedPlanes
+pub fn frame::OwnedPlanes::encoding(&self, usize) -> core::option::Option<zenpixels::plane::PlaneEncoding>
+pub fn frame::OwnedPlanes::from_encoded_planes(alloc::vec::Vec<(frame::OwnedPlane, zenpixels::plane::PlaneEncoding)>) -> core::result::Result<Self, frame::OwnedPlanesError>
+pub fn frame::OwnedPlanes::new(alloc::vec::Vec<frame::OwnedPlane>, zenpixels::sample::SampleEncoding) -> core::result::Result<Self, frame::OwnedPlanesError>
+pub mod limits
+#[non_exhaustive] pub struct limits::MediaLimitExceeded
+pub limits::MediaLimitExceeded::kind: zencodec::limits::LimitKind
+pub limits::MediaLimitExceeded::limit: u64
+pub limits::MediaLimitExceeded::requested: u64
+pub const fn limits::MediaLimitExceeded::check(zencodec::limits::LimitKind, u64, u64) -> core::result::Result<(), Self>
+#[non_exhaustive] pub struct limits::MediaLimits
+pub limits::MediaLimits::max_header_bytes: u64
+pub limits::MediaLimits::max_packet_bytes: usize
+pub limits::MediaLimits::max_queued_frames: usize
+pub limits::MediaLimits::max_queued_packets: usize
+pub limits::MediaLimits::max_table_entries: u64
+pub limits::MediaLimits::max_tracks: u32
+pub const limits::MediaLimits::DEFAULT: Self
+pub fn limits::MediaLimits::check_header_bytes(&self, u64) -> core::result::Result<(), limits::MediaLimitExceeded>
+pub fn limits::MediaLimits::check_packet_bytes(&self, u64) -> core::result::Result<(), limits::MediaLimitExceeded>
+pub fn limits::MediaLimits::check_table_entries(&self, u64) -> core::result::Result<(), limits::MediaLimitExceeded>
+pub fn limits::MediaLimits::check_tracks(&self, u64) -> core::result::Result<(), limits::MediaLimitExceeded>
+pub const fn limits::MediaLimits::with_max_header_bytes(self, u64) -> Self
+pub const fn limits::MediaLimits::with_max_packet_bytes(self, usize) -> Self
+pub const fn limits::MediaLimits::with_max_queued_frames(self, usize) -> Self
+pub const fn limits::MediaLimits::with_max_queued_packets(self, usize) -> Self
+pub const fn limits::MediaLimits::with_max_table_entries(self, u64) -> Self
+pub const fn limits::MediaLimits::with_max_tracks(self, u32) -> Self
+pub mod packet
+#[non_exhaustive] pub enum packet::PacketError
+pub packet::PacketError::Empty
+pub packet::PacketError::OutOfRange
+#[non_exhaustive] pub enum packet::PacketPayload
+pub packet::PacketPayload::Accounted(zencodec::storage::SharedStorage<u8>)
+pub packet::PacketPayload::Owned(alloc::vec::Vec<u8>)
+pub packet::PacketPayload::Shared
+pub packet::PacketPayload::Shared::bytes: alloc::rcs::arc::Arc<[u8]>
+pub packet::PacketPayload::Shared::len: usize
+pub packet::PacketPayload::Shared::start: usize
+pub fn packet::PacketPayload::as_bytes(&self) -> &[u8]
+pub fn packet::PacketPayload::into_vec(self) -> alloc::vec::Vec<u8>
+pub fn packet::PacketPayload::is_empty(&self) -> bool
+pub fn packet::PacketPayload::len(&self) -> usize
+pub enum packet::RandomAccess
+pub packet::RandomAccess::No
+pub packet::RandomAccess::Unknown
+pub packet::RandomAccess::Yes
+#[non_exhaustive] pub struct packet::Discard
+pub packet::Discard::end: core::option::Option<zencodec::animation::FrameDuration>
+pub packet::Discard::start: core::option::Option<zencodec::animation::FrameDuration>
+pub const fn packet::Discard::end(zencodec::animation::FrameDuration) -> Self
+pub const fn packet::Discard::start(zencodec::animation::FrameDuration) -> Self
+pub const fn packet::Discard::with_end(self, zencodec::animation::FrameDuration) -> Self
+pub struct packet::Packet
+pub fn packet::Packet::additions(&self) -> &[packet::PacketAddition]
+pub fn packet::Packet::bytes(&self) -> &[u8]
+pub fn packet::Packet::config_epoch(&self) -> u32
+pub fn packet::Packet::decode_time(&self) -> core::option::Option<zencodec::time::Timestamp>
+pub fn packet::Packet::discard(&self) -> core::option::Option<packet::Discard>
+pub fn packet::Packet::dts(&self) -> core::option::Option<zencodec::time::Timestamp>
+pub fn packet::Packet::duration_ticks(&self) -> core::option::Option<u64>
+pub fn packet::Packet::from_accounted(zencodec::storage::SharedStorage<u8>) -> core::result::Result<Self, packet::PacketError>
+pub fn packet::Packet::from_shared(alloc::rcs::arc::Arc<[u8]>, usize, usize) -> core::result::Result<Self, packet::PacketError>
+pub fn packet::Packet::from_vec(alloc::vec::Vec<u8>) -> core::result::Result<Self, packet::PacketError>
+pub fn packet::Packet::input_offset(&self) -> core::option::Option<u64>
+pub fn packet::Packet::is_empty(&self) -> bool
+pub fn packet::Packet::is_taken(&self) -> bool
+pub fn packet::Packet::len(&self) -> usize
+pub fn packet::Packet::ordinal(&self) -> core::option::Option<u64>
+pub fn packet::Packet::pts(&self) -> core::option::Option<zencodec::time::Timestamp>
+pub fn packet::Packet::random_access(&self) -> packet::RandomAccess
+pub fn packet::Packet::take(&mut self) -> core::option::Option<packet::PacketPayload>
+pub fn packet::Packet::track(&self) -> u32
+pub fn packet::Packet::with_addition(self, packet::PacketAddition) -> Self
+pub fn packet::Packet::with_config_epoch(self, u32) -> Self
+pub fn packet::Packet::with_discard(self, packet::Discard) -> Self
+pub fn packet::Packet::with_dts(self, zencodec::time::Timestamp) -> Self
+pub fn packet::Packet::with_duration_ticks(self, u64) -> Self
+pub fn packet::Packet::with_input_offset(self, u64) -> Self
+pub fn packet::Packet::with_ordinal(self, u64) -> Self
+pub fn packet::Packet::with_pts(self, zencodec::time::Timestamp) -> Self
+pub fn packet::Packet::with_random_access(self, packet::RandomAccess) -> Self
+pub fn packet::Packet::with_track(self, u32) -> Self
+pub struct packet::PacketAddition
+pub fn packet::PacketAddition::id(&self) -> u32
+pub fn packet::PacketAddition::new(u32, packet::PacketPayload) -> Self
+pub fn packet::PacketAddition::payload(&self) -> &packet::PacketPayload
+pub mod policy
+#[non_exhaustive] pub enum policy::Stage
+pub policy::Stage::Decode
+pub policy::Stage::Policy
+pub struct policy::Error
+pub fn policy::Error::report(&self) -> &zencodec::operation::policy::OperationReport
+pub const fn policy::Error::stage(&self) -> policy::Stage
+pub struct policy::PolicyDecoder<D, R>
+pub const fn policy::PolicyDecoder<D, R>::is_failed(&self) -> bool
+pub fn policy::PolicyDecoder<D, R>::new(D, R) -> Self
+pub fn policy::PolicyDecoder<D, R>::report(&self) -> &zencodec::operation::policy::OperationReport
+pub fn policy::PolicyDecoder<D, R>::with_policy_set(self, zencodec::operation::policy::PolicySet) -> Self
+pub fn policy::PolicyDecoder<D, R>::try_new<E: core::error::Error + core::marker::Send + core::marker::Sync + 'static>(impl core::ops::function::FnOnce() -> core::result::Result<D, E>, R, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, policy::Error>
+pub mod session
+pub use session::ErasedError
+#[non_exhaustive] pub enum session::ProtocolViolation
+pub session::ProtocolViolation::BeginTwice
+pub session::ProtocolViolation::ClockMismatch
+pub session::ProtocolViolation::EmptyPacket
+pub session::ProtocolViolation::EndOfStreamBeforeEndInput
+pub session::ProtocolViolation::EpochMismatch
+pub session::ProtocolViolation::FinishTwice
+pub session::ProtocolViolation::IndexRequired
+pub session::ProtocolViolation::MissingTimestamp
+pub session::ProtocolViolation::NoBegin
+pub session::ProtocolViolation::NoProgress
+pub session::ProtocolViolation::NotConfigured
+pub session::ProtocolViolation::ReceivePendingWithoutOutput
+pub session::ProtocolViolation::SendAfterEnd
+pub enum session::PumpError<U, D>
+pub session::PumpError::Downstream(D)
+pub session::PumpError::Upstream(U)
+#[non_exhaustive] pub enum session::Receive<T>
+pub session::Receive::EndOfStream
+pub session::Receive::NeedInput
+pub session::Receive::Ready(T)
+#[non_exhaustive] pub enum session::SendStatus
+pub session::SendStatus::Accepted
+pub session::SendStatus::ReceivePending
+#[non_exhaustive] pub enum session::SessionError<E>
+pub session::SessionError::Cancelled(enough::reason::StopReason)
+pub session::SessionError::Codec(E)
+pub session::SessionError::Finished
+pub session::SessionError::Limit(limits::MediaLimitExceeded)
+pub session::SessionError::Protocol(session::ProtocolViolation)
+pub session::SessionError::Unsupported(session::UnsupportedMedia)
+pub fn session::SessionError<E>::map_codec<F>(self, impl core::ops::function::FnOnce(E) -> F) -> session::SessionError<F>
+#[non_exhaustive] pub enum session::UnsupportedMedia
+pub session::UnsupportedMedia::Codec
+pub session::UnsupportedMedia::ConfigChange
+pub session::UnsupportedMedia::Container
+pub session::UnsupportedMedia::ExactTiming
+pub session::UnsupportedMedia::ForwardOnlyLayout
+pub session::UnsupportedMedia::PixelFormat
+pub session::UnsupportedMedia::PresentationTimeline
+pub session::UnsupportedMedia::Seek
+#[non_exhaustive] pub struct session::CodecConfig
+pub session::CodecConfig::codec: track::CodecId
+pub session::CodecConfig::epoch: u32
+pub session::CodecConfig::private: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub session::CodecConfig::time_base: zencodec::time::TimeBase
+pub session::CodecConfig::video: core::option::Option<track::VideoTrackInfo>
+pub fn session::CodecConfig::new(track::CodecId, zencodec::time::TimeBase) -> Self
+pub fn session::CodecConfig::with_epoch(self, u32) -> Self
+pub fn session::CodecConfig::with_private(self, alloc::rcs::arc::Arc<[u8]>) -> Self
+pub fn session::CodecConfig::with_video(self, track::VideoTrackInfo) -> Self
+pub struct session::FusedDecoder<D>
+pub fn session::FusedDecoder<D>::into_inner(self) -> D
+pub const fn session::FusedDecoder<D>::new(D) -> Self
+pub struct session::FusedEncoder<E>
+pub fn session::FusedEncoder<E>::into_inner(self) -> E
+pub const fn session::FusedEncoder<E>::new(E) -> Self
+pub struct session::VideoDecoderShim<D>(pub D)
+pub struct session::VideoEncoderShim<E>(pub E)
+#[non_exhaustive] pub struct session::VideoStreamInfo
+pub session::VideoStreamInfo::interpretation: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
+pub session::VideoStreamInfo::reorder_depth: core::option::Option<u32>
+pub fn session::VideoStreamInfo::new(alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>) -> Self
+pub trait session::VideoDecoder
+pub type session::VideoDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn session::VideoDecoder::configure(&mut self, &session::CodecConfig, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), session::SessionError<Self::Error>>
+pub fn session::VideoDecoder::end_input(&mut self) -> core::result::Result<(), session::SessionError<Self::Error>>
+pub fn session::VideoDecoder::receive(&mut self, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<session::Receive<zencodec::frame_storage::Frame>, session::SessionError<Self::Error>>
+pub fn session::VideoDecoder::reset(&mut self) -> core::result::Result<(), session::SessionError<Self::Error>>
+pub fn session::VideoDecoder::send(&mut self, &mut packet::Packet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<session::SendStatus, session::SessionError<Self::Error>>
+pub fn session::VideoDecoder::stream_info(&self) -> core::option::Option<&session::VideoStreamInfo>
+pub trait session::VideoEncoder
+pub type session::VideoEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn session::VideoEncoder::end_input(&mut self) -> core::result::Result<(), session::SessionError<Self::Error>>
+pub fn session::VideoEncoder::output_config(&self) -> core::option::Option<&session::CodecConfig>
+pub fn session::VideoEncoder::output_fidelity(&self) -> core::option::Option<zencodec::fidelity::Fidelity>
+pub fn session::VideoEncoder::receive(&mut self, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<session::Receive<packet::Packet>, session::SessionError<Self::Error>>
+pub fn session::VideoEncoder::send(&mut self, &zencodec::frame_storage::Frame, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<session::SendStatus, session::SessionError<Self::Error>>
+pub fn session::drain_decoder<D, F, E2>(&mut D, core::option::Option<&dyn how_far::pulse::Pulse>, F) -> core::result::Result<(), session::PumpError<session::SessionError<<D as session::VideoDecoder>::Error>, E2>> where D: session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
+pub fn session::drain_encoder<E, F, E2>(&mut E, core::option::Option<&dyn how_far::pulse::Pulse>, F) -> core::result::Result<(), session::PumpError<session::SessionError<<E as session::VideoEncoder>::Error>, E2>> where E: session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(packet::Packet) -> core::result::Result<(), E2>
+pub fn session::erase_video_decoder<D: session::VideoDecoder + core::marker::Send + 'static>(D) -> alloc::boxed::Box<session::DynVideoDecoder>
+pub fn session::erase_video_encoder<E: session::VideoEncoder + core::marker::Send + 'static>(E) -> alloc::boxed::Box<session::DynVideoEncoder>
+pub fn session::send_frame_until_accepted<E, F, E2>(&mut E, &zencodec::frame_storage::Frame, core::option::Option<&dyn how_far::pulse::Pulse>, F) -> core::result::Result<(), session::PumpError<session::SessionError<<E as session::VideoEncoder>::Error>, E2>> where E: session::VideoEncoder + ?core::marker::Sized, F: core::ops::function::FnMut(packet::Packet) -> core::result::Result<(), E2>
+pub fn session::send_packet_until_accepted<D, F, E2>(&mut D, &mut packet::Packet, core::option::Option<&dyn how_far::pulse::Pulse>, F) -> core::result::Result<(), session::PumpError<session::SessionError<<D as session::VideoDecoder>::Error>, E2>> where D: session::VideoDecoder + ?core::marker::Sized, F: core::ops::function::FnMut(zencodec::frame_storage::Frame) -> core::result::Result<(), E2>
+pub type session::DynVideoDecoder = (dyn session::VideoDecoder<Error = zencodec::traits::incremental::ErasedError> + core::marker::Send)
+pub type session::DynVideoEncoder = (dyn session::VideoEncoder<Error = zencodec::traits::incremental::ErasedError> + core::marker::Send)
+pub mod timeline
+#[non_exhaustive] pub enum timeline::EditContent
+pub timeline::EditContent::Gap
+pub timeline::EditContent::Media
+pub timeline::EditContent::Media::rate: timeline::PlaybackRate
+pub timeline::EditContent::Media::start: zencodec::time::Timestamp
+#[non_exhaustive] pub enum timeline::EditExtent
+pub timeline::EditExtent::Finite(zencodec::animation::FrameDuration)
+pub timeline::EditExtent::ToEnd
+#[non_exhaustive] pub enum timeline::TimelineError
+pub timeline::TimelineError::NonterminalOpenEnd
+pub timeline::TimelineError::ZeroRateDenominator
+#[non_exhaustive] pub enum timeline::TrackTimeline
+pub timeline::TrackTimeline::Edited(alloc::rcs::arc::Arc<timeline::EditList>)
+pub timeline::TrackTimeline::Unedited
+pub timeline::TrackTimeline::Unknown
+pub struct timeline::EditList
+pub fn timeline::EditList::new(zencodec::time::Timestamp, alloc::vec::Vec<timeline::EditSegment>) -> core::result::Result<Self, timeline::TimelineError>
+pub const fn timeline::EditList::origin(&self) -> zencodec::time::Timestamp
+pub fn timeline::EditList::segments(&self) -> &[timeline::EditSegment]
+pub struct timeline::EditSegment
+pub const fn timeline::EditSegment::content(self) -> timeline::EditContent
+pub const fn timeline::EditSegment::extent(self) -> timeline::EditExtent
+pub const fn timeline::EditSegment::new(timeline::EditExtent, timeline::EditContent) -> Self
+pub struct timeline::PlaybackRate
+pub const timeline::PlaybackRate::NORMAL: Self
+pub const fn timeline::PlaybackRate::denominator(self) -> u32
+pub fn timeline::PlaybackRate::new(i32, u32) -> core::result::Result<Self, timeline::TimelineError>
+pub const fn timeline::PlaybackRate::numerator(self) -> i32
+pub mod track
+#[non_exhaustive] pub enum track::CodecId
+pub track::CodecId::Aac
+pub track::CodecId::Av1
+pub track::CodecId::Flac
+pub track::CodecId::H264
+pub track::CodecId::Hevc
+pub track::CodecId::Opus
+pub track::CodecId::Other(track::CodecTag)
+pub track::CodecId::Pcm
+pub track::CodecId::Vp8
+pub track::CodecId::Vp9
+#[non_exhaustive] pub enum track::TrackError
+pub track::TrackError::ConflictingTimeline
+pub track::TrackError::NoChannels
+pub track::TrackError::ZeroDimension
+pub track::TrackError::ZeroSampleRate
+#[non_exhaustive] pub enum track::TrackKind
+pub track::TrackKind::Audio
+pub track::TrackKind::Data
+pub track::TrackKind::Subtitle
+pub track::TrackKind::Video
+#[non_exhaustive] pub struct track::AudioTrackInfo
+pub track::AudioTrackInfo::channels: track::ChannelLayout
+pub track::AudioTrackInfo::sample_rate: u32
+pub const fn track::AudioTrackInfo::new(u32, track::ChannelLayout) -> Self
+#[non_exhaustive] pub struct track::ChannelLayout
+pub track::ChannelLayout::count: u16
+pub track::ChannelLayout::mask: core::option::Option<u64>
+pub const fn track::ChannelLayout::new(u16) -> Self
+pub const fn track::ChannelLayout::with_mask(self, u64) -> Self
+pub struct track::CodecTag(_)
+pub fn track::CodecTag::as_str(&self) -> &str
+pub fn track::CodecTag::new(&str) -> Self
+pub struct track::TrackInfo
+pub fn track::TrackInfo::audio(u32, track::CodecId, zencodec::time::TimeBase, track::AudioTrackInfo) -> track::TrackInfoBuilder
+pub fn track::TrackInfo::audio_info(&self) -> core::option::Option<&track::AudioTrackInfo>
+pub fn track::TrackInfo::codec(&self) -> &track::CodecId
+pub fn track::TrackInfo::codec_delay(&self) -> core::option::Option<zencodec::animation::FrameDuration>
+pub fn track::TrackInfo::codec_private(&self) -> core::option::Option<&alloc::rcs::arc::Arc<[u8]>>
+pub fn track::TrackInfo::config_epoch(&self) -> u32
+pub fn track::TrackInfo::declared_duration_ticks(&self) -> core::option::Option<u64>
+pub fn track::TrackInfo::declared_packets(&self) -> core::option::Option<u64>
+pub fn track::TrackInfo::edit_delay_ticks(&self) -> core::option::Option<i64>
+pub fn track::TrackInfo::index(&self) -> u32
+pub fn track::TrackInfo::kind(&self) -> track::TrackKind
+pub fn track::TrackInfo::other(u32, track::TrackKind, track::CodecId, zencodec::time::TimeBase) -> track::TrackInfoBuilder
+pub fn track::TrackInfo::seek_preroll(&self) -> core::option::Option<zencodec::animation::FrameDuration>
+pub fn track::TrackInfo::time_base(&self) -> zencodec::time::TimeBase
+pub fn track::TrackInfo::timeline(&self) -> &timeline::TrackTimeline
+pub fn track::TrackInfo::video(u32, track::CodecId, zencodec::time::TimeBase, track::VideoTrackInfo) -> track::TrackInfoBuilder
+pub fn track::TrackInfo::video_info(&self) -> core::option::Option<&track::VideoTrackInfo>
+pub struct track::TrackInfoBuilder(_)
+pub fn track::TrackInfoBuilder::build(self) -> core::result::Result<track::TrackInfo, track::TrackError>
+pub fn track::TrackInfoBuilder::with_codec_delay(self, zencodec::animation::FrameDuration) -> Self
+pub fn track::TrackInfoBuilder::with_codec_private(self, alloc::rcs::arc::Arc<[u8]>) -> Self
+pub fn track::TrackInfoBuilder::with_config_epoch(self, u32) -> Self
+pub fn track::TrackInfoBuilder::with_declared_duration_ticks(self, u64) -> Self
+pub fn track::TrackInfoBuilder::with_declared_packets(self, u64) -> Self
+pub fn track::TrackInfoBuilder::with_edit_delay_ticks(self, i64) -> Self
+pub fn track::TrackInfoBuilder::with_seek_preroll(self, zencodec::animation::FrameDuration) -> Self
+pub fn track::TrackInfoBuilder::with_timeline(self, timeline::TrackTimeline) -> Self
+#[non_exhaustive] pub struct track::VideoTrackInfo
+pub track::VideoTrackInfo::coded_height: u32
+pub track::VideoTrackInfo::coded_width: u32
+pub track::VideoTrackInfo::color: core::option::Option<zenpixels::cicp::Cicp>
+pub track::VideoTrackInfo::display: core::option::Option<(u32, u32)>
+pub const fn track::VideoTrackInfo::new(u32, u32) -> Self
+pub const fn track::VideoTrackInfo::with_color(self, zenpixels::cicp::Cicp) -> Self
+pub const fn track::VideoTrackInfo::with_display(self, u32, u32) -> Self
+
+## trait impls (58 types)
+
+adapt::AdaptError<A, B>: Debug, Display
+adapt::Gray8: Clone, Debug, Default, adapt::CaptureFrame, adapt::RenderFrame
+alloc::boxed::Box<D>: session::VideoDecoder
+alloc::boxed::Box<E>: session::VideoEncoder
+container::DemuxEvent: Debug
+container::DemuxProgress: Debug
+container::DemuxStage<'_, D>: zencodec_io::stepper::ByteStepper
+container::DemuxStage<'a, D>: Debug
+container::MuxHint: Clone, Copy, Debug, Default
+container::MuxTiming: Clone, Copy, Debug, Eq, Hash, PartialEq
+container::MuxerShim<M>: container::DynMuxer
+container::SeekMode: Clone, Copy, Debug, Eq, PartialEq
+container::SeekResult: Clone, Copy, Debug, Eq, PartialEq
+container::SeekScope: Clone, Copy, Debug, Eq, PartialEq
+container::SeekStatus: Clone, Copy, Debug, Eq, PartialEq
+container::SeekTarget: Clone, Copy, Debug
+frame::OwnedPlane: Clone, Debug
+frame::OwnedPlanes: Clone, Debug, zencodec::frame_storage::Picture
+frame::OwnedPlanesError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+limits::MediaLimitExceeded: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+limits::MediaLimits: Clone, Copy, Debug, Default, Eq, PartialEq
+packet::Discard: Clone, Copy, Debug, Eq, PartialEq
+packet::Packet: Clone, Debug
+packet::PacketAddition: Clone, Debug
+packet::PacketError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+packet::PacketPayload: Clone, Debug
+packet::RandomAccess: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+policy::Error: Debug, Display, Error
+policy::PolicyDecoder<D, R>: session::VideoDecoder
+policy::Stage: Clone, Copy, Debug, Eq, PartialEq
+session::CodecConfig: Clone, Debug, From<&track::TrackInfo>
+session::FusedDecoder<D>: session::VideoDecoder
+session::FusedEncoder<E>: session::VideoEncoder
+session::ProtocolViolation: Clone, Copy, Debug, Eq, PartialEq
+session::PumpError<U, D>: Debug, Display, Error
+session::Receive<T>: Debug
+session::SendStatus: Clone, Copy, Debug, Eq, PartialEq
+session::SessionError<E>: Debug, Display, Error, From<enough::reason::StopReason>
+session::UnsupportedMedia: Clone, Copy, Debug, Eq, PartialEq
+session::VideoDecoderShim<D>: session::VideoDecoder
+session::VideoEncoderShim<E>: session::VideoEncoder
+session::VideoStreamInfo: Clone, Debug
+timeline::EditContent: Clone, Copy, Debug, Eq, PartialEq
+timeline::EditExtent: Clone, Copy, Debug, Eq, PartialEq
+timeline::EditList: Debug, Eq, PartialEq
+timeline::EditSegment: Clone, Copy, Debug, Eq, PartialEq
+timeline::PlaybackRate: Clone, Copy, Debug, Eq, PartialEq
+timeline::TimelineError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+timeline::TrackTimeline: Clone, Debug, Default, Eq, PartialEq
+track::AudioTrackInfo: Clone, Copy, Debug, Eq, PartialEq
+track::ChannelLayout: Clone, Copy, Debug, Eq, PartialEq
+track::CodecId: Clone, Debug, Eq, Hash, PartialEq
+track::CodecTag: Clone, Debug, Eq, Hash, PartialEq
+track::TrackError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+track::TrackInfo: Clone, Debug
+track::TrackInfoBuilder: Clone, Debug
+track::TrackKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+track::VideoTrackInfo: Clone, Copy, Debug, Eq, PartialEq
+impl<A, B> core::error::Error for adapt::AdaptError<A, B> where A: core::error::Error + 'static, B: core::error::Error + 'static
+impl<E, M, P> zencodec::traits::encoder::AnimationFrameEncoder for adapt::AnimationVideoEncoder<E, M, P> where E: session::VideoEncoder + core::marker::Send, M: container::Muxer + core::marker::Send, P: adapt::CaptureFrame + core::marker::Send
+impl<D, C, R> zencodec::traits::decoder::AnimationFrameDecoder for adapt::VideoAnimationDecoder<D, C, R> where D: container::Demuxer + core::marker::Send, C: session::VideoDecoder + core::marker::Send, R: adapt::RenderFrame + core::marker::Send
+
+## auto traits
+
+43 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+adapt::AdaptError<A, B>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+adapt::AnimationVideoEncoder<E, M, P>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+adapt::VideoAnimationDecoder<D, C, R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+container::DemuxStage<'a, D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+container::MuxerShim<M>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+policy::Error: !RefUnwindSafe !UnwindSafe
+policy::PolicyDecoder<D, R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::FusedDecoder<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::FusedEncoder<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::PumpError<U, D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::Receive<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::SessionError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::VideoDecoderShim<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+session::VideoEncoderShim<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

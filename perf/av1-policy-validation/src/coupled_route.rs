@@ -31,7 +31,6 @@ pub(crate) trait ConversionRoute {
     fn push_conversion(
         &mut self,
         input: &Frame,
-        target: &FrameInterpretation,
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause>;
@@ -40,13 +39,14 @@ impl<R: OperationPolicy> ConversionRoute for Candidate<R> {
     fn push_conversion(
         &mut self,
         input: &Frame,
-        target: &FrameInterpretation,
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause> {
+        let target = offer.encoder_input.clone();
+        let timing = offer.timing;
         self.push_route(
             input,
-            (target, input.timing()),
+            (&target, timing),
             Some(offer),
             execute,
             Some(&NoPulse),
@@ -63,11 +63,10 @@ impl<
     fn push_conversion(
         &mut self,
         input: &Frame,
-        target: &FrameInterpretation,
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause> {
-        self.push_converted(input.clone(), target, offer, |_| execute(), Some(&NoPulse))
+        self.push_converted(input.clone(), offer, |_| execute(), Some(&NoPulse))
             .map_err(Into::into)
     }
 }
@@ -144,7 +143,7 @@ pub(crate) fn push(
         ),
     );
     target.color = ColorClaim::new(None, None, Some(Cicp::new(1, 13, 0, true)));
-    let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+    let mut offer = FrameConversionOffer::new(target.clone().into(), input.timing());
     offer.assumed_chroma_siting =
         (info.layout.siting() == ChromaSiting::Unknown).then_some(ChromaSiting::Center);
     offer.admitted_bytes =
@@ -152,7 +151,7 @@ pub(crate) fn push(
     // Float conversion followed by explicit round-to-nearest U8 saturation.
     // Lossless AV1 preserves these converted codes, not the source samples.
     let output_target = Arc::new(target.clone());
-    operation.push_conversion(input, &target, offer, move || {
+    operation.push_conversion(input, offer, move || {
         executions.set(executions.get() + 1);
         let [g, b, r] = planes;
         let mut planes = [g.allocate()?, b.allocate()?, r.allocate()?];
@@ -256,8 +255,8 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
             );
             assert_eq!(facts.output.output_committed, i > 0);
             let choice = choices.first().unwrap();
-            let conversion = choice.value().conversion.unwrap();
-            assert_eq!(conversion.encoder_input.timing, timings[i]);
+            let conversion = choice.value().conversion.as_ref().unwrap();
+            assert_eq!(conversion.timing, timings[i]);
             assert!(conversion.preserves_samples);
             calls.set(i + 1);
             Ok(Decision::choose(choice))
@@ -269,8 +268,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
     );
     let mut expected = Vec::new();
     for (i, input) in inputs.iter().enumerate() {
-        let mut offer =
-            FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
+        let mut offer = FrameConversionOffer::new(input.interpretation().clone(), timings[i]);
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
         operation
@@ -351,7 +349,7 @@ fn coupled_native_changes_convert_to_one_committed_encoder_with_disclosed_losses
             let choice = choices.first().unwrap();
             let offer = choice.value();
             assert_eq!(offer.fidelity, Some(Fidelity::Lossless));
-            let conversion = offer.conversion.unwrap();
+            let conversion = offer.conversion.as_ref().unwrap();
             assert!(!conversion.preserves_samples);
             assert!(!conversion.preserves_extended_range);
             assert_eq!(
@@ -462,7 +460,12 @@ fn coupled_native_exact_sample_callback_refuses_lossless_encoder_with_lossy_conv
             );
             Ok(choices
                 .iter()
-                .find(|c| c.value().conversion.is_some_and(|c| c.preserves_samples))
+                .find(|c| {
+                    c.value()
+                        .conversion
+                        .as_ref()
+                        .is_some_and(|c| c.preserves_samples)
+                })
                 .map(Decision::choose)
                 .unwrap_or_else(|| {
                     Decision::decline(zencodec::operation::Decline::NoPreferredChoice)
@@ -505,8 +508,9 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
             .publish_header(|_| Ok(()), Some(&NoPulse))
             .unwrap();
         let target = inputs[0].interpretation();
-        let mut conversion = FrameConversionOffer::new(FrameFacts::new(target, inputs[1].timing()));
+        let mut conversion = FrameConversionOffer::new(target.clone(), inputs[1].timing());
         conversion.preserves_samples = false;
+        let expected_target = conversion.facts().encoder_input;
         let error = operation
             .push_route(
                 &inputs[1],
@@ -538,10 +542,7 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
         else {
             panic!()
         };
-        assert_eq!(
-            selected.conversion.unwrap().encoder_input,
-            conversion.encoder_input
-        );
+        assert_eq!(selected.conversion.unwrap().encoder_input, expected_target);
         assert!(operation.is_failed());
         assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(storage.reserved_bytes(), 0);

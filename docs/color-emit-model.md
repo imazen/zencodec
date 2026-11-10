@@ -32,7 +32,7 @@ pub fn resolve_color_emit(
 ) -> ColorEmitPlan;                   // { cicp: Option<Cicp>, icc: IccDisposition }
 
 pub enum ColorEmitPolicy { Compatibility, Balanced /*default*/, Compact, Verbatim, Custom(ColorEmitFields) }
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
+pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), SynthesizeGrayFrom(Cicp), Drop }
 pub struct ColorEmitFields { icc: IccRetention, cicp: CicpEmission }   // ::new(icc, cicp)
 pub enum CicpEmission { WhereValidCarrier /*default*/, WhereverSupported, Never }
 ```
@@ -41,7 +41,19 @@ Pure, `no_std`, **no CMS, no codec deps**. It emits a *plan*; the bytes are
 materialized one layer up. `SourceColor` is the type the pipeline actually
 produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
 `Metadata`). The resolver also handles the grayscale/CMYK terminal states
-(suppress CICP, keep ICC) and never emits a redundant `SynthesizeFrom(sRGB)`.
+(keep GRAY ICC plus supported CICP; CMYK stays ICC-only; a gray source with only non-default CICP gets
+`SynthesizeGrayFrom`) and never emits a redundant `SynthesizeFrom(sRGB)`.
+
+### HLG without an ICC rendering target
+
+For CICP-only HLG, a permitted native carrier takes priority over requesting a
+synthesized ICC companion, including on PNG/AVIF under Balanced or Compatibility.
+CICP alone provides no display peak/viewing conditions for HLG's full RGB OOTF.
+The same rule applies to gray and gray-alpha. An existing ICC remains governed
+by the selected retention policy; this exception does not rewrite its bytes.
+If no native CICP will be emitted (an ICC-only format, or a policy forbidding
+CICP), the resolver retains the synthesis obligation. The lowering must refuse
+unsupported synthesis; it must not write an undescribed HLG image. PQ is unchanged.
 
 ### Capabilities (three flags drive it)
 
@@ -66,6 +78,12 @@ each codec maps the plan's fields onto its own container carriers:
   `Profile`; on `NotNeeded` (sRGB) / `NeedsCms` / `CmsUnsupported` embed no ICC
   and let `cicp` carry the colour. The bundled `const` set (no CMS) reaches
   Display-P3 and SDR BT.2020; the `cms-moxcms` feature generates the rest.
+- `IccDisposition::SynthesizeGrayFrom(cicp)` →
+  `zenpixels_convert::icc_profiles::SynthesizedIcc::for_gray_cicp(cicp)`, the
+  GRAY-class profile for pixels with one color channel, with or without alpha. PNG
+  requires it for color types 0 and 4, and an RGB-class profile there is invalid.
+  CICP may accompany the profile where permitted; retain the ICC obligation and refuse
+  on `NeedsCms` / `CmsUnsupported` rather than write pixels that read as sRGB.
 - `IccDisposition::Drop` → no ICC.
 
 **What this is not:** a type-enforced atomic step. zenpixels-convert does ship
@@ -151,3 +169,24 @@ survived the grounding, all small and all on the `resolve_color_emit` shape:
 The `SynthesizeFrom`-silently-drops-color critical dissolves under lowering —
 `icc_profile_for_primaries` always materializes a non-sRGB profile, never a CMS,
 never a silent drop.
+
+## Authoritative ICC and unqualified embedded code points
+
+An embedded ICC `cicp` tag describes metadata; it does not prove that the
+profile's complete transform can be replaced. For ICC-authoritative input,
+CICP derivation now requires `IccIdentification::valid_use` to permit
+matrix/TRC substitution. Otherwise retain the ICC and derive no new CICP.
+Explicitly CICP-authoritative sources retain their existing behavior.
+
+The regression first demonstrated PNG deriving PQ code points from an
+unrecognized ICC carrying an extractable tag. The same witness covers PNG,
+JPEG XL and AVIF under balanced and compact policies. All 27 color policy
+controls pass with the guard and no pre-existing expectation changed. This
+is a separate proposal from the native carrier dependency cohort.
+
+The standalone `tools/icc-authority-validation` graph uses the exact reviewed
+pixel corpus at 3ceb0500 without repinning this workspace's dependency. It
+checks a real recognized PQ ICC with `MetadataOnly` permission, a recognized
+Display P3 matrix/TRC positive control, and explicit CICP authority. All three
+controls pass; the real MetadataOnly control fails against the original core
+function. CI and `just icc-authority-check` include this separate graph.

@@ -1,23 +1,23 @@
 {
   "repository": "imazen/zenpixels",
-  "revision": "fde59b96632557592cffa9b7301acd8db96ed078",
+  "revision": "76005fc99a7c822af1801a1f9f87e7d3dc98c510",
   "sources": [
     {
       "path": "zenpixels/src/sample/plane.rs",
       "line": 11,
-      "source_sha256": "f8875c17cbaed8ec38fcd538100b0eb819c57157a97a0f3e556938508210e1bb",
+      "source_sha256": "dd236c0688cb15b741eabf8989fd072b43cd5fd0a57c749ccce800ee5c493821",
       "code": "pub enum ChromaSubsampling {\n    /// One luma plane and no chroma planes (AV1 `I400`, HEVC 4:0:0).\n    Mono,\n    /// Equal horizontal and vertical resolution.\n    Yuv444,\n    /// Half horizontal resolution, rounded up at an odd edge.\n    Yuv422,\n    /// Half horizontal and vertical resolution, rounded up at odd edges.\n    Yuv420,\n}"
     },
     {
       "path": "zenpixels/src/sample/plane.rs",
       "line": 40,
-      "source_sha256": "f8875c17cbaed8ec38fcd538100b0eb819c57157a97a0f3e556938508210e1bb",
+      "source_sha256": "dd236c0688cb15b741eabf8989fd072b43cd5fd0a57c749ccce800ee5c493821",
       "code": "pub enum ChromaSiting {\n    /// The source did not establish a location.\n    #[default]\n    Unknown,\n    /// Centered horizontally and vertically in the subsampled luma cell\n    /// (JPEG style).\n    Center,\n    /// Horizontally co-sited with the left luma sample, vertically centered\n    /// between rows (MPEG-2 style 4:2:0).\n    Left,\n    /// Co-sited with the top-left luma sample.\n    TopLeft,\n}"
     },
     {
       "path": "zenpixels/src/sample/plane.rs",
       "line": 124,
-      "source_sha256": "f8875c17cbaed8ec38fcd538100b0eb819c57157a97a0f3e556938508210e1bb",
+      "source_sha256": "dd236c0688cb15b741eabf8989fd072b43cd5fd0a57c749ccce800ee5c493821",
       "code": "impl<'a> CodePlane<'a> {\n    pub fn new(plane: AnyPlane<'a>, encoding: SampleEncoding) -> Result<Self, CodePlaneError>;\n\n    pub fn component(\n        plane: AnyPlane<'a>,\n        components: usize,\n        index: usize,\n        encoding: SampleEncoding,\n    ) -> Result<Self, CodePlaneError>;\n\n    pub const fn width(self) -> usize;\n\n    pub const fn height(self) -> usize;\n\n    pub const fn encoding(self) -> SampleEncoding;\n\n    pub fn code(self, x: usize, y: usize) -> Option<u16>;\n}"
     },
     {

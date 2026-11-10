@@ -40,8 +40,8 @@ pub fn base(progressive: bool) -> Vec<u8> {
         .to_vec()
 }
 pub fn profile() -> Vec<u8> {
-    use zenpixels_convert::icc_profiles::{SynthesizedIcc, synthesize_icc_for_cicp};
-    match synthesize_icc_for_cicp(zencodec::Cicp::new(12, 13, 0, true)) {
+    use zenpixels_convert::icc_profiles::SynthesizedIcc;
+    match SynthesizedIcc::for_cicp(zencodec::Cicp::new(12, 13, 0, true)) {
         SynthesizedIcc::Profile(bytes) => bytes.into_owned(),
         other => panic!("expected an actual Display P3 profile: {other:?}"),
     }

@@ -113,6 +113,8 @@ pub enum UnsupportedMedia {
     PixelFormat,
     /// Exact preservation of packet timestamps and explicit durations.
     ExactTiming,
+    /// Complete preservation of the declared track presentation program.
+    PresentationTimeline,
 }
 
 /// Every session error is terminal for the session except `Codec` errors a
@@ -180,6 +182,9 @@ impl<E: core::error::Error + 'static> core::error::Error for SessionError<E> {
 
 /// What a decoder needs before the first packet of a configuration epoch:
 /// derived from a `TrackInfo`, or from a muxer's expectations.
+/// This is elementary codec configuration, not a presentation program. Keep the
+/// original TrackInfo for edit execution, priming and pre-roll; converting it
+/// here never certifies that a decoder or renderer applies those declarations.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct CodecConfig {

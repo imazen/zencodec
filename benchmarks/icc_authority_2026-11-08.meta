@@ -1,0 +1,19 @@
+Source: 47a5ad1e1997d3bb61442e8bf35eabc230454681
+Base: db6ec36d0072988888f6175695bc33c840bbcc93
+Change: require IdentificationUse::MatrixTrcSubstitution before deriving CICP from authoritative ICC; no dependency repinning.
+Original regression: failed at plan.cicp (derived PQ instead of None).
+Focused controls: 27 passed, 0 failed.
+Default workspace: 1357 passed, 0 failed, 39 existing ignores.
+All-feature workspace: 1467 passed, 0 failed, 39 existing ignores.
+All-feature strict Clippy: passed.
+Commands: just icc-authority-check
+Default test resource receipt: rc=0 123s | peak-RSS 0.51GiB | min-avail 26176MiB | peak-load 15.65
+All-feature test resource receipt: rc=0 85s | peak-RSS 0.30GiB | min-avail 26738MiB | peak-load 10.69
+All-feature Clippy resource receipt: rc=0 13s | peak-RSS 0.22GiB | min-avail 27550MiB | peak-load 9.21
+This is correctness qualification, not a performance comparison. All original failures and logs are preserved outside git. No established expectation changed.
+
+Separate real-profile graph: pixel source 3ceb0500059456aacc16c7aecb43b2d167ce1535; main workspace pins unchanged.
+Real fixtures: 3 passed (MetadataOnly rejection, qualified matrix/TRC positive, explicit CICP authority).
+Original source before guard: MetadataOnly rejection fails, two positive controls pass. Restored guard: all 3 pass.
+Real-fixture strict Clippy: passed, rc=0 8s | peak-RSS 0.35GiB | min-avail 27157MiB | peak-load 6.30
+Before/after restored-source test: rc=0 6s | peak-RSS 0.33GiB | min-avail 27284MiB | peak-load 6.25

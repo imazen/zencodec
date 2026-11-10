@@ -12,8 +12,34 @@ ROOT = Path(__file__).resolve().parent / "vendor"
 PINS = [
     ("imazen/zenavif", "94116d266299f347cfd10a75d440a5bc3b598d2c", ["zenmp4"]),
     ("imazen/zenextras", "403d46b9973a58b212def0602f4dd8cdee9560dc", ["zenivf", "zenwebm"]),
-    ("imazen/zenbitmaps", "5abfba282057f8e3eb4ab5bcc0e7c4ee5fe6146c", [""]),
+    ("imazen/zenbitmaps", "b446f830077a7153fe741bca3c9ad03da54c89ef", [""]),
 ]
+
+
+# These frozen adapters intentionally carry only the legacy scalar edit offset.
+# Keep their runtime code unchanged while the full timeline migration is reviewed.
+# Each allowance is function-scoped, recorded in sources.json, and count-checked.
+TIMELINE_COMPATIBILITY = {
+    "zenmp4/src/demux.rs": ["fn parse_track("],
+    "zenmp4/src/mux.rs": [
+        "    fn trak(&self, i: usize, t: &MuxTrack, tables: bool) -> Res<Vec<u8>> {",
+        "    fn begin(&mut self, tracks: &[TrackInfo], hint: MuxHint) -> Res<MuxTiming> {",
+    ],
+    "zenwebm/src/mux.rs": [
+        "    fn track_entry(&mut self, i: usize, t: &TrackInfo) -> Res<(Vec<u8>, bool)> {",
+    ],
+}
+
+
+def timeline_compatibility(relative, data):
+    source = data.decode()
+    for signature in TIMELINE_COMPATIBILITY.get(relative, []):
+        if source.count(signature) != 1:
+            raise RuntimeError(f"Frozen timeline compatibility site changed: {relative}: {signature}")
+        indent = signature[:len(signature) - len(signature.lstrip())]
+        attribute = indent + '#[allow(deprecated, reason = "Frozen scalar timeline adapter; full edit programs remain unqualified (issue187)")]\n'
+        source = source.replace(signature, attribute + signature)
+    return source.encode()
 
 
 def get(url):
@@ -29,13 +55,16 @@ def get(url):
 def fetch(job):
     repo, revision, source, target = job
     url = f"https://raw.githubusercontent.com/{repo}/{revision}/{source}"
-    data = get(url)
+    upstream = get(url)
+    data = timeline_compatibility(str(target.relative_to(ROOT)), upstream)
     if target.exists() and target.read_bytes() != data:
         raise RuntimeError(f"Refusing to overwrite changed source: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     return {"url": url, "path": str(target.relative_to(ROOT)),
-            "sha256": hashlib.sha256(data).hexdigest()}
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "upstream_sha256": hashlib.sha256(upstream).hexdigest(),
+            "timeline_compatibility": str(target.relative_to(ROOT)) in TIMELINE_COMPATIBILITY}
 
 
 def main():

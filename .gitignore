@@ -68,3 +68,11 @@ apidoc/target/
 # Built documentation artifact
 docs/_site/
 __pycache__/
+
+# Standalone ICC authority controls pin the profile permission corpus.
+!tools/icc-authority-validation/Cargo.lock
+
+# Compiler-derived signature-browser data is generated at site build time.
+docs/.cache/
+# Old catalog location stays unversioned for compatibility with older recipes.
+docs/code-api/

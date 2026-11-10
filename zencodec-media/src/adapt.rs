@@ -43,8 +43,9 @@ use crate::frame::{
     PlaneRole, Presentation,
 };
 use crate::session::{
-    CodecConfig, ProtocolViolation, PumpError, SessionError, VideoDecoder, VideoEncoder,
-    drain_decoder, drain_encoder, send_frame_until_accepted, send_packet_until_accepted,
+    CodecConfig, ProtocolViolation, PumpError, SessionError, UnsupportedMedia, VideoDecoder,
+    VideoEncoder, drain_decoder, drain_encoder, send_frame_until_accepted,
+    send_packet_until_accepted,
 };
 use crate::track::{TrackInfo, TrackKind};
 
@@ -306,11 +307,31 @@ pub struct VideoAnimationDecoder<D, C, R> {
     frames_decoded: u64,
 }
 
+// Raw codec timestamps cannot implement an ordered presentation program.
+fn require_raw_presentation<E>(track: &TrackInfo) -> Result<(), SessionError<E>> {
+    #[allow(deprecated)] // Legacy declarations also require explicit execution.
+    let legacy_edit = track.edit_delay_ticks().is_some();
+    if matches!(track.timeline(), crate::timeline::TrackTimeline::Edited(_))
+        || track.codec_delay().is_some()
+        || track.seek_preroll().is_some()
+        || legacy_edit
+    {
+        return Err(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline,
+        ));
+    }
+    Ok(())
+}
+
 impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R> {
     /// Decode `bytes` with `dem` and `dec`, rendering through `render`.
     /// `final_duration` is how long the last frame lasts: a video stream
     /// has none for its last presentation unless the container records
     /// one. `window` is the slice driver's read size (bytes per step).
+    /// This adapter does not execute edit programs, priming or pre-roll: known
+    /// declarations requiring them refuse before canvas allocation/configuration.
+    /// Unknown timelines retain the legacy timestamp-based behavior; they do not
+    /// establish complete presentation correctness.
     pub fn new(
         bytes: Arc<[u8]>,
         dem: D,
@@ -353,6 +374,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
             .iter()
             .find(|t| t.kind() == TrackKind::Video)
             .ok_or(AdaptError::Shape)?;
+        require_raw_presentation(track).map_err(AdaptError::Decode)?;
         let video = track.video_info().ok_or(AdaptError::Shape)?;
         let desc = self
             .render
@@ -392,6 +414,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
                         .iter()
                         .find(|t| t.index() == track)
                         .ok_or(AdaptError::Shape)?;
+                    require_raw_presentation(t).map_err(AdaptError::Decode)?;
                     self.dec
                         .configure(&CodecConfig::from(t), pulse)
                         .map_err(AdaptError::Decode)?;

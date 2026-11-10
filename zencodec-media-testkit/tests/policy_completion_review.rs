@@ -43,6 +43,24 @@ impl Muxer for HeaderOnlyMux {
     ) -> Result<MuxTiming, SessionError<Infallible>> {
         self.begin(tracks, hint)
     }
+    fn begin_exact_presentation(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Infallible>> {
+        if tracks.iter().any(|track| {
+            track.timeline() != &zencodec_media::timeline::TrackTimeline::Unedited
+                || track.codec_delay().is_some()
+                || track.seek_preroll().is_some()
+        }) {
+            return Err(SessionError::Unsupported(
+                UnsupportedMedia::PresentationTimeline,
+            ));
+        }
+        // The header-only witness rejects every packet. This tests dispatch,
+        // not native preservation of an edited presentation.
+        self.begin(tracks, hint)
+    }
     fn write_packet(
         &mut self,
         _: Packet,
@@ -322,6 +340,14 @@ impl Muxer for ObservedMux<'_> {
     ) -> Result<MuxTiming, SessionError<Infallible>> {
         self.begin(tracks, hint)
     }
+    fn begin_exact_presentation(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Infallible>> {
+        self.begins.set(self.begins.get() + 1);
+        self.inner.begin_exact_presentation(tracks, hint)
+    }
     fn write_packet(
         &mut self,
         packet: Packet,
@@ -394,4 +420,249 @@ fn staged_workspace_admission_precedes_mux_preparation() {
         assert_eq!(decisions.get(), 0);
         assert!(bytes.is_empty());
     }
+}
+
+#[test]
+fn retained_conversion_target_checks_context_alpha_and_timing_before_encoder_input() {
+    use std::sync::Arc;
+    use zencodec::{frame::Frame, operation::FrameConversionOffer};
+    use zenpixels::{AlphaMode, ColorContext, hdr::DiffuseWhite};
+    for drift in ["none", "profile", "white", "alpha", "timing"] {
+        let source = frame();
+        let target = Arc::new(
+            source
+                .interpretation()
+                .as_ref()
+                .clone()
+                .with_color_context(Arc::new(ColorContext::from_icc(&b"current"[..]))),
+        );
+        let target_timing = source.timing();
+        let mut bytes = Vec::new();
+        let calls = Cell::new(0);
+        let mut job = StagedEncode::new(
+            encoder(),
+            HeaderOnlyMux(vec![], None),
+            Forward(&mut bytes),
+            |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::FrameRoute { choices, .. } = question else {
+                    panic!()
+                };
+                let choice = choices.first().unwrap();
+                let conversion = choice.value().conversion.as_ref().unwrap();
+                assert!(Arc::ptr_eq(&conversion.encoder_input, &target));
+                assert_eq!(conversion.timing, target_timing);
+                Ok(Decision::choose(choice))
+            },
+            StorageBudget::new(1024, 16),
+            None,
+        )
+        .unwrap();
+        let result = job.push_converted(
+            source,
+            FrameConversionOffer::new(target.clone(), target_timing),
+            |held| {
+                calls.set(calls.get() + 1);
+                let mut interpretation = target.as_ref().clone();
+                let mut timing = target_timing;
+                match drift {
+                    "profile" => {
+                        interpretation.color_context =
+                            Some(Arc::new(ColorContext::from_icc(&b"different"[..])))
+                    }
+                    "white" => {
+                        interpretation.color_context = Some(Arc::new(
+                            ColorContext::from_icc(&b"current"[..])
+                                .with_diffuse_white(DiffuseWhite::BT2408),
+                        ))
+                    }
+                    "alpha" => interpretation.alpha_mode = Some(AlphaMode::Premultiplied),
+                    "timing" => timing = zencodec::frame::FrameTiming::default(),
+                    _ => {}
+                }
+                Ok(Frame::new(
+                    held.picture().clone(),
+                    Arc::new(interpretation),
+                    timing,
+                    held.presentation(),
+                ))
+            },
+            None,
+        );
+        assert_eq!(calls.get(), 1);
+        if drift == "none" {
+            result.unwrap(); // Ordinary, non-strict admission accepts the supported route.
+            assert!(!job.is_failed());
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.error().stage, zencodec_media::staged::Stage::Convert);
+            assert_eq!(
+                zencodec::find_cause::<zencodec_media::staged::Refusal>(&error),
+                Some(&zencodec_media::staged::Refusal::ConversionMismatch)
+            );
+            assert!(job.is_failed());
+        }
+        drop(job);
+        assert!(bytes.is_empty());
+    }
+}
+
+#[test]
+fn declared_timelines_cannot_fall_back_to_packet_only_or_legacy_mux_admission() {
+    use std::sync::Arc;
+    use zencodec_media::{
+        container::{DynMuxer, MuxerShim},
+        output::{Output, PreparedOutput},
+        timeline::{EditList, TrackTimeline},
+        track::{CodecId, VideoTrackInfo},
+    };
+    use zencodec_media_testkit::toy::ToyMuxer;
+    let make = |timeline| {
+        TrackInfo::video(0, CodecId::Av1, TimeBase::MILLIS, VideoTrackInfo::new(2, 2))
+            .with_timeline(timeline)
+            .build()
+            .unwrap()
+    };
+    let edited = make(TrackTimeline::Edited(Arc::new(
+        EditList::new(zencodec::time::Timestamp::new(0, TimeBase::MILLIS), vec![]).unwrap(),
+    )));
+    let mut typed = ToyMuxer::new(false);
+    assert!(matches!(
+        Muxer::begin_exact_presentation(
+            &mut typed,
+            std::slice::from_ref(&edited),
+            MuxHint::default()
+        ),
+        Err(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline
+        ))
+    ));
+    assert!(typed.pending_output().is_empty());
+    let mut erased = MuxerShim(ToyMuxer::new(false));
+    assert!(matches!(
+        DynMuxer::begin_exact_presentation(
+            &mut erased,
+            std::slice::from_ref(&edited),
+            MuxHint::default()
+        ),
+        Err(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline
+        ))
+    ));
+    assert!(DynMuxer::pending_output(&erased).is_empty());
+    for tracks in [
+        vec![edited],
+        vec![make(TrackTimeline::Unedited), make(TrackTimeline::Unknown)],
+    ] {
+        for legacy in [false, true] {
+            let mut bytes = Vec::new();
+            let result = if legacy {
+                Output::with_container_timing(
+                    HeaderOnlyMux(vec![], None),
+                    Forward(&mut bytes),
+                    &tracks,
+                    None,
+                )
+            } else {
+                Output::new(
+                    HeaderOnlyMux(vec![], None),
+                    Forward(&mut bytes),
+                    &tracks,
+                    None,
+                )
+            };
+            let error = match result {
+                Err(error) => error,
+                Ok(_) => panic!("timeline was silently discarded"),
+            };
+            assert_eq!(error.emitted, 0);
+            assert!(bytes.is_empty());
+            assert!(matches!(
+                error.stage,
+                zencodec_media::output::Stage::Prepare
+            ));
+        }
+    }
+    let mut bytes = Vec::new();
+    let prepared = PreparedOutput::new(
+        HeaderOnlyMux(vec![], None),
+        Forward(&mut bytes),
+        &[make(TrackTimeline::Unedited)],
+        None,
+    )
+    .unwrap();
+    assert!(prepared.facts().exact_timing);
+    assert!(prepared.facts().exact_presentation);
+    // Preparation keeps the header private; only publication/finish writes it.
+    prepared.publish(None).unwrap().finish(None).unwrap();
+    assert_eq!(bytes, b"header");
+}
+
+#[test]
+fn required_presentation_refuses_unknown_before_native_preparation() {
+    use zencodec_media::{
+        output::PreparedOutput,
+        track::{CodecId, VideoTrackInfo},
+    };
+    let track = TrackInfo::video(0, CodecId::Av1, TimeBase::MILLIS, VideoTrackInfo::new(2, 2))
+        .build()
+        .unwrap();
+    let begins = Cell::new(0);
+    let mut bytes = Vec::new();
+    let error = match PreparedOutput::preserving_presentation(
+        ObservedMux {
+            begins: &begins,
+            inner: HeaderOnlyMux(vec![], None),
+        },
+        Forward(&mut bytes),
+        &[track],
+        None,
+    ) {
+        Err(error) => error,
+        Ok(_) => panic!("unknown presentation was certified"),
+    };
+    assert_eq!(begins.get(), 0);
+    assert_eq!(error.emitted, 0);
+    assert!(bytes.is_empty());
+    assert!(matches!(
+        zencodec::find_cause::<SessionError<Infallible>>(&error),
+        Some(SessionError::Unsupported(
+            UnsupportedMedia::PresentationTimeline
+        ))
+    ));
+}
+
+#[test]
+fn ordinary_container_timing_accepts_explicitly_unedited_tracks() {
+    use zencodec_media::{
+        output::Output,
+        timeline::TrackTimeline,
+        track::{CodecId, VideoTrackInfo},
+    };
+    use zencodec_media_testkit::toy::ToyMuxer;
+    let track = TrackInfo::video(0, CodecId::Av1, TimeBase::MILLIS, VideoTrackInfo::new(2, 2))
+        .with_timeline(TrackTimeline::Unedited)
+        .build()
+        .unwrap();
+    let mut bytes = Vec::new();
+    let output = Output::with_container_timing(
+        ToyMuxer::new(false),
+        Forward(&mut bytes),
+        std::slice::from_ref(&track),
+        None,
+    )
+    .expect("an explicit container-timing choice needs no edit execution");
+    output.finish(None).unwrap();
+    assert!(!bytes.is_empty());
+    // Accepting native timing never upgrades this route to exact presentation.
+    let mut strict_bytes = Vec::new();
+    assert!(
+        Output::preserving_presentation(
+            ToyMuxer::new(false),
+            Forward(&mut strict_bytes),
+            &[track],
+            None
+        )
+        .is_err()
+    );
+    assert!(strict_bytes.is_empty());
 }

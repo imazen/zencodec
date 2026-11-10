@@ -730,7 +730,8 @@ struct FrameRouteOffer {
     workspace_upper_bound: Option<u64>,
 }
 struct FrameConversionOffer {
-    encoder_input: FrameFacts,
+    encoder_input: Arc<FrameInterpretation>,
+    timing: FrameTiming,
     preserves_samples: bool,
     preserves_extended_range: bool,
     assumed_chroma_siting: Option<frame::ChromaSiting>,
@@ -743,9 +744,21 @@ fn resolve_frame_route<R: OperationPolicy + ?Sized>(
     offers: &[FrameRouteOffer],
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
 ```
+
+The runtime conversion offer retains the full immutable current interpretation,
+including opaque ICC and alpha association. Its constructor takes that `Arc` and
+actual timing once. `StagedEncode::push_converted` checks the resulting frame
+against both before native input. It cannot substitute a different context just
+because geometry and source CICP match. The callback may inspect the retained
+target when color arrives late and select any supported admitted route.
+
+Reports store `FrameRouteSummary` / `FrameConversionFacts`, bounded copies with
+no profile payload or owner. These summaries diagnose a decision; equality of
+summaries never proves equality of current interpretations. `FrameFacts` records
+current-context presence and alpha association without copying ICC bytes.
 
 The destination registration is already fixed by the request. `Continue` keeps
 its current interpretation; `BeginSegment` starts an independently configured
@@ -951,7 +964,7 @@ fn resolve_image<R: OperationPolicy + ?Sized>(
 ) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
 fn resolve_frame<R: OperationPolicy + ?Sized>(
     interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
-    resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
+    resolver: &mut R, preset: PolicySet, pulse: Option<&dyn Pulse>,
 ) -> Result<DecisionRecord, At<PolicyFailure>>;
 
 // zencodec_media::policy, implements VideoDecoder
@@ -2313,7 +2326,7 @@ pub enum ColorEmitPolicy { Compatibility, Balanced, Compact, Verbatim, Custom(Co
 pub struct ColorEmitPlan { pub cicp: Option<Cicp>, pub icc: IccDisposition }
 
 #[non_exhaustive]
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
+pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), SynthesizeGrayFrom(Cicp), Drop }
 ```
 
 - **`ColorEmitPolicy`** — `Balanced` (default) writes CICP where it's a *safe sole
@@ -2329,7 +2342,9 @@ pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
   `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
   CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled
   `const` profile or a CMS-generated one, never a mis-tagged TRC. The plan never emits
-  a redundant `SynthesizeFrom(sRGB)`.
+  a redundant `SynthesizeFrom(sRGB)`. `SynthesizeGrayFrom(cicp)` is its GRAY-class
+  counterpart, lowered via `SynthesizedIcc::for_gray_cicp`, for a source with one color
+  channel (`channel_count` 1 or 2) and only non-default CICP.
 
 The emit-direction names can't be confused with the decode-side `SourceColor`. Design
 and rejected alternatives: `docs/color-emit-model.md`; how the framework resolves
@@ -2735,7 +2750,7 @@ safe backpressure or a whole-operation memory bound.
 `zencodec_media::staged::StagedEncode::new(encoder, muxer, destination, resolver,
 storage, pulse)` prepares exact-timing single-track output from the retained
 encoder configuration. `push(Frame, pulse)` retains the exact picture through
-policy. `push_converted(Frame, &FrameInterpretation, FrameConversionOffer,
+policy. `push_converted(Frame, FrameConversionOffer,
 FnOnce(Frame) -> Result<Frame, Cause>, pulse)` retains a prepared conversion,
 executes it once after selection and checks full output interpretation/timing.
 
@@ -3151,3 +3166,42 @@ proving a single native pass.
 erased setter, or `operation::EncodeRequest::with_orientation_mode`. Defaults
 refuse until a codec implements the requirement; omitting it preserves existing
 behavior. See [the contract and native limits](encode-orientation.md).
+
+### Source-depth decode preference
+
+`decode::negotiate_pixel_format_for_depth(preferred, available, source_bits)`
+first selects acceptable formats with enough channel precision to retain the
+source codes, then applies caller order. When only narrower outputs are accepted,
+the existing ranked fallback applies. Empty preferences select the first
+sufficient available format. The helper returns actual available metadata and
+does not convert pixels. Its initial consumers are deep zenavif/heic output
+selection; native decoder adoption is qualified separately.
+
+### Generation-A fidelity request
+
+`Fidelity::zensim_a(score)` selects `LossyTarget::ApproxZensimA(score)` and
+remains distinct from generation B. Native configs report the actual resolved
+target. A checked request refuses a substituted or unsupported calibration;
+this does not add a measured-quality guarantee or an encode loop.
+
+
+### Exact track presentation (core contract stack layer 4)
+
+The media declaration model is in `zencodec_media::timeline`:
+
+```rust
+TrackTimeline::{Unknown, Unedited, Edited(Arc<EditList>)}
+EditList::new(origin: Timestamp, segments: Vec<EditSegment>) -> Result<EditList, TimelineError>
+EditSegment::new(extent: EditExtent, content: EditContent) -> EditSegment
+EditExtent::{Finite(FrameDuration), ToEnd}
+EditContent::{Gap, Media { start: Timestamp, rate: PlaybackRate }}
+PlaybackRate::new(numerator: i32, denominator: u32) -> Result<PlaybackRate, TimelineError>
+```
+
+`ToEnd` must be terminal. Zero finite duration remains finite; empty edited
+programs remain empty. Rates reduce exactly without floating-point conversion.
+Track builders reject complete/legacy declaration conflicts. Muxer and DynMuxer
+have default-refusing `begin_exact_presentation(&mut self, &[TrackInfo], MuxHint)`.
+Use `PreparedOutput::preserving_presentation` to require admission before header
+publication; packet-only timing is not complete presentation evidence. See
+[the media contract](media-contract.md#complete-presentation-is-separate-from-packet-timing).

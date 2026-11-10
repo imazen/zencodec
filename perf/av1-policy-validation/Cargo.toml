@@ -14,23 +14,23 @@ zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", default-features = false }
 enough = "0.4.4"
 bytemuck = "1.25.2"
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c", features = ["media-encode", "_dev"] }
-rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec6561204ff310250bf2bc1b2c6faa42c3b5", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
-zenmp4 = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c", version = "0.1.0" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "b0901f3c87ce414012d6a8c933765c183c94e588", features = ["media-encode", "_dev"] }
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "68e499ec455dc6bc29ee4b69abd64022a6099411", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+zenmp4 = { git = "https://github.com/imazen/zenavif", rev = "b0901f3c87ce414012d6a8c933765c183c94e588", version = "0.1.0" }
 zenivf = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", version = "0.1.0" }
 zenwebm = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", version = "0.1.0" }
 
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-media = { path = "../../zencodec-media" }
 zenmeta = { path = "../../zenmeta" }
 zencodec = { path = "../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "5bdb194b64c39052f33d84f6d772158b5e660802" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

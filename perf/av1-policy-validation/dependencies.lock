@@ -52,9 +52,9 @@ checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 
 [[package]]
 name = "archmage"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
+checksum = "67dcf4e0bcce8da7704d177f604cf43299777de9d0f052ffe8822ab188de2820"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -63,9 +63,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
+checksum = "8ec18ef9ee506a934ab4f46f204f1d1d83528283d5400df800688748268b82bc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -287,9 +287,8 @@ checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "garb"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=58ce9cad7b337418a7abe9b1f6e3e4bd1928b385#58ce9cad7b337418a7abe9b1f6e3e4bd1928b385"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -431,8 +430,7 @@ dependencies = [
 [[package]]
 name = "linear-srgb"
 version = "0.6.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0e61c33d85bc56dcaf27cdf48ca32b8e34af7236584eb1d8a47316c49e0be1"
+source = "git+https://github.com/imazen/linear-srgb?rev=52896f4b24664315586bd60e5f048253b1f69052#52896f4b24664315586bd60e5f048253b1f69052"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -470,12 +468,11 @@ dependencies = [
 
 [[package]]
 name = "magetypes"
-version = "0.9.30"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
+checksum = "f509b5e651143f19077f1d3874e87d1f8ed617f7c257f60e38d58f27563e0f98"
 dependencies = [
  "archmage",
- "libm",
  "rustversion",
 ]
 
@@ -600,6 +597,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -702,7 +705,7 @@ dependencies = [
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.4.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
+source = "git+https://github.com/imazen/rav1d-safe?rev=68e499ec455dc6bc29ee4b69abd64022a6099411#68e499ec455dc6bc29ee4b69abd64022a6099411"
 dependencies = [
  "aligned",
  "loom",
@@ -713,7 +716,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.7.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
+source = "git+https://github.com/imazen/rav1d-safe?rev=68e499ec455dc6bc29ee4b69abd64022a6099411#68e499ec455dc6bc29ee4b69abd64022a6099411"
 dependencies = [
  "aligned",
  "archmage",
@@ -991,7 +994,7 @@ dependencies = [
 [[package]]
 name = "ultrahdr-core"
 version = "0.6.0"
-source = "git+https://github.com/imazen/ultrahdr?rev=7e9d296c9e037e626234c9f0e8673d48278f83f0#7e9d296c9e037e626234c9f0e8673d48278f83f0"
+source = "git+https://github.com/imazen/ultrahdr?rev=5bdb194b64c39052f33d84f6d772158b5e660802#5bdb194b64c39052f33d84f6d772158b5e660802"
 dependencies = [
  "bytemuck",
  "enough",
@@ -1134,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
+source = "git+https://github.com/imazen/zenavif?rev=b0901f3c87ce414012d6a8c933765c183c94e588#b0901f3c87ce414012d6a8c933765c183c94e588"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1163,7 +1166,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
+source = "git+https://github.com/imazen/zenavif?rev=b0901f3c87ce414012d6a8c933765c183c94e588#b0901f3c87ce414012d6a8c933765c183c94e588"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1221,6 +1224,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenhash"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenhash?rev=98c385a4e54a#98c385a4e54a1d41870610e13a614295c538275c"
+dependencies = [
+ "archmage",
+ "whereat",
+]
+
+[[package]]
 name = "zenivf"
 version = "0.1.0"
 source = "git+https://github.com/imazen/zenextras?rev=403d46b9973a58b212def0602f4dd8cdee9560dc#403d46b9973a58b212def0602f4dd8cdee9560dc"
@@ -1240,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "zenmp4"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenavif?rev=94116d266299f347cfd10a75d440a5bc3b598d2c#94116d266299f347cfd10a75d440a5bc3b598d2c"
+source = "git+https://github.com/imazen/zenavif?rev=b0901f3c87ce414012d6a8c933765c183c94e588#b0901f3c87ce414012d6a8c933765c183c94e588"
 dependencies = [
  "zencodec",
  "zencodec-media",
@@ -1250,27 +1262,29 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "bytemuck",
  "imgref",
  "rgb",
  "whereat",
+ "zenhash",
 ]
 
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "archmage",
  "bytemuck",
+ "enough",
  "garb",
  "libm",
  "linear-srgb",
  "magetypes",
  "once_cell",
- "paste",
+ "pastey 0.2.3",
  "rgb",
  "whereat",
  "zenpixels",
@@ -1298,7 +1312,7 @@ dependencies = [
  "noop_proc_macro",
  "num-derive",
  "num-traits",
- "pastey",
+ "pastey 0.1.1",
  "profiling",
  "rand",
  "rand_chacha",

@@ -1,0 +1,209 @@
+{
+  "revision": "49a12cc7246e52dfc872c81eca1ea4ebde839314",
+  "status": "passed",
+  "steps": [
+    {
+      "label": "io-sources",
+      "command": [
+        "python3",
+        "perf/io-validation/setup.py"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "io-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "perf/io-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "io-compile",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "perf/io-validation/Cargo.toml",
+        "--no-run",
+        "--locked",
+        "--test",
+        "site_examples",
+        "--test",
+        "encoder_retention",
+        "--test",
+        "policy_resolution",
+        "--test",
+        "policy_engine",
+        "--test",
+        "policy_native",
+        "--test",
+        "policy_disclosure",
+        "--test",
+        "policy_stream",
+        "--bin",
+        "policy_media",
+        "--bin",
+        "transport_contracts"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "jpeg-mox-update",
+      "command": [
+        "cargo",
+        "update",
+        "--manifest-path",
+        "perf/jpeg-policy-validation/Cargo.toml",
+        "-p",
+        "moxcms",
+        "--precise",
+        "0.9.2"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "jpeg-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "perf/jpeg-policy-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "jpeg-compile",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "perf/jpeg-policy-validation/Cargo.toml",
+        "--no-run",
+        "--locked",
+        "--lib",
+        "--tests"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "av1-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "perf/av1-policy-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "av1-compile",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "perf/av1-policy-validation/Cargo.toml",
+        "--no-run",
+        "--locked",
+        "--lib",
+        "--tests"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "spatial-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "perf/spatial-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "spatial-compile",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "perf/spatial-validation/Cargo.toml",
+        "--no-run",
+        "--locked",
+        "--lib",
+        "--tests",
+        "--features",
+        "cms_oracle,old_jpeg"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "lcms-metadata",
+      "command": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "perf/spatial-lcms-validation/Cargo.toml",
+        "--format-version",
+        "1"
+      ],
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "lcms-compile",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "perf/spatial-lcms-validation/Cargo.toml",
+        "--no-run",
+        "--locked",
+        "--lib",
+        "--tests",
+        "--features",
+        "cms_oracle,old_jpeg"
+      ],
+      "status": "passed",
+      "returncode": 0
+    }
+  ],
+  "stage": "lcms-compile",
+  "scope": "Selected no-run compilation only; no runtime or strict lint claim.",
+  "io_coverage": {
+    "integration_targets_compiled": 7,
+    "ci_integration_targets": 8,
+    "bins_compiled": 2,
+    "omitted": "policy_execution",
+    "runner_corrected_after_run": true,
+    "corrected_selection_rerun": false
+  },
+  "resource_wrapper": {
+    "returncode": 0,
+    "elapsed_seconds": 74,
+    "peak_rss_gib": 0.72,
+    "memory_cap": "4G",
+    "jobs": 2
+  },
+  "ci_source": "c83798f6db05417f22384e0be5993bed9287b94d",
+  "ci_workflow": "https://github.com/imazen/zencodec/actions/runs/42795327979"
+}

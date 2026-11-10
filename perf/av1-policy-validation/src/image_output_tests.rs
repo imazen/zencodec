@@ -115,6 +115,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                         Row::Bytes(row) => row.as_ptr() as usize,
                         Row::Words16(row) => row.as_ptr() as usize,
                         Row::Floats(_) => panic!("AV1 output became floating samples"),
+                        _ => panic!("unqualified AV1 row representation"),
                     };
                     assert_eq!(pointer, *address, "mapping must not copy the native plane");
                     for y in 0..plane.samples.dimensions().1 {
@@ -124,6 +125,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                                 actual.extend(row.iter().flat_map(|word| word.to_le_bytes()))
                             }
                             Row::Floats(_) => panic!("AV1 output became floating samples"),
+                            _ => panic!("unqualified AV1 row representation"),
                         }
                     }
                     assert!(plane.samples.row(plane.samples.dimensions().1).is_none());

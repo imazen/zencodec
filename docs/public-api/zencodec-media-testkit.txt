@@ -1,0 +1,84 @@
+# zencodec-media-testkit public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec-media-testkit.txt 48 lines (supported surface) | zencodec-media-testkit.features.txt 0 added (features: none) | zencodec-media-testkit.internal.txt 2 lines (2 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                 3
+#   pub types (struct/enum/trait/alias)         9
+#   pub consts/statics                          3
+#   free functions                             14
+#   inherent methods                            5
+#   struct fields                               4
+#   enum variants                               9
+#   trait roster entries (type × trait)        17
+#   auto-trait-complete types                   4
+#   auto-trait exceptions                       2
+#
+# per-module pub lines:
+#   (root)                           14
+#   checks                           10
+#   toy                              23
+
+## items (39 lines)
+
+pub mod zencodec_media_testkit
+pub mod checks
+pub checks::Failure::check: &'static str
+pub checks::Failure::detail: alloc::string::String
+pub mod toy
+#[non_exhaustive] pub enum toy::ToyError
+pub toy::ToyError::BadMagic
+pub toy::ToyError::BadPayload
+pub toy::ToyError::BadTimeBase
+pub toy::ToyError::HeadersFirst
+pub toy::ToyError::NoSuchFrame
+pub toy::ToyError::NoSuchTrack
+pub toy::ToyError::ShapeMismatch
+pub toy::ToyError::Truncated
+pub toy::ToyError::WrongTrackCount
+pub struct toy::ToyDecoder
+pub fn toy::ToyDecoder::new(usize) -> Self
+pub struct toy::ToyDemuxer
+pub fn toy::ToyDemuxer::new(zencodec_media::limits::MediaLimits) -> Self
+pub struct toy::ToyEncoder
+pub fn toy::ToyEncoder::lookahead(&self) -> usize
+pub fn toy::ToyEncoder::new(u32, u32, zencodec::time::TimeBase, usize, u64) -> Self
+pub struct toy::ToyMuxer
+pub fn toy::ToyMuxer::new(bool) -> Self
+pub const toy::HEADER_LEN: usize
+pub const toy::MAGIC: &[u8; 4]
+pub const toy::PACKET_HEADER_LEN: usize
+pub fn toy::toy_payload(&[&[u8]], bool) -> alloc::vec::Vec<u8>
+pub struct Failure [also: checks]
+pub Failure::check: &'static str
+pub Failure::detail: alloc::string::String
+pub fn check_animation_over_video<E, M, D, C, P, R>(impl core::ops::function::FnMut() -> E, impl core::ops::function::FnMut() -> M, u32, impl core::ops::function::FnMut() -> P, impl core::ops::function::FnOnce() -> D, impl core::ops::function::FnOnce() -> C, R, &[zenpixels::buffer::PixelBuffer], &[zencodec::animation::FrameDuration]) -> checks::Conformance where E: zencodec_media::session::VideoEncoder + core::marker::Send, M: zencodec_media::container::Muxer + core::marker::Send, D: zencodec_media::container::Demuxer + core::marker::Send, C: zencodec_media::session::VideoDecoder + core::marker::Send, P: zencodec_media::adapt::CaptureFrame + core::marker::Send, R: zencodec_media::adapt::RenderFrame + core::marker::Send [also: checks]
+pub fn check_demuxer_contract<D, F>(F, &[u8]) -> checks::Conformance where D: zencodec_media::container::Demuxer, F: core::ops::function::FnMut() -> D [also: checks]
+pub fn check_demuxer_seek<D, F>(F, &[u8], &[zencodec_media::container::SeekTarget]) -> checks::Conformance where D: zencodec_media::container::Demuxer, F: core::ops::function::FnMut() -> D [also: checks]
+pub fn check_frame_interchange(&zencodec::frame_storage::Frame) -> checks::Conformance
+pub fn check_muxer_output_honesty<M, F>(F, &[zencodec_media::track::TrackInfo], &[zencodec_media::packet::Packet]) -> checks::Conformance where M: zencodec_media::container::Muxer, F: core::ops::function::FnMut() -> M [also: checks]
+pub fn check_video_decoder_contract<D, F>(F, &zencodec_media::session::CodecConfig, &[zencodec_media::packet::Packet]) -> checks::Conformance where D: zencodec_media::session::VideoDecoder + core::marker::Send + 'static, F: core::ops::function::FnMut() -> D [also: checks]
+pub fn check_video_encoder_contract<E, F>(F, &[zencodec::frame_storage::Frame]) -> checks::Conformance where E: zencodec_media::session::VideoEncoder, F: core::ops::function::FnMut() -> E [also: checks]
+pub type Conformance = core::result::Result<(), checks::Failure> [also: checks]
+
+## trait impls (6 types)
+
+checks::Failure: Clone, Debug, Display, Eq, Error, PartialEq
+toy::ToyDecoder: zencodec_media::session::VideoDecoder
+toy::ToyDemuxer: zencodec_media::container::Demuxer
+toy::ToyEncoder: zencodec_media::session::VideoEncoder
+toy::ToyError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+toy::ToyMuxer: zencodec_media::container::Muxer
+
+## auto traits
+
+4 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+toy::ToyDecoder: !RefUnwindSafe !UnwindSafe
+toy::ToyEncoder: !RefUnwindSafe !UnwindSafe

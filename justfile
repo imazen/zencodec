@@ -5,15 +5,15 @@
 # is never built or run by plain `cargo test` or any CI job.
 fmt:
     cargo fmt --all
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC=check ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Generate Rustdoc for the same eight crates as the guide's signature catalog.
 docs-reference:
@@ -661,6 +661,17 @@ collection-context-native artifacts:
     SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Native CMYK carrier/finalizer checks and independent LCMS relative+BPC oracle.
+spatial-cmyk-check artifacts oracle:
+    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_ -- --nocapture --test-threads=1
+    just spatial-validation-lint cms_oracle,old_jpeg
+
+# Strict independent accuracy gate; the Mox route retains its explicit known discrepancy.
+spatial-lcms-check artifacts oracle:
+    cp perf/spatial-lcms-validation/dependencies.lock perf/spatial-lcms-validation/Cargo.lock
+    SPATIAL_COLOR_ARTIFACTS="{{artifacts}}" SPATIAL_COLOR_ORACLE="{{oracle}}" cargo test --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --locked native_cmyk_lcms_finalization -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-lcms-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
+
 # Same complete native suite and test timeout as the documentation workflow.
 spatial-ci-check artifacts features="":
     #!/usr/bin/env bash
@@ -1109,7 +1120,7 @@ io-transport-model:
 
 # Documentation source stays under docs/ on main; only its artifact is deployed.
 code-catalog export:
-    python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/code-api
+    python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/.cache/code-api
 
 # Exercise actual consumer calls for source-supplemented dyn-trait methods.
 source-details-check:
@@ -1932,3 +1943,91 @@ plane-main-check:
     cargo test --workspace --all-targets --all-features
     cargo test --workspace --doc --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+# Qualified patch gates for gray carriers and source-depth preference.
+gray-depth-check:
+    cargo test --locked -p zencodec --lib color::tests
+    cargo test --locked -p zencodec --lib negotiate::
+    cargo test --locked -p zencodec-testkit --test gray_color_emit
+    cargo clippy --locked -p zencodec --lib -- -D warnings
+
+# Frozen review source with stable dependencies; pixel expectations are unchanged.
+stable-cohort-check:
+    cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check
+    cargo test --locked --workspace --lib --tests
+    cargo clippy --locked --workspace --lib --tests -- -D warnings
+
+stable-cohort-docs:
+    cargo test --locked --workspace --doc
+
+# HLG carrier policy and unchanged gray/depth controls, on the frozen review graph.
+hlg-carrier-check:
+    cargo test --locked -p zencodec --lib color::tests
+    cargo test --locked -p zencodec-testkit --test gray_color_emit
+    cargo clippy --locked -p zencodec --lib -p zencodec-testkit --test gray_color_emit -- -D warnings
+
+# Preserve ICC authority independently of carrier-only dependency updates.
+icc-authority-check:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+    cargo test --manifest-path tools/icc-authority-validation/Cargo.toml --locked
+    cargo clippy --manifest-path tools/icc-authority-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Run through run-heavy; source is exported before Cargo can see parent overrides.
+core-stack-check output target revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --target "{{target}}" --revision "{{revision}}"
+
+# Shared frame access plus minimal real AV1/TIFF mapping witnesses.
+# Run through run-heavy from an isolated export to avoid parent workspace patches.
+frame-interchange-native-check inputs:
+    python3 tools/frame-native-validation/prepare.py "{{inputs}}"
+    cargo metadata --manifest-path tools/frame-native-validation/Cargo.toml --format-version 1 > "{{inputs}}/graph.json"
+    FRAME_NATIVE_INPUTS="{{inputs}}" cargo test --manifest-path tools/frame-native-validation/Cargo.toml --locked -- --test-threads=1
+    cargo clippy --manifest-path tools/frame-native-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# One immutable source export for runtime/native/reference/site acceptance.
+core-contract-release-check output target inputs revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --native-inputs "{{inputs}}" --docs
+
+# Compile each full native CI consumer against the selected shared cohort.
+validation-cohort-check:
+    python3 scripts/sync-validation-cohort.py
+
+native-cohort-compile output target revision="HEAD":
+    python3 scripts/qualify-native-cohort.py "{{output}}" --revision "{{revision}}" --target "{{target}}"
+
+# Capture public converter signatures from the same source used by native tests.
+capture-conversion-api checkout revision:
+    node docs/capture-output-api.mjs "{{checkout}}" "{{revision}}"
+    node docs/capture-ycbcr-api.mjs "{{checkout}}" "{{revision}}"
+
+# Run a frozen native root with caller-selected oracle/artifact environment.
+native-cohort-runtime output target roots="jpeg av1 spatial lcms io" filter="" revision="HEAD":
+    python3 scripts/qualify-native-cohort.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --roots {{roots}} --execute --test-filter "{{filter}}" --lint
+
+# Refresh catalogs/reference/site without rerunning unchanged native behavior.
+core-stack-docs output target revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --docs --docs-only
+
+# Inspect the exact native artifacts with the existing CI numerical/model gates.
+native-ci-artifact-check source av1 output target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{output}}"
+    cd "{{source}}"
+    export CARGO_TARGET_DIR="{{target}}"
+    cargo run --quiet --manifest-path perf/io-validation/Cargo.toml --bin transport_contracts --locked > "{{output}}/transport.csv"
+    diff -u benchmarks/io_transport_model_2026-10-25.csv "{{output}}/transport.csv"
+    just av1-planar-float-verify "{{av1}}" "{{output}}/av1-rgb"
+    just av1-gamma-verify "{{av1}}" "{{output}}/independent-gamma.json"
+    python3 -m unittest discover -s perf/av1-policy-validation -p test_timing_source.py
+
+# Fresh oracle environment; never overlay a cached partial Python installation.
+spatial-oracle-bootstrap directory:
+    test ! -e "{{directory}}"
+    timeout 30s python3 -m venv "{{directory}}"
+    timeout 120s "{{directory}}/bin/python" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
+
+# Validate GitHub expression contexts and shell syntax before changing docs CI.
+docs-workflow-lint binary="actionlint":
+    "{{binary}}" -oneline .github/workflows/docs.yml

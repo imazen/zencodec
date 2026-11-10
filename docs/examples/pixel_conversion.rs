@@ -38,7 +38,7 @@ mod framebuffer {
     };
     use zenjpeg::JpegEncoderConfig;
     use zenpixels::{AlphaPolicy, ConvertOptions, PixelBuffer, PixelDescriptor, PixelSlice};
-    use zenpixels_convert::{RowConverter, adapt::check_opaque};
+    use zenpixels_convert::{RowConverter, PixelSliceConvertExt};
 
     #[derive(Debug)]
     pub(crate) struct ExpectedSrgbFramebuffer;
@@ -59,7 +59,7 @@ mod framebuffer {
             .with_max_pixels(4_000_000)
             .check_dimensions(pixels.width(), pixels.rows())?;
         // ANCHOR: convert_framebuffer
-        check_opaque(pixels.clone())?; // Verify every row before authorizing alpha removal.
+        pixels.check_opaque()?; // Verify every row before authorizing alpha removal.
         let options =
             ConvertOptions::retain_channels().with_alpha_policy(AlphaPolicy::DiscardUnchecked); // Proven above.
         let mut converter =

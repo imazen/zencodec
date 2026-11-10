@@ -256,6 +256,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed gray color loss (2026-11-05): `resolve_color_emit` returned `Drop` for gray
+  with CICP and no ICC, so a gray PQ or gamma 2.2 image was left undescribed and read
+  as sRGB. Gray with alpha (`channel_count` 2) took the RGB path, planning an RGB-class
+  profile that PNG forbids on color type 4. Both now plan `SynthesizeGrayFrom`. GRAY ICC remains alongside CICP where the target permits it; `Verbatim`
+  carries existing CICP without deriving an ICC. `zencodec-testkit/tests/gray_color_emit.rs` compares the plan with
+  the real synthesis over all code points. Codecs need a matching lowering arm.
+
 - Fixed by the `PixelStorage` adoption (2026-11-04): `to_owned_frame` allocated bytes with no
   room to align them, then `.expect`ed the wrap, so a wide format on an allocator returning an
   odd address panicked with `InsufficientData`. glibc hid it. `tests/odd_allocator.rs` runs under
@@ -569,7 +576,9 @@ The follow-through uses zenpixels PR 93's conventional/inverted formats, fallibl
 adapter lookup, and explicit polarity on separate black. The selected-layer gate
 passes without changing sample bits or the native conformance threshold; the
 receipt retains the initial failure (`benchmarks/raw_collection_2026-10-26.json`).
-F32 CMYK color conversion is still unqualified and refuses at runtime. Source ICC
+F32 CMYK color conversion requires a CMS. The current frozen MoxCMS path accepts
+conversion but fails the independent numerical gate recorded in
+benchmarks/native_cmyk_finalization_2026-11-08.md. Source ICC
 bytes alone must never imply conventional polarity for inverted samples.
 
 ## Fixed frame-route preference regression (2026-10-27)
@@ -913,3 +922,70 @@ fingerprints even when public signatures are unchanged. The sibling cohort's
 runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
 gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
 the generator, ownership control, site build and all 27 Node tests pass locally.
+
+
+## Known Bugs: native guide dependency resolution (2026-11-06)
+
+The four native guide/qualification jobs fail before compilation because their
+pinned codec graphs select stable-only archmage requirements while linear-srgb
+requires 0.9.31-beta.2. This reproduces on main Documentation run 42083036922
+and gray/depth review run 42147460867. The core workspace and all native platform
+CI jobs pass on the review revision; that does not qualify the native codec
+consumers. Keep their tests and dependency floors intact until a compatible
+published release or an explicitly reviewed cohort resolves the graph.
+
+## Known Bugs: authoritative ICC code-point derivation (2026-11-08, review fix)
+
+`representable_cicp` accepted an extractable embedded tag as permission to
+replace an authoritative ICC. An unrecognized tagged profile could therefore
+cause PNG to derive PQ signaling, or a sole-safe carrier to drop the ICC.
+The separate review guard requires qualified matrix/TRC identification.
+The original failing witness is retained; all 27 color-policy controls pass
+without changing pre-existing expectations. See docs/color-emit-model.md.
+
+## Native graph repair and remaining CMYK expectation (2026-11-08)
+
+PR201's AV1/spatial harnesses required frozen SIMD compatibility descendants and
+public pixel/plane facade migration. AV1's 70 controls and independent float/gamma
+checks pass. Spatial passes 146/147: the existing F32 CMYK refusal assertion now
+observes successful conversion with the already-declared pixels fde59b96 cohort.
+The owner approved actual CMYK controls: no-CMS refusal is retained, while the
+LCMS 2.17/2.20 comparisons now expose 1050/786432 samples exceeding the unchanged
+0.0013 CMYK bound (maximum 0.006681680679321289). Direct MoxCMS and finalization
+agree bit-for-bit; no frozen kernel or threshold was changed. See
+benchmarks/native_cmyk_finalization_2026-11-08.md and
+benchmarks/native_graph_repair_2026-11-08.md for exact sources and original failures.
+
+## Separate native CMYK LCMS qualification (2026-11-08)
+
+The explicit af19/LCMS55 spatial validation graph matches C LCMS2.20 exactly
+for all 786432 components of the native inverted-F32 CMYK witness after declared
+clipping. Source pixels/context, metadata, striding, direct-backend parity and
+storage cleanup remain checked. Modern Mox0.9.2 still violates the unchanged
+0.0013 bound on 937 components; frozen Mox0.9.1 fails on 1050. Neither default
+backend nor frozen graph was changed. See the separate
+`just spatial-lcms-check` and benchmarks/native_cmyk_finalization_2026-11-08.md.
+
+## Known Bugs: pixel main gray-profile test migration (2026-11-09)
+
+PR201 af9dc2b5 compiles against pixel main f2d2bfde, including all-feature
+all-target checks; standalone render checks and eight integration tests pass.
+The std workspace test run stops in gray_color_emit's lowered-profile roundtrip:
+its expected derived CICP ignores IdentificationUse. The resolver retains the
+ICC and correctly emits no replacement CICP for MetadataOnly identification.
+Keep the authority guard; migrate this expectation to qualified substitution
+and retain explicit-authority/qualified positive controls. This review changes
+no behavioral test. Current PR heads, the optional IQA test receipt, planar
+context/alpha gaps and migration order are in
+[the adaptation review](docs/pixel-main-adaptation-2026-11-09.md).
+
+## Pixel adoption status (2026-11-10)
+
+The current [adoption ledger](docs/zenpixels-adoption-status-2026-11-10.md)
+inventories 63 open PR heads across 16 repositories and distinguishes main pins,
+retained review graphs and current-core checks. Pixel124c5dc4 fixes the earlier
+alpha/predicate/canonical-normalization findings; issue150 still has consumer
+evidence work, and allocation151/PR153 remains scoped. Core9058 with that pixel
+main compiles std/all-feature all-target and passes the eight renderer integration
+tests, but the workspace std run still fails the documented gray permission
+expectation. No API/pin migration or merge was performed by the status review.

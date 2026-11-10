@@ -1,0 +1,91 @@
+# zencodec-render public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec-render.txt 57 lines (supported surface) | zencodec-render.features.txt 0 added (features: none) | zencodec-render.internal.txt 3 lines (4 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)         7
+#   free functions                              1
+#   inherent methods                           11
+#   struct fields                              15
+#   enum variants                              12
+#   trait roster entries (type × trait)        20
+#   auto-trait-complete types                   5
+#   auto-trait exceptions                       2
+#
+# per-module pub lines:
+#   (root)                           33
+#   geometry                         15
+
+## items (48 lines)
+
+pub mod zencodec_render
+pub mod geometry
+#[non_exhaustive] pub enum geometry::Refusal
+pub geometry::Refusal::AuxiliaryGrid
+pub geometry::Refusal::AuxiliaryGrid::dimensions: (usize, usize)
+pub geometry::Refusal::AuxiliaryGrid::index: usize
+pub geometry::Refusal::AuxiliaryGrid::registration: zencodec::image::AuxiliaryGrid
+pub geometry::Refusal::Composition(core::option::Option<zencodec::collection::Composition>)
+pub geometry::Refusal::Interpretation
+pub geometry::Refusal::MissingStoredRegion
+pub geometry::Refusal::MissingStoredRegion::available: zencodec::image::Rect
+pub geometry::Refusal::MissingStoredRegion::required: zencodec::image::Rect
+pub geometry::Refusal::Placement
+pub struct geometry::ProjectionSource
+pub geometry::ProjectionSource::geometry: zencodec::image::ImageGeometry
+pub geometry::ProjectionSource::orientation: zenpixels::orientation::Orientation
+pub fn geometry::project(&zencodec::image::ImageOutput, core::option::Option<zencodec::image::Rect>, &zencodec::storage::StorageBudget, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::image::ImageOutput, zencodec::collection::Cause>
+#[non_exhaustive] pub enum ColorTarget
+pub ColorTarget::Current
+pub ColorTarget::Icc(alloc::rcs::arc::Arc<[u8]>)
+pub ColorTarget::Named(zenpixels::cicp::Cicp)
+#[non_exhaustive] pub enum RenderStage
+pub RenderStage::Color
+pub RenderStage::ColorPlan
+pub RenderStage::Geometry
+pub RenderStage::Publication
+pub struct RenderFailure
+pub RenderFailure::stage: RenderStage
+pub struct RenderRequest
+pub RenderRequest::conversion: zenpixels::policy::ConvertOptions
+pub RenderRequest::region: core::option::Option<zencodec::image::Rect>
+pub RenderRequest::required: zenpixels::descriptor::PixelDescriptor
+pub RenderRequest::target: ColorTarget
+pub fn RenderRequest::new(zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn RenderRequest::with_conversion(self, zenpixels::policy::ConvertOptions) -> Self
+pub fn RenderRequest::with_region(self, core::option::Option<zencodec::image::Rect>) -> Self
+pub fn RenderRequest::with_target(self, ColorTarget) -> Self
+pub struct Renderer<'a>
+pub Renderer::cms: core::option::Option<&'a dyn zenpixels_convert::cms::PluggableCms>
+pub Renderer::request: RenderRequest
+pub Renderer::storage: zencodec::storage::StorageBudget
+pub fn Renderer<'a>::new(zencodec::storage::StorageBudget) -> Self
+pub fn Renderer<'a>::render<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, zencodec::image::ImageOutput, &mut R, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<RenderFailure>>
+pub fn Renderer<'a>::render_first<C: zencodec::collection::Collection, R: zencodec::operation::binding::OperationPolicy>(&self, &mut zencodec::operation::collection::CheckedCollection<C, R>) -> core::result::Result<core::option::Option<zencodec::operation::Outcome<zencodec::image::ImageOutput>>, whereat::at::At<zencodec::operation::collection::CollectionOperationError>>
+pub fn Renderer<'a>::render_selected<C: zencodec::collection::Collection, R: zencodec::operation::binding::OperationPolicy>(&self, &mut zencodec::operation::collection::CheckedCollection<C, R>, &zencodec::collection::ImageId) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::collection::CollectionOperationError>>
+pub fn Renderer<'a>::render_with_preset<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, zencodec::image::ImageOutput, &mut R, zencodec::operation::policy::PolicySet, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<RenderFailure>>
+pub fn Renderer<'a>::with_cms(self, &'a dyn zenpixels_convert::cms::PluggableCms) -> Self
+pub fn Renderer<'a>::with_request(self, RenderRequest) -> Self
+
+## trait impls (6 types)
+
+ColorTarget: Clone
+RenderFailure: Debug, Display, Error
+RenderRequest: Default
+RenderStage: Clone, Copy, Debug, Eq, PartialEq
+geometry::ProjectionSource: Clone, Copy, Debug, Eq, PartialEq
+geometry::Refusal: Debug, Display, Eq, Error, PartialEq
+
+## auto traits
+
+5 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+RenderFailure: !RefUnwindSafe !UnwindSafe
+Renderer<'a>: !RefUnwindSafe !UnwindSafe

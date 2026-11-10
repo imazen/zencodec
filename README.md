@@ -526,7 +526,7 @@ use zencodec::{resolve_color_emit, ColorEmitPolicy, IccDisposition};
 
 let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Balanced);
 // plan.cicp: Option<Cicp>   — write this CICP (JXL/AVIF/HEIC nclx, PNG cICP) if the format carries it
-// plan.icc:  IccDisposition — KeepSource | SynthesizeFrom(Cicp) | Drop
+// plan.icc:  IccDisposition — KeepSource | SynthesizeFrom(Cicp) | SynthesizeGrayFrom(Cicp) | Drop
 ```
 
 `ColorEmitPolicy` picks the tradeoff: `Compatibility` (widest reader support), `Balanced` (default — CICP where it's a spec-mandated *safe sole carrier*, an ICC companion otherwise), `Compact` (smallest — prefer CICP, drop the ICC), `Verbatim` (carry the source's signals unchanged), or `Custom(ColorEmitFields)`. A target advertises its carriers via `EncodeCapabilities::{cicp_is_valid_carrier, cicp_safe_sole_carrier}`. The plan never emits a redundant `SynthesizeFrom(sRGB)`; a codec lowers a `SynthesizeFrom` through `zenpixels-convert`'s transfer-aware `synthesize_icc_for_cicp` (a bundled `const` profile, or — with its `cms-moxcms` feature — a generated one) so an HDR transfer is not mis-tagged with an SDR profile. ICC synthesis is best-effort: callers must handle unavailable synthesis or container carriers rather than assume every plan preserves the color description. The names carry the emit direction so they can't be confused with the decode-side `SourceColor`. Design + rejected alternatives: [docs/color-emit-model.md](https://github.com/imazen/zencodec/blob/main/docs/color-emit-model.md).

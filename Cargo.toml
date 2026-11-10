@@ -16,7 +16,7 @@ members = [
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.
-exclude = ["fuzz", "apidoc", "zencodec-render"]
+exclude = ["fuzz", "apidoc", "zencodec-render", "tools/icc-authority-validation"]
 resolver = "3"
 
 [package]
@@ -82,7 +82,7 @@ zenbench = "0.1.8"
 thiserror = "2"
 walkdir = "2.5.0"
 rayon = "1.10.0"
-moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
+moxcms = { version = "0.9.2", features = ["options"] }
 
 [[bench]]
 name = "exif_filter"
@@ -96,7 +96,7 @@ harness = false
 # Paired precision verifier; release requires these APIs in published zenpixels.
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
+garb = { git = "https://github.com/imazen/garb", rev = "58ce9cad7b337418a7abe9b1f6e3e4bd1928b385" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "76005fc99a7c822af1801a1f9f87e7d3dc98c510" }

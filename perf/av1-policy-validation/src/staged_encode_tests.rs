@@ -135,13 +135,11 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
                 operation.push(input.clone(), Some(&NoPulse)).unwrap();
             } else {
                 let target = input.interpretation().clone();
-                let conversion =
-                    FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+                let conversion = FrameConversionOffer::new(target.clone(), input.timing());
                 let executions = Cell::new(0);
                 operation
                     .push_converted(
                         input.clone(),
-                        &target,
                         conversion,
                         |held| {
                             executions.set(executions.get() + 1);
@@ -235,11 +233,10 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
         .unwrap();
         let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
         let target = input.interpretation().clone();
-        let conversion = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+        let conversion = FrameConversionOffer::new(target.clone(), input.timing());
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             operation.push_converted(
                 input.clone(),
-                &target,
                 conversion,
                 |held| {
                     executions.set(executions.get() + 1);
@@ -354,7 +351,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 let offer = choice.value();
                 assert!(offer.destination.unwrap().exact_timing);
                 assert_eq!(offer.fidelity, Some(zencodec::encode::Fidelity::Lossless));
-                let conversion = offer.conversion.unwrap();
+                let conversion = offer.conversion.as_ref().unwrap();
                 assert!(!conversion.preserves_samples);
                 assert!(!conversion.preserves_extended_range);
                 assert_eq!(
@@ -410,7 +407,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 let Some(Selection::FrameRoute(offer)) = record.selected else {
                     panic!()
                 };
-                assert!(!offer.conversion.unwrap().preserves_samples);
+                assert!(!offer.conversion.as_ref().unwrap().preserves_samples);
                 assert!(offer.destination.unwrap().exact_timing);
             }
             oracle_container(

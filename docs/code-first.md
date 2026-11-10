@@ -1,6 +1,6 @@
 # Code-first API guide
 
-The site entry point is `code.html`, built from
+The code-first catalog page is `code.html`, built from
 [`site/code-first-data.mjs`](site/code-first-data.mjs). Consumer, adapter and
 codec implementor tabs show source-extracted calls and implementations. Imports
 and surrounding code expand independently above and below each example.
@@ -28,16 +28,24 @@ transcode and conversion snapshots appear beside the examples that use them.
 
 ## Keeping it current
 
-Run `just code-catalog EXPORT` through the workspace's build resource wrapper,
-where `EXPORT` is a prepared source export with dependencies resolved outside
-workspace path overrides. It requires installed `cargo-public-api` and its
-nightly rustdoc toolchain. The generator verifies each source input against this
-checkout before extracting declarations and documentation.
+Versioned API review uses the existing `zenutils-apidoc` runner for all eight
+crates. Run `just api-doc` and commit only `docs/public-api/*.txt`; default,
+additional-feature and internal surfaces remain separate. `just api-doc-check`
+and the documentation CI job explicitly check those snapshots for drift.
 
-Commit the updated `docs/code-api/` documentation with changes to crate sources,
-manifests or crate READMEs, including documentation-only release edits. The site
-build verifies all three input kinds and both generated-file checksums;
-it refuses stale catalogs. Builds do not contact a documentation service.
+`npm run build --prefix docs` generates the richer signature-browser catalog in
+ignored `docs/.cache/code-api/`. It requires `cargo-public-api 0.52.0` and
+`nightly-2026-10-06`. Its text signatures, documentation, source spans and
+manifest are build data, never committed. The public site still publishes its
+search JSON under `_site/code-api/` with the HTML artifact.
+
+A cached catalog is reused only when crate source, Cargo manifests, crate
+READMEs, resolved lockfiles, generator code, compiler/toolchain and generation
+platform match. Every payload hash is checked too. Changed or corrupt data is
+preserved beside the cache and regenerated before publishing; the renderer
+retains its independent source/hash checks. CI caches only the generated catalog.
+`just code-catalog EXPORT` remains an explicit prebuild option for a prepared
+source export; normal site builds generate the catalog automatically.
 
 Run `just docs-site-browser-check 3547`. This checks all source scopes,
 signature preservation, keyboard tabs, deep links, independent context expansion,

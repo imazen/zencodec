@@ -210,6 +210,7 @@ impl PolicySet {
                 workspace = offer.workspace_upper_bound;
                 range = offer
                     .conversion
+                    .as_ref()
                     .filter(|c| c.preserves_extended_range)
                     .and_then(|_| offer.fidelity.map(|f| f == Fidelity::Lossless));
                 schedule = offer.output_schedule;
