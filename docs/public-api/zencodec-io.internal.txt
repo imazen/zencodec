@@ -1,0 +1,43 @@
+# zencodec-io public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                           10
+#   trait roster entries (type × trait)        10
+#
+# per-module pub lines:
+#   (root)                            7
+#   row_encode                        3
+
+## items (10 lines)
+
+pub fn BufferPolicy::assert_fields_are_eq(&self)
+pub fn DriveOptions::assert_fields_are_eq(&self)
+pub fn DriveStats::assert_fields_are_eq(&self)
+pub fn EncodeWriteReport::assert_fields_are_eq(&self)
+pub fn IoLimits::assert_fields_are_eq(&self)
+pub fn ProtocolViolation::assert_fields_are_eq(&self)
+pub fn WorkQuota::assert_fields_are_eq(&self)
+pub fn row_encode::Description::assert_fields_are_eq(&self)
+pub fn row_encode::ExactDepthContradiction::assert_fields_are_eq(&self)
+pub fn row_encode::Refusal::assert_fields_are_eq(&self)
+
+## trait impls (10 types)
+
+BufferPolicy: TrivialClone
+DriveOptions: TrivialClone
+DriveStats: TrivialClone
+EncodeWriteReport: TrivialClone
+IoLimits: TrivialClone
+WorkQuota: TrivialClone
+row_encode::ExactDepthContradiction: TrivialClone
+row_encode::Refusal: TrivialClone
+row_encode::Stage: TrivialClone
+tokio_io::Inline: TrivialClone

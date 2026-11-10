@@ -1,0 +1,192 @@
+# zencodec-io public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec-io.txt 155 lines (supported surface) | zencodec-io.features.txt 231 added (features: std,tokio) | zencodec-io.internal.txt 20 lines (20 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)        23
+#   pub consts/statics                         12
+#   free functions                              4
+#   inherent methods                           40
+#   struct fields                              16
+#   enum variants                              24
+#   re-exports                                  4
+#   trait roster entries (type × trait)        54
+#   conditional trait impls (verbatim)          1
+#   auto-trait-complete types                  10
+#   auto-trait exceptions                       9
+#
+# per-module pub lines:
+#   (root)                          121
+#   storage                           4
+
+## items (125 lines)
+
+pub mod zencodec_io
+pub mod storage
+pub use storage::OwnedStorage
+pub use storage::SharedStorage
+pub use storage::StorageBudget
+pub use storage::StorageError
+#[non_exhaustive] pub enum ControlledEvent
+pub ControlledEvent::Decode(zencodec::traits::incremental::Event)
+pub ControlledEvent::Suspended(zencodec::traits::control::DecodeBoundary)
+#[non_exhaustive] pub enum DriveFailure<E, SE>
+pub DriveFailure::Input(InputError)
+pub DriveFailure::Protocol(ProtocolViolation)
+pub DriveFailure::Source(SE)
+pub DriveFailure::Step(E)
+pub fn DriveFailure<E, core::convert::Infallible>::widen<SE>(self) -> DriveFailure<E, SE>
+#[non_exhaustive] pub enum EncoderSinkError<E>
+pub EncoderSinkError::Encoder(E)
+pub EncoderSinkError::Sink(zencodec::sink::SinkError)
+#[non_exhaustive] pub enum InputError
+pub InputError::Allocation
+pub InputError::Allocation::bytes: usize
+pub InputError::Allocation::source: alloc::collections::TryReserveError
+pub InputError::Limit
+pub InputError::Limit::limit: usize
+pub InputError::Limit::needed: u64
+pub InputError::RangesDisabled
+pub InputError::ReadsDisabled
+#[non_exhaustive] pub enum PolicyDecodeError<E>
+pub PolicyDecodeError::Native(E)
+pub PolicyDecodeError::Policy(whereat::at::At<zencodec::operation::policy::PolicyFailure>)
+pub PolicyDecodeError::Requirements(whereat::at::At<zencodec::operation::policy::requirements::UnmetRequirements>)
+#[non_exhaustive] pub enum ProtocolViolation
+pub ProtocolViolation::AddressOverflow(zencodec::traits::incremental::InputRequest)
+pub ProtocolViolation::EmptyRequest
+pub ProtocolViolation::NeedPastEnd
+pub ProtocolViolation::NeedPastEnd::request: zencodec::traits::incremental::InputRequest
+pub ProtocolViolation::NeedPastEnd::total: u64
+pub ProtocolViolation::NoProgress(zencodec::traits::incremental::InputRequest)
+pub enum Step<O>
+pub Step::Finished(O)
+pub Step::Need
+pub Step::Output(O)
+pub enum Yield<O>
+pub Yield::Finished(O)
+pub Yield::Output(O)
+pub fn Yield<O>::into_inner(self) -> O
+pub fn Yield<O>::is_finished(&self) -> bool
+pub struct CollectSink
+pub fn CollectSink::as_pixel_slice(&self) -> core::option::Option<zenpixels::buffer::PixelSlice<'_>>
+pub fn CollectSink::bytes(&self) -> &[u8]
+pub fn CollectSink::descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn CollectSink::finished(&self) -> bool
+pub fn CollectSink::height(&self) -> u32
+pub fn CollectSink::into_buffer(self) -> core::option::Option<zenpixels::buffer::PixelBuffer>
+pub fn CollectSink::new() -> Self
+pub fn CollectSink::rows_written(&self) -> u64
+pub fn CollectSink::to_buffer(&self) -> core::option::Option<zenpixels::buffer::PixelBuffer>
+pub fn CollectSink::width(&self) -> u32
+pub struct ControlledStepper<'a, D, S>
+pub fn ControlledStepper<'a, D, S>::info(&self) -> core::option::Option<&zencodec::info::ImageInfo>
+pub fn ControlledStepper<'a, D, S>::new(D, &'a mut S) -> Self
+pub fn ControlledStepper<'a, D, S>::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub fn ControlledStepper<'a, D, S>::resume(&mut self, zencodec::traits::control::BoundaryId, zencodec::traits::control::BoundaryAction, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec::traits::incremental::StepError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>>
+pub fn ControlledStepper<'a, D, S>::sink(&self) -> &S
+pub fn ControlledStepper<'a, D, S>::sink_mut(&mut self) -> &mut S
+#[non_exhaustive] pub struct DriveOptions
+pub DriveOptions::limits: IoLimits
+pub DriveOptions::max_gap: u64
+pub DriveOptions::read_size: usize
+pub DriveOptions::work_quota: WorkQuota
+pub const fn DriveOptions::new(u64, usize) -> Self
+pub const fn DriveOptions::with_limits(self, IoLimits) -> Self
+pub const fn DriveOptions::with_work_quota(self, WorkQuota) -> Self
+pub struct DriveStats
+pub DriveStats::bytes_read: u64
+pub DriveStats::reads: u64
+pub DriveStats::rows: u64
+pub DriveStats::steps: u64
+pub struct EncoderSink<E>
+pub fn EncoderSink<E>::consume_output(&mut self, usize)
+pub fn EncoderSink<E>::encoder(&self) -> &E
+pub fn EncoderSink<E>::finish(self) -> core::result::Result<zencodec::output::EncodeOutput, EncoderSinkError<<E as zencodec::traits::encoder::Encoder>::Error>>
+pub fn EncoderSink<E>::new(E) -> Self
+pub fn EncoderSink<E>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
+pub fn EncoderSink<E>::pending_output(&self) -> &[u8]
+pub fn EncoderSink<E>::rows_pushed(&self) -> u64
+pub fn EncoderSink<E>::take_output(&mut self, &mut alloc::vec::Vec<u8>)
+pub struct IoLimits
+pub const fn IoLimits::max_in_flight(self) -> usize
+pub const fn IoLimits::max_input_bytes(self) -> usize
+pub const fn IoLimits::max_ranges(self) -> usize
+pub const fn IoLimits::new(usize, usize, usize) -> Self
+pub const fn IoLimits::unlimited() -> Self
+pub struct PolicyDecoder<D, R>
+pub fn PolicyDecoder<D, R>::try_from_factory<E>(impl core::ops::function::FnOnce() -> core::result::Result<D, E>, R) -> core::result::Result<Self, PolicyDecodeError<E>>
+pub fn PolicyDecoder<D, R>::try_new<E>(impl core::ops::function::FnOnce() -> core::result::Result<D, E>, R, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Self, zencodec::traits::incremental::StepError<PolicyDecodeError<E>>>
+pub fn PolicyDecoder<D, R>::new(D, R) -> Self
+pub const fn PolicyDecoder<D, R>::report(&self) -> &zencodec::operation::policy::OperationReport
+pub fn PolicyDecoder<D, R>::with_policy_set(self, zencodec::operation::policy::PolicySet) -> Self
+pub struct ReadAtCursor
+pub fn ReadAtCursor::new(DriveOptions) -> Self
+pub fn ReadAtCursor::next<S, Src>(&mut self, &mut Src, &mut S, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Yield<<S as ByteStepper>::Output>, DriveFailure<<S as ByteStepper>::Error, <Src as zencodec::source::ReadAt>::Error>> where S: ByteStepper + ?core::marker::Sized, Src: zencodec::source::ReadAt + ?core::marker::Sized
+pub fn ReadAtCursor::retained_input_capacity(&self) -> usize
+pub fn ReadAtCursor::stats(&self) -> DriveStats
+pub struct SliceCursor
+pub fn SliceCursor::new(usize) -> Self
+pub fn SliceCursor::next<S: ByteStepper + ?core::marker::Sized>(&mut self, &[u8], &mut S, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Yield<<S as ByteStepper>::Output>, DriveFailure<<S as ByteStepper>::Error, core::convert::Infallible>>
+pub fn SliceCursor::stats(&self) -> DriveStats
+pub struct Stepped<O>
+pub Stepped::consumed: usize
+pub Stepped::step: Step<O>
+pub struct WorkQuota(_)
+pub const fn WorkQuota::max_steps(self) -> usize
+pub const fn WorkQuota::new(usize) -> core::option::Option<Self>
+pub const fn WorkQuota::unlimited() -> Self
+pub trait ByteStepper
+pub type ByteStepper::Error
+pub type ByteStepper::Output
+pub fn ByteStepper::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
+pub fn ByteStepper::step(&mut self, zencodec::traits::incremental::Input<'_>, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Stepped<Self::Output>, Self::Error>
+pub fn coalesce_byte_ranges(&[zencodec::traits::incremental::ByteRange], u64) -> alloc::vec::Vec<zencodec::traits::incremental::ByteRange>
+pub fn coalesce_into(&[zencodec::traits::incremental::ByteRange], u64, &mut alloc::vec::Vec<zencodec::traits::incremental::ByteRange>)
+pub fn drive_from_read_at<D, S>(&mut D, &mut S, &mut dyn zencodec::sink::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>, DriveOptions) -> core::result::Result<(zencodec::cost::OutputInfo, DriveStats), DriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error, <S as zencodec::source::ReadAt>::Error>> where D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized, S: zencodec::source::ReadAt + ?core::marker::Sized
+pub fn drive_from_slice<D>(&mut D, &[u8], &mut dyn zencodec::sink::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>, usize) -> core::result::Result<(zencodec::cost::OutputInfo, DriveStats), DriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error, core::convert::Infallible>> where D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized
+pub type DriveError<CE, SE> = DriveFailure<zencodec::traits::incremental::StepError<CE>, SE>
+
+## trait impls (19 types)
+
+CollectSink: Debug, Default, zencodec::sink::DecodeRowSink
+ControlledEvent: Debug
+ControlledStepper<'_, D, S>: ByteStepper
+DriveFailure<E, SE>: Debug, Display, Error
+DriveOptions: Clone, Copy, Debug, Default, Eq, PartialEq
+DriveStats: Clone, Copy, Debug, Default, Eq, PartialEq
+EncoderSink<E>: Debug
+EncoderSinkError<E>: Debug, Display, Error
+InputError: Debug, Display, Error
+IoLimits: Clone, Copy, Debug, Default, Eq, PartialEq
+PolicyDecodeError<E>: Debug, Display, Error
+PolicyDecoder<D, R>: zencodec::traits::incremental::IncrementalDecode
+ProtocolViolation: Clone, Debug, Display, Eq, Error, PartialEq
+ReadAtCursor: Debug
+SliceCursor: Debug
+Step<O>: Debug
+Stepped<O>: Debug
+WorkQuota: Clone, Copy, Debug, Default, Eq, PartialEq
+Yield<O>: Debug
+impl<E: zencodec::traits::encoder::Encoder> zencodec::sink::DecodeRowSink for EncoderSink<E> where <E as zencodec::traits::encoder::Encoder>::Error: core::marker::Send + core::marker::Sync
+
+## auto traits
+
+10 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+ControlledStepper<'a, D, S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+DriveFailure<E, SE>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+EncoderSink<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+EncoderSinkError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+PolicyDecodeError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+PolicyDecoder<D, R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+Step<O>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+Stepped<O>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+Yield<O>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

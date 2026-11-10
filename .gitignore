@@ -74,3 +74,5 @@ __pycache__/
 
 # Compiler-derived signature-browser data is generated at site build time.
 docs/.cache/
+# Old catalog location stays unversioned for compatibility with older recipes.
+docs/code-api/

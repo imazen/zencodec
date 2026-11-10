@@ -1,0 +1,85 @@
+# zencodec-coroutine public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec-coroutine.txt 51 lines (supported surface) | zencodec-coroutine.features.txt 0 added (features: none) | zencodec-coroutine.internal.txt 0 lines (0 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                 1
+#   pub types (struct/enum/trait/alias)         5
+#   pub consts/statics                          1
+#   inherent methods                           20
+#   struct fields                               3
+#   enum variants                              13
+#   re-exports                                  1
+#   trait roster entries (type × trait)         8
+#   conditional trait impls (verbatim)          2
+#   auto-trait exceptions                       3
+#
+# per-module pub lines:
+#   (root)                           44
+
+## items (44 lines)
+
+pub mod zencodec_coroutine
+pub use IncrementalDecode
+#[non_exhaustive] pub enum CoroutineError
+pub CoroutineError::Cancelled(enough::reason::StopReason)
+pub CoroutineError::Control(zencodec::traits::control::ControlError)
+pub CoroutineError::Finished
+pub CoroutineError::InputRangeOverflow
+pub CoroutineError::InputSpanLimit
+pub CoroutineError::InputSpanLimit::limit: usize
+pub CoroutineError::ReadExceedsInputCap
+pub CoroutineError::ReadExceedsInputCap::cap: usize
+pub CoroutineError::ReadExceedsInputCap::len: usize
+pub CoroutineError::RowAllocation
+pub CoroutineError::RowsBeforeHeader
+pub CoroutineError::Sink(zencodec::sink::SinkError)
+pub CoroutineError::Source(zencodec::source::SourceError)
+pub CoroutineError::Stalled
+pub CoroutineError::Storage(zencodec::storage::StorageError)
+pub struct CoroutineContext
+pub fn CoroutineContext::accepts_provisional(&self) -> bool
+pub fn CoroutineContext::announce(&mut self, zencodec::traits::incremental::MetadataUpdate) -> impl core::future::future::Future<Output = core::result::Result<(), CoroutineError>> + '_
+pub fn CoroutineContext::check_stop(&self) -> core::result::Result<(), CoroutineError>
+pub fn CoroutineContext::cursor(&self) -> u64
+pub fn CoroutineContext::interpretation(&mut self, zencodec::traits::control::InterpretationFacts) -> impl core::future::future::Future<Output = core::result::Result<zencodec::traits::control::BoundaryAction, CoroutineError>> + '_
+pub fn CoroutineContext::len(&mut self) -> impl core::future::future::Future<Output = core::result::Result<u64, CoroutineError>> + '_
+pub async fn CoroutineContext::read_exact(&mut self, &mut [u8]) -> core::result::Result<(), CoroutineError>
+pub fn CoroutineContext::read_exact_at<'a>(&'a mut self, u64, &'a mut [u8]) -> impl core::future::future::Future<Output = core::result::Result<(), CoroutineError>> + 'a
+pub fn CoroutineContext::read_many_at<'a, 'b: 'a>(&'a mut self, &'a mut [(u64, &'b mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), CoroutineError>> + 'a
+pub fn CoroutineContext::seek(&mut self, u64)
+pub fn CoroutineContext::set_details(&mut self, zencodec::output::DecodeDetails)
+pub fn CoroutineContext::set_info(&mut self, zencodec::info::ImageInfo)
+pub fn CoroutineContext::set_output_descriptor(&mut self, zenpixels::descriptor::PixelDescriptor)
+pub fn CoroutineContext::write_rows<'a>(&'a mut self, zencodec::traits::incremental::BatchMeta, &zenpixels::buffer::PixelSlice<'_>) -> impl core::future::future::Future<Output = core::result::Result<(), CoroutineError>> + 'a
+pub struct CoroutineDecoder<F, E>
+pub fn CoroutineDecoder<BoxFuture<E>, E>::boxed<Fut>(impl core::ops::function::FnOnce(CoroutineContext) -> Fut) -> Self where Fut: core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static
+pub fn CoroutineDecoder<BoxFuture<E>, E>::boxed_with_options<Fut>(usize, zencodec::source::AccessPattern, impl core::ops::function::FnOnce(CoroutineContext) -> Fut) -> Self where Fut: core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static
+pub fn CoroutineDecoder<F, E>::controlled(usize, zencodec::source::AccessPattern, impl core::ops::function::FnOnce(CoroutineContext) -> F) -> Self
+pub fn CoroutineDecoder<F, E>::controlled_with_storage(usize, zencodec::source::AccessPattern, zencodec::storage::StorageBudget, impl core::ops::function::FnOnce(CoroutineContext) -> F) -> core::result::Result<Self, CoroutineError>
+pub fn CoroutineDecoder<F, E>::new(impl core::ops::function::FnOnce(CoroutineContext) -> F) -> Self
+pub fn CoroutineDecoder<F, E>::retained_input(&self) -> usize
+pub fn CoroutineDecoder<F, E>::with_options(usize, zencodec::source::AccessPattern, impl core::ops::function::FnOnce(CoroutineContext) -> F) -> Self
+pub const DEFAULT_INPUT_CAP: usize
+pub type BoxFuture<E> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static)>>
+pub type BoxedCoroutineDecoder<E> = CoroutineDecoder<BoxFuture<E>, E>
+
+## trait impls (1 types)
+
+CoroutineError: Debug, Display, Error, From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Sync + core::marker::Send)>>, From<enough::reason::StopReason>, From<zencodec::source::SourceError>, From<zencodec::storage::StorageError>, From<zencodec::traits::control::ControlError>
+impl<F, E> zencodec::traits::control::ControlledIncrementalDecode for CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<CoroutineError> + 'static
+impl<F, E> zencodec::traits::incremental::IncrementalDecode for CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<zencodec::cost::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<CoroutineError> + 'static
+
+## auto traits
+
+0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+CoroutineContext: !RefUnwindSafe !UnwindSafe
+CoroutineDecoder<F, E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+CoroutineError: !RefUnwindSafe !UnwindSafe

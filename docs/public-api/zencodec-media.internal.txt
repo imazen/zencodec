@@ -1,0 +1,77 @@
+# zencodec-media public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                           18
+#   trait roster entries (type × trait)        32
+#
+# per-module pub lines:
+#   container                         3
+#   frame                             1
+#   limits                            2
+#   packet                            1
+#   timeline                          6
+#   track                             5
+
+## items (18 lines)
+
+pub fn container::MuxTiming::assert_fields_are_eq(&self)
+pub fn container::SeekResult::assert_fields_are_eq(&self)
+pub fn container::SeekStatus::assert_fields_are_eq(&self)
+pub fn frame::OwnedPlanesError::assert_fields_are_eq(&self)
+pub fn limits::MediaLimitExceeded::assert_fields_are_eq(&self)
+pub fn limits::MediaLimits::assert_fields_are_eq(&self)
+pub fn packet::Discard::assert_fields_are_eq(&self)
+pub fn timeline::EditContent::assert_fields_are_eq(&self)
+pub fn timeline::EditExtent::assert_fields_are_eq(&self)
+pub fn timeline::EditList::assert_fields_are_eq(&self)
+pub fn timeline::EditSegment::assert_fields_are_eq(&self)
+pub fn timeline::PlaybackRate::assert_fields_are_eq(&self)
+pub fn timeline::TrackTimeline::assert_fields_are_eq(&self)
+pub fn track::AudioTrackInfo::assert_fields_are_eq(&self)
+pub fn track::ChannelLayout::assert_fields_are_eq(&self)
+pub fn track::CodecId::assert_fields_are_eq(&self)
+pub fn track::CodecTag::assert_fields_are_eq(&self)
+pub fn track::VideoTrackInfo::assert_fields_are_eq(&self)
+
+## trait impls (32 types)
+
+container::MuxHint: TrivialClone
+container::MuxTiming: TrivialClone
+container::SeekMode: TrivialClone
+container::SeekResult: TrivialClone
+container::SeekScope: TrivialClone
+container::SeekStatus: TrivialClone
+container::SeekTarget: TrivialClone
+frame::OwnedPlanesError: TrivialClone
+limits::MediaLimitExceeded: TrivialClone
+limits::MediaLimits: TrivialClone
+output::Stage: TrivialClone
+packet::Discard: TrivialClone
+packet::PacketError: TrivialClone
+packet::RandomAccess: TrivialClone
+policy::Stage: TrivialClone
+session::ProtocolViolation: TrivialClone
+session::SendStatus: TrivialClone
+session::UnsupportedMedia: TrivialClone
+staged::Refusal: TrivialClone
+staged::Stage: TrivialClone
+staging::DiskLimits: TrivialClone
+staging::Refusal: TrivialClone
+timeline::EditContent: TrivialClone
+timeline::EditExtent: TrivialClone
+timeline::EditSegment: TrivialClone
+timeline::PlaybackRate: TrivialClone
+timeline::TimelineError: TrivialClone
+track::AudioTrackInfo: TrivialClone
+track::ChannelLayout: TrivialClone
+track::TrackError: TrivialClone
+track::TrackKind: TrivialClone
+track::VideoTrackInfo: TrivialClone

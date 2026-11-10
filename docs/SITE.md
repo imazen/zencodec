@@ -4,6 +4,10 @@ The guide lives in `docs/` on main. GitHub Actions builds and checks it, then
 publishes an allowlisted artifact to GitHub Pages. There is no publishing branch.
 The source is `site/index.html`, `site/content.mjs`, `site/styles.css`, and
 `site/app.mjs`; `build-site.mjs` produces ignored `docs/_site/`.
+API text snapshots use zenutils in `docs/public-api/`. The searchable catalog's
+JSON is generated during the build in ignored `docs/.cache/code-api/`, then
+published with the site artifact. It is not checked into the repository. See
+[code-first generation](code-first.md#keeping-it-current) for tools and cache checks.
 `site/api.mjs` selects the source declarations used by each chapter and entry
 point. `site/source.mjs` extracts those signatures and complete example scopes.
 

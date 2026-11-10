@@ -1,0 +1,267 @@
+# zencodec-io public API — additions from non-default features
+# features: std,tokio
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 3
+#   pub types (struct/enum/trait/alias)        34
+#   pub consts/statics                          7
+#   free functions                             13
+#   inherent methods                           44
+#   struct fields                              35
+#   enum variants                              55
+#   trait roster entries (type × trait)        80
+#   auto-trait-complete types                  15
+#   auto-trait exceptions                      12
+#
+# per-module pub lines:
+#   (root)                           65
+#   destination                       6
+#   row_encode                       72
+#   tokio_io                         48
+
+## items (191 lines)
+
+pub mod destination
+pub struct destination::Forward<W>(pub W)
+pub struct destination::SeekBack<W>
+pub fn destination::SeekBack<W>::new(W) -> core::io::error::Result<Self>
+pub trait destination::Destination: core::io::write::Write + destination::sealed::Sealed
+pub fn destination::Destination::can_patch(&self) -> bool
+pub fn destination::Destination::position(&mut self, u64) -> core::io::error::Result<()>
+pub mod row_encode
+#[non_exhaustive] pub enum row_encode::Refusal
+pub row_encode::Refusal::DestinationChanged
+pub row_encode::Refusal::EarlyOutput
+pub row_encode::Refusal::EarlyOutput::pass: core::option::Option<u32>
+pub row_encode::Refusal::Empty
+pub row_encode::Refusal::IncompletePass
+pub row_encode::Refusal::IncompletePass::pass: u32
+pub row_encode::Refusal::NoInputRoute
+pub row_encode::Refusal::OutputLimit
+pub row_encode::Refusal::Overflow
+pub row_encode::Refusal::PassLimit
+pub row_encode::Refusal::PassLimit::pass: u32
+pub row_encode::Refusal::Patches
+pub row_encode::Refusal::PullProtocol
+pub row_encode::Refusal::ReplayChanged
+pub row_encode::Refusal::ReplayChanged::first: u32
+pub row_encode::Refusal::ReplayChanged::pass: u32
+pub row_encode::Refusal::RequestOrder
+pub row_encode::Refusal::RequestOrder::first: u32
+pub row_encode::Refusal::RequestOrder::pass: u32
+pub row_encode::Refusal::SourceChanged
+#[non_exhaustive] pub enum row_encode::Stage
+pub row_encode::Stage::Encode
+pub row_encode::Stage::Finish
+pub row_encode::Stage::Patch
+pub row_encode::Stage::Policy
+pub row_encode::Stage::Prepare
+pub row_encode::Stage::Read
+pub row_encode::Stage::Replay
+pub row_encode::Stage::Start
+pub row_encode::Stage::Write
+pub struct row_encode::Completed
+pub row_encode::Completed::emitted: u64
+pub row_encode::Completed::patched_bytes: u64
+pub row_encode::Completed::report: zencodec::operation::policy::OperationReport
+pub row_encode::Completed::schedule: zencodec::operation::scheduling::OutputSchedule
+pub struct row_encode::Description
+pub row_encode::Description::color_context: core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
+pub row_encode::Description::descriptor: zenpixels::descriptor::PixelDescriptor
+pub row_encode::Description::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
+pub row_encode::Description::height: u32
+pub row_encode::Description::width: u32
+pub const fn row_encode::Description::new(u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn row_encode::Description::with_color_context(self, alloc::rcs::arc::Arc<zenpixels::color::ColorContext>) -> Self
+pub const fn row_encode::Description::with_exact_depth(self, zenpixels::sample::exact::ExactDepth) -> Self
+pub struct row_encode::ExactDepthContradiction
+pub row_encode::ExactDepthContradiction::claim: zenpixels::sample::exact::ExactDepth
+pub row_encode::ExactDepthContradiction::first_row: u32
+pub struct row_encode::Failure
+pub row_encode::Failure::emitted: u64
+pub row_encode::Failure::patched_bytes: u64
+pub row_encode::Failure::report: alloc::boxed::Box<zencodec::operation::policy::OperationReport>
+pub row_encode::Failure::stage: row_encode::Stage
+pub struct row_encode::Options
+pub fn row_encode::Options::new(zencodec::storage::StorageBudget, u64) -> Self
+pub fn row_encode::Options::with_batch_rows(self, core::num::nonzero::NonZeroU32) -> Self
+pub fn row_encode::Options::with_disk_staging(self, std::fs::File, core::num::nonzero::NonZeroUsize) -> core::io::error::Result<Self>
+pub fn row_encode::Options::with_policy_set(self, zencodec::operation::policy::PolicySet) -> Self
+pub fn row_encode::Options::with_raw_disk_staging(self, std::fs::File, u64) -> core::io::error::Result<Self>
+pub struct row_encode::Raster<'a>(_)
+pub const fn row_encode::Raster<'a>::new(zenpixels::buffer::PixelSlice<'a>) -> Self
+pub trait row_encode::Source
+pub type row_encode::Source::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn row_encode::Source::borrowed_pixels(&self) -> core::option::Option<zenpixels::buffer::PixelSlice<'_>>
+pub fn row_encode::Source::description(&self) -> row_encode::Description
+pub fn row_encode::Source::mechanism(&self) -> zencodec::operation::scheduling::OutputSource
+pub fn row_encode::Source::read_rows(&mut self, u32, zenpixels::buffer::PixelSliceMut<'_>, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), Self::Error>
+pub fn row_encode::Source::replay_identity(&self) -> core::result::Result<core::option::Option<[u64; 4]>, Self::Error>
+pub fn row_encode::Source::supports_positional_replay(&self) -> bool
+pub fn row_encode::encode<E: zencodec::traits::encoder::Encoder, S: row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(E, S, W, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>>
+pub fn row_encode::encode_dyn_job<S: row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, S, W, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>>
+pub fn row_encode::encode_dyn_job_to_destination<S: row_encode::Source, D: destination::Destination, R: zencodec::operation::binding::OperationPolicy>(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>, S, D, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>>
+pub fn row_encode::encode_job<J: zencodec::traits::encoding::EncodeJob, S: row_encode::Source, W: core::io::write::Write, R: zencodec::operation::binding::OperationPolicy>(J, S, W, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
+pub fn row_encode::encode_job_to_destination<J: zencodec::traits::encoding::EncodeJob, S: row_encode::Source, D: destination::Destination, R: zencodec::operation::binding::OperationPolicy>(J, S, D, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
+pub fn row_encode::encode_to_destination<E: zencodec::traits::encoder::Encoder, S: row_encode::Source, D: destination::Destination, R: zencodec::operation::binding::OperationPolicy>(E, S, D, R, row_encode::Options, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<row_encode::Completed, whereat::at::At<row_encode::Failure>>
+pub mod tokio_io
+#[non_exhaustive] pub enum tokio_io::AsyncDriveError<E>
+pub tokio_io::AsyncDriveError::Cancelled(enough::reason::StopReason)
+pub tokio_io::AsyncDriveError::Disconnected
+pub tokio_io::AsyncDriveError::Input(InputError)
+pub tokio_io::AsyncDriveError::Protocol(ProtocolViolation)
+pub tokio_io::AsyncDriveError::Source(zencodec::traits::BoxedError)
+pub tokio_io::AsyncDriveError::Step(zencodec::traits::incremental::StepError<E>)
+pub tokio_io::AsyncDriveError::Write(core::io::error::Error)
+#[non_exhaustive] pub enum tokio_io::StripEvent
+pub tokio_io::StripEvent::Begin
+pub tokio_io::StripEvent::Begin::descriptor: zenpixels::descriptor::PixelDescriptor
+pub tokio_io::StripEvent::Begin::height: u32
+pub tokio_io::StripEvent::Begin::width: u32
+pub tokio_io::StripEvent::Finish
+pub tokio_io::StripEvent::Strip
+pub tokio_io::StripEvent::Strip::meta: zencodec::traits::incremental::BatchMeta
+pub tokio_io::StripEvent::Strip::pixels: zenpixels::buffer::PixelBuffer
+pub struct tokio_io::AsyncCursor
+pub fn tokio_io::AsyncCursor::new(DriveOptions) -> Self
+pub async fn tokio_io::AsyncCursor::next<S, Src>(&mut self, &mut Src, &mut S, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Yield<<S as ByteStepper>::Output>, DriveFailure<<S as ByteStepper>::Error, zencodec::traits::BoxedError>> where S: ByteStepper + ?core::marker::Sized, Src: tokio_io::AsyncSource + ?core::marker::Sized
+pub fn tokio_io::AsyncCursor::retained_input_capacity(&self) -> usize
+pub struct tokio_io::AsyncReadSource<R>
+pub fn tokio_io::AsyncReadSource<R>::new(R) -> Self
+pub async fn tokio_io::AsyncReadSource<R>::len(&mut self) -> core::result::Result<u64, zencodec::traits::BoxedError>
+pub fn tokio_io::AsyncReadSource<R>::len_hint(&self) -> core::option::Option<u64>
+pub async fn tokio_io::AsyncReadSource<R>::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, zencodec::traits::BoxedError>
+pub fn tokio_io::AsyncReadSource<R>::read_ranges(&mut self, &mut [(u64, &mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec::traits::BoxedError>> + core::marker::Send
+pub struct tokio_io::BridgeError(pub tokio_io::AsyncDriveError<core::convert::Infallible>)
+pub struct tokio_io::BytesSource(pub alloc::rcs::arc::Arc<[u8]>)
+pub async fn tokio_io::BytesSource::len(&mut self) -> core::result::Result<u64, zencodec::traits::BoxedError>
+pub fn tokio_io::BytesSource::len_hint(&self) -> core::option::Option<u64>
+pub async fn tokio_io::BytesSource::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, zencodec::traits::BoxedError>
+pub fn tokio_io::BytesSource::read_ranges(&mut self, &mut [(u64, &mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec::traits::BoxedError>> + core::marker::Send
+pub struct tokio_io::ChannelRowSink
+pub fn tokio_io::ChannelRowSink::new(tokio::sync::mpsc::bounded::Sender<tokio_io::StripEvent>, bool) -> Self
+pub fn tokio_io::ChannelRowSink::with_pulse(self, how_far::pulse::SharedPulse) -> Self
+pub struct tokio_io::Inline
+pub trait tokio_io::AsyncSource: core::marker::Send
+pub fn tokio_io::AsyncSource::len(&mut self) -> impl core::future::future::Future<Output = core::result::Result<u64, zencodec::traits::BoxedError>> + core::marker::Send
+pub fn tokio_io::AsyncSource::len_hint(&self) -> core::option::Option<u64>
+pub fn tokio_io::AsyncSource::read_at(&mut self, u64, &mut [u8]) -> impl core::future::future::Future<Output = core::result::Result<usize, zencodec::traits::BoxedError>> + core::marker::Send
+pub fn tokio_io::AsyncSource::read_ranges(&mut self, &mut [(u64, &mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec::traits::BoxedError>> + core::marker::Send
+pub async fn tokio_io::BytesSource::len(&mut self) -> core::result::Result<u64, zencodec::traits::BoxedError>
+pub fn tokio_io::BytesSource::len_hint(&self) -> core::option::Option<u64>
+pub async fn tokio_io::BytesSource::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, zencodec::traits::BoxedError>
+pub fn tokio_io::BytesSource::read_ranges(&mut self, &mut [(u64, &mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec::traits::BoxedError>> + core::marker::Send
+pub async fn tokio_io::AsyncReadSource<R>::len(&mut self) -> core::result::Result<u64, zencodec::traits::BoxedError>
+pub fn tokio_io::AsyncReadSource<R>::len_hint(&self) -> core::option::Option<u64>
+pub async fn tokio_io::AsyncReadSource<R>::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, zencodec::traits::BoxedError>
+pub fn tokio_io::AsyncReadSource<R>::read_ranges(&mut self, &mut [(u64, &mut [u8])]) -> impl core::future::future::Future<Output = core::result::Result<(), zencodec::traits::BoxedError>> + core::marker::Send
+pub trait tokio_io::Compute: core::marker::Send + core::marker::Sync
+pub fn tokio_io::Compute::runs_inline(&self) -> bool
+pub fn tokio_io::Compute::spawn(&self, tokio_io::Job)
+pub fn tokio_io::decode_async<'a, D, S, Src, C>(D, S, &'a mut Src, C, DriveOptions, core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<(zencodec::cost::OutputInfo, S), tokio_io::AsyncDriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>>> + core::marker::Send + 'a where D: zencodec::traits::incremental::IncrementalDecode + core::marker::Send + 'static, S: zencodec::sink::DecodeRowSink + core::marker::Send + 'static, Src: tokio_io::AsyncSource + ?core::marker::Sized, C: tokio_io::Compute + 'a
+pub fn tokio_io::pull_decode_on_thread<'a, R, S, Src, C>(R, S, &'a mut Src, C, core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<(zencodec::cost::OutputInfo, S), tokio_io::AsyncDriveError<zencodec::traits::BoxedError>>> + core::marker::Send + 'a where R: core::ops::function::FnOnce(&mut dyn zencodec::source::DynReadAt, &mut dyn zencodec::sink::DecodeRowSink) -> core::result::Result<zencodec::cost::OutputInfo, zencodec::traits::BoxedError> + core::marker::Send + 'static, S: zencodec::sink::DecodeRowSink + core::marker::Send + 'static, Src: tokio_io::AsyncSource + ?core::marker::Sized, C: tokio_io::Compute + 'a
+pub fn tokio_io::transcode_async<'a, D, E, Src, W, C>(D, E, &'a mut Src, &'a mut W, C, DriveOptions, core::option::Option<how_far::pulse::SharedPulse>) -> impl core::future::future::Future<Output = core::result::Result<u64, tokio_io::AsyncDriveError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>>> + core::marker::Send + 'a where D: zencodec::traits::incremental::IncrementalDecode + core::marker::Send + 'static, E: zencodec::traits::encoder::Encoder + core::marker::Send + 'static, <E as zencodec::traits::encoder::Encoder>::Error: core::marker::Send + core::marker::Sync, Src: tokio_io::AsyncSource + ?core::marker::Sized, W: tokio::io::async_write::AsyncWrite + core::marker::Unpin + core::marker::Send + ?core::marker::Sized, C: tokio_io::Compute + 'a
+pub async fn tokio_io::write_pending_async<E, W>(&mut E, &mut W) -> core::io::error::Result<usize> where E: zencodec::traits::encoder::Encoder, W: tokio::io::async_write::AsyncWrite + core::marker::Unpin + ?core::marker::Sized
+pub type tokio_io::Job = alloc::boxed::Box<(dyn core::ops::function::FnOnce() + core::marker::Send + 'static)>
+#[non_exhaustive] pub enum BufferPolicy
+pub BufferPolicy::Spool
+pub BufferPolicy::Spool::max_bytes: usize
+pub BufferPolicy::Window
+pub BufferPolicy::Window::window_bytes: usize
+pub const fn BufferPolicy::for_pattern(zencodec::source::AccessPattern, usize) -> Self
+pub const fn BufferPolicy::try_for_pattern(zencodec::source::AccessPattern, usize) -> core::result::Result<Self, zencodec::source::SourceError>
+pub const fn BufferPolicy::max_bytes(&self) -> usize
+#[non_exhaustive] pub enum EncodeWriteError<E>
+pub EncodeWriteError::Encoder(E)
+pub EncodeWriteError::Io(core::io::error::Error)
+#[non_exhaustive] pub enum PumpFailure<E>
+pub PumpFailure::Input(InputError)
+pub PumpFailure::Io(core::io::error::Error)
+pub PumpFailure::NeedsRandomAccess(zencodec::traits::incremental::InputRequest)
+pub PumpFailure::Protocol(ProtocolViolation)
+pub PumpFailure::Step(E)
+pub PumpFailure::WindowLimit
+pub PumpFailure::WindowLimit::limit: usize
+pub PumpFailure::WindowLimit::needed: usize
+#[non_exhaustive] pub enum StdSourceError
+pub StdSourceError::Allocation
+pub StdSourceError::Allocation::requested: usize
+pub StdSourceError::Allocation::source: alloc::collections::TryReserveError
+pub StdSourceError::Io(core::io::error::Error)
+pub StdSourceError::Source(zencodec::source::SourceError)
+pub struct BufferedReadAt<R: alloc::io::read::Read>
+pub fn BufferedReadAt<R>::new(R, BufferPolicy) -> Self
+pub fn BufferedReadAt<R>::retained_bytes(&self) -> usize
+pub fn BufferedReadAt<R>::watermark(&self) -> u64
+#[non_exhaustive] pub struct EncodeWriteReport
+pub EncodeWriteReport::bytes: u64
+pub EncodeWriteReport::timing: zencodec::output::OutputTiming
+pub fn EncoderSink<E>::write_pending(&mut self, &mut impl core::io::write::Write) -> core::io::error::Result<usize>
+pub struct FileReadAt
+pub fn FileReadAt::new(std::fs::File) -> core::result::Result<Self, StdSourceError>
+pub fn FileReadAt::open(impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, StdSourceError>
+pub struct ReadAtReader<S>
+pub fn ReadAtReader<S>::into_inner(self) -> S
+pub const fn ReadAtReader<S>::new(S) -> Self
+pub struct ReadCursor
+pub fn ReadCursor::new(usize, usize) -> Self
+pub fn ReadCursor::next<S, R>(&mut self, &mut R, &mut S, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<Yield<<S as ByteStepper>::Output>, PumpFailure<<S as ByteStepper>::Error>> where S: ByteStepper + ?core::marker::Sized, R: alloc::io::read::Read + ?core::marker::Sized
+pub fn ReadCursor::retained_input_capacity(&self) -> usize
+pub fn encode_to_writer<E: zencodec::traits::encoder::Encoder>(E, zenpixels::buffer::PixelSlice<'_>, &mut impl core::io::write::Write) -> core::result::Result<EncodeWriteReport, EncodeWriteError<<E as zencodec::traits::encoder::Encoder>::Error>>
+pub fn pump_read_to_sink<R, D>(R, &mut D, &mut dyn zencodec::sink::DecodeRowSink, core::option::Option<&dyn how_far::pulse::Pulse>, usize, usize) -> core::result::Result<zencodec::cost::OutputInfo, PumpError<<D as zencodec::traits::incremental::IncrementalDecode>::Error>> where R: alloc::io::read::Read, D: zencodec::traits::incremental::IncrementalDecode + ?core::marker::Sized
+pub fn write_pending<E: zencodec::traits::encoder::Encoder>(&mut E, &mut impl core::io::write::Write) -> core::io::error::Result<usize>
+pub fn write_pending_animation<A: zencodec::traits::encoder::AnimationFrameEncoder>(&mut A, &mut impl core::io::write::Write) -> core::io::error::Result<usize>
+pub type PumpError<E> = PumpFailure<zencodec::traits::incremental::StepError<E>>
+
+## trait impls (27 types)
+
+BufferPolicy: Clone, Copy, Debug, Eq, PartialEq
+BufferedReadAt<R>: zencodec::source::ReadAt
+EncodeWriteError<E>: Debug, Display, Error
+EncodeWriteReport: Clone, Copy, Debug, Eq, PartialEq
+F: tokio_io::Compute
+FileReadAt: zencodec::source::ReadAt
+PumpFailure<E>: Debug, Display, Error
+ReadAtReader<S>: Debug, Read, Seek
+ReadCursor: Debug
+StdSourceError: Debug, Display, Error, From<core::io::error::Error>, From<zencodec::source::SourceError>
+destination::Forward<W>: Write, destination::Destination
+destination::SeekBack<W>: Write, destination::Destination
+row_encode::Completed: Debug
+row_encode::Description: Clone, Debug, Eq, PartialEq
+row_encode::ExactDepthContradiction: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+row_encode::Failure: Debug, Display, Error
+row_encode::Raster<'_>: row_encode::Source
+row_encode::Refusal: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+row_encode::Stage: Clone, Copy, Debug, Eq, PartialEq
+tokio_io::AsyncCursor: Debug
+tokio_io::AsyncDriveError<E>: Debug, Display, Error
+tokio_io::AsyncReadSource<R>: Debug, tokio_io::AsyncSource
+tokio_io::BridgeError: Debug, Display, Error
+tokio_io::BytesSource: Clone, Debug, tokio_io::AsyncSource
+tokio_io::ChannelRowSink: Debug, zencodec::sink::DecodeRowSink
+tokio_io::Inline: Clone, Copy, Debug, Default, tokio_io::Compute
+tokio_io::StripEvent: Debug
+
+## auto traits
+
+15 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+BufferedReadAt<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+EncodeWriteError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+PumpFailure<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+ReadAtReader<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+StdSourceError: !RefUnwindSafe !UnwindSafe
+destination::Forward<W>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+destination::SeekBack<W>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+row_encode::Failure: !RefUnwindSafe !UnwindSafe
+tokio_io::AsyncDriveError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+tokio_io::AsyncReadSource<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+tokio_io::BridgeError: !RefUnwindSafe !UnwindSafe
+tokio_io::ChannelRowSink: !RefUnwindSafe !UnwindSafe
