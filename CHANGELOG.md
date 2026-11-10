@@ -903,6 +903,8 @@ removes that whole class).
 
 ### [Unreleased]
 
+- Prepare the owner-approved crates.io publication switch; publication remains a separate manual release action.
+
 - Align image factory admission with video's `try_new(factory, policy, pulse)`:
   check cancellation before and after construction, drop cancelled native owners,
   and preserve factory failures. Deprecate the no-pulse `try_from_factory` spelling.

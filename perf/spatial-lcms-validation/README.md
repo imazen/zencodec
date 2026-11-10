@@ -1,23 +1,23 @@
 # Native CMYK through explicit LCMS
 
-This isolated graph compiles the existing spatial controls against zenpixels
-`af19bcdab06b0df55745288931a1bdfaa6232665` and its opt-in Rust LCMS backend
-`55b59476cf64920345e9ca32eb3a4678bf0bbece`. It does not repin the frozen spatial
-harness, change a core signature, or select a new product default.
+This isolated graph uses the root pixel/converter76005fc9 cohort with the
+opt-in Rust LCMS backend. It changes no core signature or product default.
+The earlier af19 graph and failing Mox receipts remain historical evidence;
+they are not relabeled as current-cohort measurements.
 
-Run `just spatial-lcms-check <fresh-artifacts> <independent-C-oracle>` from the
-repository root, outside inherited workspace overrides. Build the C oracle with
-`perf/spatial-validation/build_color_oracle.py --help` (the pinned C 2.20 source
-used in the receipt is independent of the production Rust implementation).
+Run `just spatial-lcms-check <fresh-artifacts> <independent-C-oracle>` from an
+export outside inherited workspace overrides. Build the independent C oracle
+with `perf/spatial-validation/build_color_oracle.py`.
 
-The same native JXL image, source ICC, inverted F32 polarity, strided staging,
-metadata/source preservation, owner accounting, direct-backend parity and
-strict absolute error <0.0013 controls apply to both backends. The build script
-only enables the additional LCMS test in the shared test source. The frozen
-manifest cannot accidentally enable an unavailable LCMS dependency through
-`--all-features`.
+The LCMS test retains the native JXL source ICC, inverted F32 polarity, strided
+staging, metadata/source preservation, owner accounting and bit-exact
+finalizer/direct-backend checks. Every RGB component must satisfy the unchanged
+strict absolute error <0.0013 against independent LCMS relative+BPC output.
+The build script enables this additional backend gate in the shared test source.
+Its focused runtime gate and strict all-target Clippy pass on the current cohort.
 
-The original Mox accuracy test remains enabled and fails on both known graphs;
-a full run here is not expected to be green. The focused LCMS command is an
-explicit backend qualification, not a workaround asserting that Mox meets the
-bound. See [the numerical receipt](../../benchmarks/native_cmyk_finalization_2026-11-08.md).
+The Mox test separately retains direct-backend parity and explicitly reproduces
+the known independent accuracy discrepancy, as approved by the owner. Its JSON
+report marks accuracy unqualified; no higher error bound is accepted. See the
+[current gate split](../spatial-validation/README.md#current-shared-cohort-and-cmyk-gate-split-2026-11-10)
+and [preserved original measurements](../../benchmarks/native_cmyk_finalization_2026-11-08.md).
