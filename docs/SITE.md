@@ -7,6 +7,12 @@ The source is `site/index.html`, `site/content.mjs`, `site/styles.css`, and
 `site/api.mjs` selects the source declarations used by each chapter and entry
 point. `site/source.mjs` extracts those signatures and complete example scopes.
 
+## Structural review
+
+[The architectural critique](architecture-critique-2026-11-10.md) separates
+obvious naming/navigation cleanup from proposed contract changes. It audits the
+main and PR208/209 snapshots; its target module map is not an implemented API.
+
 ## Unlisted migration review
 
 `migration.html` is built from `site/migration.mjs`, `site/migration-data.mjs`,
