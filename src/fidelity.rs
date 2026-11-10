@@ -50,6 +50,13 @@ impl Fidelity {
         Self::Lossy(LossyTarget::ApproxButteraugli(distance))
     }
 
+    /// Lossy, aiming at a generation-A zensim score in one calibrated pass.
+    /// A codec without A calibration reports substitution or refuses a checked target.
+    #[must_use]
+    pub const fn zensim_a(score: f32) -> Self {
+        Self::Lossy(LossyTarget::ApproxZensimA(score))
+    }
+
     /// Lossy, aiming at a zensim score (`zensim::ZensimProfile::B`) via a single
     /// calibrated pass.
     #[must_use]
@@ -147,6 +154,7 @@ impl Fidelity {
             Self::Lossy(
                 LossyTarget::ApproxSsim2(v)
                 | LossyTarget::ApproxButteraugli(v)
+                | LossyTarget::ApproxZensimA(v)
                 | LossyTarget::ApproxZensimB(v)
                 | LossyTarget::CodecSpecificQuality(v),
             ) => v,
@@ -203,11 +211,12 @@ pub(crate) fn select_target<T>(
 
 /// What a lossy encode aims at.
 ///
-/// Four things we can target **today**, each in a single blind pass (no
+/// Five things we can request **today**, each in a single blind pass (no
 /// re-encode):
 /// - [`ApproxSsim2`](Self::ApproxSsim2) — a SSIMULACRA2 score.
 /// - [`ApproxButteraugli`](Self::ApproxButteraugli) — a butteraugli
 ///   **max-norm** distance (worst-region; lower is better).
+/// - [`ApproxZensimA`](Self::ApproxZensimA) — a generation-A zensim score.
 /// - [`ApproxZensimB`](Self::ApproxZensimB) — a zensim score on the
 ///   `ZensimProfile::B` scale.
 /// - [`CodecSpecificQuality`](Self::CodecSpecificQuality) — the codec's own
@@ -251,6 +260,11 @@ pub enum LossyTarget {
     /// `B` as the recommended profile, that becomes a new sibling arm here —
     /// this one keeps meaning "generation-B" for as long as it exists.
     ApproxZensimB(f32),
+    /// Aim for a generation-A zensim score in one calibrated pass.
+    /// This is a distinct target from generation B, never an alias or a promise
+    /// of a measured result. A codec must report the target actually used;
+    /// checked selection refuses an unimplemented or substituted calibration.
+    ApproxZensimA(f32),
     /// The codec's **native** quality dial, on its own scale. The meaning is
     /// codec-specific — there is no cross-codec standard here (unlike a metric
     /// target). Use when you know the codec and want its raw knob.
@@ -324,11 +338,21 @@ mod tests {
         assert!(!Fidelity::ssim2(90.0).is_lossless());
         assert!(!Fidelity::butteraugli(1.0).is_lossless());
         assert!(!Fidelity::zensim_b(90.0).is_lossless());
+        assert!(!Fidelity::zensim_a(90.0).is_lossless());
         assert!(!Fidelity::codec_quality(90.0).is_lossless());
     }
 
     #[test]
     fn fidelity_constructors() {
+        assert_eq!(
+            Fidelity::zensim_a(90.0),
+            Fidelity::Lossy(LossyTarget::ApproxZensimA(90.0))
+        );
+        assert_ne!(Fidelity::zensim_a(90.0), Fidelity::zensim_b(90.0));
+        assert_eq!(
+            Fidelity::zensim_a(f32::NAN).validate_target(),
+            Err(super::FidelityTargetError::NonFinite)
+        );
         assert_eq!(
             Fidelity::ssim2(90.0),
             Fidelity::Lossy(LossyTarget::ApproxSsim2(90.0))

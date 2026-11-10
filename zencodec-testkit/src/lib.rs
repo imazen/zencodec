@@ -3556,6 +3556,7 @@ where
         ("Lossy(ApproxSsim2)", Fidelity::ssim2(80.0)),
         ("Lossy(ApproxButteraugli)", Fidelity::butteraugli(1.5)),
         ("Lossy(ApproxZensimB)", Fidelity::zensim_b(80.0)),
+        ("Lossy(ApproxZensimA)", Fidelity::zensim_a(80.0)),
     ];
     for (name, req) in requests {
         let cfg = enc

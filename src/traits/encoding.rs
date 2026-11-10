@@ -176,6 +176,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
             // / SSIM2 / zensim / their native scale precisely.
             Fidelity::Lossy(
                 LossyTarget::ApproxSsim2(q)
+                | LossyTarget::ApproxZensimA(q)
                 | LossyTarget::ApproxZensimB(q)
                 | LossyTarget::CodecSpecificQuality(q),
             ) => self.with_lossless(false).with_generic_quality(q),

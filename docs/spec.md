@@ -3163,3 +3163,10 @@ the existing ranked fallback applies. Empty preferences select the first
 sufficient available format. The helper returns actual available metadata and
 does not convert pixels. Its initial consumers are deep zenavif/heic output
 selection; native decoder adoption is qualified separately.
+
+### Generation-A fidelity request
+
+`Fidelity::zensim_a(score)` selects `LossyTarget::ApproxZensimA(score)` and
+remains distinct from generation B. Native configs report the actual resolved
+target. A checked request refuses a substituted or unsupported calibration;
+this does not add a measured-quality guarantee or an encode loop.

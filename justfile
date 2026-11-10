@@ -1972,3 +1972,7 @@ icc-authority-check:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
     cargo test --manifest-path tools/icc-authority-validation/Cargo.toml --locked
     cargo clippy --manifest-path tools/icc-authority-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Run through run-heavy; source is exported before Cargo can see parent overrides.
+core-stack-check output target revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --target "{{target}}" --revision "{{revision}}"

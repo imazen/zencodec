@@ -13,9 +13,9 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.31-beta.2"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b88a77003bd21035bb9ded3659d9ea666fc58499c2cf41949402a9bb388b9a2b"
+checksum = "67dcf4e0bcce8da7704d177f604cf43299777de9d0f052ffe8822ab188de2820"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -24,9 +24,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.31-beta.2"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1148cd0448e74ae017248ce560c1f6577da191855f083986e74a2587def019"
+checksum = "8ec18ef9ee506a934ab4f46f204f1d1d83528283d5400df800688748268b82bc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -67,8 +67,8 @@ checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "garb"
-version = "0.2.8"
-source = "git+https://github.com/imazen/garb?rev=605276d717ea0b31a1cd2a36ae05301383c7b8b5#605276d717ea0b31a1cd2a36ae05301383c7b8b5"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=58ce9cad7b337418a7abe9b1f6e3e4bd1928b385#58ce9cad7b337418a7abe9b1f6e3e4bd1928b385"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -103,9 +103,9 @@ dependencies = [
 
 [[package]]
 name = "magetypes"
-version = "0.9.31-beta.2"
+version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a3848d5e0967e86afbc9ada733366a5acf852e73f9ed1c957e2031a96b1debc"
+checksum = "f509b5e651143f19077f1d3874e87d1f8ed617f7c257f60e38d58f27563e0f98"
 dependencies = [
  "archmage",
  "rustversion",
@@ -132,6 +132,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "proc-macro2"
@@ -224,7 +230,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -233,16 +239,17 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=fde59b96632557592cffa9b7301acd8db96ed078#fde59b96632557592cffa9b7301acd8db96ed078"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "archmage",
  "bytemuck",
+ "enough",
  "garb",
  "libm",
  "linear-srgb",
  "magetypes",
  "once_cell",
- "paste",
+ "pastey",
  "whereat",
  "zenpixels",
 ]

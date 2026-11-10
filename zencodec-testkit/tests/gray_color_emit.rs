@@ -80,7 +80,11 @@ fn lowered_profile_is_gray_class_and_round_trips_through_the_resolver() {
         assert_eq!(plan.icc, IccDisposition::KeepSource);
         assert_eq!(
             plan.cicp,
-            zenpixels::icc::IccIdentification::from_icc(&profile).and_then(|id| id.to_cicp())
+            zenpixels::icc::IccIdentification::from_icc(&profile)
+                .filter(
+                    |id| id.valid_use == zenpixels::icc::IdentificationUse::MatrixTrcSubstitution
+                )
+                .and_then(|id| id.to_cicp())
         );
     }
 }

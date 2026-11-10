@@ -623,6 +623,14 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Workspace contract stack
+
+- Select the current zenpixels allocation/interpretation cohort in core, render
+  and fuzz roots. Gray ICC roundtrip checks distinguish extraction from qualified
+  substitution; source ICC retention remains required.
+- Add generation-A `LossyTarget::ApproxZensimA` and `Fidelity::zensim_a` alongside
+  generation B. These are requested calibrated targets, not measured guarantees.
+
 - Preserve permitted native HLG CICP without synthesizing an ICC companion when
   no rendering target is supplied. Apply the same rule to RGB, gray and gray-alpha;
   retain existing ICCs under keeping policies and keep ICC-only output obligations
