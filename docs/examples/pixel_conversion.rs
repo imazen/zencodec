@@ -38,7 +38,7 @@ mod framebuffer {
     };
     use zenjpeg::JpegEncoderConfig;
     use zenpixels::{AlphaPolicy, ConvertOptions, PixelBuffer, PixelDescriptor, PixelSlice};
-    use zenpixels_convert::{RowConverter, PixelSliceConvertExt};
+    use zenpixels_convert::{PixelSliceConvertExt, RowConverter};
 
     #[derive(Debug)]
     pub(crate) struct ExpectedSrgbFramebuffer;
