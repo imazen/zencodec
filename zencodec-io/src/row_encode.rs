@@ -558,7 +558,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: Operation
     options: Options,
     pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
-    run_rows(
+    planned::run(
         LegacyStartup(encoder),
         source,
         writer,
@@ -675,31 +675,64 @@ fn validate_row_plan(
     Ok(plan)
 }
 
+// A supplied encoder reports observed timing after begin. Only a retained job
+// supplies a plan that can be admitted before native construction.
+enum StartupPlan {
+    ObservedRows(zencodec::encode::OutputTiming),
+    Declared(EncodePlan),
+}
+impl StartupPlan {
+    fn input(&self) -> InputRequirement {
+        match self {
+            Self::ObservedRows(_) => InputRequirement::Rows,
+            Self::Declared(plan) => plan.input,
+        }
+    }
+    fn timing(&self) -> zencodec::encode::OutputTiming {
+        match self {
+            Self::ObservedRows(timing) => *timing,
+            Self::Declared(plan) => plan.timing,
+        }
+    }
+    fn phase(&self) -> zencodec::encode::OutputPhase {
+        match self {
+            Self::ObservedRows(_) => zencodec::encode::OutputPhase::AnyPass,
+            Self::Declared(plan) => plan.output_phase,
+        }
+    }
+    fn declared(&self) -> Result<&EncodePlan, Cause> {
+        match self {
+            Self::Declared(plan) => Ok(plan),
+            Self::ObservedRows(_) => Err(Refusal::PullProtocol.into()),
+        }
+    }
+}
+
 trait RowStartup {
     type Enc: Encoder;
     // Preserve legacy allocation/start ordering on the existing raw adapter.
     const EARLY_BUFFER: bool;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause>;
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause>;
     fn start(
         self,
         declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
+        plan: &StartupPlan,
     ) -> Result<Self::Enc, Cause>;
 }
 struct LegacyStartup<E>(E);
 impl<E: Encoder> RowStartup for LegacyStartup<E> {
     type Enc = E;
     const EARLY_BUFFER: bool = true;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
         let timing = self.0.begin_output(
             declaration.width,
             declaration.height,
             declaration.descriptor,
             declaration.access,
         )?;
-        Ok(EncodePlan::rows(timing))
+        Ok(StartupPlan::ObservedRows(timing))
     }
-    fn start(self, _: &EncodeDeclaration<'_>, _: &EncodePlan) -> Result<E, Cause> {
+    fn start(self, _: &EncodeDeclaration<'_>, _: &StartupPlan) -> Result<E, Cause> {
         Ok(self.0)
     }
 }
@@ -710,17 +743,17 @@ where
 {
     type Enc = J::Enc;
     const EARLY_BUFFER: bool = false;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
-        validate_row_plan(self.0.plan_encode(declaration)?, declaration)
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
+        validate_row_plan(self.0.plan_encode(declaration)?, declaration).map(StartupPlan::Declared)
     }
     fn start(
         self,
         declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
+        plan: &StartupPlan,
     ) -> Result<Self::Enc, Cause> {
         let mut encoder = self.0.encoder()?;
         let observed = encoder.begin_declared(declaration)?;
-        plan.validate_started(&observed)?;
+        plan.declared()?.validate_started(&observed)?;
         Ok(encoder)
     }
 }
@@ -729,17 +762,17 @@ struct DynPlannedStartup(Box<dyn DynEncodeJob>);
 impl RowStartup for DynPlannedStartup {
     type Enc = DynRows;
     const EARLY_BUFFER: bool = false;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
-        validate_row_plan(self.0.plan_encode(declaration)?, declaration)
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
+        validate_row_plan(self.0.plan_encode(declaration)?, declaration).map(StartupPlan::Declared)
     }
     fn start(
         self,
         declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
+        plan: &StartupPlan,
     ) -> Result<Self::Enc, Cause> {
         let mut encoder = self.0.into_encoder()?;
         let observed = encoder.begin_declared(declaration)?;
-        plan.validate_started(&observed)?;
+        plan.declared()?.validate_started(&observed)?;
         Ok(DynRows(encoder))
     }
 }
@@ -778,280 +811,6 @@ impl Encoder for DynRows {
         self,
     ) -> Result<zencodec::output_patch::OutputFinish<EncodeOutput>, Self::Error> {
         self.0.finish_output().map_err(Self::Error::new)
-    }
-}
-
-fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
-    mut startup: P,
-    mut source: S,
-    mut writer: D,
-    mut resolver: R,
-    mut options: Options,
-    pulse: Option<&dyn zencodec::Pulse>,
-) -> Result<Completed, At<Failure>> {
-    let control = pulse.unwrap_or(&zencodec::NoPulse);
-    let mut boundary = Stage::Prepare;
-    let mut emitted = 0;
-    let mut patched_bytes = 0;
-    let mut report = OperationReport::default();
-    let bound_requirements = resolver.requirements();
-    let entry_requirements = options.preset;
-    let run = || -> Result<OutputSchedule, Cause> {
-        check(control)?;
-        // This adapter has no qualified native preparation/workspace bound.
-        // Refuse before asking the job to prepare any state. These checks do
-        // not discharge the unchanged requirements at final route selection.
-        boundary = Stage::Policy;
-        entry_requirements.check_workspace(None)?;
-        if let Some(required) = bound_requirements {
-            required.check_workspace(None)?;
-        }
-        boundary = Stage::Prepare;
-        let desc = source.description();
-        let mechanism = source.mechanism();
-        if desc.width == 0 || desc.height == 0 {
-            return Err(Refusal::Empty.into());
-        }
-        let stride = (desc.width as usize)
-            .checked_mul(desc.descriptor.bytes_per_pixel())
-            .ok_or(Refusal::Overflow)?;
-        let rows = options.batch_rows.get().min(desc.height);
-        let len = stride.checked_mul(rows as usize).ok_or(Refusal::Overflow)?;
-        let early_buffer = if P::EARLY_BUFFER {
-            Some(options.storage.bytes(len)?)
-        } else {
-            None
-        };
-        let access = if writer.can_patch() {
-            OutputAccess::SeekBack
-        } else {
-            OutputAccess::Forward
-        };
-        let mut declaration =
-            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor).with_access(access);
-        if let Some(color) = &desc.color_context {
-            declaration = declaration.with_color(color);
-        }
-        if let Some(exact) = desc.exact_depth {
-            declaration = declaration.with_exact_depth(exact);
-        }
-        // Includes the legacy path, whose plan() may start native headers.
-        // This validates structure only; planning must not read source samples.
-        declaration.validate_exact_depth()?;
-        let plan = startup.plan(&declaration)?;
-        let timing = plan.timing;
-        if timing.patches_at_finish() && !writer.can_patch() {
-            return Err(Refusal::Patches.into());
-        }
-        check(control)?;
-        let mut finish_first = OutputScheduleOffer::new(OutputSchedule::FinishFirst);
-        finish_first.staging = Some(StagingFacts::new(
-            if options.disk.is_some() {
-                StagingKind::Disk
-            } else {
-                StagingKind::Memory
-            },
-            0,
-            if options.disk.is_some() {
-                options.max_output_bytes
-            } else {
-                options.storage.max_bytes() as u64
-            },
-        ));
-        let offers = [finish_first, OutputScheduleOffer::new(OutputSchedule::Live)];
-        let offers = &offers[..if timing.streams() { 2 } else { 1 }];
-        boundary = Stage::Policy;
-        let (index, record) = match resolve_output_schedule(
-            OutputScheduleFacts::new(timing, mechanism),
-            offers,
-            &mut resolver,
-            options.preset,
-            pulse,
-        ) {
-            Ok(selected) => selected,
-            Err(error) => {
-                report.record(error.error().record());
-                return Err(error.into());
-            }
-        };
-        report.record(record);
-        let schedule = offers[index].schedule;
-        check(control)?;
-        boundary = Stage::Read;
-        validate_source(&source, &desc, mechanism)?;
-        let current_access = if writer.can_patch() {
-            OutputAccess::SeekBack
-        } else {
-            OutputAccess::Forward
-        };
-        if current_access != access {
-            return Err(Refusal::DestinationChanged.into());
-        }
-        boundary = Stage::Prepare;
-        let mut buffer = match early_buffer {
-            Some(buffer) => buffer,
-            None => options.storage.bytes(len)?,
-        };
-        check(control)?;
-        boundary = Stage::Start;
-        let mut encoder = startup.start(&declaration, &plan)?;
-        // Exact carrier evidence can own ICC bytes. Release it before final
-        // destination waits; the executing encoder owns its admitted metadata.
-        drop(plan);
-        let mut staged = VecDeque::new();
-        let mut produced = 0;
-        let mut y = 0;
-        loop {
-            check(control)?;
-            boundary = Stage::Read;
-            validate_source(&source, &desc, mechanism)?;
-            // The final pending bytes belong to finish. Do not introduce an
-            // avoidable writer wait just before releasing native/source state.
-            if y == desc.height {
-                break;
-            }
-            boundary = Stage::Encode;
-            let pending = encoder.pending_output();
-            count(&mut produced, pending.len(), options.max_output_bytes)?;
-            if schedule == OutputSchedule::Live {
-                boundary = Stage::Write;
-                write_all(&mut writer, pending, &mut emitted, control)?;
-            } else {
-                boundary = Stage::Encode;
-                if let Some(disk) = &mut options.disk {
-                    disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                    disk.append(pending, control)?;
-                } else {
-                    stage(pending, &options.storage, &mut staged)?;
-                }
-            }
-            encoder.consume_output(pending.len());
-            let count = rows.min(desc.height - y);
-            let size = stride
-                .checked_mul(count as usize)
-                .ok_or(Refusal::Overflow)?;
-            boundary = Stage::Read;
-            validate_source(&source, &desc, mechanism)?;
-            let mut destination = PixelSliceMut::new(
-                &mut buffer.as_mut_slice()[..size],
-                desc.width,
-                count,
-                stride,
-                desc.descriptor,
-            )?;
-            if let Some(context) = &desc.color_context {
-                destination = destination.with_color_context(context.clone());
-            }
-            source.read_rows(y, destination, pulse)?;
-            check(control)?;
-            validate_source(&source, &desc, mechanism)?;
-            boundary = Stage::Encode;
-            let mut pixels = PixelSlice::new(
-                &buffer.as_slice()[..size],
-                desc.width,
-                count,
-                stride,
-                desc.descriptor,
-            )?;
-            if let Some(exact) = desc.exact_depth {
-                // Check untagged rows written through the mutable source view.
-                // Per-row checks retain the first contradictory absolute row;
-                // nothing in this strip reaches the encoder until all pass.
-                for row in 0..pixels.rows() {
-                    check(control)?;
-                    if !exact.holds_for(&pixels.sub_rows(row, 1))? {
-                        return Err(ExactDepthContradiction {
-                            first_row: y + row,
-                            claim: exact,
-                        }
-                        .into());
-                    }
-                }
-                // A Pulse callback during verification can also mutate a
-                // source declaration. Keep that mutation from reaching push.
-                boundary = Stage::Read;
-                validate_source(&source, &desc, mechanism)?;
-                boundary = Stage::Encode;
-                pixels = pixels.with_exact_depth(exact)?;
-            }
-            // Grid verification needs no color context. Attach it only after
-            // scanning so its per-row borrowed views need no Arc clone/drop.
-            if let Some(context) = &desc.color_context {
-                pixels = pixels.with_color_context(context.clone());
-            }
-            encoder.push_rows(pixels)?;
-            y += count;
-        }
-        drop(source);
-        drop(buffer);
-        drop(desc);
-        boundary = Stage::Finish;
-        check(control)?;
-        let finished = encoder.finish_output()?;
-        check(control)?;
-        finished.validate(produced)?;
-        if !finished.patches.is_empty() && (!writer.can_patch() || !timing.patches_at_finish()) {
-            return Err(Refusal::Patches.into());
-        }
-        let patches = finished.patches;
-        let rest = finished.tail;
-        count(&mut produced, rest.len(), options.max_output_bytes)?;
-        if schedule == OutputSchedule::FinishFirst {
-            if let Some(disk) = &mut options.disk {
-                disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                disk.append(rest.data(), control)?;
-                drop(rest);
-                disk.replay(
-                    produced,
-                    &options.storage,
-                    &mut writer,
-                    &mut emitted,
-                    &mut boundary,
-                    control,
-                )?;
-            } else {
-                stage(rest.data(), &options.storage, &mut staged)?;
-                drop(rest);
-                boundary = Stage::Write;
-                while let Some(bytes) = staged.pop_front() {
-                    write_all(&mut writer, bytes.as_slice(), &mut emitted, control)?;
-                }
-            }
-        } else {
-            boundary = Stage::Write;
-            write_all(&mut writer, rest.data(), &mut emitted, control)?;
-        }
-        check(control)?;
-        if !patches.is_empty() {
-            boundary = Stage::Patch;
-            for patch in patches {
-                check(control)?;
-                writer.position(patch.offset)?;
-                write_all(&mut writer, &patch.bytes, &mut patched_bytes, control)?;
-            }
-            check(control)?;
-            writer.position(produced)?;
-        }
-        boundary = Stage::Write;
-        check(control)?;
-        writer.flush()?;
-        check(control)?;
-        Ok(schedule)
-    };
-    match run() {
-        Ok(schedule) => Ok(Completed {
-            emitted,
-            patched_bytes,
-            schedule,
-            report,
-        }),
-        Err(cause) => Err(At::wrap(Failure {
-            stage: boundary,
-            emitted,
-            patched_bytes,
-            report: Box::new(report),
-            cause,
-        })),
     }
 }
 
