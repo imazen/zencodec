@@ -54,6 +54,7 @@ fn edits(entries: &[(u32, i32, i16)]) -> Vec<u8> {
     boxed(b"edts", &boxed(b"elst", &payload))
 }
 
+#[allow(deprecated, reason = "This diagnostic witnesses the frozen scalar adapter limitation in issue187") ]
 fn inspect(bytes: &[u8]) -> Result<Option<i64>, String> {
     let mut demux = zenmp4::Mp4Demuxer::new(MediaLimits::default());
     let mut cursor = SliceCursor::new(65536);
