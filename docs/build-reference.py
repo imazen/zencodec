@@ -11,7 +11,7 @@ revision = os.environ.get("GITHUB_SHA") or subprocess.check_output(
     ["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
 target = Path(os.environ.get("CARGO_TARGET_DIR", str(root / "target"))).resolve()
 env = os.environ.copy()
-env["RUSTDOCFLAGS"] = (env.get("RUSTDOCFLAGS", "") + " -D warnings").strip()
+env["RUSTDOCFLAGS"] = (env.get("RUSTDOCFLAGS", "") + " -D warnings --default-theme dark").strip()
 # The library root intentionally does not commit Cargo.lock. Preserve an
 # existing export lock; resolve once on a fresh checkout, as normal CI does.
 if not (root / "Cargo.lock").exists():

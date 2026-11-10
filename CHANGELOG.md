@@ -10,6 +10,11 @@
 
 ### Added
 
+- Add the `advanced` authoring namespace as aliases of existing contracts;
+  ordinary applications continue to use `CodecSet`. No parallel protocol or
+  second set of implementations is introduced. (`caller simplicity review`)
+
+
 - `negotiate_pixel_format_for_depth` prefers an acceptable output that retains source depth, preserving caller order among sufficient formats; legacy negotiation remains available.
 
 - `IccDisposition::SynthesizeGrayFrom(Cicp)`: a gray or gray-alpha source with only
@@ -143,10 +148,6 @@
   append/overwrite counts; adversarial controls cover both output schedules.
 
 ### QUEUED BREAKING CHANGES
-
-- Add the `advanced` authoring namespace as aliases of existing contracts;
-  ordinary applications continue to use `CodecSet`. No parallel protocol or
-  second set of implementations is introduced. (`caller simplicity review`)
 
 - Media decoder conformance compares complete immutable interpretation, timing
   and presentation across paths. The reusable frame interchange check covers
