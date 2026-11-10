@@ -964,7 +964,7 @@ fn resolve_image<R: OperationPolicy + ?Sized>(
 ) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
 fn resolve_frame<R: OperationPolicy + ?Sized>(
     interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
-    resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
+    resolver: &mut R, preset: PolicySet, pulse: Option<&dyn Pulse>,
 ) -> Result<DecisionRecord, At<PolicyFailure>>;
 
 // zencodec_media::policy, implements VideoDecoder

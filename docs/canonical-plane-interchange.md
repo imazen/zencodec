@@ -2,7 +2,8 @@
 
 A frame keeps one validated `zenpixels::plane::PlanarLayout`. It describes each
 plane's role and encoding, plus chroma subsampling and siting. Frame geometry,
-presentation timing, color claims and configuration epoch remain in zencodec.
+presentation timing, current color/alpha interpretation, source color claims and
+configuration epoch remain in zencodec.
 
 ```rust
 use zenpixels::{ChannelType, plane::{PlanarLayout, PlaneEncoding, PlaneRole, PlaneSpec},
@@ -15,7 +16,8 @@ let layout = PlanarLayout::new(vec![
     PlaneSpec::new(PlaneRole::Luma, PlaneEncoding::Code(y)),
     PlaneSpec::new(PlaneRole::Alpha, PlaneEncoding::Code(alpha)),
 ], ChromaSubsampling::Mono, ChromaSiting::Unknown)?;
-let interpretation = FrameInterpretation::new(FrameGeometry::full(640, 480), layout);
+let interpretation = FrameInterpretation::new(FrameGeometry::full(640, 480), layout)
+    .with_alpha_mode(zenpixels::AlphaMode::Straight);
 assert_eq!(interpretation.uniform_code_encoding(), None);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
@@ -30,10 +32,10 @@ For an owned software frame, `OwnedPlanes::new(planes, encoding)` remains the
 uniform integer convenience. `OwnedPlanes::from_encoded_planes` accepts each
 owned plane with its `PlaneEncoding`, checks the storage type, and moves the
 owners without copying their sample buffers. U8, U16 and F32 are supported,
-including accounted shared storage. Roles and dimensions are validated by the
-image mapping against the retained layout. An owner that reports its encoding
-must agree with that layout; an owner that omits it relies on the adapter's
-retained declaration, not independent verification.
+including accounted shared storage. Direct frame mapping validates roles,
+dimensions and native encoding against the retained layout before any consumer
+gets a loan. Missing native encoding refuses; it never inherits the request.
+Image access and canonical planar lending use the same shared validation.
 
 ## Sample words versus spatial positions
 

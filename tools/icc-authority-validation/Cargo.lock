@@ -233,21 +233,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenhash"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenhash?rev=98c385a4e54a#98c385a4e54a1d41870610e13a614295c538275c"
+dependencies = [
+ "archmage",
+ "whereat",
+]
+
+[[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=3ceb0500059456aacc16c7aecb43b2d167ce1535#3ceb0500059456aacc16c7aecb43b2d167ce1535"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "bytemuck",
  "whereat",
+ "zenhash",
 ]
 
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=3ceb0500059456aacc16c7aecb43b2d167ce1535#3ceb0500059456aacc16c7aecb43b2d167ce1535"
+source = "git+https://github.com/imazen/zenpixels?rev=76005fc99a7c822af1801a1f9f87e7d3dc98c510#76005fc99a7c822af1801a1f9f87e7d3dc98c510"
 dependencies = [
  "archmage",
  "bytemuck",
+ "enough",
  "garb",
  "libm",
  "linear-srgb",

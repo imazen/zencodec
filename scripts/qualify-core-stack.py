@@ -73,6 +73,8 @@ def main():
         run('native-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--format-version', '1'])
         run('native-tests', ['cargo', 'test', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--locked', '--', '--test-threads=1'])
         run('native-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--all-targets', '--locked', '--', '-D', 'warnings'])
+    run('icc-authority-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--format-version', '1'])
+    run('icc-authority-tests', ['cargo', 'test', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--locked'])
     if args.docs:
         run('docs-install', ['npm', 'ci', '--prefix', 'docs'])
         run('docs-catalog', ['env', 'RUSTUP_TOOLCHAIN=nightly-2026-10-06', 'python3', 'docs/generate-code-catalog.py', str(source)])
