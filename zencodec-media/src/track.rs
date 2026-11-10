@@ -11,6 +11,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use core::fmt;
 
+use crate::timeline::TrackTimeline;
 use zencodec::time::{FrameDuration, TimeBase};
 use zenpixels::Cicp;
 
@@ -158,7 +159,8 @@ impl AudioTrackInfo {
 /// container declares about it. Built with [`TrackInfo::video`],
 /// [`TrackInfo::audio`] or [`TrackInfo::other`].
 ///
-/// Carries delay, pre-roll and a legacy scalar edit offset. Retaining these
+/// Carries delay, pre-roll, a complete timeline when known, and an optional
+/// legacy scalar edit offset. Retaining these
 /// declarations does not certify that a muxer writes them or that a decoder
 /// adapter applies them. Exact packet-timing admission is a separate contract.
 /// The scalar cannot describe a complete multi-segment edit program; callers
@@ -176,6 +178,7 @@ pub struct TrackInfo {
     codec_delay: Option<FrameDuration>,
     seek_preroll: Option<FrameDuration>,
     edit_delay_ticks: Option<i64>,
+    timeline: TrackTimeline,
     declared_packets: Option<u64>,
     declared_duration_ticks: Option<u64>,
 }
@@ -190,6 +193,8 @@ pub enum TrackError {
     ZeroSampleRate,
     /// An audio track with no channels.
     NoChannels,
+    /// A full timeline and a legacy scalar edit offset were both supplied.
+    ConflictingTimeline,
 }
 
 impl fmt::Display for TrackError {
@@ -198,6 +203,7 @@ impl fmt::Display for TrackError {
             Self::ZeroDimension => "video track has a zero dimension",
             Self::ZeroSampleRate => "audio track has a zero sample rate",
             Self::NoChannels => "audio track has no channels",
+            Self::ConflictingTimeline => "track has both a timeline and a legacy edit offset",
         })
     }
 }
@@ -222,6 +228,7 @@ impl TrackInfo {
             codec_delay: None,
             seek_preroll: None,
             edit_delay_ticks: None,
+            timeline: TrackTimeline::Unknown,
             declared_packets: None,
             declared_duration_ticks: None,
         }
@@ -313,9 +320,47 @@ impl TrackInfo {
         self.seek_preroll
     }
 
-    /// The edit-list offset of the first presentation, in track ticks.
+    /// Complete presentation declaration, or explicit unknown evidence.
+    pub fn timeline(&self) -> &TrackTimeline {
+        &self.timeline
+    }
+
+    /// The legacy scalar offset; it cannot describe an ordered edit program.
+    /// For a complete program, derives the first media start minus leading
+    /// gaps, rounded to the track clock with nearest ties upward. Later edits
+    /// and rates are omitted. Returns `None` if that projection is unavailable.
+    #[deprecated(note = "use timeline(); a scalar cannot preserve full edit programs")]
     pub fn edit_delay_ticks(&self) -> Option<i64> {
-        self.edit_delay_ticks
+        if let Some(offset) = self.edit_delay_ticks {
+            return Some(offset);
+        }
+        use crate::timeline::{EditContent, EditExtent};
+        use zencodec::time::{Rounding, Timestamp};
+        let TrackTimeline::Edited(program) = &self.timeline else {
+            return None;
+        };
+        let mut at = program.origin();
+        for segment in program.segments() {
+            match segment.content() {
+                EditContent::Gap => {
+                    let EditExtent::Finite(duration) = segment.extent() else {
+                        return None;
+                    };
+                    at = at.checked_add(duration).ok()?;
+                }
+                EditContent::Media { start, .. } => {
+                    let shift = Timestamp::new(at.ticks().checked_neg()?, at.base())
+                        .rescale(self.time_base, Rounding::Nearest)
+                        .ok()?;
+                    return start
+                        .rescale(self.time_base, Rounding::Nearest)
+                        .ok()?
+                        .ticks()
+                        .checked_add(shift.ticks());
+                }
+            }
+        }
+        None
     }
 
     /// How many packets the container says the track has.
@@ -354,7 +399,15 @@ impl TrackInfoBuilder {
         self
     }
 
-    /// Edit-list offset in track ticks.
+    /// Bind an immutable complete timeline. Combining this with a legacy
+    /// offset refuses at build, independent of setter order.
+    pub fn with_timeline(mut self, timeline: TrackTimeline) -> Self {
+        self.0.timeline = timeline;
+        self
+    }
+
+    /// Legacy scalar offset. This leaves the complete timeline unknown.
+    #[deprecated(note = "use with_timeline() with an explicit complete program")]
     pub fn with_edit_delay_ticks(mut self, ticks: i64) -> Self {
         self.0.edit_delay_ticks = Some(ticks);
         self
@@ -377,9 +430,12 @@ impl TrackInfoBuilder {
     /// # Errors
     ///
     /// A [`TrackError`] for a zero video dimension, a zero sample rate, or
-    /// no audio channels.
+    /// no audio channels, or conflicting complete/legacy timeline declarations.
     pub fn build(self) -> Result<TrackInfo, TrackError> {
         let t = self.0;
+        if t.edit_delay_ticks.is_some() && t.timeline != TrackTimeline::Unknown {
+            return Err(TrackError::ConflictingTimeline);
+        }
         if let Some(v) = &t.video
             && (v.coded_width == 0 || v.coded_height == 0)
         {

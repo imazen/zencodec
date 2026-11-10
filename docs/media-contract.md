@@ -602,3 +602,34 @@ input and prefixed seek-back output returns to its end. This adapter buffers
 its raster: no bounded-memory claim or production raster-codec adoption follows.
 Resource receipt: `rc=0 27s | peak-RSS 0.58GiB | min-avail 12708MiB | peak-load 0.59`.
 No zenpixels changes were needed.
+
+
+## Complete presentation is separate from packet timing
+
+`TrackInfo::timeline()` is `TrackTimeline::Unknown`, `Unedited`, or an immutable
+`Edited(Arc<EditList>)`. Unknown is not identity. An empty edit program is an
+empty presentation. Ordered `EditSegment`s retain finite rational durations or
+an explicit terminal `ToEnd`, gaps, media origins in their own clocks, and exact
+signed `PlaybackRate` (including dwell/reverse). These declarations do not
+execute edits or certify that a native backend can execute them.
+
+Use `with_timeline` instead of the deprecated scalar edit-delay builder.
+Supplying a known timeline together with the legacy scalar refuses in either
+builder order. `CodecConfig::from(&track)` remains elementary codec configuration;
+the retained `TrackInfo` owns presentation, priming and pre-roll evidence.
+
+`PreparedOutput::preserving_presentation(mux, destination, tracks, pulse)` requires
+known complete presentation before native preparation. `Muxer` and `DynMuxer`
+`begin_exact_presentation` defaults refuse without calling legacy begin. A native
+implementation must preserve declared edits/priming/pre-roll and future packet
+discard facts, or refuse before affected output. Known programs cannot fall back
+to packet-only admission. `DestinationFacts::exact_presentation` records this
+stronger admission separately from `exact_timing`.
+
+`Output::with_container_timing` remains an explicit native-timing choice for
+unedited/unknown tracks; edited and mixed known/unknown declarations refuse.
+The animation adapter does not implement an edit renderer. Known edits,
+priming, pre-roll and legacy offsets refuse before canvas/configure effects.
+Unknown timelines retain the existing timestamp-based behavior, which is not a
+promise of edited-playback correctness. Native playback equivalence still needs
+its independent controls; retaining declarations alone does not qualify it.

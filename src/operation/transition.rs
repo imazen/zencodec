@@ -63,6 +63,9 @@ pub struct DestinationFacts {
     /// The retained muxer guarantees exact supplied packet timing or fails.
     /// False means no such guarantee, not permission to discard timing.
     pub exact_timing: bool,
+    /// Complete declared track presentation was admitted by this retained muxer.
+    /// Packet timing alone does not establish this guarantee.
+    pub exact_presentation: bool,
 }
 impl DestinationFacts {
     /// Describe a successfully prepared container/writer pair. Adapters must
@@ -78,6 +81,7 @@ impl DestinationFacts {
             streams,
             patches_at_finish,
             exact_timing,
+            exact_presentation: false,
         }
     }
 }

@@ -3183,3 +3183,25 @@ selection; native decoder adoption is qualified separately.
 remains distinct from generation B. Native configs report the actual resolved
 target. A checked request refuses a substituted or unsupported calibration;
 this does not add a measured-quality guarantee or an encode loop.
+
+
+### Exact track presentation (core contract stack layer 4)
+
+The media declaration model is in `zencodec_media::timeline`:
+
+```rust
+TrackTimeline::{Unknown, Unedited, Edited(Arc<EditList>)}
+EditList::new(origin: Timestamp, segments: Vec<EditSegment>) -> Result<EditList, TimelineError>
+EditSegment::new(extent: EditExtent, content: EditContent) -> EditSegment
+EditExtent::{Finite(FrameDuration), ToEnd}
+EditContent::{Gap, Media { start: Timestamp, rate: PlaybackRate }}
+PlaybackRate::new(numerator: i32, denominator: u32) -> Result<PlaybackRate, TimelineError>
+```
+
+`ToEnd` must be terminal. Zero finite duration remains finite; empty edited
+programs remain empty. Rates reduce exactly without floating-point conversion.
+Track builders reject complete/legacy declaration conflicts. Muxer and DynMuxer
+have default-refusing `begin_exact_presentation(&mut self, &[TrackInfo], MuxHint)`.
+Use `PreparedOutput::preserving_presentation` to require admission before header
+publication; packet-only timing is not complete presentation evidence. See
+[the media contract](media-contract.md#complete-presentation-is-separate-from-packet-timing).

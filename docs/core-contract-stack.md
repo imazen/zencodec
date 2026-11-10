@@ -8,8 +8,8 @@ API proposals. Core remains unpublished pending the normal release gates.
 |---|---|---|
 | 1. Current pixel/color/fidelity baseline | PR201 (retargeted to main) | Core/render/fuzz select pixel76005fc9, including fallible allocations. Gray/HLG/ICC authority and source-depth work are retained. Generation A is a distinct fidelity request. Core all-feature library/integration tests 1435 pass, doctests32 pass/39 existing ignores; strict all-target Clippy and no-default core check pass. Render8 integration tests +1 doctest and strict Clippy pass. |
 | 2. Complete frame interpretation and checked lending | [PR204](https://github.com/imazen/zencodec/pull/204) | Current color/alpha, explicit mapped encoding and shared validation; direct/image/lent consumers share refusal checks. Core1440 tests +33 doctests pass/39 existing ignores; strict all-target Clippy, core no-default and renderer controls pass. |
-| 3. Evidence and late decisions | Stacked evidence PR | Runtime conversion choices retain the exact current target; report snapshots stay payload-free. Shared controls inspect opaque targets, reject context/alpha/timing drift, preserve ordinary successful admission and verify report cleanup. |
-| 4. Exact media presentation | Next stacked PR | Rebase the reviewed timeline/default-refusal delta; implementation follows layer3. |
+| 3. Evidence and late decisions | [PR205](https://github.com/imazen/zencodec/pull/205) | Runtime conversion choices retain the exact current target; report snapshots stay payload-free. Shared controls inspect opaque targets, reject context/alpha/timing drift, preserve ordinary successful admission and verify report cleanup. |
+| 4. Exact media presentation | Stacked presentation PR | Ordered exact timelines, default-refusing typed/erased mux admission, known-program fallback refusal, separate presentation facts and complete conformance comparison. |
 | 5. Shared conformance, migration and guide | Next stacked PR | Reusable contract controls and final public surface/docs. |
 
 Layer1's independent source-export gate is `just core-stack-check OUTPUT TARGET REVISION`
@@ -48,3 +48,10 @@ The isolated full gate passes with the existing exact-depth, replay, mandatory
 metadata/workspace and late-boundary controls included; no source-depth hint is
 promoted into a losslessness certificate. Native AV1 witness source is migrated
 to the same signature; its separate graph/runtime qualification is still open.
+
+Layer4 rebases PR188's declaration/default-refusal delta while retaining current
+optional-Pulse forwarding. The animation adapter now refuses known presentation
+work it cannot execute; elementary codec configuration is explicitly separate
+from the retained track program. Unknown/unedited/empty edited declarations stay
+distinct. The full isolated gate passes; this is shared contract admission, not
+proof that MP4 edits render correctly on every native backend.

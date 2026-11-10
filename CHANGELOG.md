@@ -144,6 +144,11 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Media tracks retain full `TrackTimeline`/`EditList` declarations. Known complete
+  programs require exact-presentation mux admission; unsupported defaults and
+  animation projections refuse before effects. Scalar edit-delay projection and
+  builder are deprecated. (`core-contracts layer4`)
+
 - Frame conversion offers retain the actual target interpretation and timing;
   staged conversion takes that single authority. Selection reports use bounded
   summaries and never retain opaque profile owners. Runtime offers are Clone,
