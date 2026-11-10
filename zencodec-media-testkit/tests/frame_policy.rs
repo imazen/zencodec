@@ -82,7 +82,7 @@ fn frame_route_preset_does_not_trade_required_workspace_for_preferred_fidelity()
     unknown.fidelity = Some(Fidelity::Lossless);
     let mut bounded = FrameRouteOffer::new(FrameRoute::Continue);
     bounded.workspace_upper_bound = Some(64);
-    let mut larger = unknown;
+    let mut larger = unknown.clone();
     larger.workspace_upper_bound = Some(128);
     let offers = [unknown, bounded, larger];
     for (limit, expected) in [(64, 1), (128, 2)] {
@@ -530,40 +530,44 @@ fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_e
     use zencodec::{
         encode::Fidelity,
         operation::{
-            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
-            Selection, resolve_frame_route,
+            FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, Selection,
+            resolve_frame_route,
         },
     };
     let budget = StorageBudget::new(16, 1);
     let held = frame(&budget, 0);
     let mut unknown = FrameRouteOffer::new(FrameRoute::Continue);
     unknown.fidelity = Some(Fidelity::Lossless);
-    let mut clipping = unknown;
-    clipping.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
-        held.interpretation(),
+    let mut clipping = unknown.clone();
+    clipping.conversion = Some(FrameConversionOffer::new(
+        held.interpretation().clone(),
         held.timing(),
-    )));
-    let mut preserving = clipping;
+    ));
+    let mut preserving = clipping.clone();
     preserving
         .conversion
         .as_mut()
         .unwrap()
         .preserves_extended_range = true;
-    let mut unqualified_encoder = preserving;
+    let mut unqualified_encoder = preserving.clone();
     unqualified_encoder.fidelity = None;
-    let mut assumed = preserving;
+    let mut assumed = preserving.clone();
     assumed.conversion.as_mut().unwrap().assumed_chroma_siting = Some(ChromaSiting::Center);
-    let mut impossible = preserving;
+    let mut impossible = preserving.clone();
     impossible
         .conversion
         .as_mut()
         .unwrap()
         .assumed_chroma_siting = Some(ChromaSiting::Unknown);
     for (offers, allow_assumption, expected) in [
-        (vec![unknown, clipping, preserving], false, Some(2)),
+        (
+            vec![unknown.clone(), clipping.clone(), preserving.clone()],
+            false,
+            Some(2),
+        ),
         (vec![unknown, clipping], true, None),
         (vec![unqualified_encoder], true, None),
-        (vec![assumed], false, None),
+        (vec![assumed.clone()], false, None),
         (vec![assumed], true, Some(0)),
         (vec![impossible], true, None),
     ] {
@@ -604,8 +608,7 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
     use zencodec::{
         encode::Fidelity,
         operation::{
-            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
-            resolve_frame_route,
+            FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, resolve_frame_route,
         },
     };
     let budget = StorageBudget::new(16, 1);
@@ -613,19 +616,23 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
     let mut encoder_only = FrameRouteOffer::new(FrameRoute::Continue);
     encoder_only.fidelity = Some(Fidelity::Lossless);
     encoder_only.workspace_upper_bound = Some(16);
-    let mut changes_samples = encoder_only;
-    changes_samples.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
-        held.interpretation(),
+    let mut changes_samples = encoder_only.clone();
+    changes_samples.conversion = Some(FrameConversionOffer::new(
+        held.interpretation().clone(),
         held.timing(),
-    )));
-    let mut preserves_samples = changes_samples;
+    ));
+    let mut preserves_samples = changes_samples.clone();
     preserves_samples
         .conversion
         .as_mut()
         .unwrap()
         .preserves_samples = true;
     preserves_samples.workspace_upper_bound = Some(32);
-    let offers = [changes_samples, encoder_only, preserves_samples];
+    let offers = [
+        changes_samples,
+        encoder_only.clone(),
+        preserves_samples.clone(),
+    ];
     for (prefer, limit, expected) in [(true, 32, 2), (true, 16, 0), (false, 32, 0)] {
         let (selected, _) = resolve_frame_route(
             held.interpretation(),
@@ -819,4 +826,71 @@ fn cancellation_during_factory_drops_the_unpublished_native_owner() {
             .downcast_ref::<SessionError<Infallible>>(),
         Some(SessionError::Cancelled(StopReason::TimedOut))
     ));
+}
+
+#[test]
+fn conversion_choices_hold_current_context_but_reports_release_opaque_payloads() {
+    use zencodec::operation::{
+        FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, Selection,
+        resolve_frame_route,
+    };
+    use zenpixels::ColorContext;
+    let budget = StorageBudget::new(16, 1);
+    let input = frame(&budget, 0);
+    let a = Arc::new(ColorContext::from_icc(&b"private-a"[..]));
+    let b = Arc::new(ColorContext::from_icc(&b"private-b"[..]));
+    let weak = Arc::downgrade(&b);
+    let targets = [a, b].map(|context| {
+        Arc::new(
+            input
+                .interpretation()
+                .as_ref()
+                .clone()
+                .with_color_context(context),
+        )
+    });
+    // A bounded snapshot deliberately cannot establish opaque-profile equality.
+    assert_eq!(
+        zencodec::operation::FrameFacts::new(&targets[0], input.timing()),
+        zencodec::operation::FrameFacts::new(&targets[1], input.timing())
+    );
+    assert_ne!(targets[0], targets[1]);
+    let offers = targets.map(|target| {
+        let mut offer = FrameRouteOffer::new(FrameRoute::Continue);
+        offer.conversion = Some(FrameConversionOffer::new(target, input.timing()));
+        offer
+    });
+    let (_, record) = resolve_frame_route(
+        input.interpretation(),
+        input.timing(),
+        FrameRouteState::default(),
+        &offers,
+        &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+            let Question::FrameRoute { choices, .. } = question else {
+                panic!()
+            };
+            let choice = choices.iter().nth(1).unwrap();
+            let context = choice
+                .value()
+                .conversion
+                .as_ref()
+                .unwrap()
+                .encoder_input
+                .color_context
+                .as_ref()
+                .unwrap();
+            assert!(Arc::ptr_eq(context, &weak.upgrade().unwrap()));
+            Ok(Decision::choose(choice))
+        },
+        PolicySet::new(),
+        None,
+    )
+    .unwrap();
+    assert!(matches!(record.selected, Some(Selection::FrameRoute(_))));
+    assert!(!format!("{record:?}").contains("private-b"));
+    drop(offers);
+    assert!(
+        weak.upgrade().is_none(),
+        "reports must not retain profile payloads"
+    );
 }

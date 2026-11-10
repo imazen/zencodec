@@ -730,7 +730,8 @@ struct FrameRouteOffer {
     workspace_upper_bound: Option<u64>,
 }
 struct FrameConversionOffer {
-    encoder_input: FrameFacts,
+    encoder_input: Arc<FrameInterpretation>,
+    timing: FrameTiming,
     preserves_samples: bool,
     preserves_extended_range: bool,
     assumed_chroma_siting: Option<frame::ChromaSiting>,
@@ -743,9 +744,21 @@ fn resolve_frame_route<R: OperationPolicy + ?Sized>(
     offers: &[FrameRouteOffer],
     resolver: &mut R,
     preset: PolicySet,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
 ```
+
+The runtime conversion offer retains the full immutable current interpretation,
+including opaque ICC and alpha association. Its constructor takes that `Arc` and
+actual timing once. `StagedEncode::push_converted` checks the resulting frame
+against both before native input. It cannot substitute a different context just
+because geometry and source CICP match. The callback may inspect the retained
+target when color arrives late and select any supported admitted route.
+
+Reports store `FrameRouteSummary` / `FrameConversionFacts`, bounded copies with
+no profile payload or owner. These summaries diagnose a decision; equality of
+summaries never proves equality of current interpretations. `FrameFacts` records
+current-context presence and alpha association without copying ICC bytes.
 
 The destination registration is already fixed by the request. `Continue` keeps
 its current interpretation; `BeginSegment` starts an independently configured
@@ -2737,7 +2750,7 @@ safe backpressure or a whole-operation memory bound.
 `zencodec_media::staged::StagedEncode::new(encoder, muxer, destination, resolver,
 storage, pulse)` prepares exact-timing single-track output from the retained
 encoder configuration. `push(Frame, pulse)` retains the exact picture through
-policy. `push_converted(Frame, &FrameInterpretation, FrameConversionOffer,
+policy. `push_converted(Frame, FrameConversionOffer,
 FnOnce(Frame) -> Result<Frame, Cause>, pulse)` retains a prepared conversion,
 executes it once after selection and checks full output interpretation/timing.
 

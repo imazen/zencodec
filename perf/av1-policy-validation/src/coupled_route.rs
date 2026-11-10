@@ -67,7 +67,7 @@ impl<
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause> {
-        self.push_converted(input.clone(), target, offer, |_| execute(), Some(&NoPulse))
+        self.push_converted(input.clone(), offer, |_| execute(), Some(&NoPulse))
             .map_err(Into::into)
     }
 }
@@ -144,7 +144,7 @@ pub(crate) fn push(
         ),
     );
     target.color = ColorClaim::new(None, None, Some(Cicp::new(1, 13, 0, true)));
-    let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+    let mut offer = FrameConversionOffer::new(target.clone().into(), input.timing());
     offer.assumed_chroma_siting =
         (info.layout.siting() == ChromaSiting::Unknown).then_some(ChromaSiting::Center);
     offer.admitted_bytes =
@@ -256,8 +256,8 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
             );
             assert_eq!(facts.output.output_committed, i > 0);
             let choice = choices.first().unwrap();
-            let conversion = choice.value().conversion.unwrap();
-            assert_eq!(conversion.encoder_input.timing, timings[i]);
+            let conversion = choice.value().conversion.as_ref().unwrap();
+            assert_eq!(conversion.timing, timings[i]);
             assert!(conversion.preserves_samples);
             calls.set(i + 1);
             Ok(Decision::choose(choice))
@@ -269,8 +269,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
     );
     let mut expected = Vec::new();
     for (i, input) in inputs.iter().enumerate() {
-        let mut offer =
-            FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
+        let mut offer = FrameConversionOffer::new(input.interpretation().clone(), timings[i]);
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
         operation
@@ -505,7 +504,8 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
             .publish_header(|_| Ok(()), Some(&NoPulse))
             .unwrap();
         let target = inputs[0].interpretation();
-        let mut conversion = FrameConversionOffer::new(FrameFacts::new(target, inputs[1].timing()));
+        let mut conversion =
+            FrameConversionOffer::new(Arc::new(target.clone()), inputs[1].timing());
         conversion.preserves_samples = false;
         let error = operation
             .push_route(
@@ -540,7 +540,7 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
         };
         assert_eq!(
             selected.conversion.unwrap().encoder_input,
-            conversion.encoder_input
+            conversion.facts().encoder_input
         );
         assert!(operation.is_failed());
         assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);

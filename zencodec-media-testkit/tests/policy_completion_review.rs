@@ -395,3 +395,87 @@ fn staged_workspace_admission_precedes_mux_preparation() {
         assert!(bytes.is_empty());
     }
 }
+
+#[test]
+fn retained_conversion_target_checks_context_alpha_and_timing_before_encoder_input() {
+    use std::sync::Arc;
+    use zencodec::{frame::Frame, operation::FrameConversionOffer};
+    use zenpixels::{AlphaMode, ColorContext, hdr::DiffuseWhite};
+    for drift in ["none", "profile", "white", "alpha", "timing"] {
+        let source = frame();
+        let target = Arc::new(
+            source
+                .interpretation()
+                .as_ref()
+                .clone()
+                .with_color_context(Arc::new(ColorContext::from_icc(&b"current"[..]))),
+        );
+        let target_timing = source.timing();
+        let mut bytes = Vec::new();
+        let calls = Cell::new(0);
+        let mut job = StagedEncode::new(
+            encoder(),
+            HeaderOnlyMux(vec![], None),
+            Forward(&mut bytes),
+            |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::FrameRoute { choices, .. } = question else {
+                    panic!()
+                };
+                let choice = choices.first().unwrap();
+                let conversion = choice.value().conversion.as_ref().unwrap();
+                assert!(Arc::ptr_eq(&conversion.encoder_input, &target));
+                assert_eq!(conversion.timing, target_timing);
+                Ok(Decision::choose(choice))
+            },
+            StorageBudget::new(1024, 16),
+            None,
+        )
+        .unwrap();
+        let result = job.push_converted(
+            source,
+            FrameConversionOffer::new(target.clone(), target_timing),
+            |held| {
+                calls.set(calls.get() + 1);
+                let mut interpretation = target.as_ref().clone();
+                let mut timing = target_timing;
+                match drift {
+                    "profile" => {
+                        interpretation.color_context =
+                            Some(Arc::new(ColorContext::from_icc(&b"different"[..])))
+                    }
+                    "white" => {
+                        interpretation.color_context = Some(Arc::new(
+                            ColorContext::from_icc(&b"current"[..])
+                                .with_diffuse_white(DiffuseWhite::BT2408),
+                        ))
+                    }
+                    "alpha" => interpretation.alpha_mode = Some(AlphaMode::Premultiplied),
+                    "timing" => timing = zencodec::frame::FrameTiming::default(),
+                    _ => {}
+                }
+                Ok(Frame::new(
+                    held.picture().clone(),
+                    Arc::new(interpretation),
+                    timing,
+                    held.presentation(),
+                ))
+            },
+            None,
+        );
+        assert_eq!(calls.get(), 1);
+        if drift == "none" {
+            result.unwrap(); // Ordinary, non-strict admission accepts the supported route.
+            assert!(!job.is_failed());
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.error().stage, zencodec_media::staged::Stage::Convert);
+            assert_eq!(
+                zencodec::find_cause::<zencodec_media::staged::Refusal>(&error),
+                Some(&zencodec_media::staged::Refusal::ConversionMismatch)
+            );
+            assert!(job.is_failed());
+        }
+        drop(job);
+        assert!(bytes.is_empty());
+    }
+}

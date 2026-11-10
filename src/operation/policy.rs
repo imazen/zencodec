@@ -144,7 +144,7 @@ pub enum Selection {
     /// Prepared conversion of a held image before destination writes.
     ImageConversion(super::ImageConversionOffer),
     /// Prepared frame encoding and output continuity.
-    FrameRoute(super::FrameRouteOffer),
+    FrameRoute(super::FrameRouteSummary),
     /// Publication of the exact held selected-image output.
     /// Output facts are retained once in `DecisionContext::Image`.
     Image(PublicationOffer),
@@ -622,7 +622,7 @@ impl PolicySet {
                 }
                 let permitted = || {
                     choices.iter().filter(|choice| {
-                        let conversion = choice.value().conversion;
+                        let conversion = choice.value().conversion.as_ref();
                         let conversion_permitted = conversion.is_none_or(|c| {
                             (c.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
                                 && c.assumed_chroma_siting != Some(ChromaSiting::Unknown)
@@ -649,6 +649,7 @@ impl PolicySet {
                                 && choice
                                     .value()
                                     .conversion
+                                    .as_ref()
                                     .is_some_and(|c| c.preserves_samples)
                         })
                         .or_else(|| {
@@ -967,7 +968,7 @@ pub fn resolve_boundary<R: OperationPolicy + ?Sized>(
     Ok((offers[index].action, record))
 }
 
-pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
+pub(super) fn choose<'a, T: Clone, R: OperationPolicy + ?Sized>(
     offers: &'a [T],
     context: DecisionContext,
     question: impl Fn(Choices<'a, T>) -> Question<'a>,
@@ -1089,7 +1090,7 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     match decision {
         Decision::Choose(id) => match choices.selected(id) {
             Some(index) => {
-                record.selected = Some(selection(offers[index]));
+                record.selected = Some(selection(offers[index].clone()));
                 record.code = DecisionCode::Selected;
                 Ok((index, record))
             }

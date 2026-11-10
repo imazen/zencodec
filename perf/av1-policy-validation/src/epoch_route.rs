@@ -231,7 +231,10 @@ impl<R: OperationPolicy> Candidate<R> {
             .ok_or_else(|| std::io::Error::other("terminal frame route"))?;
         check(local_stop)?;
         let (target, timing) = target;
-        if conversion.is_some_and(|c| c.encoder_input != FrameFacts::new(target, timing)) {
+        if conversion
+            .as_ref()
+            .is_some_and(|c| c.encoder_input.as_ref() != target || c.timing != timing)
+        {
             return Err(std::io::Error::other("conversion offer target mismatch").into());
         }
         let key = Key::from_input(target, timing)?;

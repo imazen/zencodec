@@ -135,13 +135,11 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
                 operation.push(input.clone(), Some(&NoPulse)).unwrap();
             } else {
                 let target = input.interpretation().clone();
-                let conversion =
-                    FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+                let conversion = FrameConversionOffer::new(target.clone().into(), input.timing());
                 let executions = Cell::new(0);
                 operation
                     .push_converted(
                         input.clone(),
-                        &target,
                         conversion,
                         |held| {
                             executions.set(executions.get() + 1);
@@ -235,11 +233,10 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
         .unwrap();
         let input = frame(&settings(8, ChromaSubsampling::Yuv420, false), 0);
         let target = input.interpretation().clone();
-        let conversion = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+        let conversion = FrameConversionOffer::new(target.clone().into(), input.timing());
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             operation.push_converted(
                 input.clone(),
-                &target,
                 conversion,
                 |held| {
                     executions.set(executions.get() + 1);

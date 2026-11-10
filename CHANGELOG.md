@@ -144,6 +144,11 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Frame conversion offers retain the actual target interpretation and timing;
+  staged conversion takes that single authority. Selection reports use bounded
+  summaries and never retain opaque profile owners. Runtime offers are Clone,
+  no longer Copy. (`core-contracts layer3`)
+
 - Frame interpretation adopts zenpixels `PlanarLayout`; per-plane integer/float encodings replace frame-wide encoding and roles. Mapping exposes F32 and explicit interleaved component access; frame diagnostic uniform encoding becomes optional (51411aee, d2beb2dc).
 
 - Frame ablation candidate: remove `frame::Subsampling` and `frame::ChromaSiting`

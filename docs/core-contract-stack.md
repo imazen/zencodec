@@ -7,8 +7,8 @@ API proposals. Core remains unpublished pending the normal release gates.
 | Layer | Review | Implementation / qualification |
 |---|---|---|
 | 1. Current pixel/color/fidelity baseline | PR201 (retargeted to main) | Core/render/fuzz select pixel76005fc9, including fallible allocations. Gray/HLG/ICC authority and source-depth work are retained. Generation A is a distinct fidelity request. Core all-feature library/integration tests 1435 pass, doctests32 pass/39 existing ignores; strict all-target Clippy and no-default core check pass. Render8 integration tests +1 doctest and strict Clippy pass. |
-| 2. Complete frame interpretation and checked lending | Stacked frame PR | Current color/alpha, explicit mapped encoding and shared validation; direct/image/lent consumers share refusal checks. Core1440 tests +33 doctests pass/39 existing ignores; strict all-target Clippy, core no-default and renderer controls pass. |
-| 3. Evidence and late decisions | Next stacked PR | Reuse retained planning and OperationPolicy; implementation follows layer2. |
+| 2. Complete frame interpretation and checked lending | [PR204](https://github.com/imazen/zencodec/pull/204) | Current color/alpha, explicit mapped encoding and shared validation; direct/image/lent consumers share refusal checks. Core1440 tests +33 doctests pass/39 existing ignores; strict all-target Clippy, core no-default and renderer controls pass. |
+| 3. Evidence and late decisions | Stacked evidence PR | Runtime conversion choices retain the exact current target; report snapshots stay payload-free. Shared controls inspect opaque targets, reject context/alpha/timing drift, preserve ordinary successful admission and verify report cleanup. |
 | 4. Exact media presentation | Next stacked PR | Rebase the reviewed timeline/default-refusal delta; implementation follows layer3. |
 | 5. Shared conformance, migration and guide | Next stacked PR | Reusable contract controls and final public surface/docs. |
 
@@ -39,3 +39,12 @@ The lifetime doctest rejects an escaping view. Adversarial controls cover
 contradictory encoding, invalid alpha, pre-effect geometry refusal, native-return
 Pulse cancellation and original native error priority. Source-export rerun passes
 rc0,35s,peak RSS0.49GiB; earlier failed fixture/lint runs remain retained.
+
+Layer3 removes the redundant `push_converted` target parameter. The conversion
+offer owns that immutable target and timing once. Runtime target equality uses
+all current color/alpha facts; bounded `FrameFacts` equality is diagnostic only.
+`FrameRouteSummary` and `FrameConversionFacts` retain no opaque profile owner.
+The isolated full gate passes with the existing exact-depth, replay, mandatory
+metadata/workspace and late-boundary controls included; no source-depth hint is
+promoted into a losslessness certificate. Native AV1 witness source is migrated
+to the same signature; its separate graph/runtime qualification is still open.

@@ -38,7 +38,7 @@ use core::{error::Error as StdError, fmt};
 
 use zencodec::{
     At,
-    frame::{Frame, FrameInterpretation},
+    frame::Frame,
     operation::{
         FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
         OperationPolicy, OperationReport, PolicySet, resolve_frame_route,
@@ -107,8 +107,6 @@ pub enum Refusal {
     ConfigurationUnavailable,
     /// Configuration does not describe video.
     VideoConfigurationRequired,
-    /// Conversion's bounded facts disagree with its full target.
-    OfferMismatch,
     /// Conversion returned different interpretation or timing.
     ConversionMismatch,
     /// Encoder promised pending output but did not return a packet.
@@ -306,19 +304,18 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), At<Failure>> {
         let target = input.interpretation().clone();
-        let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+        let mut offer = FrameConversionOffer::new(target, input.timing());
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
-        self.push_converted(input, &target, offer, Ok, pulse)
+        self.push_converted(input, offer, Ok, pulse)
     }
     /// Retain this input and selected converter through policy, then execute once.
-    /// `target` is the complete required interpretation; timing comes from the
-    /// offer. Output must match both exactly before reaching the encoder. The
+    /// The offer retains the complete required interpretation and timing.
+    /// Output must match both exactly before reaching the encoder. The
     /// closure owns its prepared conversion/reservations; it must not publish.
     pub fn push_converted(
         &mut self,
         input: Frame,
-        target: &FrameInterpretation,
         conversion: FrameConversionOffer,
         execute: impl FnOnce(Frame) -> Result<Frame, Cause>,
         pulse: Option<&dyn zencodec::Pulse>,
@@ -337,15 +334,13 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             if state.encoder.output_fidelity() != state.fidelity {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
-            if conversion.encoder_input != FrameFacts::new(target, conversion.encoder_input.timing)
-            {
-                return Err(invalid(Refusal::OfferMismatch));
-            }
             let mut offer = FrameRouteOffer::new(if state.previous.is_none() {
                 FrameRoute::BeginSegment
             } else {
                 FrameRoute::Continue
             });
+            let target = conversion.encoder_input.clone();
+            let target_timing = conversion.timing;
             offer.conversion = Some(conversion);
             offer.fidelity = state.fidelity;
             offer.destination = Some(state.output.facts());
@@ -375,8 +370,8 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             let previous = FrameFacts::new(input.interpretation(), input.timing());
             let converted = execute(input)?;
             check(local_pulse)?;
-            if converted.interpretation().as_ref() != target
-                || converted.timing() != conversion.encoder_input.timing
+            if converted.interpretation().as_ref() != target.as_ref()
+                || converted.timing() != target_timing
             {
                 return Err(invalid(Refusal::ConversionMismatch));
             }
