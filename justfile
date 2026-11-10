@@ -5,15 +5,15 @@
 # is never built or run by plain `cargo test` or any CI job.
 fmt:
     cargo fmt --all
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC=check ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06 cargo test --manifest-path apidoc/Cargo.toml
 
 # Generate Rustdoc for the same eight crates as the guide's signature catalog.
 docs-reference:
@@ -1120,7 +1120,7 @@ io-transport-model:
 
 # Documentation source stays under docs/ on main; only its artifact is deployed.
 code-catalog export:
-    python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/code-api
+    python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/.cache/code-api
 
 # Exercise actual consumer calls for source-supplemented dyn-trait methods.
 source-details-check:

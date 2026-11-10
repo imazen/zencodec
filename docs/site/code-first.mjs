@@ -84,14 +84,14 @@ export function catalogItems(surface,details) {
   return items;
 }
 export async function codeFirstPage({sha,apiPanels,docs,dest}) {
-  const root=path.dirname(docs),manifest=JSON.parse(await readFile(path.join(docs,'code-api/manifest.json'),'utf8'));
+  const root=path.dirname(docs),manifest=JSON.parse(await readFile(path.join(docs,'.cache/code-api/manifest.json'),'utf8'));
   await mkdir(path.join(dest,'code-api'),{recursive:true});
   let supplements;
   for(const pkg of manifest.packages) {
-    if(await sourceFingerprint(root,pkg.directory)!==pkg.fingerprint)throw Error(`Stale code catalog: ${pkg.name}; regenerate with just code-catalog EXPORT`);
-    const surface=await readFile(path.join(docs,`code-api/${pkg.name}.txt`),'utf8');
+    if(await sourceFingerprint(root,pkg.directory)!==pkg.fingerprint)throw Error(`Stale code catalog: ${pkg.name}; rebuild with npm run build --prefix docs`);
+    const surface=await readFile(path.join(docs,`.cache/code-api/${pkg.name}.txt`),'utf8');
     if(digest(surface)!==pkg.surface_sha256)throw Error(`Modified code catalog: ${pkg.name}`);
-    const detailsText=await readFile(path.join(docs,`code-api/${pkg.name}.json`),'utf8');
+    const detailsText=await readFile(path.join(docs,`.cache/code-api/${pkg.name}.json`),'utf8');
     if(digest(detailsText)!==pkg.details_sha256)throw Error(`Modified source documentation: ${pkg.name}`);
     const details=JSON.parse(detailsText);
     const items=catalogItems(surface,details);pkg.count=items.length;

@@ -9,7 +9,7 @@ import { implementation, catalogItems, sourceFingerprint, exampleImports, inline
 import { codeFlows } from './code-first-data.mjs';
 import { example } from './source.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const manifest=JSON.parse(await readFile(new URL('../code-api/manifest.json',import.meta.url),'utf8'));
+const manifest=JSON.parse(await readFile(new URL('../.cache/code-api/manifest.json',import.meta.url),'utf8'));
 test('catalog invalidation includes README text embedded in crate documentation',async()=>{
   const scratch=path.join(homedir(),'tmp');
   await mkdir(scratch,{recursive:true});
@@ -30,8 +30,8 @@ test('every catalog declaration survives rendering and metadata matches exact so
   assert.equal(manifest.packages.length,8);
   for(const pkg of manifest.packages) {
     assert.equal(await sourceFingerprint(root,pkg.directory),pkg.fingerprint,pkg.name);
-    const surface=await readFile(new URL(`../code-api/${pkg.name}.txt`,import.meta.url),'utf8');
-    const metadata=await readFile(new URL(`../code-api/${pkg.name}.json`,import.meta.url),'utf8');
+    const surface=await readFile(new URL(`../.cache/code-api/${pkg.name}.txt`,import.meta.url),'utf8');
+    const metadata=await readFile(new URL(`../.cache/code-api/${pkg.name}.json`,import.meta.url),'utf8');
     assert.equal(createHash('sha256').update(metadata).digest('hex'),pkg.details_sha256);
     const items=catalogItems(surface,JSON.parse(metadata));
     assert.deepEqual(new Set(items.map(i=>i.signature)),new Set(surface.trim().split('\n')),pkg.name);

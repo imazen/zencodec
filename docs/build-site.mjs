@@ -15,6 +15,8 @@ import { codeFirstPage, inlineContext } from './site/code-first.mjs';
 const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
+// Generate rich browser data locally; only zenutils text snapshots are versioned.
+execFileSync('python3', [path.join(docs, 'generate-code-catalog.py'), root], {cwd:root, stdio:'inherit'});
 const source = await readFile(path.join(docs, 'examples/journeys.rs'), 'utf8');
 const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8');
 const jpegSource = await readFile(path.join(docs, 'examples/jpeg_policy.rs'), 'utf8');

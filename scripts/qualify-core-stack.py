@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--browser-port', default='3547')
     parser.add_argument('--native-inputs', type=Path, help='run the AV1/TIFF mapping witnesses against prepared independent inputs')
     parser.add_argument('--docs-only', action='store_true', help='Reuse unchanged runtime evidence; regenerate and validate documentation only')
+    parser.add_argument('--refresh-api-snapshots', action='store_true', help='Regenerate zenutils text snapshots before checking them')
     args = parser.parse_args()
     if args.docs_only and not args.docs:parser.error('--docs-only requires --docs')
     repo = Path(__file__).resolve().parents[1]
@@ -82,7 +83,9 @@ def main():
         seed = source / 'zencodec-render/dependencies.lock'
         (seed.parent / 'Cargo.lock').write_bytes(seed.read_bytes())
         run('docs-install', ['npm', 'ci', '--prefix', 'docs'])
-        run('docs-catalog', ['env', 'RUSTUP_TOOLCHAIN=nightly-2026-10-06', 'python3', 'docs/generate-code-catalog.py', str(source)])
+        if args.refresh_api_snapshots:
+            run('api-snapshots-regen', ['env', 'ZEN_API_DOC=regen', 'ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06', 'cargo', 'test', '--manifest-path', 'apidoc/Cargo.toml'])
+        run('api-snapshots', ['env', 'ZEN_API_DOC=check', 'ZEN_API_DOC_TOOLCHAIN=nightly-2026-10-06', 'cargo', 'test', '--manifest-path', 'apidoc/Cargo.toml'])
         run('docs-reference', ['python3', 'docs/build-reference.py'])
         run('docs-browser', ['just', 'docs-site-browser-check', args.browser_port])
     receipt['status'] = 'passed'

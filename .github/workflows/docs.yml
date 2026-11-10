@@ -273,6 +273,24 @@ jobs:
           cache-dependency-path: docs/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned catalog toolchain
+        run: rustup toolchain install nightly-2026-10-06 --profile minimal
+      - name: Install catalog CLI
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api@0.52.0
+      - name: Check zenutils API text snapshots
+        timeout-minutes: 10
+        env:
+          ZEN_API_DOC: check
+          ZEN_API_DOC_TOOLCHAIN: nightly-2026-10-06
+          CARGO_BUILD_JOBS: 2
+        run: cargo +stable test --manifest-path apidoc/Cargo.toml
+      - name: Cache generated signature-browser data
+        uses: actions/cache@v5
+        with:
+          path: docs/.cache/code-api
+          key: catalog-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.rs', '**/Cargo.toml', '**/README.md', '**/dependencies.lock', 'docs/generate-code-catalog.py') }}
       - name: Build the matching Rustdoc reference
         timeout-minutes: 5
         env:

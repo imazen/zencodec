@@ -71,3 +71,6 @@ __pycache__/
 
 # Standalone ICC authority controls pin the profile permission corpus.
 !tools/icc-authority-validation/Cargo.lock
+
+# Compiler-derived signature-browser data is generated at site build time.
+docs/.cache/

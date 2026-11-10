@@ -7,8 +7,13 @@ sources are copied; only this repository's exported declarations are retained.
 import argparse
 import hashlib
 import json
+import os
+import platform
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
+
+TOOLCHAIN = "nightly-2026-10-06"
 
 PACKAGES = [
     ("zencodec", "."),
@@ -97,6 +102,31 @@ def source_details(rustdoc, root, directory):
     return sorted(result, key=lambda item: (item["path"], item["kind"], item["file"], item["line"]))
 
 
+def cached_catalog(output, source_root, identity):
+    """Reuse generated data only when every source/tool/payload hash matches."""
+    try:
+        manifest = json.loads((output / "manifest.json").read_text())
+        if not isinstance(manifest, dict) or manifest.get("identity") != identity:
+            return False
+        if [(p["name"], p["directory"]) for p in manifest["packages"]] != PACKAGES:
+            return False
+        for package in manifest["packages"]:
+            if package["fingerprint"] != fingerprint(source_root, package["directory"]):
+                return False
+            for suffix, key in [("txt", "surface_sha256"), ("json", "details_sha256")]:
+                data = (output / f"{package['name']}.{suffix}").read_bytes()
+                if hashlib.sha256(data).hexdigest() != package[key]:
+                    return False
+        return True
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def lock_identity(root):
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in [root / "Cargo.lock", root / "zencodec-render/Cargo.lock"] if p.exists()}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
@@ -105,9 +135,20 @@ def main():
     args = parser.parse_args()
     root = args.root.resolve()
     source_root = (args.source_root or root).resolve()
-    output = (args.output or root / "docs/code-api").resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    manifest = {"generator": "cargo public-api --all-features -sss -v", "packages": []}
+    output = (args.output or root / "docs/.cache/code-api").resolve()
+    env = dict(os.environ, RUSTUP_TOOLCHAIN=TOOLCHAIN)
+    identity = {"schema": 1, "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "toolchain": TOOLCHAIN, "platform": platform.system(), "machine": platform.machine(),
+                "lockfiles": lock_identity(root),
+                "public_api": subprocess.check_output(["cargo", "public-api", "--version"], cwd=root, env=env, text=True).strip(),
+                "rustc": subprocess.check_output(["rustc", "--version"], cwd=root, env=env, text=True).strip()}
+    if cached_catalog(output, source_root, identity):
+        print("Catalog cache matches this source and toolchain", flush=True)
+        return
+    if output.exists():
+        output.rename(output.with_name(output.name + ".previous-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")))
+    output.mkdir(parents=True)
+    manifest = {"generator": "cargo public-api --all-features -sss -v", "identity": identity, "packages": []}
     for package, directory in PACKAGES:
         for source in source_inputs(source_root, directory):
             built = root / source.relative_to(source_root)
@@ -118,7 +159,7 @@ def main():
         result = subprocess.run(
             ["cargo", "public-api", "--manifest-path", str(cargo_manifest),
              "-p", package, "--all-features", "-sss", "-v", "--color", "never"],
-            cwd=root, check=True, capture_output=True, text=True, timeout=180,
+            cwd=root, env=env, check=True, capture_output=True, text=True, timeout=180,
         )
         print(result.stderr, end="", flush=True)
         surface = result.stdout
@@ -128,7 +169,7 @@ def main():
         metadata = subprocess.run(
             ["cargo", "metadata", "--manifest-path", str(cargo_manifest),
              "--no-deps", "--format-version", "1"],
-            cwd=root, check=True, capture_output=True, text=True, timeout=180,
+            cwd=root, env=env, check=True, capture_output=True, text=True, timeout=180,
         )
         # Cargo resolves environment and config overrides, including each
         # independent workspace. Do not assume artifacts live under root/target.
@@ -142,6 +183,7 @@ def main():
             "surface_sha256": hashlib.sha256(surface.encode()).hexdigest(),
             "details_sha256": hashlib.sha256(details_text.encode()).hexdigest(),
         })
+    identity["lockfiles"] = lock_identity(root)
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 

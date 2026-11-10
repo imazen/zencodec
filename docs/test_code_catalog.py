@@ -48,5 +48,47 @@ class OwnershipTests(unittest.TestCase):
         self.assertNotIn("fixture::Output::inspect", names)
 
 
+
+
+class CacheTests(unittest.TestCase):
+    def test_cache_requires_source_tool_and_payload_identity(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            output = root / 'cache'
+            output.mkdir()
+            packages = []
+            for package, directory in catalog.PACKAGES:
+                base = root / directory
+                (base / 'src').mkdir(parents=True, exist_ok=True)
+                (base / 'Cargo.toml').write_text('[package]\nname="fixture"\n')
+                (base / 'src/lib.rs').write_text('pub struct Example;\n')
+                (base / 'README.md').write_text('Original documentation\n')
+                entry = {'name': package, 'directory': directory,
+                         'fingerprint': catalog.fingerprint(root, directory)}
+                for suffix, key, data in [('txt', 'surface_sha256', b'pub struct Example\n'),
+                                          ('json', 'details_sha256', b'[]\n')]:
+                    (output / f'{package}.{suffix}').write_bytes(data)
+                    entry[key] = hashlib.sha256(data).hexdigest()
+                packages.append(entry)
+            identity = {'toolchain': 'frozen', 'generator': 'test'}
+            manifest = {'identity': identity, 'packages': packages}
+            path = output / 'manifest.json'
+            path.write_text(json.dumps(manifest))
+            self.assertTrue(catalog.cached_catalog(output, root, identity))
+            self.assertFalse(catalog.cached_catalog(output, root, {'toolchain': 'changed'}))
+            (root / 'README.md').write_text('Changed docs, identical signatures\n')
+            self.assertFalse(catalog.cached_catalog(output, root, identity))
+            (root / 'README.md').write_text('Original documentation\n')
+            target = output / 'zencodec.json'
+            original = target.read_bytes()
+            target.write_bytes(b'["corrupt"]')
+            self.assertFalse(catalog.cached_catalog(output, root, identity))
+            target.write_bytes(original)
+            target.unlink()
+            self.assertFalse(catalog.cached_catalog(output, root, identity))
+            path.write_text('[]')
+            self.assertFalse(catalog.cached_catalog(output, root, identity))
+
 if __name__ == "__main__":
     unittest.main()

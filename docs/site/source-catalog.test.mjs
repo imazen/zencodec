@@ -8,8 +8,8 @@ import { filterCatalog } from './catalog-search.mjs';
 
 const read = file => readFile(new URL(file,import.meta.url),'utf8');
 const source = await read('../../src/detect.rs');
-const surface = await read('../code-api/zencodec.txt');
-const details = JSON.parse(await read('../code-api/zencodec.json'));
+const surface = await read('../.cache/code-api/zencodec.txt');
+const details = JSON.parse(await read('../.cache/code-api/zencodec.json'));
 const scopes = ['impl dyn SourceEncodingDetails {','impl dyn SourceEncodingDetails + Send {','impl dyn SourceEncodingDetails + Send + Sync {'];
 const plain = html => html.replace(/<[^>]*>/g,'').replaceAll('&quot;','"').replaceAll('&gt;','>').replaceAll('&lt;','<').replaceAll('&amp;','&');
 
