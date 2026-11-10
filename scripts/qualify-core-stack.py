@@ -14,6 +14,9 @@ def main():
     parser.add_argument('output', type=Path, help='fresh run directory')
     parser.add_argument('--revision', default='HEAD')
     parser.add_argument('--target', type=Path, help='owned reusable Cargo target directory')
+    parser.add_argument('--docs', action='store_true', help='generate catalog/Rustdoc and run the complete site/browser gate')
+    parser.add_argument('--browser-port', default='3547')
+    parser.add_argument('--native-inputs', type=Path, help='run the AV1/TIFF mapping witnesses against prepared independent inputs')
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     revision = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', args.revision], text=True).strip()
@@ -24,6 +27,7 @@ def main():
     with tarfile.open(fileobj=io.BytesIO(archive)) as files:
         files.extractall(source, filter='data')
     env = dict(os.environ)
+    env['GITHUB_SHA'] = revision
     if args.target:
         env['CARGO_TARGET_DIR'] = str(args.target.resolve())
     receipt = {'revision': revision, 'status': 'running', 'steps': []}
@@ -61,6 +65,19 @@ def main():
         else:
             run('render-tests', ['cargo', 'test', '--manifest-path', manifest, '--locked'])
             run('render-clippy', ['cargo', 'clippy', '--manifest-path', manifest, '--all-targets', '--locked', '--', '-D', 'warnings'])
+    if args.native_inputs:
+        env['FRAME_NATIVE_INPUTS'] = str(args.native_inputs.resolve())
+        native = source / 'tools/frame-native-validation'
+        (native / 'Cargo.lock').write_bytes((native / 'dependencies.lock').read_bytes())
+        run('native-prepare', ['python3', 'tools/frame-native-validation/prepare.py', str(args.native_inputs.resolve())])
+        run('native-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--format-version', '1'])
+        run('native-tests', ['cargo', 'test', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--locked', '--', '--test-threads=1'])
+        run('native-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--all-targets', '--locked', '--', '-D', 'warnings'])
+    if args.docs:
+        run('docs-install', ['npm', 'ci', '--prefix', 'docs'])
+        run('docs-catalog', ['env', 'RUSTUP_TOOLCHAIN=nightly-2026-10-06', 'python3', 'docs/generate-code-catalog.py', str(source)])
+        run('docs-reference', ['python3', 'docs/build-reference.py'])
+        run('docs-browser', ['just', 'docs-site-browser-check', args.browser_port])
     receipt['status'] = 'passed'
     save()
     print(record)

@@ -1976,3 +1976,15 @@ icc-authority-check:
 # Run through run-heavy; source is exported before Cargo can see parent overrides.
 core-stack-check output target revision="HEAD":
     python3 scripts/qualify-core-stack.py "{{output}}" --target "{{target}}" --revision "{{revision}}"
+
+# Shared frame access plus minimal real AV1/TIFF mapping witnesses.
+# Run through run-heavy from an isolated export to avoid parent workspace patches.
+frame-interchange-native-check inputs:
+    python3 tools/frame-native-validation/prepare.py "{{inputs}}"
+    cargo metadata --manifest-path tools/frame-native-validation/Cargo.toml --format-version 1 > "{{inputs}}/graph.json"
+    FRAME_NATIVE_INPUTS="{{inputs}}" cargo test --manifest-path tools/frame-native-validation/Cargo.toml --locked -- --test-threads=1
+    cargo clippy --manifest-path tools/frame-native-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# One immutable source export for runtime/native/reference/site acceptance.
+core-contract-release-check output target inputs revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --native-inputs "{{inputs}}" --docs

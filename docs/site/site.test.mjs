@@ -117,3 +117,13 @@ test('checked API page links executable examples and actual signatures for each 
     for(const [,target] of entry.evidence) if(!target.startsWith('https://')) await stat(new URL(`../../${target}`,import.meta.url));
   }
 });
+
+
+test('current frame contracts show compiled scopes and separate three API roles',async()=>{
+  const html=await readFile(new URL('../_site/contracts.html',import.meta.url),'utf8');
+  for(const role of ['consumer','adapter','implementor'])assert.ok(html.includes(`id="${role}"`));
+  for(const name of ['frame_inspect','frame_policy_target','frame_conversion','frame_native_loan'])assert.ok(html.includes(`data-example="${name}"`));
+  for(const text of ['FrameConversionOffer','MappedPlanes','preserving_presentation','Approximate quality','not yet merged or published'])assert.ok(html.includes(text));
+  assert.equal((html.match(/data-example-source="docs\/examples\/frame_contracts.rs"/g)||[]).length,4);
+  assert.ok(!html.includes('<details class="code-context"'),'short examples and setup stay visible');
+});

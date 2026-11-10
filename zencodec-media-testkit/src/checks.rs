@@ -82,6 +82,13 @@ fn frame_pixels(frame: &Frame) -> Result<Vec<u8>, String> {
                     }
                 }
             }
+            AnyPlane::F32(p) => {
+                for r in p.rows() {
+                    for v in r {
+                        out.extend_from_slice(&v.to_bits().to_le_bytes());
+                    }
+                }
+            }
             _ => return Err("unsupported plane sample type".into()),
         }
     }
@@ -91,17 +98,18 @@ fn frame_pixels(frame: &Frame) -> Result<Vec<u8>, String> {
 /// What a decoded frame is, for comparing two decodes.
 #[derive(Debug, PartialEq, Eq)]
 struct Shown {
-    pts: Option<Timestamp>,
-    keyframe: bool,
-    show_existing: bool,
+    interpretation: Arc<zencodec_media::frame::FrameInterpretation>,
+    timing: zencodec_media::frame::FrameTiming,
+    presentation: zencodec_media::frame::Presentation,
     pixels: Vec<u8>,
 }
 
 fn shown(frame: &Frame) -> Result<Shown, String> {
+    crate::check_frame_interchange(frame).map_err(|e| e.to_string())?;
     Ok(Shown {
-        pts: frame.timing().pts,
-        keyframe: frame.presentation().keyframe,
-        show_existing: frame.presentation().show_existing,
+        interpretation: frame.interpretation().clone(),
+        timing: frame.timing(),
+        presentation: frame.presentation(),
         pixels: frame_pixels(frame)?,
     })
 }

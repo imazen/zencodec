@@ -144,6 +144,10 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Media decoder conformance compares complete immutable interpretation, timing
+  and presentation across paths. The reusable frame interchange check covers
+  direct, image and planar access including F32 payload bits. (`core-contracts layer5`)
+
 - Media tracks retain full `TrackTimeline`/`EditList` declarations. Known complete
   programs require exact-presentation mux admission; unsupported defaults and
   animation projections refuse before effects. Scalar edit-delay projection and

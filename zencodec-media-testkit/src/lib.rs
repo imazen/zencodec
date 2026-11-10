@@ -6,6 +6,8 @@
 extern crate alloc;
 
 pub mod checks;
+mod frame_interchange;
+pub use frame_interchange::check_frame_interchange;
 pub mod toy;
 
 pub use checks::{

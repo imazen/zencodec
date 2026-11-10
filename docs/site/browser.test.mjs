@@ -152,4 +152,11 @@ try {
   await checkGaps(browser,url,output);
   await checkCodeFirst(browser,url,output);
   console.log('Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.');
+  await page.goto(new URL('contracts.html',url).href);
+  assert.equal(await page.locator('.code-panel[data-example]').count(),4);
+  for(const role of ['consumer','adapter','implementor']) assert.equal(await page.locator('#'+role).count(),1);
+  for(const width of [1440,768,390]) {
+    await page.setViewportSize({width,height:1000});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`contract page overflows at ${width}`);
+  }
 } finally {await browser.close();}

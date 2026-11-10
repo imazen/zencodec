@@ -828,6 +828,7 @@ pub const fn zencodec::encode::Fidelity::butteraugli(distance: f32) -> Self
 pub const fn zencodec::encode::Fidelity::codec_quality(q: f32) -> Self
 pub const fn zencodec::encode::Fidelity::is_lossless(self) -> bool
 pub const fn zencodec::encode::Fidelity::ssim2(score: f32) -> Self
+pub const fn zencodec::encode::Fidelity::zensim_a(score: f32) -> Self
 pub const fn zencodec::encode::Fidelity::zensim_b(score: f32) -> Self
 #[non_exhaustive] pub enum zencodec::encode::FidelitySelectionError
 pub zencodec::encode::FidelitySelectionError::AllocationFailed
@@ -854,6 +855,7 @@ pub zencodec::encode::InputRequirement::WholeRaster
 #[non_exhaustive] pub enum zencodec::encode::LossyTarget
 pub zencodec::encode::LossyTarget::ApproxButteraugli(f32)
 pub zencodec::encode::LossyTarget::ApproxSsim2(f32)
+pub zencodec::encode::LossyTarget::ApproxZensimA(f32)
 pub zencodec::encode::LossyTarget::ApproxZensimB(f32)
 pub zencodec::encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub enum zencodec::encode::OutputPhase
@@ -1381,10 +1383,22 @@ pub use zencodec::frame::PlaneError
 pub use zencodec::frame::PlaneRef
 pub use zencodec::frame::PlaneRole
 #[non_exhaustive] pub enum zencodec::frame::MapError
+pub zencodec::frame::MapError::AllocationFailed
 pub zencodec::frame::MapError::Backend(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>)
+pub zencodec::frame::MapError::Component
+pub zencodec::frame::MapError::Component::actual_dimensions: (usize, usize)
+pub zencodec::frame::MapError::Component::actual_encoding: core::option::Option<zenpixels::plane::PlaneEncoding>
+pub zencodec::frame::MapError::Component::actual_storage: zenpixels::descriptor::ChannelType
+pub zencodec::frame::MapError::Component::expected_dimensions: (usize, usize)
+pub zencodec::frame::MapError::Component::expected_encoding: zenpixels::plane::PlaneEncoding
+pub zencodec::frame::MapError::Component::index: usize
+pub zencodec::frame::MapError::InvalidGeometry
+pub zencodec::frame::MapError::Layout(zenpixels::plane::LayoutError)
 pub zencodec::frame::MapError::Unavailable
 impl core::error::Error for zencodec::frame::MapError
 pub fn zencodec::frame::MapError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for zencodec::frame::MapError
+pub fn zencodec::frame::MapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for zencodec::frame::MapError
 pub fn zencodec::frame::MapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::frame::ColorClaim
@@ -1408,6 +1422,7 @@ pub fn zencodec::frame::Frame::presentation(&self) -> zencodec::frame::Presentat
 pub fn zencodec::frame::Frame::represent(&self, timing: zencodec::frame::FrameTiming, presentation: zencodec::frame::Presentation) -> Self
 pub fn zencodec::frame::Frame::shares_picture(&self, other: &zencodec::frame::Frame) -> bool
 pub fn zencodec::frame::Frame::timing(&self) -> zencodec::frame::FrameTiming
+pub fn zencodec::frame::Frame::with_planar<T>(&self, pulse: core::option::Option<&dyn how_far::pulse::Pulse>, callback: impl core::ops::function::FnOnce(zenpixels::plane::PlanarSlice<'_>) -> T) -> core::result::Result<T, zencodec::frame::MapError>
 impl core::fmt::Debug for zencodec::frame::Frame
 pub fn zencodec::frame::Frame::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::frame::FrameGeometry
@@ -1418,15 +1433,21 @@ pub zencodec::frame::FrameGeometry::render: core::option::Option<(u32, u32)>
 impl zencodec::frame::FrameGeometry
 pub const fn zencodec::frame::FrameGeometry::full(width: u32, height: u32) -> Self
 #[non_exhaustive] pub struct zencodec::frame::FrameInterpretation
+pub zencodec::frame::FrameInterpretation::alpha_mode: core::option::Option<zenpixels::descriptor::AlphaMode>
 pub zencodec::frame::FrameInterpretation::color: zencodec::frame::ColorClaim
+pub zencodec::frame::FrameInterpretation::color_context: core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
 pub zencodec::frame::FrameInterpretation::config_epoch: u32
 pub zencodec::frame::FrameInterpretation::geometry: zencodec::frame::FrameGeometry
 pub zencodec::frame::FrameInterpretation::layout: zenpixels::plane::PlanarLayout
 impl zencodec::frame::FrameInterpretation
 pub fn zencodec::frame::FrameInterpretation::new(geometry: zencodec::frame::FrameGeometry, layout: zenpixels::plane::PlanarLayout) -> Self
 pub fn zencodec::frame::FrameInterpretation::uniform_code_encoding(&self) -> core::option::Option<zenpixels::sample::SampleEncoding>
+pub fn zencodec::frame::FrameInterpretation::with_alpha_mode(self, alpha: zenpixels::descriptor::AlphaMode) -> Self
 pub fn zencodec::frame::FrameInterpretation::with_color(self, color: zencodec::frame::ColorClaim) -> Self
+pub fn zencodec::frame::FrameInterpretation::with_color_context(self, context: alloc::rcs::arc::Arc<zenpixels::color::ColorContext>) -> Self
 pub fn zencodec::frame::FrameInterpretation::with_config_epoch(self, epoch: u32) -> Self
+impl core::fmt::Debug for zencodec::frame::FrameInterpretation
+pub fn zencodec::frame::FrameInterpretation::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::frame::FrameTiming
 pub zencodec::frame::FrameTiming::duration_ticks: core::option::Option<u64>
 pub zencodec::frame::FrameTiming::input_offset: core::option::Option<u64>
@@ -1660,11 +1681,11 @@ impl core::error::Error for zencodec::image::PlacementError
 pub fn zencodec::image::PlacementError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Display for zencodec::image::PlacementError
 pub fn zencodec::image::PlacementError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub enum zencodec::image::Row<'a>
+#[non_exhaustive] pub enum zencodec::image::Row<'a>
 pub zencodec::image::Row::Bytes(&'a [u8])
 pub zencodec::image::Row::Floats(&'a [f32])
 pub zencodec::image::Row::Words16(&'a [u16])
-pub enum zencodec::image::Samples<'a>
+#[non_exhaustive] pub enum zencodec::image::Samples<'a>
 pub zencodec::image::Samples::Codes(zencodec::image::CodePlane<'a>)
 pub zencodec::image::Samples::Float
 pub zencodec::image::Samples::Float::encoding: zenpixels::plane::FloatEncoding
@@ -2116,7 +2137,7 @@ pub zencodec::operation::Selection::Boundary(zencodec::decode::BoundaryAction)
 pub zencodec::operation::Selection::Encode(zencodec::operation::EncodeOffer)
 pub zencodec::operation::Selection::EncodeRoute(zencodec::operation::EncodeRouteOffer)
 pub zencodec::operation::Selection::Frame(zencodec::operation::PublicationOffer)
-pub zencodec::operation::Selection::FrameRoute(zencodec::operation::FrameRouteOffer)
+pub zencodec::operation::Selection::FrameRoute(zencodec::operation::FrameRouteSummary)
 pub zencodec::operation::Selection::Image(zencodec::operation::PublicationOffer)
 pub zencodec::operation::Selection::ImageConversion(zencodec::operation::ImageConversionOffer)
 pub zencodec::operation::Selection::OutputSchedule(zencodec::operation::OutputScheduleOffer)
@@ -2203,6 +2224,7 @@ pub const fn zencodec::operation::DecodeRequest::with_format(self, format: zenco
 pub fn zencodec::operation::DecodeRequest::with_output(self, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
 pub const fn zencodec::operation::DecodeRequest::with_policy(self, policy: zencodec::decode::DecodePolicy) -> Self
 #[non_exhaustive] pub struct zencodec::operation::DestinationFacts
+pub zencodec::operation::DestinationFacts::exact_presentation: bool
 pub zencodec::operation::DestinationFacts::exact_timing: bool
 pub zencodec::operation::DestinationFacts::patches_at_finish: bool
 pub zencodec::operation::DestinationFacts::seek_back: bool
@@ -2258,19 +2280,29 @@ pub zencodec::operation::EncodeRouteOffer::workspace_upper_bound: core::option::
 impl zencodec::operation::EncodeRouteOffer
 pub const fn zencodec::operation::EncodeRouteOffer::external_source_passes(&self, plan: &zencodec::encode::EncodePlan) -> core::option::Option<zencodec::encode::SourcePasses>
 pub const fn zencodec::operation::EncodeRouteOffer::new(acquisition: zencodec::operation::InputAcquisition, output: zencodec::operation::OutputScheduleOffer) -> Self
+#[non_exhaustive] pub struct zencodec::operation::FrameConversionFacts
+pub zencodec::operation::FrameConversionFacts::admitted_bytes: usize
+pub zencodec::operation::FrameConversionFacts::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
+pub zencodec::operation::FrameConversionFacts::encoder_input: zencodec::operation::FrameFacts
+pub zencodec::operation::FrameConversionFacts::preserves_extended_range: bool
+pub zencodec::operation::FrameConversionFacts::preserves_samples: bool
 #[non_exhaustive] pub struct zencodec::operation::FrameConversionOffer
 pub zencodec::operation::FrameConversionOffer::admitted_bytes: usize
 pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>
-pub zencodec::operation::FrameConversionOffer::encoder_input: zencodec::operation::FrameFacts
+pub zencodec::operation::FrameConversionOffer::encoder_input: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>
 pub zencodec::operation::FrameConversionOffer::preserves_extended_range: bool
 pub zencodec::operation::FrameConversionOffer::preserves_samples: bool
+pub zencodec::operation::FrameConversionOffer::timing: zencodec::frame::FrameTiming
 impl zencodec::operation::FrameConversionOffer
-pub const fn zencodec::operation::FrameConversionOffer::new(encoder_input: zencodec::operation::FrameFacts) -> Self
+pub fn zencodec::operation::FrameConversionOffer::facts(&self) -> zencodec::operation::FrameConversionFacts
+pub fn zencodec::operation::FrameConversionOffer::new(encoder_input: alloc::rcs::arc::Arc<zencodec::frame::FrameInterpretation>, timing: zencodec::frame::FrameTiming) -> Self
 #[non_exhaustive] pub struct zencodec::operation::FrameFacts
+pub zencodec::operation::FrameFacts::alpha_mode: core::option::Option<zenpixels::descriptor::AlphaMode>
 pub zencodec::operation::FrameFacts::color: zencodec::frame::ColorClaim
 pub zencodec::operation::FrameFacts::config_epoch: u32
 pub zencodec::operation::FrameFacts::encoding: core::option::Option<zenpixels::sample::SampleEncoding>
 pub zencodec::operation::FrameFacts::geometry: zencodec::frame::FrameGeometry
+pub zencodec::operation::FrameFacts::has_color_context: bool
 pub zencodec::operation::FrameFacts::plane_specs: [core::option::Option<zenpixels::plane::PlaneSpec>; 4]
 pub zencodec::operation::FrameFacts::planes: usize
 pub zencodec::operation::FrameFacts::siting: zenpixels::sample::plane::ChromaSiting
@@ -2292,10 +2324,21 @@ pub zencodec::operation::FrameRouteOffer::staging: core::option::Option<zencodec
 pub zencodec::operation::FrameRouteOffer::workspace_upper_bound: core::option::Option<u64>
 impl zencodec::operation::FrameRouteOffer
 pub const fn zencodec::operation::FrameRouteOffer::new(route: zencodec::operation::FrameRoute) -> Self
+impl zencodec::operation::FrameRouteOffer
+pub fn zencodec::operation::FrameRouteOffer::summary(&self) -> zencodec::operation::FrameRouteSummary
 #[non_exhaustive] pub struct zencodec::operation::FrameRouteState
 pub zencodec::operation::FrameRouteState::completed_segments: u64
 pub zencodec::operation::FrameRouteState::output_committed: bool
 pub zencodec::operation::FrameRouteState::previous: core::option::Option<zencodec::operation::FrameFacts>
+#[non_exhaustive] pub struct zencodec::operation::FrameRouteSummary
+pub zencodec::operation::FrameRouteSummary::admitted_encoded_bytes: usize
+pub zencodec::operation::FrameRouteSummary::conversion: core::option::Option<zencodec::operation::FrameConversionFacts>
+pub zencodec::operation::FrameRouteSummary::destination: core::option::Option<zencodec::operation::DestinationFacts>
+pub zencodec::operation::FrameRouteSummary::fidelity: core::option::Option<zencodec::encode::Fidelity>
+pub zencodec::operation::FrameRouteSummary::output_schedule: core::option::Option<zencodec::operation::OutputScheduleOffer>
+pub zencodec::operation::FrameRouteSummary::route: zencodec::operation::FrameRoute
+pub zencodec::operation::FrameRouteSummary::staging: core::option::Option<zencodec::operation::StagingFacts>
+pub zencodec::operation::FrameRouteSummary::workspace_upper_bound: core::option::Option<u64>
 #[non_exhaustive] pub struct zencodec::operation::ImageConversionOffer
 pub zencodec::operation::ImageConversionOffer::admitted_bytes: usize
 pub zencodec::operation::ImageConversionOffer::assumed_chroma_siting: core::option::Option<zenpixels::sample::plane::ChromaSiting>

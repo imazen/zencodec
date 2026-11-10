@@ -197,6 +197,16 @@ impl FrameConversionOffer {
             admitted_bytes: 0,
         }
     }
+    /// Copy diagnostics; opaque profiles and interpretation owners are not retained.
+    pub fn facts(&self) -> FrameConversionFacts {
+        FrameConversionFacts {
+            encoder_input: FrameFacts::new(&self.encoder_input, self.timing),
+            preserves_samples: self.preserves_samples,
+            preserves_extended_range: self.preserves_extended_range,
+            assumed_chroma_siting: self.assumed_chroma_siting,
+            admitted_bytes: self.admitted_bytes,
+        }
+    }
 }
 
 /// Bounded diagnostic summary of the selected prepared frame route.
@@ -254,18 +264,6 @@ impl FrameRouteOffer {
             output_schedule: self.output_schedule,
             admitted_encoded_bytes: self.admitted_encoded_bytes,
             workspace_upper_bound: self.workspace_upper_bound,
-        }
-    }
-}
-impl FrameConversionOffer {
-    /// Copy diagnostics; opaque profiles and interpretation owners are not retained.
-    pub fn facts(&self) -> FrameConversionFacts {
-        FrameConversionFacts {
-            encoder_input: FrameFacts::new(&self.encoder_input, self.timing),
-            preserves_samples: self.preserves_samples,
-            preserves_extended_range: self.preserves_extended_range,
-            assumed_chroma_siting: self.assumed_chroma_siting,
-            admitted_bytes: self.admitted_bytes,
         }
     }
 }

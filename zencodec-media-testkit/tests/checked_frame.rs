@@ -116,6 +116,7 @@ fn context_and_alpha_lending_preserve_odd_coded_geometry_strides_and_payloads() 
     })
     .unwrap();
     assert_eq!(f.interpretation().geometry, geometry);
+    zencodec_media_testkit::check_frame_interchange(&f).unwrap();
     let image = ImageOutput::from_frame(f.clone());
     assert_eq!(image.map().unwrap().plane_count(), 3);
     let replay = f.represent(FrameTiming::default(), Presentation::SHOW_EXISTING);
@@ -266,5 +267,54 @@ fn post_mapping_timeout_preserves_reason_and_native_failure_priority() {
             );
         }
         assert!(!format!("{error:?}").contains("native payload"));
+    }
+}
+
+#[test]
+fn shared_interchange_checks_float_payload_bits_and_unshifted_12bit_codes() {
+    for floating in [false, true] {
+        let (plane, encoding) = if floating {
+            (
+                OwnedPlane::F32(
+                    Plane::new(
+                        vec![
+                            f32::from_bits(0x7fc00077),
+                            -0.0,
+                            -2.0,
+                            1000.0,
+                            77.0,
+                            0.5,
+                            1.0,
+                            2.0,
+                            3.0,
+                        ],
+                        4,
+                        2,
+                        5,
+                    )
+                    .unwrap(),
+                ),
+                PlaneEncoding::Float(zenpixels::plane::FloatEncoding::NOMINAL),
+            )
+        } else {
+            (
+                OwnedPlane::U16(
+                    Plane::new(vec![0, 1, 2048, 4095, 0xffff, 57, 234, 577, 1023], 4, 2, 5)
+                        .unwrap(),
+                ),
+                PlaneEncoding::Code(SampleEncoding::new(ChannelType::U16, 12, 0).unwrap()),
+            )
+        };
+        let owner = Arc::new(OwnedPlanes::from_encoded_planes(vec![(plane, encoding)]).unwrap());
+        let signal = FrameInterpretation::new(
+            FrameGeometry::full(4, 2),
+            PlanarLayout::new(
+                vec![PlaneSpec::new(PlaneRole::Luma, encoding)],
+                ChromaSubsampling::Mono,
+                ChromaSiting::Unknown,
+            )
+            .unwrap(),
+        );
+        zencodec_media_testkit::check_frame_interchange(&frame(owner, signal)).unwrap();
     }
 }
