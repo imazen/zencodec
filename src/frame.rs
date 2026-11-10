@@ -11,7 +11,10 @@ use zenpixels::{
 };
 
 use crate::time::Timestamp;
+use alloc::sync::Arc;
+use core::fmt;
 use zenpixels::Cicp;
+use zenpixels::{AlphaMode, ColorContext};
 
 pub use zenpixels::plane::{AnyPlane, PlaneRef, PlaneRole};
 
@@ -93,7 +96,7 @@ impl ColorClaim {
 /// Everything needed to interpret the samples of one frame. Immutable and
 /// shared through `Arc`: a configuration change makes a new one, and a frame
 /// keeps the one it was decoded under.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FrameInterpretation {
     /// Picture shape.
@@ -103,6 +106,11 @@ pub struct FrameInterpretation {
     pub layout: PlanarLayout,
     /// Colour claims.
     pub color: ColorClaim,
+    /// Interpretation of these samples, including authoritative ICC/CICP and HDR anchors.
+    /// Absence is unknown, never an sRGB assumption. Source claims stay in `color`.
+    pub color_context: Option<Arc<ColorContext>>,
+    /// Actual alpha association, present exactly for a real alpha plane.
+    pub alpha_mode: Option<AlphaMode>,
     /// The codec configuration epoch it was decoded under.
     pub config_epoch: u32,
 }
@@ -114,8 +122,22 @@ impl FrameInterpretation {
             geometry,
             layout,
             color: ColorClaim::default(),
+            color_context: None,
+            alpha_mode: None,
             config_epoch: 0,
         }
+    }
+
+    /// Retain the current sample interpretation without reading or converting pixels.
+    pub fn with_color_context(mut self, context: Arc<ColorContext>) -> Self {
+        self.color_context = Some(context);
+        self
+    }
+
+    /// Declare real alpha association. Mapping validates it against the layout.
+    pub fn with_alpha_mode(mut self, alpha: AlphaMode) -> Self {
+        self.alpha_mode = Some(alpha);
+        self
     }
 
     /// A common integer encoding only when every plane has exactly that encoding.
@@ -141,6 +163,20 @@ impl FrameInterpretation {
     pub fn with_config_epoch(mut self, epoch: u32) -> Self {
         self.config_epoch = epoch;
         self
+    }
+}
+
+// Opaque profile bytes never enter routine diagnostics.
+impl fmt::Debug for FrameInterpretation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FrameInterpretation")
+            .field("geometry", &self.geometry)
+            .field("layout", &self.layout)
+            .field("color", &self.color)
+            .field("has_color_context", &self.color_context.is_some())
+            .field("alpha_mode", &self.alpha_mode)
+            .field("config_epoch", &self.config_epoch)
+            .finish()
     }
 }
 

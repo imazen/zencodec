@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use zencodec::{
     frame::{Frame, FrameGeometry, FrameInterpretation, FrameTiming, Presentation},
-    image::{ImageOutput, OutputError, Row, Samples},
+    image::{ImageOutput, Row, Samples},
     operation::ImageFacts,
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
@@ -22,9 +22,14 @@ fn image(
 ) -> ImageOutput {
     let layout = PlanarLayout::new(specs, sub, ChromaSiting::Unknown).unwrap();
     let owner = Arc::new(OwnedPlanes::from_encoded_planes(planes).unwrap());
+    let has_alpha = layout.roles().any(|role| role == PlaneRole::Alpha);
+    let mut interpretation = FrameInterpretation::new(FrameGeometry::full(3, 2), layout);
+    if has_alpha {
+        interpretation = interpretation.with_alpha_mode(zenpixels::AlphaMode::Straight);
+    }
     ImageOutput::from_frame(Frame::new(
         owner,
-        Arc::new(FrameInterpretation::new(FrameGeometry::full(3, 2), layout)),
+        Arc::new(interpretation),
         FrameTiming::default(),
         Presentation::default(),
     ))
@@ -168,21 +173,20 @@ fn per_plane_owner_encoding_contradiction_is_a_typed_refusal() {
         vec![PlaneSpec::new(PlaneRole::Luma, claimed)],
         ChromaSubsampling::Mono,
     );
-    let mapped = output.map().unwrap();
-    let error = match mapped.plane(0) {
+    let error = match output.map() {
         Err(error) => error,
         Ok(_) => panic!("must refuse contradiction"),
     };
-    let Some(OutputError::Component {
+    let Some(zencodec::frame::MapError::Component {
         expected_encoding,
         actual_encoding,
         ..
-    }) = zencodec::find_cause::<OutputError>(&error)
+    }) = zencodec::find_cause::<zencodec::frame::MapError>(&error)
     else {
         panic!("typed component cause")
     };
     assert_eq!(*expected_encoding, claimed);
-    assert_eq!(*actual_encoding, actual);
+    assert_eq!(*actual_encoding, Some(actual));
 }
 
 #[test]

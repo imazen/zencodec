@@ -625,6 +625,18 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### Workspace contract stack
 
+- Frame interpretations retain current color and alpha; checked native mapping
+  validates encoding, layout and geometry before lending. `with_planar` retains
+  the mapping loan and optional Pulse boundary. `Samples`/`Row` are extensible.
+
+### QUEUED BREAKING CHANGES
+
+- Unreleased `MappedPlanes::encoding` is now required and mapping refuses absent
+  or contradictory evidence before returning a view. Image mapping retains the
+  detailed `MapError::Component` cause; missing/contradictory frames refuse earlier.
+
+### Workspace cohort and fidelity
+
 - Select the current zenpixels allocation/interpretation cohort in core, render
   and fuzz roots. Gray ICC roundtrip checks distinguish extraction from qualified
   substitution; source ICC retention remains required.
