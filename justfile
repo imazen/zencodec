@@ -2004,3 +2004,7 @@ capture-conversion-api checkout revision:
 # Run a frozen native root with caller-selected oracle/artifact environment.
 native-cohort-runtime output target roots="jpeg av1 spatial lcms io" filter="" revision="HEAD":
     python3 scripts/qualify-native-cohort.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --roots {{roots}} --execute --test-filter "{{filter}}" --lint
+
+# Refresh catalogs/reference/site without rerunning unchanged native behavior.
+core-stack-docs output target revision="HEAD":
+    python3 scripts/qualify-core-stack.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --docs --docs-only

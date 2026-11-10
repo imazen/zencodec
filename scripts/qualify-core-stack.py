@@ -17,7 +17,9 @@ def main():
     parser.add_argument('--docs', action='store_true', help='generate catalog/Rustdoc and run the complete site/browser gate')
     parser.add_argument('--browser-port', default='3547')
     parser.add_argument('--native-inputs', type=Path, help='run the AV1/TIFF mapping witnesses against prepared independent inputs')
+    parser.add_argument('--docs-only', action='store_true', help='Reuse unchanged runtime evidence; regenerate and validate documentation only')
     args = parser.parse_args()
+    if args.docs_only and not args.docs:parser.error('--docs-only requires --docs')
     repo = Path(__file__).resolve().parents[1]
     revision = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', args.revision], text=True).strip()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -51,31 +53,34 @@ def main():
             raise SystemExit(result.returncode)
         save()
 
-    for manifest, name in [('Cargo.toml', 'core'), ('zencodec-render/Cargo.toml', 'render')]:
-        lock = source / Path(manifest).parent / 'Cargo.lock'
-        seed = source / Path(manifest).parent / 'dependencies.lock'
-        if seed.exists():
-            lock.write_bytes(seed.read_bytes())
-        run(name + '-metadata', ['cargo', 'metadata', '--manifest-path', manifest, '--format-version', '1', '--all-features'])
-        if name == 'core':
-            run('core-tests', ['cargo', 'test', '--workspace', '--all-features', '--lib', '--tests', '--locked'])
-            run('core-docs', ['cargo', 'test', '--workspace', '--all-features', '--doc', '--locked'])
-            run('core-clippy', ['cargo', 'clippy', '--workspace', '--all-features', '--all-targets', '--locked', '--', '-D', 'warnings'])
-            run('core-no-default', ['cargo', 'check', '-p', 'zencodec', '--no-default-features', '--locked'])
-        else:
-            run('render-tests', ['cargo', 'test', '--manifest-path', manifest, '--locked'])
-            run('render-clippy', ['cargo', 'clippy', '--manifest-path', manifest, '--all-targets', '--locked', '--', '-D', 'warnings'])
-    if args.native_inputs:
-        env['FRAME_NATIVE_INPUTS'] = str(args.native_inputs.resolve())
-        native = source / 'tools/frame-native-validation'
-        (native / 'Cargo.lock').write_bytes((native / 'dependencies.lock').read_bytes())
-        run('native-prepare', ['python3', 'tools/frame-native-validation/prepare.py', str(args.native_inputs.resolve())])
-        run('native-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--format-version', '1'])
-        run('native-tests', ['cargo', 'test', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--locked', '--', '--test-threads=1'])
-        run('native-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--all-targets', '--locked', '--', '-D', 'warnings'])
-    run('icc-authority-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--format-version', '1'])
-    run('icc-authority-tests', ['cargo', 'test', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--locked'])
+    if not args.docs_only:
+        for manifest, name in [('Cargo.toml', 'core'), ('zencodec-render/Cargo.toml', 'render')]:
+            lock = source / Path(manifest).parent / 'Cargo.lock'
+            seed = source / Path(manifest).parent / 'dependencies.lock'
+            if seed.exists():
+                lock.write_bytes(seed.read_bytes())
+            run(name + '-metadata', ['cargo', 'metadata', '--manifest-path', manifest, '--format-version', '1', '--all-features'])
+            if name == 'core':
+                run('core-tests', ['cargo', 'test', '--workspace', '--all-features', '--lib', '--tests', '--locked'])
+                run('core-docs', ['cargo', 'test', '--workspace', '--all-features', '--doc', '--locked'])
+                run('core-clippy', ['cargo', 'clippy', '--workspace', '--all-features', '--all-targets', '--locked', '--', '-D', 'warnings'])
+                run('core-no-default', ['cargo', 'check', '-p', 'zencodec', '--no-default-features', '--locked'])
+            else:
+                run('render-tests', ['cargo', 'test', '--manifest-path', manifest, '--locked'])
+                run('render-clippy', ['cargo', 'clippy', '--manifest-path', manifest, '--all-targets', '--locked', '--', '-D', 'warnings'])
+        if args.native_inputs:
+            env['FRAME_NATIVE_INPUTS'] = str(args.native_inputs.resolve())
+            native = source / 'tools/frame-native-validation'
+            (native / 'Cargo.lock').write_bytes((native / 'dependencies.lock').read_bytes())
+            run('native-prepare', ['python3', 'tools/frame-native-validation/prepare.py', str(args.native_inputs.resolve())])
+            run('native-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--format-version', '1'])
+            run('native-tests', ['cargo', 'test', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--locked', '--', '--test-threads=1'])
+            run('native-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/frame-native-validation/Cargo.toml', '--all-targets', '--locked', '--', '-D', 'warnings'])
+        run('icc-authority-metadata', ['cargo', 'metadata', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--format-version', '1'])
+        run('icc-authority-tests', ['cargo', 'test', '--manifest-path', 'tools/icc-authority-validation/Cargo.toml', '--locked'])
     if args.docs:
+        seed = source / 'zencodec-render/dependencies.lock'
+        (seed.parent / 'Cargo.lock').write_bytes(seed.read_bytes())
         run('docs-install', ['npm', 'ci', '--prefix', 'docs'])
         run('docs-catalog', ['env', 'RUSTUP_TOOLCHAIN=nightly-2026-10-06', 'python3', 'docs/generate-code-catalog.py', str(source)])
         run('docs-reference', ['python3', 'docs/build-reference.py'])
