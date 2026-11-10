@@ -2035,3 +2035,7 @@ docs-workflow-lint binary="actionlint":
 # Separate ablation spike: execute the current committed source in an isolated export.
 row-policy-spike-check output target revision phase="core":
     python3 scripts/qualify-row-policy-spike.py {{output}} --target {{target}} --revision {{revision}} --phase {{phase}}
+
+# Profile the identical native control against baseline and candidate; no throughput claim.
+row-policy-spike-allocations output target revision baseline:
+    python3 scripts/qualify-row-policy-spike.py {{output}} --target {{target}} --revision {{revision}} --phase allocations --baseline {{baseline}}

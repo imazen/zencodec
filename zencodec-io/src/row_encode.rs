@@ -48,7 +48,7 @@ use zencodec::{
 };
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, sample::ExactDepth};
 
-mod planned;
+mod engine;
 
 /// Fixed sample declaration for this operation. Color conversion is not implicit.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -192,7 +192,7 @@ pub struct Options {
     batch_rows: NonZeroU32,
     preset: PolicySet,
     disk: Option<Disk>,
-    raw_disk: Option<planned::RawDisk>,
+    raw_disk: Option<engine::RawDisk>,
 }
 impl Options {
     /// Row buffers and compressed staging share this admission pool.
@@ -246,7 +246,7 @@ impl Options {
                 "raw scratch must start at its end",
             ));
         }
-        self.raw_disk = Some(planned::RawDisk {
+        self.raw_disk = Some(engine::RawDisk {
             file,
             origin,
             max_bytes,
@@ -558,8 +558,8 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: Operation
     options: Options,
     pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
-    planned::run(
-        LegacyStartup(encoder),
+    engine::run(
+        SuppliedStartup(encoder),
         source,
         writer,
         resolver,
@@ -613,7 +613,7 @@ pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: Ope
 where
     J::Enc: Encoder,
 {
-    planned::run(
+    engine::run(
         PlannedStartup(job),
         source,
         writer,
@@ -654,7 +654,7 @@ pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: OperationPoli
     options: Options,
     pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Completed, At<Failure>> {
-    planned::run(
+    engine::run(
         DynPlannedStartup(job),
         source,
         writer,
@@ -711,7 +711,7 @@ impl StartupPlan {
 trait RowStartup {
     type Enc: Encoder;
     // Preserve legacy allocation/start ordering on the existing raw adapter.
-    const EARLY_BUFFER: bool;
+    const SUPPLIED_ENCODER: bool;
     fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause>;
     fn start(
         self,
@@ -719,10 +719,10 @@ trait RowStartup {
         plan: &StartupPlan,
     ) -> Result<Self::Enc, Cause>;
 }
-struct LegacyStartup<E>(E);
-impl<E: Encoder> RowStartup for LegacyStartup<E> {
+struct SuppliedStartup<E>(E);
+impl<E: Encoder> RowStartup for SuppliedStartup<E> {
     type Enc = E;
-    const EARLY_BUFFER: bool = true;
+    const SUPPLIED_ENCODER: bool = true;
     fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
         let timing = self.0.begin_output(
             declaration.width,
@@ -742,7 +742,7 @@ where
     J::Enc: Encoder,
 {
     type Enc = J::Enc;
-    const EARLY_BUFFER: bool = false;
+    const SUPPLIED_ENCODER: bool = false;
     fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
         validate_row_plan(self.0.plan_encode(declaration)?, declaration).map(StartupPlan::Declared)
     }
@@ -761,7 +761,7 @@ where
 struct DynPlannedStartup(Box<dyn DynEncodeJob>);
 impl RowStartup for DynPlannedStartup {
     type Enc = DynRows;
-    const EARLY_BUFFER: bool = false;
+    const SUPPLIED_ENCODER: bool = false;
     fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<StartupPlan, Cause> {
         validate_row_plan(self.0.plan_encode(declaration)?, declaration).map(StartupPlan::Declared)
     }

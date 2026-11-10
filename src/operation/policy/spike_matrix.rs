@@ -363,3 +363,129 @@ fn direct_decide_cannot_treat_weakly_admitted_choices_as_strict_evidence() {
     let mut strict = PolicySet::new().allow_opaque_profiles(false);
     assert!(matches!(strict.decide(q).unwrap(), Decision::Decline(_)));
 }
+
+// Prototype migration of two sources into one bound policy. Preferences follow
+// the existing bound-policy precedence; mandatory constraints intersect.
+// Deliberately private: conflict timing and diagnostics need API review.
+fn intersect(older: PolicySet, bound: PolicySet) -> Result<PolicySet, PolicyRequirement> {
+    fn same<T: Copy + PartialEq>(
+        a: Option<T>,
+        b: Option<T>,
+        requirement: PolicyRequirement,
+    ) -> Result<Option<T>, PolicyRequirement> {
+        match (a, b) {
+            (Some(a), Some(b)) if a != b => Err(requirement),
+            (Some(a), _) => Ok(Some(a)),
+            (_, b) => Ok(b),
+        }
+    }
+    fn minimum<T: Copy + Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
+        match (a, b) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), _) => Some(a),
+            (_, b) => b,
+        }
+    }
+    Ok(PolicySet {
+        metadata: same(older.metadata, bound.metadata, PolicyRequirement::Metadata)?,
+        output_schedule: same(
+            older.output_schedule,
+            bound.output_schedule,
+            PolicyRequirement::OutputSchedule,
+        )?,
+        allow_opaque_profiles: older.allow_opaque_profiles && bound.allow_opaque_profiles,
+        workspace_limit: minimum(older.workspace_limit, bound.workspace_limit),
+        output_wait_limit: minimum(older.output_wait_limit, bound.output_wait_limit),
+        max_source_passes: minimum(older.max_source_passes, bound.max_source_passes),
+        require_extended_range: older.require_extended_range || bound.require_extended_range,
+        exact_replay: older.exact_replay || bound.exact_replay,
+        allow_raw_memory_staging: older.allow_raw_memory_staging && bound.allow_raw_memory_staging,
+        ..bound
+    })
+}
+fn summary(
+    result: Result<(usize, DecisionRecord), At<PolicyFailure>>,
+) -> (
+    Option<usize>,
+    DecisionCode,
+    alloc::vec::Vec<(PolicyRequirement, RequirementEvidence)>,
+) {
+    match result {
+        Ok((index, record)) => (
+            Some(index),
+            record.code,
+            record.unmet_requirements.iter().collect(),
+        ),
+        Err(error) => {
+            let record = error.error().record();
+            (
+                None,
+                record.code,
+                record.unmet_requirements.iter().collect(),
+            )
+        }
+    }
+}
+#[test]
+fn explicit_intersection_matches_two_source_transcode_for_4096_policy_pairs() {
+    let offers = transcodes();
+    for bits in 0..4096u16 {
+        let older = policies(bits);
+        // A permutation retains each of the 4096 presets on both sides.
+        let bound = policies((bits.wrapping_mul(1549).wrapping_add(811)) & 4095);
+        let old = resolve_transcode(
+            DecodeBoundary::new(facts()).unwrap(),
+            &offers,
+            &mut BoundPolicy::new(
+                bound,
+                |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) },
+            ),
+            older,
+            None,
+        );
+        match intersect(older, bound) {
+            Ok(merged) => {
+                let new = transcode(
+                    &offers,
+                    &mut BoundPolicy::new(
+                        merged,
+                        |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                            Ok(Decision::UsePreset)
+                        },
+                    ),
+                );
+                assert_eq!(summary(new), summary(old), "pair {bits}");
+            }
+            Err(requirement) => {
+                let error = old.unwrap_err();
+                assert!(
+                    error
+                        .error()
+                        .record()
+                        .unmet_requirements
+                        .iter()
+                        .any(|(r, _)| r == requirement)
+                );
+            }
+        }
+    }
+}
+#[test]
+fn eager_intersection_changes_legal_discovery_timing_for_conflicting_metadata() {
+    let older = PolicySet::new().require_metadata(MetadataTransfer::PreserveReported);
+    let bound = PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive);
+    assert_eq!(
+        intersect(older, bound).unwrap_err(),
+        PolicyRequirement::Metadata
+    );
+    let early = DecodeBoundary::new(InterpretationFacts::new(
+        2,
+        1,
+        None,
+        InterpretationState::Pending,
+    ))
+    .unwrap();
+    // The existing two-source contract can still discover facts before final
+    // adoption. A fallible merge rejects sooner; that is an observable change.
+    assert!(resolve_boundary(early, &mut { bound }, older, None).is_ok());
+}

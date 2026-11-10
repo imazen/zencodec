@@ -58,6 +58,7 @@ zencodec-coroutine = { path = "../../zencodec-coroutine" }
 zenmeta = { path = "../../zenmeta" }
 
 [dev-dependencies]
+png = "0.18.1" # Independent active-sample oracle for the row-driver spike.
 zenpng = { version = "0.2.0", default-features = false, features = ["controlled-decode"] }
 zencodec-testkit = { path = "../../zencodec-testkit", version = "0.2.0" }
 how-far-along = { version = "0.1.0", default-features = false, features = ["std"] }

@@ -526,7 +526,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let batch_rows = out.options.batch_rows.get().min(desc.height);
         // Raw encoders historically admit their strip before begin_output.
         // Retained jobs allocate only after their route has been selected.
-        let early_buffer = if P::EARLY_BUFFER {
+        let early_buffer = if P::SUPPLIED_ENCODER {
             Some(
                 out.options.storage.bytes(
                     row_bytes
@@ -564,7 +564,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let single = declared.max() == Some(1);
         // The temporary probe only chooses a borrow-checker branch. The second
         // returned view is the actual storage retained and used for all reads.
-        let input = if !P::EARLY_BUFFER && source.borrowed_pixels().is_some() {
+        let input = if !P::SUPPLIED_ENCODER && source.borrowed_pixels().is_some() {
             let pixels = source.borrowed_pixels().ok_or(Refusal::SourceChanged)?;
             Input::Raster {
                 pixels,
@@ -804,7 +804,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             }
             _ => zencodec::how_far::Total::Unknown,
         };
-        if !P::EARLY_BUFFER {
+        if !P::SUPPLIED_ENCODER {
             let _ = control.set_total(total);
         }
         check(control)?;
