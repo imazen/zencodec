@@ -965,3 +965,16 @@ storage cleanup remain checked. Modern Mox0.9.2 still violates the unchanged
 0.0013 bound on 937 components; frozen Mox0.9.1 fails on 1050. Neither default
 backend nor frozen graph was changed. See the separate
 `just spatial-lcms-check` and benchmarks/native_cmyk_finalization_2026-11-08.md.
+
+## Known Bugs: pixel main gray-profile test migration (2026-11-09)
+
+PR201 af9dc2b5 compiles against pixel main f2d2bfde, including all-feature
+all-target checks; standalone render checks and eight integration tests pass.
+The std workspace test run stops in gray_color_emit's lowered-profile roundtrip:
+its expected derived CICP ignores IdentificationUse. The resolver retains the
+ICC and correctly emits no replacement CICP for MetadataOnly identification.
+Keep the authority guard; migrate this expectation to qualified substitution
+and retain explicit-authority/qualified positive controls. This review changes
+no behavioral test. Current PR heads, the optional IQA test receipt, planar
+context/alpha gaps and migration order are in
+[the adaptation review](docs/pixel-main-adaptation-2026-11-09.md).
