@@ -2000,3 +2000,7 @@ native-cohort-compile output target revision="HEAD":
 capture-conversion-api checkout revision:
     node docs/capture-output-api.mjs "{{checkout}}" "{{revision}}"
     node docs/capture-ycbcr-api.mjs "{{checkout}}" "{{revision}}"
+
+# Run a frozen native root with caller-selected oracle/artifact environment.
+native-cohort-runtime output target roots="jpeg av1 spatial lcms io" filter="" revision="HEAD":
+    python3 scripts/qualify-native-cohort.py "{{output}}" --revision "{{revision}}" --target "{{target}}" --roots {{roots}} --execute --test-filter "{{filter}}" --lint

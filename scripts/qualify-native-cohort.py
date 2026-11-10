@@ -30,6 +30,9 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--target', type=Path, required=True)
     parser.add_argument('--roots', nargs='+', choices=ROOTS, default=list(ROOTS))
+    parser.add_argument('--execute', action='store_true', help='Run the selected native tests, not only compile')
+    parser.add_argument('--test-filter', default='')
+    parser.add_argument('--lint', action='store_true', help='Run strict all-target Clippy after successful tests')
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     revision = subprocess.check_output(['git','rev-parse',args.revision],cwd=repo,text=True).strip()
@@ -53,13 +56,20 @@ def main():
         if name=='io' and not run('io-sources',['python3',directory+'/setup.py']):continue
         if name=='jpeg' and not run('jpeg-mox-update',['cargo','update','--manifest-path',manifest,'-p','moxcms','--precise','0.9.2']):continue
         if not run(name+'-metadata',['cargo','metadata','--manifest-path',manifest,'--format-version','1']):continue
-        command=['cargo','test','--manifest-path',manifest,'--no-run','--locked']
+        command=['cargo','test','--manifest-path',manifest,'--locked']
+        if not args.execute:command+=['--no-run']
         if name=='io':
             for test in IO_TESTS:command+=['--test',test]
             for binary in IO_BINS:command+=['--bin',binary]
-        else:command+=['--lib','--tests']
+        elif not args.execute:command+=['--lib','--tests']
         if name in ['spatial','lcms']:command+=['--features','cms_oracle,old_jpeg']
-        run(name+'-compile',command)
+        if args.test_filter:command+=[args.test_filter]
+        if args.execute:command+=['--','--nocapture','--test-threads=1']
+        if not run(name+('-runtime' if args.execute else '-compile'),command):continue
+        if args.lint:
+            command=['cargo','clippy','--manifest-path',manifest,'--locked','--all-targets']
+            if name in ['spatial','lcms']:command+=['--features','cms_oracle,old_jpeg']
+            command+=['--','-D','warnings'];run(name+'-lint',command)
     receipt['status']='failed' if any(s['status']=='failed' for s in receipt['steps']) else 'passed';save()
     raise SystemExit(int(receipt['status']=='failed'))
 
