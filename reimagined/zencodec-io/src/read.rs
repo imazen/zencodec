@@ -1,6 +1,7 @@
 //! Blocking sources and destinations.
 
 use crate::drive::{Batch, DriveOptions, Next, RangeRead, Session, Window};
+use crate::memory::decode_slice;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use zencodec::decode::{Decoder, Sink};
 use zencodec::encode::{OutputBuffer, Patch};
@@ -14,6 +15,12 @@ pub trait ReadAt {
     /// The total length, when the source knows it.
     fn total_len(&mut self) -> io::Result<Option<u64>> {
         Ok(None)
+    }
+
+    /// The whole input, when it is already in memory. A driver borrows it
+    /// instead of reading: no window, no copy.
+    fn as_slice(&self) -> Option<&[u8]> {
+        None
     }
 
     /// Read several spans. A source with slow round trips overrides this to
@@ -43,6 +50,10 @@ impl ReadAt for &[u8] {
 
     fn total_len(&mut self) -> io::Result<Option<u64>> {
         Ok(Some(<[u8]>::len(self) as u64))
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        Some(self)
     }
 }
 
@@ -116,6 +127,7 @@ pub(crate) fn sink_error(e: io::Error) -> Error {
 
 /// Run a prepared decoder over a positioned source.
 ///
+/// A source that is already in memory is borrowed, not read.
 /// Returns the decoder, whose [`info`](Decoder::info) is now complete.
 pub fn decode_read_at(
     decoder: Box<dyn Decoder>,
@@ -123,6 +135,9 @@ pub fn decode_read_at(
     sink: &mut dyn Sink,
     opts: &DriveOptions,
 ) -> Result<Box<dyn Decoder>> {
+    if let Some(bytes) = source.as_slice() {
+        return decode_slice(decoder, bytes, sink);
+    }
     let mut session = Session::new(decoder, sink, opts);
     let pulse = SharedPulse::default();
     loop {

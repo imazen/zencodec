@@ -401,3 +401,55 @@ async fn a_codec_that_dies_on_its_worker_is_an_error_not_a_hang() {
         assert_eq!(err.error().kind(), ErrorKind::Internal, "{offload:?}");
     }
 }
+
+/// Bytes in memory that must never be read: only borrowed.
+struct Resident(Vec<u8>);
+impl AsyncSource for Resident {
+    async fn read_at(&mut self, _: u64, _: &mut [u8]) -> io::Result<usize> {
+        panic!("a resident source was read instead of borrowed");
+    }
+    fn as_slice(&self) -> Option<&[u8]> {
+        Some(&self.0)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_inline_driver_borrows_bytes_already_in_memory() {
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let (bytes, source) = sample(&**enc, 14, 90, 8);
+        let opts = DriveOptions::new().with_steps_per_batch(3);
+        let (_, collect) = tokio_io::decode(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &mut Resident(bytes.clone()),
+            Collect::new(),
+            Offload::Inline,
+            opts,
+            SharedPulse::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(packed(&collect.frames()[0]), source, "{}", enc.name());
+
+        let reference = transcode(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &bytes,
+            Arc::new(RowsCodec),
+            |frame| EncodeSpec::new(frame.raster.clone()),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let written = tokio_io::transcode(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            to(Arc::new(RowsCodec)),
+            &mut Resident(bytes),
+            &mut out,
+            Offload::Inline,
+            opts,
+            SharedPulse::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(written, reference.len() as u64);
+        assert_eq!(out, reference, "{}", enc.name());
+    }
+}

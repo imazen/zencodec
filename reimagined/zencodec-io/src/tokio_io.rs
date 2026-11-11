@@ -20,6 +20,8 @@
 //!   owned vector, so batch *n*'s bytes go to the socket while batch *n+1*
 //!   computes. Two vectors alternate; a steady transcode allocates no
 //!   output buffers.
+//! - **Bytes already in memory are borrowed.** A source that reports
+//!   [`as_slice`](AsyncSource::as_slice) is never read by an inline driver.
 //! - **The buffered route is one hop.** Decoders are `'static` and borrow
 //!   their input per step, so [`decode_buffered`] and [`transcode_buffered`]
 //!   are a single `spawn_blocking` around the in-memory driver.
@@ -29,7 +31,7 @@
 
 use crate::drive::{Batch, DriveOptions, Next, RangeRead, Session, Window};
 use crate::encoder_sink::EncoderSink;
-use crate::memory::decode_slice;
+use crate::memory::{SliceRun, decode_slice};
 use crate::read::{sink_error, source_error};
 use std::future::Future;
 use std::io;
@@ -50,6 +52,14 @@ pub trait AsyncSource: Send {
     /// The total length, when the source knows it.
     fn total_len(&mut self) -> impl Future<Output = io::Result<Option<u64>>> + Send {
         async { Ok(None) }
+    }
+
+    /// The whole input, when it is already in memory. An inline driver
+    /// borrows it instead of reading. A worker cannot borrow across threads:
+    /// for resident bytes and a worker, use [`decode_buffered`] or
+    /// [`transcode_buffered`], which hand the bytes over once.
+    fn as_slice(&self) -> Option<&[u8]> {
+        None
     }
 
     /// Read several spans. A source with slow round trips (HTTP ranges)
@@ -93,6 +103,10 @@ impl<B: AsRef<[u8]> + Send> AsyncSource for InMemory<B> {
 
     async fn total_len(&mut self) -> io::Result<Option<u64>> {
         Ok(Some(self.0.as_ref().len() as u64))
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        Some(self.0.as_ref())
     }
 }
 
@@ -277,6 +291,17 @@ where
     Src: AsyncSource + ?Sized,
 {
     async move {
+        if let (Offload::Inline, Some(bytes)) = (&offload, source.as_slice()) {
+            // Resident bytes on the polling task: borrow them, read nothing.
+            let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
+            loop {
+                check(&pulse)?;
+                if run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)? {
+                    return Ok((decoder, sink));
+                }
+                tokio::task::yield_now().await;
+            }
+        }
         let mut session = Box::new(Session::new(decoder, sink, &opts));
         loop {
             check(&pulse)?;
@@ -316,6 +341,23 @@ async fn publish<W: AsyncWrite + Unpin + Send + ?Sized>(
     Ok(())
 }
 
+/// Close out a transcode whose bytes have all been written.
+async fn finish_output<W: AsyncWrite + Unpin + Send + ?Sized>(
+    out: &mut W,
+    sink: &mut EncoderSink,
+    written: u64,
+    pulse: &SharedPulse,
+) -> Result<u64> {
+    if !sink.take_patches().is_empty() {
+        return Err(CodecError::new(ErrorKind::Sink)
+            .with_message("an async writer cannot be patched")
+            .at());
+    }
+    check(pulse)?;
+    out.flush().await.map_err(sink_error)?;
+    Ok(written)
+}
+
 /// Decode from an async source and encode to an async writer, row by row.
 ///
 /// Returns the bytes written. On an error, bytes already written are a
@@ -335,6 +377,27 @@ where
     W: AsyncWrite + Unpin + Send + ?Sized,
 {
     async move {
+        if let (Offload::Inline, Some(bytes)) = (&offload, source.as_slice()) {
+            // Resident bytes on the polling task: borrow them, read nothing,
+            // and reuse one output vector.
+            let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
+            let mut written = 0u64;
+            loop {
+                check(&pulse)?;
+                let done = run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)?;
+                if done {
+                    check(&pulse)?;
+                    sink.finish()?;
+                }
+                let mut chunk = sink.take_output();
+                publish(out, &mut chunk, &mut written, &pulse).await?;
+                sink.recycle(chunk);
+                if done {
+                    return finish_output(out, &mut sink, written, &pulse).await;
+                }
+                tokio::task::yield_now().await;
+            }
+        }
         let mut session = Box::new(Session::new(decoder, sink, &opts));
         // Bytes the last batch made, and the vector the batch before used.
         let (mut carry, mut spare) = (Vec::new(), Vec::new());
@@ -361,14 +424,7 @@ where
             match end {
                 Batch::Done => {
                     publish(out, &mut carry, &mut written, &pulse).await?;
-                    if !session.sink.take_patches().is_empty() {
-                        return Err(CodecError::new(ErrorKind::Sink)
-                            .with_message("an async writer cannot be patched")
-                            .at());
-                    }
-                    check(&pulse)?;
-                    out.flush().await.map_err(sink_error)?;
-                    return Ok(written);
+                    return finish_output(out, &mut session.sink, written, &pulse).await;
                 }
                 Batch::Yield => tokio::task::yield_now().await,
                 Batch::Read(next) => {

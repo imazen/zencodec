@@ -5,7 +5,7 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-11: it compiles, 30 tests pass, clippy and rustdoc are clean
+Status on 2026-11-11: it compiles, 33 tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been proven on a real codec,
@@ -13,7 +13,7 @@ and nothing about its speed has been measured.
 
 ```text
 zencodec/           the contract: 2,806 lines, no_std + alloc, forbid(unsafe_code)
-zencodec-io/        the loops: memory, blocking I/O, Tokio (1,938 lines)
+zencodec-io/        the loops: memory, blocking I/O, Tokio (2,045 lines)
 zencodec-fixtures/  three codecs that exercise it (1,507 lines)
 ```
 
@@ -130,7 +130,8 @@ worker thread moves finalization with them.
 
 ## What it costs and saves an async host
 
-None of this is measured. These are structural differences read off the code.
+This spike measures nothing itself. These are structural differences read off
+the code:
 
 - A batch hand-off to a worker moves one pointer. The current async driver
   moves the decoder, sink and window by value into a boxed job, per batch.
@@ -147,6 +148,30 @@ None of this is measured. These are structural differences read off the code.
 - Per step, the cost is one dynamic call, the same as the erased path today.
   A concrete codec called directly would save that call; nothing prevents a
   codec from also offering inherent methods.
+
+A separate lane did measure an earlier capture of this code against the
+current drivers (PR 210, `reimagined/docs/ablation-evidence-2026-11-11.md` on
+`review/reimagined-documents`). Its timing run was rejected by its own
+resource gates, so its timings confirm nothing. Its allocation counts
+(heaptrack, 1,000 decodes of 256x256 RGBA) are exact: the pool route here made
+11,013 allocation calls against 21,013 for the current pool driver, and the
+boxed in-memory route matched the current boxed route at 2,000.
+
+It also found two costs in that capture, both fixed here and neither
+re-measured:
+
+- A positioned source that was already in memory was copied into a window.
+  `ReadAt::as_slice` and `AsyncSource::as_slice` now let a driver borrow it;
+  tests use sources that panic if read.
+- The window filled its memory before every read. It now reuses one
+  initialized buffer, and a streaming decode holds a window no larger than
+  the decoder leaves unconsumed (a test decodes a 19 KB file through a
+  512-byte window).
+
+One cost it measured remains by design: with a worker and a source that is
+not in memory, every read is a hand-off. Larger reads mean fewer of them
+(`DriveOptions::read_size`), and bytes that are in memory should take the
+buffered route.
 
 ## zenpixels
 
@@ -182,6 +207,14 @@ merging. This spike is not that consumer yet.
   `zencodec-media`, the registry and application conveniences (which belong
   in `zencodecs`), EXIF/ICC/gain-map parsing (which belongs in `zenmeta`),
   and the conformance testkit.
+- **Accounted storage.** The current crate charges retained images against
+  a `StorageBudget`. Here a gate bounds what a codec may own and a driver may
+  hold, and nothing tracks a buffer after it is handed over.
+- **`Send + 'static` is required of every decoder and encoder.** That is what
+  lets one erased type serve a registry, a worker pool and a foreign host.
+  It also rules out a codec that borrows its source or is bound to a thread,
+  which the current collection factories allow. Whether to keep the bound in
+  the contract or move it to the drivers that offload is undecided.
 - **Planar:** only borrowed strips. No owned planar hand-off.
 - **Provisional passes** are in the signatures (`Pass`) and no fixture
   produces one.

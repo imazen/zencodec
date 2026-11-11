@@ -876,3 +876,72 @@ fn the_transcoding_sink_stages_at_most_one_strip() {
     let decoded = decode(&RowsCodec, &out, &DecodeSpec::new()).unwrap();
     assert_eq!(packed(&decoded.frames[0]), source);
 }
+
+/// Bytes in memory that must never be read: only borrowed.
+struct Resident<'a>(&'a [u8]);
+impl zencodec_io::ReadAt for Resident<'_> {
+    fn read_at(&mut self, _: u64, _: &mut [u8]) -> std::io::Result<usize> {
+        panic!("a resident source was read instead of borrowed");
+    }
+    fn as_slice(&self) -> Option<&[u8]> {
+        Some(self.0)
+    }
+}
+
+#[test]
+fn a_source_already_in_memory_is_borrowed_not_read() {
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let (bytes, source) = encoded(&**enc, 30, 30, PixelDescriptor::RGB8_SRGB, 18);
+        let mut collect = Collect::new();
+        decode_read_at(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &mut Resident(&bytes),
+            &mut collect,
+            &DriveOptions::new(),
+        )
+        .unwrap();
+        assert_eq!(packed(&collect.frames()[0]), source, "{}", enc.name());
+        // A plain slice is resident too.
+        let mut collect = Collect::new();
+        decode_read_at(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &mut &bytes[..],
+            &mut collect,
+            &DriveOptions::new().with_max_input_bytes(1),
+        )
+        .expect("nothing is held, so the input gate has nothing to refuse");
+        assert_eq!(packed(&collect.frames()[0]), source);
+    }
+}
+
+#[test]
+fn a_streaming_window_stays_as_small_as_the_decoder_lets_it() {
+    // Rows are consumed as they arrive, so a gate far below the file size
+    // is enough: the window is reused, not grown.
+    let (bytes, source) = encoded(&RowsCodec, 16, 400, PixelDescriptor::RGB8_SRGB, 19);
+    assert!(bytes.len() > 19_000);
+    let mut collect = Collect::new();
+    let opts = DriveOptions::new()
+        .with_read_size(256)
+        .with_max_input_bytes(512);
+    decode_read_at(
+        RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
+        &mut Drip::new(&bytes, 256),
+        &mut collect,
+        &opts,
+    )
+    .expect("a 512-byte window decodes a 19 KB file");
+    assert_eq!(packed(&collect.frames()[0]), source);
+
+    // A decoder that needs the whole file cannot fit, and is told so.
+    let (bytes, _) = encoded(&RleCodec::codec(), 16, 400, PixelDescriptor::RGB8_SRGB, 19);
+    let err = decode_read_at(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &mut Drip::new(&bytes, 256),
+        &mut Collect::new(),
+        &opts,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(err.error().kind(), ErrorKind::Limit(LimitKind::InputBytes));
+}
