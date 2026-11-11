@@ -1,0 +1,14 @@
+run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=11137MiB :: cargo test --manifest-path reimagined/tools/native-tiff/Cargo.toml --locked
+[1m[92m   Compiling[0m reimagined-native-tiff v0.0.0 (/home/lilith/work/zen/zencodec--reimagined-documents/reimagined/tools/native-tiff)
+[1m[92m    Finished[0m `test` profile [optimized + debuginfo] target(s) in 2.19s
+[1m[92m     Running[0m unittests src/lib.rs (/home/lilith/tmp/target-zencodec-reimagined-native-tiff/debug/deps/reimagined_native_tiff-183f8b3d21120dde)
+
+running 3 tests
+test tests::native_directory_browsing_and_repeated_tile_roi_use_the_same_range_dialogue ... ok
+test tests::independent_ffmpeg_decodes_the_hand_authored_tiled_tiff ... FAILED
+test tests::source_failure_retains_the_native_transport_cause_and_drops_the_worker has been running for over 60 seconds
+[1m[91merror[0m: test failed, to rerun pass `--lib`
+
+Caused by:
+  process didn't exit successfully: `/home/lilith/tmp/target-zencodec-reimagined-native-tiff/debug/deps/reimagined_native_tiff-183f8b3d21120dde` (signal: 15, SIGTERM: termination signal)
+run-heavy: done rc=101 109s | peak-RSS 0.24GiB | min-avail 10935MiB | peak-load 1.09
