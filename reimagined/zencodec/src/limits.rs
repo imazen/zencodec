@@ -31,6 +31,24 @@ pub struct ResourceLimits {
 }
 
 impl ResourceLimits {
+    /// Preserve every independently configured hard gate.
+    pub fn intersection(self, other: Self) -> Self {
+        fn minimum<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
+            match (a, b) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            }
+        }
+        Self {
+            max_width: minimum(self.max_width, other.max_width),
+            max_height: minimum(self.max_height, other.max_height),
+            max_pixels: minimum(self.max_pixels, other.max_pixels),
+            max_frames: minimum(self.max_frames, other.max_frames),
+            max_input_bytes: minimum(self.max_input_bytes, other.max_input_bytes),
+            max_output_bytes: minimum(self.max_output_bytes, other.max_output_bytes),
+            max_memory_bytes: minimum(self.max_memory_bytes, other.max_memory_bytes),
+        }
+    }
     /// No gates.
     pub const fn none() -> Self {
         Self {

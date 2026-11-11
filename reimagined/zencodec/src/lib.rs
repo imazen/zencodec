@@ -34,6 +34,7 @@ whereat::define_at_crate_info!(path = "reimagined/zencodec/");
 
 mod bytes;
 pub mod decode;
+pub mod document;
 pub mod encode;
 mod error;
 mod format;

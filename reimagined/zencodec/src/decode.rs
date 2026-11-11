@@ -303,6 +303,9 @@ impl DecodePlan {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DecodeEvent {
+    /// Computation or a native worker can continue without another input read.
+    /// No sink effect is implied. Drivers may yield before the next step.
+    Continue,
     /// The window lent was not enough; see [`Decoder::requested`].
     NeedInput,
     /// The header is read: [`Decoder::info`] and [`Decoder::plan`] are set and
