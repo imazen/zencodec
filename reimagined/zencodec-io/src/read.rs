@@ -233,7 +233,8 @@ impl<W: Write + Seek> Destination for SeekBack<W> {
 
     fn patch(&mut self, patch: &Patch) -> io::Result<()> {
         let end = self.writer.stream_position()?;
-        self.writer.seek(SeekFrom::Start(self.origin + patch.offset))?;
+        self.writer
+            .seek(SeekFrom::Start(self.origin + patch.offset))?;
         self.writer.write_all(&patch.bytes)?;
         self.writer.seek(SeekFrom::Start(end))?;
         Ok(())

@@ -95,9 +95,7 @@ impl WholeImageDecode for RleCodec {
             pixels.resize(pixels.len() + count, value);
         }
         if pixels.len() != len {
-            return Err(CodecError::new(ErrorKind::Truncated)
-                .with_codec("zwh")
-                .at());
+            return Err(CodecError::new(ErrorKind::Truncated).with_codec("zwh").at());
         }
         PixelBuffer::from_vec(pixels, info.width, info.height, output)
             .map_err(|_| error(ErrorKind::Internal))
@@ -123,7 +121,8 @@ impl WholeImageEncode for RleCodec {
         _fidelity: Fidelity,
         _spec: &EncodeSpec,
     ) -> Result<Vec<u8>> {
-        let layout = packed_to_byte(pixels.descriptor()).ok_or_else(|| error(ErrorKind::Internal))?;
+        let layout =
+            packed_to_byte(pixels.descriptor()).ok_or_else(|| error(ErrorKind::Internal))?;
         let mut out = Vec::with_capacity(HEADER + 64);
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&pixels.width().to_le_bytes());

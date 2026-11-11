@@ -90,7 +90,10 @@ impl EncoderSink {
     /// it; a still is already complete.
     pub fn finish(&mut self) -> Result<()> {
         let Some(encoder) = self.encoder.as_mut() else {
-            return Err(error_msg(ErrorKind::Protocol, "no frame reached the encoder"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "no frame reached the encoder",
+            ));
         };
         if self.need == EncodeEvent::NeedFrame {
             self.need = encoder.step(EncodeInput::End)?.event;
@@ -98,7 +101,10 @@ impl EncoderSink {
         if self.need == EncodeEvent::Done {
             Ok(())
         } else {
-            Err(error_msg(ErrorKind::Protocol, "the encoder still wants rows"))
+            Err(error_msg(
+                ErrorKind::Protocol,
+                "the encoder still wants rows",
+            ))
         }
     }
 
@@ -176,7 +182,10 @@ impl EncoderSink {
             return Err(unsupported(Unsupported::Progressive));
         }
         if !matches!(self.need, EncodeEvent::NeedRows { .. }) {
-            return Err(error_msg(ErrorKind::Protocol, "the encoder is not taking rows"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "the encoder is not taking rows",
+            ));
         }
         if y != self.y + self.staged {
             return Err(error_msg(ErrorKind::Protocol, "rows out of order"));
@@ -222,7 +231,10 @@ impl Sink for EncoderSink {
             return Err(unsupported(Unsupported::Animation));
         }
         if self.need != (EncodeEvent::NeedRows { pass: 0, y: 0 }) {
-            return Err(error_msg(ErrorKind::Protocol, "the encoder is not at a frame's start"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "the encoder is not at a frame's start",
+            ));
         }
         self.staged = 0;
         self.y = 0;
@@ -321,7 +333,10 @@ impl Sink for EncoderSink {
         if complete {
             Ok(())
         } else {
-            Err(error_msg(ErrorKind::Protocol, "frame ended with rows missing"))
+            Err(error_msg(
+                ErrorKind::Protocol,
+                "frame ended with rows missing",
+            ))
         }
     }
 }

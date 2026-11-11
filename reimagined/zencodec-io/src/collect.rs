@@ -112,7 +112,11 @@ impl Collect {
     }
 }
 
-fn copy_plane<T: PlaneSample>(src: &PlaneRef<'_, T>, dst: &mut PlaneBuf<T>, at: usize) -> Result<()> {
+fn copy_plane<T: PlaneSample>(
+    src: &PlaneRef<'_, T>,
+    dst: &mut PlaneBuf<T>,
+    at: usize,
+) -> Result<()> {
     for (r, row) in src.rows().enumerate() {
         dst.row_mut(at + r)
             .filter(|d| d.len() == row.len())
@@ -151,7 +155,10 @@ impl Sink for Collect {
         let building = self.building()?;
         let raster = &building.header.raster;
         let Some(descriptor) = raster.descriptor() else {
-            return Err(error_msg(ErrorKind::Protocol, "packed rows for a planar frame"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "packed rows for a planar frame",
+            ));
         };
         if rows == 0 || y.checked_add(rows).is_none_or(|end| end > raster.height) {
             return Err(error_msg(ErrorKind::Protocol, "rows outside the frame"));
@@ -169,7 +176,10 @@ impl Sink for Collect {
         }
         match building.pixels.as_mut() {
             Some(Pixels::Packed(buffer)) => Ok(buffer.rows_mut(y, rows)),
-            _ => Err(error_msg(ErrorKind::Protocol, "packed rows after planar rows")),
+            _ => Err(error_msg(
+                ErrorKind::Protocol,
+                "packed rows after planar rows",
+            )),
         }
     }
 
@@ -183,7 +193,10 @@ impl Sink for Collect {
             || pixels.width() != raster.width
             || pixels.height() != raster.height
         {
-            return Err(error_msg(ErrorKind::Protocol, "frame does not match its header"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "frame does not match its header",
+            ));
         }
         building.covered = raster.height;
         building.pixels = Some(Pixels::Packed(pixels));
@@ -194,14 +207,20 @@ impl Sink for Collect {
         let building = self.building()?;
         let raster = &building.header.raster;
         let Layout::Planar { planes: layout, .. } = &raster.layout else {
-            return Err(error_msg(ErrorKind::Protocol, "planar rows for a packed frame"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "planar rows for a packed frame",
+            ));
         };
         if *strip.layout() != **layout
             || strip.width() != raster.width
             || y != building.covered
             || strip.height() > raster.height - y
         {
-            return Err(error_msg(ErrorKind::Protocol, "planar strip does not fit the frame"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "planar strip does not fit the frame",
+            ));
         }
         if building.pixels.is_none() {
             let mut planes = Vec::with_capacity(layout.planes().len());
@@ -223,7 +242,10 @@ impl Sink for Collect {
             }));
         }
         let Some(Pixels::Planar(owned)) = building.pixels.as_mut() else {
-            return Err(error_msg(ErrorKind::Protocol, "planar rows after packed rows"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "planar rows after packed rows",
+            ));
         };
         for (index, (src, dst)) in strip.planes().iter().zip(&mut owned.planes).enumerate() {
             // Rows of this plane that precede the strip.
@@ -248,7 +270,10 @@ impl Sink for Collect {
             .take()
             .ok_or_else(|| error_msg(ErrorKind::Protocol, "frame ended outside a frame"))?;
         if building.covered != building.header.raster.height {
-            return Err(error_msg(ErrorKind::Protocol, "frame ended with rows missing"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "frame ended with rows missing",
+            ));
         }
         let pixels = match building.pixels {
             Some(pixels) => pixels,

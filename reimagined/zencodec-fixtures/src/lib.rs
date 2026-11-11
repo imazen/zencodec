@@ -69,7 +69,10 @@ pub(crate) fn packed_from_byte(byte: u8) -> Result<PixelDescriptor, FixtureError
 }
 
 pub(crate) fn packed_to_byte(descriptor: PixelDescriptor) -> Option<u8> {
-    PACKED.iter().position(|d| *d == descriptor).map(|i| i as u8)
+    PACKED
+        .iter()
+        .position(|d| *d == descriptor)
+        .map(|i| i as u8)
 }
 
 pub(crate) fn packed_of(layout: &Layout) -> Option<PixelDescriptor> {

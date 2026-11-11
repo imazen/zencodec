@@ -52,8 +52,12 @@ pub trait WholeImageDecode: Clone + Send + Sync + 'static {
     }
 
     /// Decode the complete file into `output`.
-    fn decode(&self, bytes: &[u8], info: &ImageInfo, output: PixelDescriptor)
-    -> Result<PixelBuffer>;
+    fn decode(
+        &self,
+        bytes: &[u8],
+        info: &ImageInfo,
+        output: PixelDescriptor,
+    ) -> Result<PixelBuffer>;
 }
 
 /// An encoder that takes the whole image and returns the whole file.
@@ -144,7 +148,10 @@ struct WholeDecoder<C> {
 impl<C: WholeImageDecode> WholeDecoder<C> {
     fn header(&mut self, input: Input<'_>) -> Result<DecodeStep> {
         if input.offset != 0 {
-            return Err(error_msg(ErrorKind::Protocol, "header input must start at 0"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "header input must start at 0",
+            ));
         }
         let Some(info) = self.codec.probe(input.bytes)? else {
             if input.reaches_end() {
@@ -240,9 +247,10 @@ impl<C: WholeImageDecode> Decoder for WholeDecoder<C> {
                 self.state = DecodeState::Done { info, plan };
                 Ok(DecodeStep::new(input.bytes.len(), DecodeEvent::Done))
             }
-            DecodeState::Done { .. } | DecodeState::Failed => {
-                Err(error_msg(ErrorKind::Protocol, "step after the decode ended"))
-            }
+            DecodeState::Done { .. } | DecodeState::Failed => Err(error_msg(
+                ErrorKind::Protocol,
+                "step after the decode ended",
+            )),
         }
     }
 }
@@ -370,7 +378,10 @@ impl<C: WholeImageEncode> Encoder for WholeEncoder<C> {
                     0,
                     EncodeEvent::NeedRows { pass: 0, y: self.y },
                 )),
-                _ => Err(error_msg(ErrorKind::Protocol, "this encoder takes packed rows")),
+                _ => Err(error_msg(
+                    ErrorKind::Protocol,
+                    "this encoder takes packed rows",
+                )),
             };
         };
         if rows.width() != width

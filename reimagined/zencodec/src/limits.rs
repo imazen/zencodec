@@ -84,7 +84,11 @@ impl ResourceLimits {
     /// Refuse a frame size the gates do not admit.
     #[track_caller]
     pub fn check_dimensions(&self, width: u32, height: u32) -> Result<()> {
-        gate(LimitKind::Width, self.max_width.map(u64::from), width.into())?;
+        gate(
+            LimitKind::Width,
+            self.max_width.map(u64::from),
+            width.into(),
+        )?;
         gate(
             LimitKind::Height,
             self.max_height.map(u64::from),

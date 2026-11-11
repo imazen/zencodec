@@ -27,7 +27,9 @@ use zencodec::{
     ImageFormat, ImageInfo, Input, InputRequest, Layout, MetadataKinds, OutputAccess, Pass, Raster,
     ResourceEstimate, Result, Sequence, Unsupported, check, error, error_msg,
 };
-use zenpixels::plane::{AnyPlane, PlanarLayout, PlanarSlice, PlaneEncoding, PlaneRef, PlaneRole, PlaneSpec};
+use zenpixels::plane::{
+    AnyPlane, PlanarLayout, PlanarSlice, PlaneEncoding, PlaneRef, PlaneRole, PlaneSpec,
+};
 use zenpixels::sample::{ChromaSiting, ChromaSubsampling, SampleEncoding};
 use zenpixels::{ChannelType, Cicp, ColorContext, PixelDescriptor, PixelSlice};
 
@@ -44,9 +46,8 @@ pub const FORMAT: ImageFormat = ImageFormat::new(&INFO);
 
 /// The planar layout `ZRW1` stores: 8-bit Y, Cb, Cr at 4:2:0.
 pub fn yuv420() -> Arc<PlanarLayout> {
-    let u8_codes = PlaneEncoding::Code(
-        SampleEncoding::new(ChannelType::U8, 8, 0).expect("8 bits fit a byte"),
-    );
+    let u8_codes =
+        PlaneEncoding::Code(SampleEncoding::new(ChannelType::U8, 8, 0).expect("8 bits fit a byte"));
     Arc::new(
         PlanarLayout::new(
             vec![
@@ -203,7 +204,11 @@ impl RowsDecoder {
             }
             let (layout, color) = (yuv420(), bt601_full());
             let raster = Raster::planar(width, height, layout.clone(), None, color.clone());
-            (Samples::Planar(layout, color), raster.layout.clone(), raster)
+            (
+                Samples::Planar(layout, color),
+                raster.layout.clone(),
+                raster,
+            )
         } else {
             let native = packed_from_byte(bytes[12]).map_err(bad)?;
             let output = self.spec.accept.choose(native, &[]).map_err(refuse)?;
@@ -260,7 +265,10 @@ impl Decoder for RowsDecoder {
 
     fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep> {
         if input.offset != self.pos {
-            return Err(error_msg(ErrorKind::Protocol, "input is not at the read position"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "input is not at the read position",
+            ));
         }
         let bytes = input.bytes;
         match self.state {
@@ -270,7 +278,12 @@ impl Decoder for RowsDecoder {
                     return self.need(&input, 0, 4);
                 }
                 let head = self.head.as_ref().expect("set with the header");
-                let raster = self.plan.as_ref().expect("set with the header").raster.clone();
+                let raster = self
+                    .plan
+                    .as_ref()
+                    .expect("set with the header")
+                    .raster
+                    .clone();
                 let duration = head
                     .animated
                     .then(|| FrameDuration::from_millis(le32(bytes, 0)));
@@ -295,9 +308,14 @@ impl Decoder for RowsDecoder {
                         }
                         let used = rows as usize * row_bytes;
                         if rows > 0 {
-                            let strip =
-                                PixelSlice::new(&bytes[..used], width, rows, row_bytes, *descriptor)
-                                    .map_err(|_| error(ErrorKind::Internal))?;
+                            let strip = PixelSlice::new(
+                                &bytes[..used],
+                                width,
+                                rows,
+                                row_bytes,
+                                *descriptor,
+                            )
+                            .map_err(|_| error(ErrorKind::Internal))?;
                             sink.rows(y, strip, Pass::Final)?;
                         }
                         (used, rows)
@@ -319,8 +337,9 @@ impl Decoder for RowsDecoder {
                             plane(luma_len, chroma, chroma, 1)?,
                             plane(luma_len + chroma, chroma, chroma, 1)?,
                         ];
-                        let strip = PlanarSlice::new(&planes, layout, width, luma_rows, color, None)
-                            .map_err(|_| error(ErrorKind::Internal))?;
+                        let strip =
+                            PlanarSlice::new(&planes, layout, width, luma_rows, color, None)
+                                .map_err(|_| error(ErrorKind::Internal))?;
                         sink.planes(y, strip)?;
                         (strip_bytes, luma_rows)
                     }
@@ -344,7 +363,10 @@ impl Decoder for RowsDecoder {
                 self.state = DecodeState::Done;
                 Ok(DecodeStep::new(0, DecodeEvent::Done))
             }
-            DecodeState::Done => Err(error_msg(ErrorKind::Protocol, "step after the decode ended")),
+            DecodeState::Done => Err(error_msg(
+                ErrorKind::Protocol,
+                "step after the decode ended",
+            )),
         }
     }
 }
@@ -363,13 +385,17 @@ impl EncodeCodec for RowsCodec {
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
         let (width, height) = (spec.raster.width, spec.raster.height);
         let (layout_byte, frame_bytes, strip_rows) = match &spec.raster.layout {
-            Layout::Planar { planes, alpha: None } if **planes == *yuv420() => {
+            Layout::Planar {
+                planes,
+                alpha: None,
+            } if **planes == *yuv420() => {
                 let chroma = u64::from(width.div_ceil(2)) * u64::from(height.div_ceil(2));
                 (PLANAR, u64::from(width) * u64::from(height) + 2 * chroma, 2)
             }
             Layout::Planar { .. } => return Err(refuse(Unsupported::Planar)),
             layout => {
-                let descriptor = packed_of(layout).ok_or_else(|| refuse(Unsupported::PixelFormat))?;
+                let descriptor =
+                    packed_of(layout).ok_or_else(|| refuse(Unsupported::PixelFormat))?;
                 let bpp = descriptor.bytes_per_pixel() as u64;
                 let byte = packed_to_byte(descriptor).expect("checked by packed_of");
                 (byte, u64::from(width) * u64::from(height) * bpp, 1)
@@ -518,7 +544,9 @@ impl RowsEncoder {
         {
             return Err(error_msg(ErrorKind::Protocol, "rows do not match the spec"));
         }
-        let row_bytes = raster.row_bytes().ok_or_else(|| error(ErrorKind::Internal))?;
+        let row_bytes = raster
+            .row_bytes()
+            .ok_or_else(|| error(ErrorKind::Internal))?;
         for row in 0..rows.rows() {
             self.output.write(&rows.row(row)[..row_bytes])?;
         }
@@ -528,14 +556,18 @@ impl RowsEncoder {
     fn planar_rows(&mut self, y: u32, strip: PlanarSlice<'_>) -> Result<EncodeStep> {
         let raster = &self.spec.raster;
         let Layout::Planar { planes: layout, .. } = &raster.layout else {
-            return Err(error_msg(ErrorKind::Protocol, "this encode takes packed rows"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "this encode takes packed rows",
+            ));
         };
         let given = strip.height();
-        if *strip.layout() != **layout
-            || strip.width() != raster.width
-            || given > raster.height - y
+        if *strip.layout() != **layout || strip.width() != raster.width || given > raster.height - y
         {
-            return Err(error_msg(ErrorKind::Protocol, "planes do not match the spec"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "planes do not match the spec",
+            ));
         }
         // A strip is consumed whole when it is a multiple of two luma rows or
         // reaches the last row. Otherwise the odd row waits for its pair.
@@ -548,14 +580,20 @@ impl RowsEncoder {
         while row < take {
             let luma_rows = (take - row).min(2);
             for r in row..row + luma_rows {
-                self.output
-                    .write(luma.row(r as usize).ok_or_else(|| error(ErrorKind::Internal))?)?;
+                self.output.write(
+                    luma.row(r as usize)
+                        .ok_or_else(|| error(ErrorKind::Internal))?,
+                )?;
             }
             let chroma_row = (row / 2) as usize;
-            self.output
-                .write(cb.row(chroma_row).ok_or_else(|| error(ErrorKind::Internal))?)?;
-            self.output
-                .write(cr.row(chroma_row).ok_or_else(|| error(ErrorKind::Internal))?)?;
+            self.output.write(
+                cb.row(chroma_row)
+                    .ok_or_else(|| error(ErrorKind::Internal))?,
+            )?;
+            self.output.write(
+                cr.row(chroma_row)
+                    .ok_or_else(|| error(ErrorKind::Internal))?,
+            )?;
             row += luma_rows;
         }
         self.advance(y, take)
@@ -603,7 +641,10 @@ impl Encoder for RowsEncoder {
                 Some(rows) => self.packed_rows(y, rows),
                 None => Err(error_msg(ErrorKind::Protocol, "rows were needed")),
             },
-            _ => Err(error_msg(ErrorKind::Protocol, "input does not answer the last event")),
+            _ => Err(error_msg(
+                ErrorKind::Protocol,
+                "input does not answer the last event",
+            )),
         }
     }
 

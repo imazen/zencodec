@@ -151,7 +151,10 @@ impl BiasDecoder {
         if input.offset == self.pos {
             Ok(())
         } else {
-            Err(error_msg(ErrorKind::Protocol, "input is not at the read position"))
+            Err(error_msg(
+                ErrorKind::Protocol,
+                "input is not at the read position",
+            ))
         }
     }
 
@@ -178,7 +181,9 @@ impl BiasDecoder {
         let data_end = HEADER as u64
             + u64::from(width) * u64::from(height) * descriptor.bytes_per_pixel() as u64;
         if exif.length > 0 && exif.offset != data_end {
-            return Err(bad(FixtureError::BadHeader("EXIF does not follow the pixels")));
+            return Err(bad(FixtureError::BadHeader(
+                "EXIF does not follow the pixels",
+            )));
         }
 
         let early = exif.length > 0 && self.spec.metadata_first.contains(MetadataKinds::EXIF);
@@ -268,7 +273,12 @@ impl Decoder for BiasDecoder {
                 let head = self.head.expect("set with the header");
                 if !begun {
                     check(&self.spec.pulse)?;
-                    let raster = self.plan.as_ref().expect("set with the header").raster.clone();
+                    let raster = self
+                        .plan
+                        .as_ref()
+                        .expect("set with the header")
+                        .raster
+                        .clone();
                     sink.begin(&FrameHeader::still(raster))?;
                     self.state = DecodeState::Rows { y, begun: true };
                 }
@@ -287,7 +297,10 @@ impl Decoder for BiasDecoder {
                     // One loan per step: the sink may lend fewer rows than asked.
                     let mut lent = sink.lend(y, available, Pass::Final)?;
                     if lent.width() != head.width || lent.descriptor() != head.descriptor {
-                        return Err(error_msg(ErrorKind::Sink, "sink lent rows of another shape"));
+                        return Err(error_msg(
+                            ErrorKind::Sink,
+                            "sink lent rows of another shape",
+                        ));
                     }
                     rows = lent.rows().min(available);
                     if rows == 0 {
@@ -338,7 +351,10 @@ impl Decoder for BiasDecoder {
                 self.state = DecodeState::Done;
                 Ok(DecodeStep::new(0, DecodeEvent::Done))
             }
-            DecodeState::Done => Err(error_msg(ErrorKind::Protocol, "step after the decode ended")),
+            DecodeState::Done => Err(error_msg(
+                ErrorKind::Protocol,
+                "step after the decode ended",
+            )),
         }
     }
 }
@@ -522,7 +538,10 @@ impl Encoder for BiasEncoder {
         let Some(rows) = input.packed() else {
             return match input {
                 EncodeInput::None => Ok(EncodeStep::new(0, need(self))),
-                _ => Err(error_msg(ErrorKind::Protocol, "this encoder takes packed rows")),
+                _ => Err(error_msg(
+                    ErrorKind::Protocol,
+                    "this encoder takes packed rows",
+                )),
             };
         };
         if self.done

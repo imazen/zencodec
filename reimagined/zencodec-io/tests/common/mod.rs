@@ -45,7 +45,13 @@ pub fn pattern(width: u32, height: u32, descriptor: PixelDescriptor, seed: u8) -
 }
 
 /// The same samples in rows `pad` bytes wider than they need to be.
-pub fn padded(tight: &[u8], width: u32, height: u32, descriptor: PixelDescriptor, pad: usize) -> (Vec<u8>, usize) {
+pub fn padded(
+    tight: &[u8],
+    width: u32,
+    height: u32,
+    descriptor: PixelDescriptor,
+    pad: usize,
+) -> (Vec<u8>, usize) {
     let row = width as usize * descriptor.bytes_per_pixel();
     let stride = row + pad;
     let mut out = vec![0xEE; stride * height as usize];
@@ -55,7 +61,13 @@ pub fn padded(tight: &[u8], width: u32, height: u32, descriptor: PixelDescriptor
     (out, stride)
 }
 
-pub fn slice<'a>(bytes: &'a [u8], width: u32, height: u32, stride: usize, descriptor: PixelDescriptor) -> PixelSlice<'a> {
+pub fn slice<'a>(
+    bytes: &'a [u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    descriptor: PixelDescriptor,
+) -> PixelSlice<'a> {
     PixelSlice::new(bytes, width, height, stride, descriptor).expect("a valid slice")
 }
 
@@ -63,7 +75,9 @@ pub fn slice<'a>(bytes: &'a [u8], width: u32, height: u32, stride: usize, descri
 pub fn tight(buffer: &PixelBuffer) -> Vec<u8> {
     let view = buffer.as_slice();
     let row = view.width() as usize * view.descriptor().bytes_per_pixel();
-    (0..view.rows()).flat_map(|y| view.row(y)[..row].to_vec()).collect()
+    (0..view.rows())
+        .flat_map(|y| view.row(y)[..row].to_vec())
+        .collect()
 }
 
 pub fn packed(frame: &Frame) -> Vec<u8> {
@@ -80,7 +94,12 @@ pub struct Drip<'a> {
 
 impl<'a> Drip<'a> {
     pub fn new(bytes: &'a [u8], chunk: usize) -> Self {
-        Self { bytes, chunk, reads: 0, range_calls: 0 }
+        Self {
+            bytes,
+            chunk,
+            reads: 0,
+            range_calls: 0,
+        }
     }
 }
 
@@ -125,7 +144,11 @@ impl Sink for Recording {
     }
     fn lend(&mut self, y: u32, rows: u32, pass: Pass) -> Result<PixelSliceMut<'_>> {
         self.log.push("lend");
-        let rows = if self.max_loan == 0 { rows } else { rows.min(self.max_loan) };
+        let rows = if self.max_loan == 0 {
+            rows
+        } else {
+            rows.min(self.max_loan)
+        };
         self.inner.lend(y, rows, pass)
     }
     fn frame(&mut self, pixels: PixelBuffer) -> Result<()> {
@@ -153,7 +176,10 @@ pub struct Switch {
 
 impl Switch {
     pub fn tripping_at(check: usize) -> Self {
-        Self { trip_at: check, ..Self::default() }
+        Self {
+            trip_at: check,
+            ..Self::default()
+        }
     }
     pub fn stop(&self) {
         self.stopped.store(true, Ordering::SeqCst);

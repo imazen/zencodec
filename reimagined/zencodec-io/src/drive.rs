@@ -134,15 +134,15 @@ impl Window {
             + self.ranges.iter().map(|r| r.buf.len() as u64).sum::<u64>()
             + more;
         match self.max_bytes {
-            Some(limit) if held > limit => Err(CodecError::new(ErrorKind::Limit(
-                LimitKind::InputBytes,
-            ))
-            .with_native(LimitExceeded {
-                kind: LimitKind::InputBytes,
-                limit,
-                actual: Some(held),
-            })
-            .at()),
+            Some(limit) if held > limit => {
+                Err(CodecError::new(ErrorKind::Limit(LimitKind::InputBytes))
+                    .with_native(LimitExceeded {
+                        kind: LimitKind::InputBytes,
+                        limit,
+                        actual: Some(held),
+                    })
+                    .at())
+            }
             _ => Ok(()),
         }
     }
@@ -222,7 +222,9 @@ impl Window {
                     .collect();
                 self.ranges.retain(|held| {
                     let end = held.offset + held.buf.len() as u64;
-                    wanted.iter().any(|w| held.offset < w.end() && w.offset < end)
+                    wanted
+                        .iter()
+                        .any(|w| held.offset < w.end() && w.offset < end)
                 });
                 let missing: Vec<ByteRange> = wanted
                     .into_iter()
@@ -236,7 +238,13 @@ impl Window {
                     let len = usize::try_from(range.length).map_err(|_| {
                         error_msg(ErrorKind::Limit(LimitKind::InputBytes), "range too large")
                     })?;
-                    self.admit(len as u64 + reads.iter().map(|r: &RangeRead| r.buf.len() as u64).sum::<u64>())?;
+                    self.admit(
+                        len as u64
+                            + reads
+                                .iter()
+                                .map(|r: &RangeRead| r.buf.len() as u64)
+                                .sum::<u64>(),
+                    )?;
                     let mut buf = Vec::new();
                     buf.try_reserve_exact(len)
                         .map_err(|_| zencodec::error(ErrorKind::OutOfMemory))?;

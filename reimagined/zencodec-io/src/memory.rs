@@ -100,7 +100,10 @@ pub fn feed_frame(
             return Ok(event);
         };
         if y > frame.rows() {
-            return Err(error_msg(ErrorKind::Protocol, "encoder asked past the frame"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "encoder asked past the frame",
+            ));
         }
         let rest = frame.sub_rows(y, frame.rows() - y);
         let step = encoder.step(EncodeInput::Rows(rest))?;
@@ -116,12 +119,19 @@ pub fn feed_frame(
 
 /// Encode one image held in memory. The encoder's output allocation is
 /// returned as is.
-pub fn encode(codec: &dyn EncodeCodec, spec: EncodeSpec, pixels: PixelSlice<'_>) -> Result<Vec<u8>> {
+pub fn encode(
+    codec: &dyn EncodeCodec,
+    spec: EncodeSpec,
+    pixels: PixelSlice<'_>,
+) -> Result<Vec<u8>> {
     let mut encoder = codec.encoder(&spec.with_supply(RowSupply::Whole))?;
     let first = encoder.step(EncodeInput::None)?.event;
     match feed_frame(&mut *encoder, &pixels, first)? {
         EncodeEvent::Done => Ok(encoder.output().take()),
-        _ => Err(error_msg(ErrorKind::Protocol, "encoder wants more than one frame")),
+        _ => Err(error_msg(
+            ErrorKind::Protocol,
+            "encoder wants more than one frame",
+        )),
     }
 }
 
@@ -132,19 +142,28 @@ pub fn encode_sequence<'a>(
     frames: impl IntoIterator<Item = (PixelSlice<'a>, FrameMeta)>,
 ) -> Result<Vec<u8>> {
     if spec.sequence.is_none() {
-        return Err(error_msg(ErrorKind::Protocol, "the spec does not describe a sequence"));
+        return Err(error_msg(
+            ErrorKind::Protocol,
+            "the spec does not describe a sequence",
+        ));
     }
     let mut encoder = codec.encoder(&spec.with_supply(RowSupply::Whole))?;
     let mut event = encoder.step(EncodeInput::None)?.event;
     for (pixels, meta) in frames {
         if event != EncodeEvent::NeedFrame {
-            return Err(error_msg(ErrorKind::Protocol, "the encoder is not between frames"));
+            return Err(error_msg(
+                ErrorKind::Protocol,
+                "the encoder is not between frames",
+            ));
         }
         event = encoder.step(EncodeInput::Frame(meta))?.event;
         event = feed_frame(&mut *encoder, &pixels, event)?;
     }
     if event != EncodeEvent::NeedFrame {
-        return Err(error_msg(ErrorKind::Protocol, "the encoder is not between frames"));
+        return Err(error_msg(
+            ErrorKind::Protocol,
+            "the encoder is not between frames",
+        ));
     }
     match encoder.step(EncodeInput::End)?.event {
         EncodeEvent::Done => Ok(encoder.output().take()),

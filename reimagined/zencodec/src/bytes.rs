@@ -256,15 +256,15 @@ impl OutputBuffer {
     fn admit(&self, more: usize) -> Result<()> {
         let total = self.position() + more as u64;
         match self.limit {
-            Some(limit) if total > limit => Err(CodecError::new(ErrorKind::Limit(
-                LimitKind::OutputBytes,
-            ))
-            .with_native(LimitExceeded {
-                kind: LimitKind::OutputBytes,
-                limit,
-                actual: Some(total),
-            })
-            .at()),
+            Some(limit) if total > limit => {
+                Err(CodecError::new(ErrorKind::Limit(LimitKind::OutputBytes))
+                    .with_native(LimitExceeded {
+                        kind: LimitKind::OutputBytes,
+                        limit,
+                        actual: Some(total),
+                    })
+                    .at())
+            }
             _ => Ok(()),
         }
     }
