@@ -2031,3 +2031,11 @@ spatial-oracle-bootstrap directory:
 # Validate GitHub expression contexts and shell syntax before changing docs CI.
 docs-workflow-lint binary="actionlint":
     "{{binary}}" -oneline .github/workflows/docs.yml
+
+# Separate ablation spike: execute the current committed source in an isolated export.
+row-policy-spike-check output target revision phase="core":
+    python3 scripts/qualify-row-policy-spike.py {{output}} --target {{target}} --revision {{revision}} --phase {{phase}}
+
+# Profile the identical native control against baseline and candidate; no throughput claim.
+row-policy-spike-allocations output target revision baseline:
+    python3 scripts/qualify-row-policy-spike.py {{output}} --target {{target}} --revision {{revision}} --phase allocations --baseline {{baseline}}

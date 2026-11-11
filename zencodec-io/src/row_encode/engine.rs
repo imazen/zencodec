@@ -1,4 +1,4 @@
-//! Retained-job executor. Raw-encoder entry points keep their legacy ordering.
+//! Shared row/replay executor. Startup retains raw versus preflight guarantees.
 use super::*;
 use zencodec::{
     encode::{EncodeRows, OutputPhase, PullProgress, RowDemand, RowFillError, SourcePasses},
@@ -523,9 +523,20 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let row_bytes = (desc.width as usize)
             .checked_mul(desc.descriptor.bytes_per_pixel())
             .ok_or(Refusal::Overflow)?;
-        let raw_bytes = row_bytes
-            .checked_mul(desc.height as usize)
-            .ok_or(Refusal::Overflow)?;
+        let batch_rows = out.options.batch_rows.get().min(desc.height);
+        // Raw encoders historically admit their strip before begin_output.
+        // Retained jobs allocate only after their route has been selected.
+        let early_buffer = if P::SUPPLIED_ENCODER {
+            Some(
+                out.options.storage.bytes(
+                    row_bytes
+                        .checked_mul(batch_rows as usize)
+                        .ok_or(Refusal::Overflow)?,
+                )?,
+            )
+        } else {
+            None
+        };
         let access = if out.writer.can_patch() {
             OutputAccess::SeekBack
         } else {
@@ -541,7 +552,11 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         }
         declaration.validate_exact_depth()?;
         let plan = startup.plan(&declaration)?;
-        let declared = match plan.input {
+        let timing = plan.timing();
+        if timing.patches_at_finish() && !out.writer.can_patch() {
+            return Err(Refusal::Patches.into());
+        }
+        let declared = match plan.input() {
             InputRequirement::Rows => SourcePasses::ONCE,
             InputRequirement::Replay(passes) => passes,
             _ => return Err(EncodePlanError::InputProtocol.into()),
@@ -549,7 +564,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let single = declared.max() == Some(1);
         // The temporary probe only chooses a borrow-checker branch. The second
         // returned view is the actual storage retained and used for all reads.
-        let input = if source.borrowed_pixels().is_some() {
+        let input = if !P::SUPPLIED_ENCODER && source.borrowed_pixels().is_some() {
             let pixels = source.borrowed_pixels().ok_or(Refusal::SourceChanged)?;
             Input::Raster {
                 pixels,
@@ -567,7 +582,14 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         };
         check(control)?;
         input.validate(&desc, mechanism, positional)?;
-        let batch_rows = out.options.batch_rows.get().min(desc.height);
+        // No whole-image size is needed for the raw single-pass path.
+        let raw_bytes = if !single {
+            row_bytes
+                .checked_mul(desc.height as usize)
+                .ok_or(Refusal::Overflow)?
+        } else {
+            0
+        };
         let mut reservation_error: Option<Cause> = None;
         // Probe mutually exclusive reservations independently. A callback may
         // change the budget; re-admit and allocate only the selected route
@@ -624,7 +646,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         let mut offer_slots = [EncodeRouteOffer::new(InputAcquisition::Unknown, finish); 6];
         let mut offer_count = 0;
         let mut add = |acquisition, replay| {
-            for output in &schedules[..if plan.timing.streams() { 2 } else { 1 }] {
+            for output in &schedules[..if timing.streams() { 2 } else { 1 }] {
                 let mut offer = EncodeRouteOffer::new(acquisition, *output);
                 offer.replay = replay;
                 offer_slots[offer_count] = offer;
@@ -660,23 +682,49 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             return Err(reservation_error.unwrap_or_else(|| Refusal::NoInputRoute.into()));
         }
         out.boundary = Stage::Policy;
-        let (selected, record) = match resolve_encode_route(
-            &declaration,
-            &plan,
-            unknown_job_evidence(),
-            offers,
-            &mut resolver,
-            entry_requirements,
-            pulse,
-        ) {
-            Ok(selected) => selected,
-            Err(error) => {
-                report.record(error.error().record());
-                return Err(error.into());
+        let selected = match &plan {
+            StartupPlan::ObservedRows(timing) => {
+                // Observed timing cannot certify an EncodeRoute or job metadata.
+                let schedules = &schedules[..if timing.streams() { 2 } else { 1 }];
+                let result = resolve_output_schedule(
+                    OutputScheduleFacts::new(*timing, mechanism),
+                    schedules,
+                    &mut resolver,
+                    entry_requirements,
+                    pulse,
+                );
+                match result {
+                    Ok((index, record)) => {
+                        report.record(record);
+                        EncodeRouteOffer::new(InputAcquisition::DirectRows, schedules[index])
+                    }
+                    Err(error) => {
+                        report.record(error.error().record());
+                        return Err(error.into());
+                    }
+                }
+            }
+            StartupPlan::Declared(plan) => {
+                match resolve_encode_route(
+                    &declaration,
+                    plan,
+                    unknown_job_evidence(),
+                    offers,
+                    &mut resolver,
+                    entry_requirements,
+                    pulse,
+                ) {
+                    Ok((index, record)) => {
+                        report.record(record);
+                        offers[index]
+                    }
+                    Err(error) => {
+                        report.record(error.error().record());
+                        return Err(error.into());
+                    }
+                }
             }
         };
-        report.record(record);
-        let selected = offers[selected];
         check(control)?;
         out.boundary = Stage::Read;
         input.validate(&desc, mechanism, positional)?;
@@ -712,7 +760,9 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             None
         };
-        let mut row_buffer = if plan.input == InputRequirement::Rows && !borrowed {
+        let mut row_buffer = if let Some(buffer) = early_buffer {
+            Some(buffer)
+        } else if plan.input() == InputRequirement::Rows && !borrowed {
             Some(
                 out.options.storage.bytes(
                     row_bytes
@@ -754,15 +804,16 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             }
             _ => zencodec::how_far::Total::Unknown,
         };
-        let _ = control.set_total(total);
+        if !P::SUPPLIED_ENCODER {
+            let _ = control.set_total(total);
+        }
         check(control)?;
         filler.validate()?;
         out.boundary = Stage::Start;
         let mut encoder = startup.start(&declaration, &plan)?;
         out.schedule = selected.output.schedule;
-        let timing = plan.timing;
-        let input_contract = plan.input;
-        let phase = plan.output_phase;
+        let input_contract = plan.input();
+        let phase = plan.phase();
         drop(plan);
         loop {
             check(control)?;

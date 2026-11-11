@@ -1,5 +1,12 @@
 # Changelog
 
+## Row/policy ablation (unmerged spike)
+
+- Share raw/retained row execution and publication, keeping observed timing separate
+  from preflight plans. Reuse mandatory policy predicates and retain the old
+  selector as a test-only differential oracle. Single-policy signature/intersection
+  prototypes remain private; see [scope and results](docs/row-policy-spike.md).
+
 ## Native image selection (unreleased experiment)
 
 ### Fixed

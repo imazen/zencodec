@@ -57,3 +57,6 @@ mod request_cancellation;
 
 #[cfg(test)]
 mod pulse_diagnostics;
+
+#[cfg(test)]
+mod row_spike;

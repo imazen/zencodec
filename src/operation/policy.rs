@@ -293,6 +293,59 @@ pub enum Question<'a> {
     },
 }
 
+impl<'a> Question<'a> {
+    fn admit(self, policy: PolicySet) -> Self {
+        if !policy.has_requirements() && !matches!(self, Self::EncodeRoute { .. }) {
+            return self;
+        }
+        macro_rules! filter {
+            ($variant:ident, $choices:ident, $($field:ident),*) => {{
+                let admitted = $choices.iter().fold(0, |mask, c| {
+                    let mut one = $choices;
+                    one.admitted = 1u64 << c.id.index;
+                    if policy.unmet(Self::$variant { $($field,)* choices: one }).is_empty() {
+                        mask | one.admitted
+                    } else { mask }
+                });
+                Self::$variant { $($field,)* choices: Choices { admitted, ..$choices } }
+            }};
+        }
+        // Exhaustive: every added question must retain this admission boundary.
+        match self {
+            Self::EncodeRoute {
+                declaration,
+                plan,
+                facts,
+                choices,
+            } => filter!(EncodeRoute, choices, declaration, plan, facts),
+            Self::OutputSchedule { facts, choices } => filter!(OutputSchedule, choices, facts),
+            Self::ImageConversion {
+                image,
+                facts,
+                choices,
+            } => filter!(ImageConversion, choices, image, facts),
+            Self::FrameRoute {
+                interpretation,
+                facts,
+                choices,
+            } => filter!(FrameRoute, choices, interpretation, facts),
+            Self::Image {
+                image,
+                facts,
+                choices,
+            } => filter!(Image, choices, image, facts),
+            Self::Frame {
+                interpretation,
+                timing,
+                choices,
+            } => filter!(Frame, choices, interpretation, timing),
+            Self::Transcode { facts, choices } => filter!(Transcode, choices, facts),
+            Self::Boundary { facts, choices } => filter!(Boundary, choices, facts),
+            Self::Encode { facts, choices } => filter!(Encode, choices, facts),
+        }
+    }
+}
+
 /// Predefined expected policy refusals. Application failures use `Err(At<E>)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -486,33 +539,9 @@ impl PolicySet {
         self.allow_raw_memory_staging = allowed;
         self
     }
-    fn permits_output_schedule(self, offer: Option<&super::OutputScheduleOffer>) -> bool {
-        if self.output_schedule.is_none() && self.output_wait_limit.is_none() {
-            return true;
-        }
-        offer.is_some_and(|offer| {
-            self.output_schedule.is_none_or(|s| s == offer.schedule)
-                && self.output_wait_limit.is_none_or(|limit| {
-                    offer
-                        .wait_retained_upper_bound
-                        .is_some_and(|bound| bound <= limit)
-                })
-        })
-    }
-    fn permits_transcode(self, offer: &TranscodeOffer) -> bool {
-        self.permits_output_schedule(offer.output_schedule.as_ref())
-            && self.metadata.is_none_or(|m| m == offer.metadata)
-            && (self.allow_opaque_profiles || offer.retains_opaque_profile == Some(false))
-            && self.workspace_limit.is_none_or(|limit| {
-                offer
-                    .workspace_upper_bound
-                    .is_some_and(|bound| bound <= limit)
-            })
-    }
-    pub(super) fn resolve_builtin(
-        &mut self,
-        question: Question<'_>,
-    ) -> Result<Decision, At<Infallible>> {
+    // Domain diagnostics are distinct from admission evidence: retain the
+    // established UnsupportedQuestion versus NoPreferredChoice categories.
+    fn supports_requirements(self, question: Question<'_>) -> bool {
         if (self.output_schedule.is_some() || self.output_wait_limit.is_some())
             && !matches!(
                 question,
@@ -523,7 +552,7 @@ impl PolicySet {
                     | Question::Boundary { .. }
             )
         {
-            return Ok(Decision::decline(Decline::UnsupportedQuestion));
+            return false;
         }
         if self.require_extended_range
             && !matches!(
@@ -534,7 +563,7 @@ impl PolicySet {
                     | Question::Boundary { .. }
             )
         {
-            return Ok(Decision::decline(Decline::UnsupportedQuestion));
+            return false;
         }
         if (self.max_source_passes.is_some() || self.exact_replay || !self.allow_raw_memory_staging)
             && !matches!(
@@ -542,204 +571,114 @@ impl PolicySet {
                 Question::EncodeRoute { .. } | Question::Boundary { .. }
             )
         {
+            return false;
+        }
+        match question {
+            Question::OutputSchedule { .. }
+            | Question::Frame { .. }
+            | Question::Image { .. }
+            | Question::Encode { .. } => {
+                self.metadata.is_none()
+                    && self.allow_opaque_profiles
+                    && self.workspace_limit.is_none()
+            }
+            Question::ImageConversion { .. } | Question::FrameRoute { .. } => {
+                self.metadata.is_none() && self.allow_opaque_profiles
+            }
+            _ => true,
+        }
+    }
+    pub(super) fn resolve_builtin(
+        &mut self,
+        question: Question<'_>,
+    ) -> Result<Decision, At<Infallible>> {
+        if !self.supports_requirements(question) {
             return Ok(Decision::decline(Decline::UnsupportedQuestion));
         }
-        let choices = match question {
-            Question::EncodeRoute {
-                declaration,
-                plan,
-                facts,
-                choices,
-            } => {
-                // A single configured job: fidelity is identical across these
-                // acquisition/output alternatives. Preserve request order.
-                return Ok(choices
-                    .iter()
-                    .find(|choice| {
-                        self.unmet(Question::EncodeRoute {
-                            declaration,
-                            plan,
-                            facts,
-                            choices: Choices {
-                                ticket: choices.ticket,
-                                entries: choices.entries,
-                                admitted: 1u64 << choice.id.index,
-                            },
-                        })
-                        .is_empty()
-                    })
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+        // A public OperationPolicy::decide call may receive choices admitted
+        // under a different policy. It must still enforce this set. Reuse the
+        // same hard predicates as the framework, never a second handwritten set.
+        self.resolve_preferences(question.admit(*self))
+    }
+    fn resolve_preferences(&self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
+        let choose = |decision: Option<Decision>| {
+            decision.unwrap_or_else(|| {
+                Decision::decline(
+                    if matches!(question, Question::Boundary { .. }) && self.has_requirements() {
+                        Decline::UnsupportedQuestion
+                    } else {
+                        Decline::NoPreferredChoice
+                    },
+                )
+            })
+        };
+        let decision = match question {
+            Question::EncodeRoute { choices, .. } => choices.first().map(Decision::choose),
+            Question::OutputSchedule { choices, .. } => choices.first().map(Decision::choose),
+            Question::Image { choices, .. } | Question::Frame { choices, .. } => {
+                choices.first().map(Decision::choose)
             }
-            Question::OutputSchedule { choices, .. } => {
-                if self.metadata.is_some()
-                    || !self.allow_opaque_profiles
-                    || self.workspace_limit.is_some()
-                {
-                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
-                }
-                return Ok(choices
-                    .iter()
-                    .find(|c| {
-                        let offer = c.value();
-                        self.output_schedule.is_none_or(|s| s == offer.schedule)
-                            && self.output_wait_limit.is_none_or(|limit| {
-                                offer
-                                    .wait_retained_upper_bound
-                                    .is_some_and(|bound| bound <= limit)
-                            })
-                    })
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
-            }
-            Question::ImageConversion { choices, .. } => {
-                // Conversion alone does not certify metadata or opaque-profile
-                // treatment. Do not silently ignore an existing obligation.
-                if self.metadata.is_some() || !self.allow_opaque_profiles {
-                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
-                }
-                return Ok(choices
-                    .iter()
-                    .find(|choice| {
-                        let offer = choice.value();
-                        (offer.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
-                            && offer.assumed_chroma_siting != Some(ChromaSiting::Unknown)
-                            && (!self.require_extended_range || offer.preserves_extended_range)
-                            && self.workspace_limit.is_none_or(|limit| {
-                                offer
-                                    .workspace_upper_bound
-                                    .is_some_and(|bound| bound <= limit)
-                            })
-                    })
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
-            }
+            Question::Boundary { choices, .. } => choices.first().map(Decision::choose),
+            Question::ImageConversion { choices, .. } => choices
+                .iter()
+                .find(|c| {
+                    let siting = c.value().assumed_chroma_siting;
+                    (siting.is_none() || self.allow_assumed_siting)
+                        && siting != Some(ChromaSiting::Unknown)
+                })
+                .map(Decision::choose),
             Question::FrameRoute { choices, .. } => {
-                // Encoding continuity does not establish metadata treatment or
-                // whole-container disclosure evidence.
-                if self.metadata.is_some() || !self.allow_opaque_profiles {
-                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
-                }
                 let permitted = || {
-                    choices.iter().filter(|choice| {
-                        let conversion = choice.value().conversion.as_ref();
-                        let conversion_permitted = conversion.is_none_or(|c| {
-                            (c.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
-                                && c.assumed_chroma_siting != Some(ChromaSiting::Unknown)
-                        }) && (!self.require_extended_range
-                            || (choice.value().fidelity == Some(Fidelity::Lossless)
-                                && conversion.is_some_and(|c| c.preserves_extended_range)));
-                        conversion_permitted
-                            && self.permits_output_schedule(choice.value().output_schedule.as_ref())
-                            && self.workspace_limit.is_none_or(|limit| {
-                                choice
-                                    .value()
-                                    .workspace_upper_bound
-                                    .is_some_and(|bound| bound <= limit)
-                            })
+                    choices.iter().filter(|c| {
+                        c.value().conversion.as_ref().is_none_or(|conversion| {
+                            let siting = conversion.assumed_chroma_siting;
+                            (siting.is_none() || self.allow_assumed_siting)
+                                && siting != Some(ChromaSiting::Unknown)
+                        })
                     })
                 };
-                let selected = if self.prefer_lossless {
-                    // Prefer a qualified complete route before considering
-                    // encoder-only evidence. This is still a preference, not
-                    // permission to violate any required bound.
+                if self.prefer_lossless {
                     permitted()
-                        .find(|choice| {
-                            choice.value().fidelity == Some(Fidelity::Lossless)
-                                && choice
-                                    .value()
+                        .find(|c| {
+                            c.value().fidelity == Some(Fidelity::Lossless)
+                                && c.value()
                                     .conversion
                                     .as_ref()
                                     .is_some_and(|c| c.preserves_samples)
                         })
                         .or_else(|| {
-                            permitted()
-                                .find(|choice| choice.value().fidelity == Some(Fidelity::Lossless))
+                            permitted().find(|c| c.value().fidelity == Some(Fidelity::Lossless))
                         })
                         .or_else(|| permitted().next())
+                        .map(Decision::choose)
                 } else {
-                    permitted().next()
-                };
-                return Ok(selected
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
-            }
-            Question::Frame { choices, .. } | Question::Image { choices, .. } => {
-                // Native publication has no evidence for these transcode-only
-                // obligations. A preset must not silently ignore them.
-                if self.metadata.is_some()
-                    || !self.allow_opaque_profiles
-                    || self.workspace_limit.is_some()
-                {
-                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                    permitted().next().map(Decision::choose)
                 }
-                return Ok(choices
-                    .first()
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
             }
             Question::Transcode { choices, .. } => {
-                let permitted = || choices.iter().filter(|c| self.permits_transcode(c.value()));
-                let choice = if self.prefer_lossless {
-                    permitted()
+                if self.prefer_lossless {
+                    choices
+                        .iter()
                         .find(|c| c.value().encoder.fidelity == Some(Fidelity::Lossless))
-                        .or_else(|| permitted().next())
+                        .or_else(|| choices.first())
+                        .map(Decision::choose)
                 } else {
-                    permitted().next()
-                };
-                return Ok(choice
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+                    choices.first().map(Decision::choose)
+                }
             }
             Question::Encode { choices, .. } => {
-                if self.metadata.is_some()
-                    || !self.allow_opaque_profiles
-                    || self.workspace_limit.is_some()
-                {
-                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                if self.prefer_lossless {
+                    choices
+                        .iter()
+                        .find(|c| c.value().fidelity == Some(Fidelity::Lossless))
+                        .or_else(|| choices.first())
+                        .map(Decision::choose)
+                } else {
+                    choices.first().map(Decision::choose)
                 }
-                choices
-            }
-            Question::Boundary { choices, .. } => {
-                // Discovery may continue, but adopting interpretation permits
-                // native output immediately. There need not be another policy
-                // question before rows reach a sink, so requirements lacking
-                // evidence here must not silently disappear at adoption.
-                let unproven = self.metadata.is_some()
-                    || !self.allow_opaque_profiles
-                    || self.workspace_limit.is_some()
-                    || self.require_extended_range
-                    || self.output_schedule.is_some()
-                    || self.output_wait_limit.is_some()
-                    || self.max_source_passes.is_some()
-                    || self.exact_replay
-                    || !self.allow_raw_memory_staging;
-                return Ok(choices
-                    .iter()
-                    .find(|choice| {
-                        !unproven || choice.value().action == BoundaryAction::ContinueReading
-                    })
-                    .map(Decision::choose)
-                    .unwrap_or_else(|| {
-                        Decision::decline(if unproven {
-                            Decline::UnsupportedQuestion
-                        } else {
-                            Decline::NoPreferredChoice
-                        })
-                    }));
             }
         };
-        let choice = if self.prefer_lossless {
-            choices
-                .iter()
-                .find(|choice| choice.value().fidelity == Some(Fidelity::Lossless))
-                .or_else(|| choices.first())
-        } else {
-            choices.first()
-        };
-        Ok(choice
-            .map(Decision::choose)
-            .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)))
+        Ok(choose(decision))
     }
 }
 
@@ -1082,10 +1021,14 @@ pub(super) fn choose<'a, T: Clone, R: OperationPolicy + ?Sized>(
     }
     if matches!(decision, Decision::UsePreset) {
         record.used_preset = true;
-        decision = bound
-            .unwrap_or(preset)
-            .resolve_builtin(question)
-            .unwrap_or_else(|never| match *never.error() {});
+        let preferences = bound.unwrap_or(preset);
+        decision = if preferences.supports_requirements(question) {
+            preferences
+                .resolve_preferences(question)
+                .unwrap_or_else(|never| match *never.error() {})
+        } else {
+            Decision::decline(Decline::UnsupportedQuestion)
+        };
     }
     match decision {
         Decision::Choose(id) => match choices.selected(id) {
@@ -1290,3 +1233,8 @@ mod tests {
         assert_eq!(report.decisions().count(), 16);
     }
 }
+
+#[cfg(test)]
+mod spike_baseline;
+#[cfg(test)]
+mod spike_matrix;
