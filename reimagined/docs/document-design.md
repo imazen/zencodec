@@ -148,6 +148,29 @@ a `Selection` does not remove them.
 
 ## Recommendation and stopping point
 
+The [readable API comparison](resident-input.html) also separates caller
+conveniences, capability discovery and correctness obligations. Main's typed
+one-shots, codec registry and direct output access have no complete replacement
+in this candidate. The existing one-call drivers hide stepping; restoring
+ordinary methods need not expose the protocol or require another trait family.
+Provided defaults or caller-layer extension methods can delegate to shared
+checked execution, with native optimizations held to the same contract.
+
+Source review at `e6687695` establishes two I/O limits: the document loops create
+a fresh `Window` for each query/decode, so persistent compressed-byte caching
+depends on the retained source adapter; they also do not use the resident
+`ReadAt::as_slice` shortcut implemented by the ordinary image drivers. Neither
+document zero-copy behavior nor production cache efficiency is qualified.
+
+Color/metadata carriers are present, but the existing retention, color-emission
+and orientation-reconciliation machinery is not integrated here. The selected
+document driver checks `metadata_first` against `ImageInfo::settled` before
+publication. `WholeDecoder::header` in `simple.rs` has no matching settlement
+check. This is a source-review finding, not a newly executed failing regression;
+repair and runtime qualification remain required. Capability discovery and the
+existing testkit's support/refusal and metadata-delivery disciplines likewise
+need counterparts before migration.
+
 Keep this subfork as the mechanism experiment. Preserve main/PR208's checked
 admission, interpretation, metadata, source identity and storage contracts as
 explicit requirements for any replacement. Use PR209's execution consolidation
