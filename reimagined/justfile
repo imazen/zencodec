@@ -7,5 +7,16 @@ clippy:
 check-core:
     cargo check -p zencodec --no-default-features --locked
 
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
+    cargo test --doc --workspace --all-features --locked
+
+tiff-test:
+    cargo test --manifest-path tools/native-tiff/Cargo.toml --locked
+
+tiff-clippy:
+    cargo clippy --manifest-path tools/native-tiff/Cargo.toml --all-targets --locked -- -D warnings
+
 fmt:
     cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures
+    cargo fmt --manifest-path tools/native-tiff/Cargo.toml
