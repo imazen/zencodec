@@ -284,11 +284,11 @@ impl Decoder for BiasDecoder {
                 }
                 let row_bytes = head.width as usize * head.descriptor.bytes_per_pixel();
                 let remaining = head.height - y;
-                let available = if row_bytes == 0 {
-                    remaining
-                } else {
-                    ((input.bytes.len() / row_bytes) as u64).min(remaining.into()) as u32
-                };
+                let available = input
+                    .bytes
+                    .len()
+                    .checked_div(row_bytes)
+                    .map_or(remaining, |n| (n as u64).min(remaining.into()) as u32);
                 if available == 0 && remaining > 0 {
                     return self.need(&input, 0, row_bytes);
                 }

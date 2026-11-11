@@ -1,0 +1,11 @@
+test:
+    cargo test --workspace --all-features --locked
+
+clippy:
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+check-core:
+    cargo check -p zencodec --no-default-features --locked
+
+fmt:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures

@@ -298,11 +298,10 @@ impl Decoder for RowsDecoder {
                 let (used, rows) = match &head.samples {
                     Samples::Packed(descriptor) => {
                         let row_bytes = width as usize * descriptor.bytes_per_pixel();
-                        let rows = if row_bytes == 0 {
-                            height - y
-                        } else {
-                            ((bytes.len() / row_bytes) as u64).min(u64::from(height - y)) as u32
-                        };
+                        let rows = bytes
+                            .len()
+                            .checked_div(row_bytes)
+                            .map_or(height - y, |n| (n as u64).min(u64::from(height - y)) as u32);
                         if rows == 0 && y < height {
                             return self.need(&input, 0, row_bytes);
                         }

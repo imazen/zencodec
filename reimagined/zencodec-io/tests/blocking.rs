@@ -10,7 +10,7 @@ use zencodec::decode::{
     Sink,
 };
 use zencodec::encode::{
-    EncodeCodec, EncodeEvent, EncodeInput, EncodeSpec, Encoder, FrameMeta, OutputTiming, RowDemand,
+    EncodeCodec, EncodeEvent, EncodeInput, EncodeSpec, FrameMeta, OutputTiming, RowDemand,
     RowSupply, SequenceSpec,
 };
 use zencodec::{
