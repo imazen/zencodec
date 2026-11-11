@@ -29,3 +29,6 @@ pub use memory::{Decoded, decode, decode_slice, encode, encode_sequence, feed_fr
 pub use read::{
     Destination, Forward, ReadAt, SeekBack, SeekRead, Sequential, decode_read_at, write_output,
 };
+
+#[cfg(feature = "tokio")]
+pub mod tokio_io;

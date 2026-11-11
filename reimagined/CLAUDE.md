@@ -23,3 +23,12 @@ Only the bounded synthetic and tiled Gray8 TIFF witnesses execute. Native EXR,
 JXL and IMIJ, arbitrary malformed directory graphs, async document driving,
 complete metadata, output-storage budgets, native memory bounds, rendering and
 performance are not established. Keep these explicit when extending the fork.
+
+## Captured Tokio feature wiring (2026-11-11)
+
+The captured `tokio_io.rs` file was not declared in the I/O crate's lib.rs.
+The earlier all-feature gate therefore did not compile or execute those drivers.
+The fork now declares the feature-gated module. Paired driver controls qualify
+positive in-memory decode, pool execution and buffered one-hop execution with
+exact strided output. This does not qualify async document driving, native
+request-drop cancellation, transcode publication or real network scheduling.

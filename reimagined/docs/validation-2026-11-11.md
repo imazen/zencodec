@@ -87,3 +87,11 @@ CI targets do not by themselves execute this nested workspace. Native codec
 cohorts, other platforms, freestanding targets, async document controls and
 performance are unqualified. No benchmark speedup or reduced application memory
 is claimed.
+
+## Follow-up: previously unwired Tokio source
+
+The ablation investigation found `tokio_io.rs` absent from the crate's module
+declarations. The initial all-feature results above did not compile or exercise
+that source. The follow-up wires it under `feature = "tokio"` and qualifies
+positive old/new driver paths separately. See the ablation evidence ledger;
+no async document or native lifecycle qualification is implied.

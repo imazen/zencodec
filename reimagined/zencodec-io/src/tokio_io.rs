@@ -263,6 +263,10 @@ async fn read_next<Src: AsyncSource + ?Sized>(
 /// Returns the decoder, whose info is now complete, and the sink.
 // Written as a function returning a future, not an `async fn`, so that the
 // `Send` bound is checked here, once, for every source type.
+#[allow(
+    clippy::manual_async_fn,
+    reason = "check the Send future bound at the driver boundary"
+)]
 pub fn decode<'a, S, Src>(
     decoder: Box<dyn Decoder>,
     source: &'a mut Src,
@@ -319,6 +323,10 @@ async fn publish<W: AsyncWrite + Unpin + Send + ?Sized>(
 ///
 /// Returns the bytes written. On an error, bytes already written are a
 /// prefix of a file that will not be finished: abandon the destination.
+#[allow(
+    clippy::manual_async_fn,
+    reason = "check the Send future bound at the driver boundary"
+)]
 pub fn transcode<'a, Src, W>(
     decoder: Box<dyn Decoder>,
     sink: EncoderSink,
