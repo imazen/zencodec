@@ -34,3 +34,9 @@ ablation-bench *args:
 
 ablation-run binary output *args:
     python3 tools/ablation/run.py {{binary}} {{output}} -- {{args}}
+
+ablation-probe-build:
+    cargo build --release --manifest-path tools/ablation/Cargo.toml --bin allocations --locked
+
+ablation-allocations binary output:
+    python3 tools/ablation/profile.py {{binary}} {{output}}
