@@ -215,3 +215,14 @@ Then consolidate sample/owner representations under native bit/stride/lifetime
 controls. Migrate richer policy, storage and document adapters against their
 actual semantic acceptance matrix before considering retirement of older types.
 No trait removal follows merely from a faster synthetic decoder.
+
+## Published resident-input repair
+
+The forward import from PR211 (`ba8f7082`) adds `ReadAt::as_slice` and
+`AsyncSource::as_slice`, routes blocking and inline resident sources through
+borrowed sub-slices, and reuses initialized sequential-window storage. The
+existing document driver and its `read_next` access remain intact. The imported
+blocking/async controls, existing document controls, doctests and strict workspace
+Clippy pass. These checks establish behavior on the fixture codecs, not a native
+codec performance result. The earlier timing/allocation receipt still describes
+the pre-repair source; measurements below must identify their own source.

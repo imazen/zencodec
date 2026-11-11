@@ -92,10 +92,14 @@ pub(crate) enum Next {
 }
 
 /// The bytes a driver holds: one sequential run and any ranges read ahead.
+///
+/// The run lives in a buffer that is grown, never shrunk, and stays
+/// initialized, so a read lands in reused memory with no fill before it.
 pub(crate) struct Window {
     buf: Vec<u8>,
-    /// First live byte of `buf`.
+    /// The live bytes are `buf[head..tail]`.
     head: usize,
+    tail: usize,
     /// Offset of `buf[head]` in the input.
     base: u64,
     total: Option<u64>,
@@ -109,6 +113,7 @@ impl Window {
         Self {
             buf: Vec::new(),
             head: 0,
+            tail: 0,
             base: 0,
             total: None,
             ranges: Vec::new(),
@@ -118,7 +123,7 @@ impl Window {
     }
 
     fn live(&self) -> &[u8] {
-        &self.buf[self.head..]
+        &self.buf[self.head..self.tail]
     }
 
     fn end(&self) -> u64 {
@@ -152,8 +157,8 @@ impl Window {
         if offset >= self.base && offset <= self.end() {
             self.head += (offset - self.base) as usize;
         } else {
-            self.buf.clear();
             self.head = 0;
+            self.tail = 0;
         }
         self.base = offset;
     }
@@ -260,21 +265,24 @@ impl Window {
         }
     }
 
-    /// Room for a sequential read of `len` bytes.
+    /// Room for a sequential read of `len` bytes, after the live bytes.
     pub(crate) fn spare(&mut self, len: usize) -> &mut [u8] {
-        if self.head > 0 {
-            self.buf.drain(..self.head);
+        if self.buf.len() - self.tail < len {
+            // Slide the live bytes to the front, and grow only if that is
+            // still not enough. Growth is the only time memory is filled.
+            self.buf.copy_within(self.head..self.tail, 0);
+            self.tail -= self.head;
             self.head = 0;
+            if self.buf.len() - self.tail < len {
+                self.buf.resize(self.tail + len, 0);
+            }
         }
-        let old = self.buf.len();
-        self.buf.resize(old + len, 0);
-        &mut self.buf[old..]
+        &mut self.buf[self.tail..self.tail + len]
     }
 
     /// Record that the last [`spare`](Self::spare) of `len` bytes received `n`.
     pub(crate) fn commit(&mut self, len: usize, n: usize) {
-        let unused = len - n.min(len);
-        self.buf.truncate(self.buf.len() - unused);
+        self.tail += n.min(len);
         if n == 0 {
             self.total = Some(self.end());
         }
@@ -319,6 +327,11 @@ impl Window {
         let n = n.min(self.live().len());
         self.head += n;
         self.base += n as u64;
+        if self.head == self.tail {
+            // Empty: the next read starts at the front of the buffer again.
+            self.head = 0;
+            self.tail = 0;
+        }
     }
 }
 
