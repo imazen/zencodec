@@ -47,3 +47,23 @@ ablation-probe-build:
 
 ablation-allocations binary output:
     python3 tools/ablation/profile.py {{binary}} {{output}}
+
+# Explicitly selected RGB8 native witnesses, with no shipping codec changes.
+native-slice-setup:
+    python3 tools/native-slice/setup.py
+
+native-slice-check:
+    python3 tools/native-slice/verify-source.py
+    cargo fmt --manifest-path tools/native-slice/Cargo.toml -p reimagined-native-slice --check
+    cargo test --manifest-path tools/native-slice/Cargo.toml --locked
+    cargo clippy --manifest-path tools/native-slice/Cargo.toml --all-targets --locked -- -D warnings
+
+native-slice-build:
+    cargo bench --manifest-path tools/native-slice/Cargo.toml --bench native --no-run --locked
+    cargo build --manifest-path tools/native-slice/Cargo.toml --release --bin allocations --locked
+
+native-slice-run binary output *args:
+    python3 tools/native-slice/run.py {{binary}} {{output}} -- {{args}}
+
+native-slice-profile binary output:
+    python3 tools/native-slice/profile.py {{binary}} {{output}}
