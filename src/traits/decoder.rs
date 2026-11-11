@@ -167,6 +167,12 @@ pub trait AnimationFrameDecoder: Sized {
     /// and copies the pixel data. Codecs that produce owned data natively
     /// may override for efficiency.
     ///
+    /// # Panics
+    ///
+    /// The default implementation uses [`AnimationFrame::to_owned_frame`],
+    /// which panics if the owned pixel copy cannot be allocated. Its returned
+    /// codec error does not cover that allocation failure.
+    ///
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_owned(
         &mut self,

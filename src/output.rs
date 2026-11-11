@@ -646,6 +646,10 @@ impl<'a> AnimationFrame<'a> {
     /// The frame's [`ColorContext`](zenpixels::ColorContext), if any, rides
     /// along: the copy is a staging buffer, and staging buffers are where
     /// buffer-level color signaling silently dies (zencodec#25).
+    ///
+    /// # Panics
+    ///
+    /// Panics if storage for the owned pixel copy cannot be allocated.
     pub fn to_owned_frame(&self) -> OwnedAnimationFrame {
         let ps = &self.pixels;
 

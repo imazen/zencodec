@@ -42,9 +42,9 @@ pub trait EncoderConfig: Clone + Send + Sync {
 
     /// Pixel formats this encoder accepts natively (without internal conversion).
     ///
-    /// Every descriptor in this list is a guarantee: the corresponding
-    /// per-format encode trait is implemented and will work without format
-    /// conversion. Must not be empty.
+    /// Every descriptor in this list is a guarantee: the type-erased
+    /// [`Encoder`] accepts it without caller-side format conversion.
+    /// There is no separate encode trait per pixel format. Must not be empty.
     fn supported_descriptors() -> &'static [PixelDescriptor];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).

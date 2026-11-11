@@ -499,8 +499,10 @@ impl CodecSet {
             .decode()?)
     }
 
-    /// Detect the format and decode into a caller-owned sink (push model, the
-    /// most memory-efficient path).
+    /// Detect the format and decode final rows into a caller-owned sink (push model).
+    ///
+    /// This does not establish a bound on native workspace or retained memory;
+    /// native buffering depends on the codec and its configuration.
     pub fn push_decode<'a>(
         &'a self,
         data: &'a [u8],

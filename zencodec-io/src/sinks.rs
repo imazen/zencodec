@@ -79,7 +79,15 @@ impl CollectSink {
         self.finished.then_some(self.data).flatten()
     }
 
-    /// Copy the collected image into an owned [`PixelBuffer`].
+    /// Copy the collected image into a new owned [`PixelBuffer`].
+    ///
+    /// Returns `None` before collection begins. Unlike [`Self::into_buffer`],
+    /// this method allocates and does not require successful completion.
+    /// Use `into_buffer` after the driver succeeds to move finished storage.
+    ///
+    /// # Panics
+    ///
+    /// Panics if storage for the copied image cannot be allocated.
     pub fn to_buffer(&self) -> Option<PixelBuffer> {
         let src = self.as_pixel_slice()?;
         let mut out = PixelBuffer::new(self.width, self.height, src.descriptor());
