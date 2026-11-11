@@ -236,3 +236,87 @@ keeping native errors primary. Its synchronous instantiation supplies a no-op
 closure. Direct assignment of a zero public step quota now makes progress rather
 than yielding forever. These are driver-boundary checks; they do not preempt a
 native call.
+
+## Resident repair and native trials
+
+The [readable API/cost page](resident-input.html) and
+[machine-readable receipt](../benchmarks/resident_input_2026-11-11.json)
+record the follow-through. The repaired synthetic source is `e9066b12`; the
+native trial source is `739bc0df`. Both timing studies retained unchanged source
+through execution. Earlier receipts still describe their original compiled inputs.
+
+The native trial uses actual QOI/BMP decoding from zenbitmaps `9d71b356` and
+JPEG from the retained [PR260](https://github.com/imazen/zenjpeg/pull/260)
+cohort at `6d6539df`. Two benchmark-only bitmap accessors expose the existing
+QOI parser and move out its private pixel Cow. The source verifier compares all
+184 exported blobs with the pinned Git tree and permits only those two exact
+additions. No native kernel or sibling checkout changed. The methods and
+remaining limits are in [the trial README](../tools/native-slice/README.md).
+
+Every native route preserves dimensions, descriptor and sample bits for 8, 63
+and 256 square RGB8 witnesses. Native output pointers survive ownership
+extraction and PixelBuffer adoption. A separate `&[u8]` / `&dyn Pulse` entry
+point accepts a stack-borrowing observer whose `share()` refuses, reaches native
+checks, and retains native timeout causes. JPEG reports progress through it;
+the raw bitmap APIs qualify cancellation only. These success-path frontends are
+not full codec ports or policy/admission replacements.
+
+Heaptrack reports these additional calls over 1,000 native decodes (256 square
+RGB8, same warm operation in both processes, all threads). Borrowed cost arms
+use `&NoPulse`; the reporting observer is a separate behavioral control:
+
+| Route | QOI | BMP | JPEG |
+|---|---:|---:|---:|
+| Native | 1000 | 1000 | 39000 |
+| Native plus a separate header probe | 1000 | 1000 | 41000 |
+| Borrowed typed, `&dyn Pulse` | 1000 | 1000 | 39000 |
+| Borrowed dyn, `&dyn Pulse` | 1000 | 1000 | 39000 |
+| Reimagined slice | 2000 | 2000 | 42000 |
+| Reimagined resident ReadAt | 2000 | 2000 | 42000 |
+| Reimagined inline Tokio | 2000 | 2000 | 42000 |
+| Existing erased one-shot | 5000 | 5000 | 45000 |
+
+The new loop improves on the older erased binding, but still requires a decoder
+box; JPEG's separate probe adds two calls per operation. The borrowed dyn control
+matches native allocation counts. This is allocation-call evidence, not latency,
+peak live heap, total process memory or a qualified native workspace bound.
+It does not establish equivalent metadata/policy surfaces.
+
+The repaired synthetic paths also changed as predicted: resident ReadAt fell
+from 4000 to 2000 calls per 1000 decodes, and inline Tokio from 5000 to 3000.
+The older typed and stack-erased paths remain at 1000, boxed old/new slice paths
+at 2000. Pool counts include runtime startup effects; the complete exact counts
+remain in the receipt, including the non-rounded 11013 new-pool calls.
+
+Both new timing runs are **inconclusive**, with no process dropped or gate
+relaxed. The repaired synthetic run completed five processes and 900 rounds;
+196 rounds were flagged (182 heavy-process, 14 CPU-load). The native run
+completed five processes and 1350 rounds; 325 were flagged for heavy processes.
+Every native process is unreliable. Descriptive means are retained in the
+receipt but cannot authorize performance acceptance. No repeated search for a
+favorable run was performed.
+
+Resource-wrapper receipts:
+
+```text
+synthetic timing: rc=2 171s | peak-RSS 0.16GiB | min-avail 10831MiB | peak-load 1.57
+synthetic heaptrack: rc=0 4s | peak-RSS 0.09GiB | min-avail 10917MiB | peak-load 0.95
+native timing: rc=2 131s | peak-RSS 0.10GiB | min-avail 11024MiB | peak-load 1.19
+native heaptrack: rc=0 9s | peak-RSS 0.10GiB | min-avail 10611MiB | peak-load 0.39
+```
+
+The local resident path should borrow both the file and `&dyn Pulse`, without
+requiring a box, runtime or owned control. Keep the range/streaming mechanism and
+retained document semantics as useful mechanisms, and preserve checked admission
+and publication obligations. An object-safe resident override need not recreate
+the old parallel typed/dyn hierarchy. The cost control is not yet that complete
+API: `DecodeSpec` still stores SharedPulse, `WholeImageDecode::decode` has no
+Pulse argument, and a `'static` Decoder cannot retain a native parser borrowing
+caller input between steps. Do not remove the existing fast path until the
+borrowed replacement meets those obligations and has valid latency evidence.
+
+Raw identities, rejected timings, source fingerprints, all-thread captures and
+logs live at `/mnt/v/output/zencodec/reimagined-resident-2026-11-11/`, with the
+receipt identifying their source and binary hashes. Full codec conformance,
+malformed-input behavior, color/orientation/metadata policy, workspace bounds,
+document-driver borrowing and nonresident worker copies remain outside this gate.

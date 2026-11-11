@@ -37,5 +37,7 @@ From reimagined/, run `just native-slice-setup` once, then
 isolated target directory. `native-slice-run` retains frozen zenbench evidence;
 `native-slice-profile` retains all-thread heaptrack call counts at zero and
 1,000 additional operations, including the same warm operation in both captures.
+Borrowed cost arms use `&NoPulse`; the reporting observer is a separate behavior
+control, not a measured claim about arbitrary progress observers.
 Use a fresh output directory. Invalid timing stays invalid; allocation calls do
 not establish latency or process memory.

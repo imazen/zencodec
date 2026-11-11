@@ -39,3 +39,8 @@ See [validation](docs/validation-2026-11-11.md) for receipts and failed attempts
 [The ablation evidence ledger](docs/ablation-evidence-2026-11-11.md) identifies
 which older responsibilities remain necessary, which mechanisms can be
 consolidated, and what the paired driver/heaptrack study actually establishes.
+
+The [readable API and cost comparison](docs/resident-input.html) includes the
+native RGB8 QOI/BMP/JPEG trial and the `&[u8]` / `&dyn Pulse` cost control.
+Allocation parity is established for that control; both timing studies remain
+inconclusive. The boxed protocol and WholeImage Pulse hook still need API work.

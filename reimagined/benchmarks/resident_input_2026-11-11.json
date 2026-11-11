@@ -1,0 +1,266 @@
+{
+  "date": "2026-11-11",
+  "artifact_root": "/mnt/v/output/zencodec/reimagined-resident-2026-11-11",
+  "repaired_source": "e9066b1255b4d66e80466a16a9598cec8744a7d1",
+  "native_source": "739bc0dfa3add545dcac2a9f58f43176b4dc76f9",
+  "runs": {
+    "synthetic": {
+      "binary_sha256": "d5b6576c1dfc007f51e431cd18530054bbdb4137f654f79bc814c3c82626d250",
+      "returncode": 2,
+      "source_unchanged": true,
+      "processes": 5,
+      "rounds": 900,
+      "flagged_rounds": 196,
+      "flags": {
+        "reason=Some(HeavyProcesses(2))": 30,
+        "reason=Some(HeavyProcesses(1))": 152,
+        "reason=Some(CpuLoad(0.05064413487911223))": 14
+      },
+      "unreliable": true,
+      "incomplete": false,
+      "result_sha256": "5bd310c13f893709fa225e5b2589cc879121e69ab64808b00de6c91924b85a77",
+      "descriptive_means_ns_not_confirmed": {
+        "256x256/4-row": {
+          "direct": 5967.557034316668,
+          "direct_AA": 5966.999284562735,
+          "older_slice_dyn_stack": 6532.223372307658,
+          "older_slice_typed": 6525.148074595552,
+          "older_slice_dyn": 6601.05809676075,
+          "next_slice_boxed": 6168.692711580438,
+          "older_read_at": 6650.0750611151025,
+          "next_read_at": 6137.590987535965,
+          "older_coroutine": 30235.92286302329,
+          "older_tokio_inline": 11608.388569501718,
+          "next_tokio_inline": 6441.751343792641,
+          "older_tokio_pool": 63672.49388405369,
+          "next_tokio_pool": 57067.309990123256,
+          "next_buffered_one_hop": 14263.167966724066
+        },
+        "1024x1024/16-row": {
+          "direct": 97121.61616313425,
+          "direct_AA": 98292.03410434956,
+          "older_slice_dyn_stack": 98476.78037588198,
+          "older_slice_typed": 99251.29399101199,
+          "older_slice_dyn": 99134.3178421918,
+          "next_slice_boxed": 97966.73752133326,
+          "older_read_at": 99868.67175020846,
+          "next_read_at": 98015.19522718953,
+          "older_coroutine": 2641570.361432953,
+          "older_tokio_inline": 169323.88919597588,
+          "next_tokio_inline": 99108.87287807648,
+          "older_tokio_pool": 643357.4882340509,
+          "next_tokio_pool": 721741.5750644846,
+          "next_buffered_one_hop": 109561.029096594
+        },
+        "1024x1024/1-row": {
+          "direct": 112822.13003438033,
+          "direct_AA": 113726.67308233224,
+          "older_slice_dyn_stack": 122793.5514464909,
+          "older_slice_typed": 123792.19432827944,
+          "older_slice_dyn": 122937.8893665422,
+          "next_slice_boxed": 117318.32607374321,
+          "older_read_at": 124564.67102765887,
+          "next_read_at": 116349.17739724953,
+          "older_coroutine": 2738642.6104083615,
+          "older_tokio_inline": 193129.86794542745,
+          "next_tokio_inline": 121571.435135361,
+          "older_tokio_pool": 701706.6774171139,
+          "next_tokio_pool": 698883.7838076227,
+          "next_buffered_one_hop": 132682.1454137746
+        },
+        "quota/256x256/1-row/1": {
+          "older_tokio_inline": 58092.72376303151,
+          "next_tokio_inline": 26209.911904821307,
+          "older_tokio_pool": 1672260.8004921435,
+          "next_tokio_pool": 1593066.7665381667,
+          "next_buffered_one_hop": 18605.540811085324
+        },
+        "quota/256x256/1-row/64": {
+          "older_tokio_inline": 17167.012202894588,
+          "next_tokio_inline": 10526.860112387922,
+          "older_tokio_pool": 87749.66609834475,
+          "next_tokio_pool": 96348.00014804462,
+          "next_buffered_one_hop": 18005.50357372295
+        },
+        "quota/256x256/1-row/18446744073709551615": {
+          "older_tokio_inline": 16463.824574375525,
+          "next_tokio_inline": 10382.952667063764,
+          "older_tokio_pool": 62995.84716671308,
+          "next_tokio_pool": 62539.04940367396,
+          "next_buffered_one_hop": 17692.129457491403
+        }
+      }
+    },
+    "native": {
+      "binary_sha256": "77bc73a65ac641dd59de178d6d7600f5a5157229174d249346d051f75c1febb6",
+      "returncode": 2,
+      "source_unchanged": true,
+      "processes": 5,
+      "rounds": 1350,
+      "flagged_rounds": 325,
+      "flags": {
+        "reason=Some(HeavyProcesses(1))": 298,
+        "reason=Some(HeavyProcesses(2))": 27
+      },
+      "unreliable": true,
+      "incomplete": false,
+      "result_sha256": "34a15983f9a9d7287f3f38a5400bbf56835df74c0ac27f38f769f2228953f04a",
+      "descriptive_means_ns_not_confirmed": {
+        "qoi/8x8": {
+          "native": 161.7080731829486,
+          "native_probed": 162.9724076296723,
+          "borrowed_typed": 163.97576536138078,
+          "borrowed_dyn": 165.04329084623714,
+          "older_erased": 299.3142328402119,
+          "next_slice": 250.8013359359518,
+          "next_read_at": 254.00388302215958,
+          "next_inline": 352.2595567359066
+        },
+        "qoi/256x256": {
+          "native": 112674.49472299876,
+          "native_probed": 112431.19352707143,
+          "borrowed_typed": 112677.29365816669,
+          "borrowed_dyn": 112612.72217884348,
+          "older_erased": 141509.29760539142,
+          "next_slice": 113061.37506275579,
+          "next_read_at": 112635.75038339013,
+          "next_inline": 112897.97398608418
+        },
+        "qoi/1024x1024": {
+          "native": 1787200.9733333332,
+          "native_probed": 1784740.04,
+          "borrowed_typed": 1784479.6666666665,
+          "borrowed_dyn": 1785018.9633333334,
+          "older_erased": 2182026.9066666667,
+          "next_slice": 1786427.24,
+          "next_read_at": 1785015.2466666668,
+          "next_inline": 1789221.8833333333
+        },
+        "bmp/8x8": {
+          "native": 185.94292554588793,
+          "native_probed": 229.144489311304,
+          "borrowed_typed": 191.80890316781546,
+          "borrowed_dyn": 192.19278176821345,
+          "older_erased": 331.99311878461776,
+          "next_slice": 321.6641026673299,
+          "next_read_at": 325.38842482898264,
+          "next_inline": 434.6789069361403
+        },
+        "bmp/256x256": {
+          "native": 28122.189301205184,
+          "native_probed": 28083.934016514537,
+          "borrowed_typed": 28184.43919453962,
+          "borrowed_dyn": 28105.261852587268,
+          "older_erased": 56235.16200784468,
+          "next_slice": 28211.345350614487,
+          "next_read_at": 28238.340780478124,
+          "next_inline": 28336.619544932382
+        },
+        "bmp/1024x1024": {
+          "native": 460856.31068181817,
+          "native_probed": 460141.2217676767,
+          "borrowed_typed": 459675.4522828282,
+          "borrowed_dyn": 461820.76613973064,
+          "older_erased": 853069.0885858585,
+          "next_slice": 461036.48618350166,
+          "next_read_at": 460570.33321548824,
+          "next_inline": 461113.11184680136
+        },
+        "jpeg/8x8": {
+          "native": 4507.975258465209,
+          "native_probed": 4855.852885208468,
+          "borrowed_typed": 4503.180964670129,
+          "borrowed_dyn": 4488.2268113793425,
+          "older_erased": 5091.025240197097,
+          "next_slice": 4965.829304931787,
+          "next_read_at": 4992.297548647045,
+          "next_inline": 5099.253833341792
+        },
+        "jpeg/256x256": {
+          "native": 189278.63033068585,
+          "native_probed": 189353.27477428727,
+          "borrowed_typed": 189456.7008077216,
+          "borrowed_dyn": 189435.11902952282,
+          "older_erased": 189321.3466696095,
+          "next_slice": 190318.15333020457,
+          "next_read_at": 190285.59613758992,
+          "next_inline": 190758.21493673016
+        },
+        "jpeg/1024x1024": {
+          "native": 3697728.52,
+          "native_probed": 3695511.3000000003,
+          "borrowed_typed": 3701753.653333334,
+          "borrowed_dyn": 3698222.4266666663,
+          "older_erased": 3662562.2800000003,
+          "next_slice": 3697848.753333333,
+          "next_read_at": 3696318.1266666665,
+          "next_inline": 3696226.646666667
+        }
+      }
+    }
+  },
+  "allocation_calls": {
+    "synthetic": {
+      "binary_sha256": "e44e98ce19fbb84ccdfb69da79003c1645bbe175216f175f21609d833a3db50c",
+      "shape": "256x256 RGBA8; 4-row strips; quota64; same warm operation in both processes",
+      "method": "heaptrack allocation-cost flamegraph leaves summed over all threads; 1000-operation process minus zero-operation process; includes runtime effects that scale with operations",
+      "calls_added_in_1000_operations": {
+        "synthetic/direct": 1000,
+        "synthetic/older_slice_typed": 1000,
+        "synthetic/older_slice_dyn_stack": 1000,
+        "synthetic/older_slice_dyn": 2000,
+        "synthetic/next_slice_boxed": 2000,
+        "synthetic/older_read_at": 1000,
+        "synthetic/next_read_at": 2000,
+        "synthetic/older_coroutine": 12000,
+        "synthetic/older_tokio_inline": 3000,
+        "synthetic/next_tokio_inline": 3000,
+        "synthetic/older_tokio_pool": 21000,
+        "synthetic/next_tokio_pool": 11013,
+        "synthetic/next_buffered_one_hop": 3000
+      },
+      "summary_sha256": "0daea2ee215dd17c7308f6719cba4a59affd521582296269faa1a19d8fae268d"
+    },
+    "native": {
+      "binary_sha256": "db2587fa3f9adca51dd116eb98cfac71911fc26166d572a96397024c8b54b3b2",
+      "shape": "256x256 RGB8; same encoded noise/patch witness and warm operation in both processes",
+      "method": "heaptrack allocation-cost flamegraph leaves summed over all threads; 1000-operation process minus zero-operation process; includes runtime effects that scale with operations",
+      "calls_added_in_1000_operations": {
+        "qoi/native": 1000,
+        "qoi/native_probed": 1000,
+        "qoi/borrowed_typed": 1000,
+        "qoi/borrowed_dyn": 1000,
+        "qoi/older_erased": 5000,
+        "qoi/next_slice": 2000,
+        "qoi/next_read_at": 2000,
+        "qoi/next_inline": 2000,
+        "bmp/native": 1000,
+        "bmp/native_probed": 1000,
+        "bmp/borrowed_typed": 1000,
+        "bmp/borrowed_dyn": 1000,
+        "bmp/older_erased": 5000,
+        "bmp/next_slice": 2000,
+        "bmp/next_read_at": 2000,
+        "bmp/next_inline": 2000,
+        "jpeg/native": 39000,
+        "jpeg/native_probed": 41000,
+        "jpeg/borrowed_typed": 39000,
+        "jpeg/borrowed_dyn": 39000,
+        "jpeg/older_erased": 45000,
+        "jpeg/next_slice": 42000,
+        "jpeg/next_read_at": 42000,
+        "jpeg/next_inline": 42000
+      },
+      "summary_sha256": "3768e7db980d97b23c8a33264be20e10ec9bd17dee5e8e12a94eb687d6665a8d"
+    }
+  },
+  "scope": "Allocation calls and bounded native RGB8/sample/pointer/Pulse controls. Both timing studies are inconclusive. No whole-codec conformance, operation RAM bound, or released API change.",
+  "resource_wrapper": {
+    "synthetic_timing": "run-heavy: done rc=2 171s | peak-RSS 0.16GiB | min-avail 10831MiB | peak-load 1.57",
+    "synthetic_heaptrack": "run-heavy: done rc=0 4s | peak-RSS 0.09GiB | min-avail 10917MiB | peak-load 0.95",
+    "native_timing": "run-heavy: done rc=2 131s | peak-RSS 0.10GiB | min-avail 11024MiB | peak-load 1.19",
+    "native_heaptrack": "run-heavy: done rc=0 9s | peak-RSS 0.10GiB | min-avail 10611MiB | peak-load 0.39"
+  },
+  "identity_note": "Embedded zenbench git_hash resolves the enclosing zen repository in this jj workspace and is not compiled-source identity. Use explicit jj source revisions, per-file source fingerprints, Cargo dependency locks, and verified binary SHA256.",
+  "pulse_cost_scope": "Timed and allocation borrowed arms use &NoPulse; nonshareable reporting/cancellation observer is a separate behavioral control, not an arbitrary-observer performance claim."
+}
