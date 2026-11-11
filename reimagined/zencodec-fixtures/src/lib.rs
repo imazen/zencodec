@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 
 pub mod bias;
+pub mod document;
 pub mod rle;
 pub mod rows;
 
