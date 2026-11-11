@@ -1,5 +1,6 @@
 //! A sink that feeds an encoder: the transcoding seam.
 
+use crate::memory::encoder_step;
 use std::sync::Arc;
 use zencodec::decode::Sink;
 use zencodec::encode::{
@@ -7,8 +8,8 @@ use zencodec::encode::{
     RowSupply,
 };
 use zencodec::{
-    ErrorKind, FrameHeader, Pass, Raster, Result, Unsupported, copy_rows, error, error_msg,
-    unsupported,
+    ErrorKind, FrameHeader, Pass, Pulse, Raster, Result, SharedPulse, Unsupported, copy_rows,
+    error, error_msg, unsupported,
 };
 use zenpixels::plane::PlanarSlice;
 use zenpixels::{PixelBuffer, PixelSlice, PixelSliceMut};
@@ -22,9 +23,15 @@ type SpecFn = Box<dyn FnMut(&FrameHeader) -> EncodeSpec + Send>;
 /// before the decoder has read it. Rows the decoder already holds go to the
 /// encoder in place. Rows the decoder wants to write are lent from one strip
 /// buffer, sized to the encoder's strip height. No other copy is made.
-pub struct EncoderSink {
+///
+/// The encoder's steps observe the sink's own pulse `P`: a borrowed
+/// `&dyn Pulse` when the transcode stays on the caller's thread, a
+/// [`SharedPulse`] when the sink travels to a worker. It may be the pulse
+/// the decoder observes or a different stage of the same plan.
+pub struct EncoderSink<P = SharedPulse> {
     codec: Arc<dyn EncodeCodec>,
     spec: SpecFn,
+    pulse: P,
     encoder: Option<Box<dyn Encoder>>,
     raster: Option<Raster>,
     sequence: bool,
@@ -38,17 +45,19 @@ pub struct EncoderSink {
     y: u32,
 }
 
-impl EncoderSink {
+impl<P: Pulse> EncoderSink<P> {
     /// Encode with `codec`, to the spec `spec` builds from the first frame's
-    /// header. The sink sets the spec's row supply itself: a decoder shows
-    /// each row once.
+    /// header, observed by `pulse`. The sink sets the spec's row supply
+    /// itself: a decoder shows each row once.
     pub fn new(
         codec: Arc<dyn EncodeCodec>,
         spec: impl FnMut(&FrameHeader) -> EncodeSpec + Send + 'static,
+        pulse: P,
     ) -> Self {
         Self {
             codec,
             spec: Box::new(spec),
+            pulse,
             encoder: None,
             raster: None,
             sequence: false,
@@ -96,7 +105,7 @@ impl EncoderSink {
             ));
         };
         if self.need == EncodeEvent::NeedFrame {
-            self.need = encoder.step(EncodeInput::End)?.event;
+            self.need = encoder_step(&mut **encoder, EncodeInput::End, &self.pulse)?.event;
         }
         if self.need == EncodeEvent::Done {
             Ok(())
@@ -108,10 +117,15 @@ impl EncoderSink {
         }
     }
 
-    fn encoder(&mut self) -> Result<&mut dyn Encoder> {
-        self.encoder
+    /// One step of the encoder, recording what it needs next.
+    fn step(&mut self, input: EncodeInput<'_>) -> Result<u32> {
+        let encoder = self
+            .encoder
             .as_deref_mut()
-            .ok_or_else(|| error_msg(ErrorKind::Protocol, "rows outside a frame"))
+            .ok_or_else(|| error_msg(ErrorKind::Protocol, "rows outside a frame"))?;
+        let step = encoder_step(encoder, input, &self.pulse)?;
+        self.need = step.event;
+        Ok(step.rows)
     }
 
     /// Present the staged rows. Mid-frame the encoder may leave a remainder;
@@ -121,7 +135,7 @@ impl EncoderSink {
             let strip = self.strip.as_ref().expect("rows are staged in it");
             let rows = strip.rows(0, self.staged);
             let encoder = self.encoder.as_mut().expect("prepared at begin");
-            let step = encoder.step(EncodeInput::Rows(rows))?;
+            let step = encoder_step(&mut **encoder, EncodeInput::Rows(rows), &self.pulse)?;
             self.need = step.event;
             let used = step.rows.min(self.staged);
             if used == 0 {
@@ -194,14 +208,14 @@ impl EncoderSink {
     }
 }
 
-impl Sink for EncoderSink {
+impl<P: Pulse> Sink for EncoderSink<P> {
     fn begin(&mut self, frame: &FrameHeader) -> Result<()> {
         if self.encoder.is_none() {
             let mut spec = (self.spec)(frame);
             spec.supply = RowSupply::Once;
             self.sequence = spec.sequence.is_some();
             let mut encoder = self.codec.encoder(&spec)?;
-            self.need = encoder.step(EncodeInput::None)?.event;
+            self.need = encoder_step(&mut *encoder, EncodeInput::None, &self.pulse)?.event;
             // A strip of at least 16 rows, in whole encoder strips, and no
             // taller than the frame.
             let unit = encoder.plan().strip_rows.max(1);
@@ -226,7 +240,7 @@ impl Sink for EncoderSink {
             let meta = frame
                 .duration
                 .map_or_else(FrameMeta::default, FrameMeta::shown_for);
-            self.need = self.encoder()?.step(EncodeInput::Frame(meta))?.event;
+            self.step(EncodeInput::Frame(meta))?;
         } else if frame.index > 0 {
             return Err(unsupported(Unsupported::Animation));
         }
@@ -269,11 +283,9 @@ impl Sink for EncoderSink {
             let left = rows.rows() - offset;
             if self.staged == 0 {
                 // Nothing waiting: show the encoder the decoder's rows in place.
-                let step = self
-                    .encoder()?
-                    .step(EncodeInput::Rows(rows.sub_rows(offset, left)))?;
-                self.need = step.event;
-                let used = step.rows.min(left);
+                let used = self
+                    .step(EncodeInput::Rows(rows.sub_rows(offset, left)))?
+                    .min(left);
                 offset += used;
                 self.y += used;
                 if used == 0 {
@@ -309,9 +321,7 @@ impl Sink for EncoderSink {
     fn planes(&mut self, y: u32, strip: PlanarSlice<'_>) -> Result<()> {
         self.in_order(y, Pass::Final)?;
         let height = strip.height();
-        let step = self.encoder()?.step(EncodeInput::Planes(strip))?;
-        self.need = step.event;
-        if step.rows != height {
+        if self.step(EncodeInput::Planes(strip))? != height {
             // Holding a planar remainder needs a mutable planar strip, which
             // zenpixels does not have yet. See the workspace README.
             return Err(error_msg(

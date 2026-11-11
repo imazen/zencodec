@@ -37,6 +37,8 @@
 //!    the driver takes from it. Draining changes memory, never the bytes.
 //! 6. **An error is final**, and bytes already taken are a prefix of a file
 //!    that will not be finished.
+//! 7. **Progress and cancellation** arrive with every step as a borrowed
+//!    [`Pulse`], on the same terms as for a decoder.
 
 use crate::bytes::OutputAccess;
 use crate::error::Result;
@@ -46,7 +48,7 @@ use crate::limits::{ResourceEstimate, ResourceLimits, ResourceTargets};
 use crate::quality::{Demand, Effort, Fidelity};
 use crate::raster::{FrameDuration, Raster};
 use alloc::boxed::Box;
-use how_far::SharedPulse;
+use how_far::Pulse;
 use zenpixels::plane::PlanarSlice;
 use zenpixels::{PixelSlice, PixelSliceMut};
 
@@ -62,6 +64,12 @@ pub trait EncodeCodec: Send + Sync + 'static {
 
     /// The format it writes.
     fn format(&self) -> ImageFormat;
+
+    /// The metadata kinds it can write when given them. A caller choosing
+    /// what to embed (which color carrier, for one) reads this before it
+    /// builds a spec; [`EncodePlan::embedded`] then says what one request
+    /// will carry.
+    fn embeds(&self) -> MetadataKinds;
 
     /// Admit a request or refuse it, before any pixel moves.
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>>;
@@ -113,8 +121,8 @@ impl SequenceSpec {
     }
 }
 
-/// Everything a caller can ask of any encoder. Owns its data, so it can move
-/// to a worker thread or across a foreign-function boundary.
+/// Everything a caller can ask of any encoder. Plain owned data, so it can
+/// move to a worker thread or across a foreign-function boundary.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct EncodeSpec {
@@ -139,8 +147,6 @@ pub struct EncodeSpec {
     pub limits: ResourceLimits,
     /// Targets.
     pub targets: ResourceTargets,
-    /// Progress and cancellation, shared with whoever started the work.
-    pub pulse: SharedPulse,
 }
 
 impl EncodeSpec {
@@ -157,8 +163,12 @@ impl EncodeSpec {
             output: OutputAccess::Forward,
             limits: ResourceLimits::none(),
             targets: ResourceTargets::auto(),
-            pulse: SharedPulse::default(),
         }
+    }
+
+    /// A still with the size, format and color of `pixels`.
+    pub fn for_pixels(pixels: &PixelSlice<'_>) -> Self {
+        Self::new(Raster::of(pixels))
     }
 
     /// Encode a sequence.
@@ -207,12 +217,6 @@ impl EncodeSpec {
     /// Set the targets.
     pub fn with_targets(mut self, targets: ResourceTargets) -> Self {
         self.targets = targets;
-        self
-    }
-
-    /// Share progress and cancellation.
-    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
-        self.pulse = pulse;
         self
     }
 }
@@ -385,8 +389,8 @@ pub trait Encoder: Send + 'static {
     /// What this encode will do. Fixed when the encoder is made.
     fn plan(&self) -> &EncodePlan;
 
-    /// Take some rows and do some work.
-    fn step(&mut self, input: EncodeInput<'_>) -> Result<EncodeStep>;
+    /// Take some rows and do some work, observed by `pulse`.
+    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep>;
 
     /// The encoded bytes not yet taken.
     fn output(&mut self) -> &mut OutputBuffer;

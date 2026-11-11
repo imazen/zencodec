@@ -29,8 +29,11 @@
 //!    [`FrameDone`](DecodeEvent::FrameDone). After the last frame,
 //!    [`Done`](DecodeEvent::Done).
 //! 5. **An error is final.** A decoder is not stepped after one.
-//! 6. **Cancellation** comes from [`DecodeSpec::pulse`], checked around
-//!    expensive work, and surfaces as [`ErrorKind::Stopped`].
+//! 6. **Progress and cancellation** arrive with every step as a borrowed
+//!    [`Pulse`]. A decoder checks it around expensive work and reports a stop
+//!    as [`ErrorKind::Stopped`]. It keeps no reference to the pulse between
+//!    steps; a decoder with threads of its own that outlive a step asks for
+//!    [`Pulse::share`] and refuses when the pulse cannot be shared.
 
 use crate::bytes::{Input, InputRequest};
 use crate::error::{ErrorKind, Result, Unsupported, error_msg, unsupported};
@@ -39,7 +42,7 @@ use crate::info::{ImageInfo, MetadataKinds};
 use crate::limits::{ResourceEstimate, ResourceLimits, ResourceTargets};
 use crate::raster::{FrameHeader, Pass, Raster, copy_rows};
 use alloc::boxed::Box;
-use how_far::SharedPulse;
+use how_far::Pulse;
 use zenpixels::plane::PlanarSlice;
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 
@@ -164,8 +167,8 @@ pub enum Frames {
     All,
 }
 
-/// Everything a caller can ask of any decoder. Owns its data, so it can move
-/// to a worker thread or across a foreign-function boundary.
+/// Everything a caller can ask of any decoder. Plain owned data, so it can
+/// move to a worker thread or across a foreign-function boundary.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct DecodeSpec {
@@ -186,8 +189,6 @@ pub struct DecodeSpec {
     pub limits: ResourceLimits,
     /// Targets.
     pub targets: ResourceTargets,
-    /// Progress and cancellation, shared with whoever started the work.
-    pub pulse: SharedPulse,
 }
 
 impl DecodeSpec {
@@ -235,12 +236,6 @@ impl DecodeSpec {
     /// Set the targets.
     pub fn with_targets(mut self, targets: ResourceTargets) -> Self {
         self.targets = targets;
-        self
-    }
-
-    /// Share progress and cancellation.
-    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
-        self.pulse = pulse;
         self
     }
 }
@@ -347,8 +342,13 @@ pub trait Decoder: Send + 'static {
     /// What this decode will do; `Some` from [`Info`](DecodeEvent::Info) on.
     fn plan(&self) -> Option<&DecodePlan>;
 
-    /// Do some work with the input in hand.
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep>;
+    /// Do some work with the input in hand, observed by `pulse`.
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn Sink,
+        pulse: &dyn Pulse,
+    ) -> Result<DecodeStep>;
 }
 
 /// Where decoded rows go.

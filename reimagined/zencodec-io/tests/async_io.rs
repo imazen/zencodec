@@ -12,8 +12,8 @@ use zencodec::decode::{
 };
 use zencodec::encode::{EncodeCodec, EncodeSpec};
 use zencodec::{
-    ErrorKind, ImageInfo, Input, InputRequest, Metadata, MetadataKinds, Raster, Result,
-    SharedPulse, StopReason,
+    ErrorKind, ImageInfo, Input, InputRequest, Metadata, MetadataKinds, NoPulse, Pulse, Raster,
+    Result, SharedPulse, StopReason,
 };
 use zencodec_fixtures::bias::BiasCodec;
 use zencodec_fixtures::rows::RowsCodec;
@@ -87,13 +87,19 @@ fn sample(codec: &dyn EncodeCodec, w: u32, h: u32, seed: u8) -> (Vec<u8>, Vec<u8
         codec,
         EncodeSpec::new(Raster::packed(w, h, d)),
         slice(&source, w, h, w as usize * 3, d),
+        &NoPulse,
     )
     .unwrap();
     (bytes, source)
 }
 
 fn to(codec: Arc<dyn EncodeCodec>) -> EncoderSink {
-    EncoderSink::new(codec, |frame| EncodeSpec::new(frame.raster.clone()))
+    observed(codec, SharedPulse::default())
+}
+
+/// A transcoding sink whose encoder observes `pulse`.
+fn observed(codec: Arc<dyn EncodeCodec>, pulse: SharedPulse) -> EncoderSink {
+    EncoderSink::new(codec, |frame| EncodeSpec::new(frame.raster.clone()), pulse)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -137,6 +143,7 @@ async fn an_async_transcode_writes_what_a_blocking_one_does() {
                 &bytes,
                 dst_enc.clone(),
                 |frame| EncodeSpec::new(frame.raster.clone()),
+                &NoPulse,
             )
             .unwrap();
             for offload in offloads() {
@@ -181,6 +188,7 @@ async fn a_slow_reader_of_the_output_only_slows_it() {
         &bytes,
         Arc::new(RowsCodec),
         |frame| EncodeSpec::new(frame.raster.clone()),
+        &NoPulse,
     )
     .unwrap();
 
@@ -230,6 +238,7 @@ async fn the_buffered_route_is_one_hand_off() {
             dec.decoder(&DecodeSpec::new()).unwrap(),
             bytes.clone(),
             Collect::new(),
+            SharedPulse::default(),
         )
         .await
         .unwrap();
@@ -241,12 +250,14 @@ async fn the_buffered_route_is_one_hand_off() {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
+            &NoPulse,
         )
         .unwrap();
         let out = transcode_buffered(
             dec.decoder(&DecodeSpec::new()).unwrap(),
             Arc::<[u8]>::from(&bytes[..]),
             to(Arc::new(RowsCodec)),
+            SharedPulse::default(),
         )
         .await
         .unwrap();
@@ -294,6 +305,7 @@ async fn a_stop_ends_a_transcode_and_leaves_a_prefix() {
         &bytes,
         Arc::new(RowsCodec),
         |frame| EncodeSpec::new(frame.raster.clone()),
+        &NoPulse,
     )
     .unwrap();
     for offload in offloads() {
@@ -301,10 +313,8 @@ async fn a_stop_ends_a_transcode_and_leaves_a_prefix() {
         let mut source = Trickle::new(&bytes, 200);
         let mut out = Vec::new();
         let err = tokio_io::transcode(
-            RowsCodec
-                .decoder(&DecodeSpec::new().with_pulse(switch.pulse()))
-                .unwrap(),
-            to(Arc::new(RowsCodec)),
+            RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
+            observed(Arc::new(RowsCodec), switch.pulse()),
             &mut source,
             &mut out,
             offload.clone(),
@@ -334,7 +344,7 @@ async fn metadata_wanted_first_costs_one_range_fetch() {
         Metadata::none().with_exif(exif.to_vec()),
         MetadataKinds::EXIF,
     );
-    let bytes = encode(&BiasCodec, spec, slice(&source, w, h, 18, d)).unwrap();
+    let bytes = encode(&BiasCodec, spec, slice(&source, w, h, 18, d), &NoPulse).unwrap();
 
     let first = DecodeSpec::new().with_metadata_first(MetadataKinds::EXIF);
     let mut trickle = Trickle::new(&bytes, 4);
@@ -368,7 +378,7 @@ impl Decoder for Panics {
     fn plan(&self) -> Option<&DecodePlan> {
         None
     }
-    fn step(&mut self, _: Input<'_>, _: &mut dyn Sink) -> Result<DecodeStep> {
+    fn step(&mut self, _: Input<'_>, _: &mut dyn Sink, _: &dyn Pulse) -> Result<DecodeStep> {
         if self.0.len() == 1 {
             panic!("codec bug");
         }
@@ -435,6 +445,7 @@ async fn an_inline_driver_borrows_bytes_already_in_memory() {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
+            &NoPulse,
         )
         .unwrap();
         let mut out = Vec::new();

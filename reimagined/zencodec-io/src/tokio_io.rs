@@ -26,8 +26,10 @@
 //!   their input per step, so [`decode_buffered`] and [`transcode_buffered`]
 //!   are a single `spawn_blocking` around the in-memory driver.
 //!
-//! Dropping a driver's future does not stop a batch that has already been
-//! handed to a worker: signal the shared pulse as well.
+//! Each driver takes one [`SharedPulse`], the owned handle a pulse gives out
+//! for work that leaves the caller's thread, and lends it to every step
+//! wherever that step runs. Dropping a driver's future does not stop a batch
+//! that has already been handed to a worker: signal the pulse as well.
 
 use crate::drive::{Batch, DriveOptions, Next, RangeRead, Session, Window};
 use crate::encoder_sink::EncoderSink;
@@ -230,10 +232,10 @@ fn batch<S: Sink>(
     pulse: &SharedPulse,
     done: impl FnOnce(&mut S) -> Result<()>,
 ) -> (Box<Session<S>>, Result<Batch>) {
-    let mut end = session.run(quota, pulse);
+    let mut end = session.run(quota, pulse.as_pulse());
     if matches!(end, Ok(Batch::Done)) {
         // Whatever finishing the sink needs runs here, on the worker.
-        if let Err(e) = check(pulse).and_then(|()| done(&mut session.sink)) {
+        if let Err(e) = done(&mut session.sink) {
             end = Err(e);
         }
     }
@@ -295,8 +297,8 @@ where
             // Resident bytes on the polling task: borrow them, read nothing.
             let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
             loop {
-                check(&pulse)?;
-                if run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)? {
+                let quota = opts.steps_per_batch;
+                if run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())? {
                     return Ok((decoder, sink));
                 }
                 tokio::task::yield_now().await;
@@ -360,6 +362,9 @@ async fn finish_output<W: AsyncWrite + Unpin + Send + ?Sized>(
 
 /// Decode from an async source and encode to an async writer, row by row.
 ///
+/// The decoder's steps and the driver's own waits observe `pulse`; the
+/// encoder's steps observe the pulse the sink was built with.
+///
 /// Returns the bytes written. On an error, bytes already written are a
 /// prefix of a file that will not be finished: abandon the destination.
 #[allow(clippy::manual_async_fn)]
@@ -383,10 +388,9 @@ where
             let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
             let mut written = 0u64;
             loop {
-                check(&pulse)?;
-                let done = run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)?;
+                let quota = opts.steps_per_batch;
+                let done = run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())?;
                 if done {
-                    check(&pulse)?;
                     sink.finish()?;
                 }
                 let mut chunk = sink.take_output();
@@ -438,17 +442,24 @@ where
 }
 
 /// Decode bytes already in memory on the blocking pool: one hand-off.
+///
+/// `bytes` is any owner of the input that can travel to the worker: a
+/// vector, an `Arc<[u8]>`, or a handle that keeps a foreign buffer pinned
+/// until it is dropped. Nothing is copied.
 pub async fn decode_buffered<S, B>(
     decoder: Box<dyn Decoder>,
     bytes: B,
     mut sink: S,
+    pulse: SharedPulse,
 ) -> Result<(Box<dyn Decoder>, S)>
 where
     S: Sink + Send + 'static,
     B: AsRef<[u8]> + Send + 'static,
 {
     Offload::Blocking
-        .start(move || decode_slice(decoder, bytes.as_ref(), &mut sink).map(|d| (d, sink)))
+        .start(move || {
+            decode_slice(decoder, bytes.as_ref(), &mut sink, pulse.as_pulse()).map(|d| (d, sink))
+        })
         .finish()
         .await?
 }
@@ -459,13 +470,14 @@ pub async fn transcode_buffered<B>(
     decoder: Box<dyn Decoder>,
     bytes: B,
     mut sink: EncoderSink,
+    pulse: SharedPulse,
 ) -> Result<Vec<u8>>
 where
     B: AsRef<[u8]> + Send + 'static,
 {
     Offload::Blocking
         .start(move || {
-            decode_slice(decoder, bytes.as_ref(), &mut sink)?;
+            decode_slice(decoder, bytes.as_ref(), &mut sink, pulse.as_pulse())?;
             sink.finish()?;
             Ok(sink.take_output())
         })

@@ -8,16 +8,19 @@
 //! ```
 
 use crate::{FixtureError, PACKED, le32, packed_from_byte, packed_to_byte};
-use zencodec::encode::EncodeSpec;
-use zencodec::simple::{WholeImage, WholeImageDecode, WholeImageEncode};
-use zencodec::{
-    Bound, CodecError, ErrorKind, Fidelity, FormatInfo, ImageFormat, ImageInfo, Layout,
-    MetadataKinds, Result, error,
+use zencodec::simple::{
+    DecodeRequest, EncodeRequest, WholeImage, WholeImageDecode, WholeImageEncode,
 };
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zencodec::{
+    Bound, CodecError, ErrorKind, FormatInfo, ImageFormat, ImageInfo, Layout, MetadataKinds,
+    Result, check, error,
+};
+use zenpixels::{PixelBuffer, PixelDescriptor};
 
 const MAGIC: &[u8; 4] = b"ZWH1";
 const HEADER: usize = 13;
+/// Runs decoded between looks at the pulse.
+const RUNS_PER_CHECK: usize = 256;
 
 static INFO: FormatInfo = FormatInfo::new("zwh", "image/x-zwh", "zwh", 4, |b| b.starts_with(MAGIC));
 
@@ -39,7 +42,16 @@ fn bad(e: FixtureError) -> zencodec::Error {
     CodecError::from_native(e).at()
 }
 
+/// What the header says, parsed once by `probe` and handed to `decode`.
+#[derive(Clone, Copy, Debug)]
+pub struct RleHeader {
+    width: u32,
+    height: u32,
+}
+
 impl WholeImageDecode for RleCodec {
+    type Header = RleHeader;
+
     fn name(&self) -> &'static str {
         "zwh"
     }
@@ -48,7 +60,7 @@ impl WholeImageDecode for RleCodec {
         &[FORMAT]
     }
 
-    fn probe(&self, bytes: &[u8]) -> Result<Option<ImageInfo>> {
+    fn probe(&self, bytes: &[u8]) -> Result<Option<(ImageInfo, RleHeader)>> {
         if bytes.len() >= 4 && !bytes.starts_with(MAGIC) {
             return Err(bad(FixtureError::BadMagic));
         }
@@ -56,15 +68,20 @@ impl WholeImageDecode for RleCodec {
             return Ok(None);
         }
         let descriptor = packed_from_byte(bytes[12]).map_err(bad)?;
+        let header = RleHeader {
+            width: le32(bytes, 4),
+            height: le32(bytes, 8),
+        };
+        // The format carries no metadata, so every kind is settled: absent.
         let info = ImageInfo::new(
             FORMAT,
-            le32(bytes, 4),
-            le32(bytes, 8),
+            header.width,
+            header.height,
             Layout::Packed(descriptor),
         )
         .with_lossless(true)
         .with_metadata(Default::default(), MetadataKinds::ALL);
-        Ok(Some(info))
+        Ok(Some((info, header)))
     }
 
     fn memory_bound(&self, info: &ImageInfo) -> Bound {
@@ -72,14 +89,16 @@ impl WholeImageDecode for RleCodec {
         Bound::AtMost(u64::from(info.width) * u64::from(info.height) * bpp)
     }
 
-    fn decode(
-        &self,
-        bytes: &[u8],
-        info: &ImageInfo,
-        output: PixelDescriptor,
-    ) -> Result<PixelBuffer> {
-        let len = (info.width as usize)
-            .checked_mul(info.height as usize)
+    fn decode(&self, request: DecodeRequest<'_, RleHeader>) -> Result<PixelBuffer> {
+        let DecodeRequest {
+            bytes,
+            header,
+            output,
+            pulse,
+            ..
+        } = request;
+        let len = (header.width as usize)
+            .checked_mul(header.height as usize)
             .and_then(|n| n.checked_mul(output.bytes_per_pixel()))
             .ok_or_else(|| bad(FixtureError::BadHeader("size overflows")))?;
         let mut pixels = Vec::new();
@@ -88,7 +107,10 @@ impl WholeImageDecode for RleCodec {
             .map_err(|_| error(ErrorKind::OutOfMemory))?;
         let runs = &bytes[HEADER..];
         // A trailing odd byte is a cut file; the length check below reports it.
-        for run in runs.as_chunks::<2>().0 {
+        for (index, run) in runs.as_chunks::<2>().0.iter().enumerate() {
+            if index % RUNS_PER_CHECK == 0 {
+                check(pulse)?;
+            }
             let (count, value) = (run[0] as usize, run[1]);
             if count == 0 || pixels.len() + count > len {
                 return Err(bad(FixtureError::BadStream("run overflows the image")));
@@ -98,7 +120,7 @@ impl WholeImageDecode for RleCodec {
         if pixels.len() != len {
             return Err(CodecError::new(ErrorKind::Truncated).with_codec("zwh").at());
         }
-        PixelBuffer::from_vec(pixels, info.width, info.height, output)
+        PixelBuffer::from_vec(pixels, header.width, header.height, output)
             .map_err(|_| error(ErrorKind::Internal))
     }
 }
@@ -116,12 +138,8 @@ impl WholeImageEncode for RleCodec {
         &PACKED
     }
 
-    fn encode(
-        &self,
-        pixels: PixelSlice<'_>,
-        _fidelity: Fidelity,
-        _spec: &EncodeSpec,
-    ) -> Result<Vec<u8>> {
+    fn encode(&self, request: EncodeRequest<'_>) -> Result<Vec<u8>> {
+        let EncodeRequest { pixels, pulse, .. } = request;
         let layout =
             packed_to_byte(pixels.descriptor()).ok_or_else(|| error(ErrorKind::Internal))?;
         let mut out = Vec::with_capacity(HEADER + 64);
@@ -132,6 +150,7 @@ impl WholeImageEncode for RleCodec {
         let row_bytes = pixels.width() as usize * pixels.descriptor().bytes_per_pixel();
         let mut run: Option<(u8, u8)> = None;
         for y in 0..pixels.rows() {
+            check(pulse)?;
             for &byte in &pixels.row(y)[..row_bytes] {
                 run = match run {
                     Some((count, value)) if value == byte && count < u8::MAX => {

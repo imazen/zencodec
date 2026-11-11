@@ -6,8 +6,13 @@
 //! the gates, format negotiation, cancellation checks and the requirement
 //! refusals, so a simple codec is a full citizen of the contract without
 //! learning it. It claims nothing the codec did not state: memory is
-//! unbounded unless the codec bounds it, and no metadata is embedded unless
-//! the codec says it embeds it.
+//! unbounded unless the codec bounds it, no metadata is embedded unless the
+//! codec says it embeds it, and no metadata is settled unless the codec's
+//! probe says so.
+//!
+//! The codec's own work still sees everything the caller asked for: each
+//! hook is handed the spec and the pulse, so a long decode can report
+//! progress, stop when told to, and honor thread and memory targets.
 
 use crate::bytes::{Input, InputRequest, OutputAccess, OutputBuffer};
 use crate::decode::{
@@ -25,6 +30,7 @@ use crate::quality::{Demand, Fidelity};
 use crate::raster::{FrameHeader, Raster, copy_rows};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use how_far::Pulse;
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 /// A decoder that needs the whole file and produces the whole image.
@@ -35,9 +41,14 @@ pub trait WholeImageDecode: Clone + Send + Sync + 'static {
     /// The formats it reads.
     fn formats(&self) -> &[ImageFormat];
 
+    /// What [`probe`](Self::probe) parsed that [`decode`](Self::decode) can
+    /// reuse, so the header is read once. `()` when there is nothing to keep.
+    type Header: Send + 'static;
+
     /// Read the header from the start of the file. `Ok(None)` asks for more
-    /// bytes. `info.native` must be a packed layout.
-    fn probe(&self, bytes: &[u8]) -> Result<Option<ImageInfo>>;
+    /// bytes. `info.native` must be a packed layout, and `info.settled` names
+    /// the metadata kinds whose presence or absence is now final.
+    fn probe(&self, bytes: &[u8]) -> Result<Option<(ImageInfo, Self::Header)>>;
 
     /// Formats `decode` can produce besides the native one.
     fn convertible(&self, info: &ImageInfo) -> &[PixelDescriptor] {
@@ -51,13 +62,26 @@ pub trait WholeImageDecode: Clone + Send + Sync + 'static {
         Bound::Unknown
     }
 
-    /// Decode the complete file into `output`.
-    fn decode(
-        &self,
-        bytes: &[u8],
-        info: &ImageInfo,
-        output: PixelDescriptor,
-    ) -> Result<PixelBuffer>;
+    /// Decode the complete file into the requested format.
+    fn decode(&self, request: DecodeRequest<'_, Self::Header>) -> Result<PixelBuffer>;
+}
+
+/// What [`WholeImageDecode::decode`] is handed.
+#[non_exhaustive]
+pub struct DecodeRequest<'a, H> {
+    /// The complete file.
+    pub bytes: &'a [u8],
+    /// What `probe` reported.
+    pub info: &'a ImageInfo,
+    /// What `probe` kept.
+    pub header: H,
+    /// The format to produce: the native one, or one of
+    /// [`convertible`](WholeImageDecode::convertible).
+    pub output: PixelDescriptor,
+    /// The caller's request; its targets apply to this work.
+    pub spec: &'a DecodeSpec,
+    /// Progress and cancellation for this work.
+    pub pulse: &'a dyn Pulse,
 }
 
 /// An encoder that takes the whole image and returns the whole file.
@@ -87,13 +111,21 @@ pub trait WholeImageEncode: Clone + Send + Sync + 'static {
         MetadataKinds::NONE
     }
 
-    /// Encode a complete image. `spec.fidelity` has been settled to `fidelity`.
-    fn encode(
-        &self,
-        pixels: PixelSlice<'_>,
-        fidelity: Fidelity,
-        spec: &EncodeSpec,
-    ) -> Result<Vec<u8>>;
+    /// Encode a complete image.
+    fn encode(&self, request: EncodeRequest<'_>) -> Result<Vec<u8>>;
+}
+
+/// What [`WholeImageEncode::encode`] is handed.
+#[non_exhaustive]
+pub struct EncodeRequest<'a> {
+    /// The complete image.
+    pub pixels: PixelSlice<'a>,
+    /// The fidelity settled from the spec's demand.
+    pub fidelity: Fidelity,
+    /// The caller's request: metadata to embed, targets.
+    pub spec: &'a EncodeSpec,
+    /// Progress and cancellation for this work.
+    pub pulse: &'a dyn Pulse,
 }
 
 /// Makes a [`WholeImageDecode`] or [`WholeImageEncode`] a contract codec.
@@ -124,12 +156,13 @@ impl<C: WholeImageDecode> DecodeCodec for WholeImage<C> {
     }
 }
 
-enum DecodeState {
+enum DecodeState<H> {
     Header,
     Body {
         info: ImageInfo,
         plan: DecodePlan,
         output: PixelDescriptor,
+        header: H,
     },
     Done {
         info: ImageInfo,
@@ -138,11 +171,11 @@ enum DecodeState {
     Failed,
 }
 
-struct WholeDecoder<C> {
+struct WholeDecoder<C: WholeImageDecode> {
     codec: C,
     spec: DecodeSpec,
     request: [InputRequest; 1],
-    state: DecodeState,
+    state: DecodeState<C::Header>,
 }
 
 impl<C: WholeImageDecode> WholeDecoder<C> {
@@ -153,7 +186,7 @@ impl<C: WholeImageDecode> WholeDecoder<C> {
                 "header input must start at 0",
             ));
         }
-        let Some(info) = self.codec.probe(input.bytes)? else {
+        let Some((info, header)) = self.codec.probe(input.bytes)? else {
             if input.reaches_end() {
                 return Err(CodecError::new(ErrorKind::Truncated)
                     .with_codec(self.codec.name())
@@ -166,6 +199,20 @@ impl<C: WholeImageDecode> WholeDecoder<C> {
             }];
             return Ok(DecodeStep::new(0, DecodeEvent::NeedInput));
         };
+        // Metadata the caller must see before pixels has to be settled now.
+        // A probe that saw only a prefix gets the whole file and a second
+        // look; one that saw everything and still cannot say is refused.
+        if !info.settled.contains(self.spec.metadata_first) {
+            if !input.reaches_end() {
+                self.request = [InputRequest::All];
+                return Ok(DecodeStep::new(0, DecodeEvent::NeedInput));
+            }
+            return Err(
+                CodecError::new(ErrorKind::Unsupported(Unsupported::Metadata))
+                    .with_codec(self.codec.name())
+                    .at(),
+            );
+        }
         let Some(native) = info.native.descriptor() else {
             return Err(error_msg(
                 ErrorKind::Internal,
@@ -190,7 +237,12 @@ impl<C: WholeImageDecode> WholeDecoder<C> {
             estimate,
         );
         self.request = [InputRequest::All];
-        self.state = DecodeState::Body { info, plan, output };
+        self.state = DecodeState::Body {
+            info,
+            plan,
+            output,
+            header,
+        };
         Ok(DecodeStep::new(0, DecodeEvent::Info))
     }
 }
@@ -214,7 +266,12 @@ impl<C: WholeImageDecode> Decoder for WholeDecoder<C> {
         }
     }
 
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep> {
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn Sink,
+        pulse: &dyn Pulse,
+    ) -> Result<DecodeStep> {
         match core::mem::replace(&mut self.state, DecodeState::Failed) {
             DecodeState::Header => {
                 self.state = DecodeState::Header;
@@ -224,13 +281,30 @@ impl<C: WholeImageDecode> Decoder for WholeDecoder<C> {
                 }
                 step
             }
-            DecodeState::Body { info, plan, output } => {
+            DecodeState::Body {
+                info,
+                plan,
+                output,
+                header,
+            } => {
                 if !InputRequest::All.is_met_by(&input) {
-                    self.state = DecodeState::Body { info, plan, output };
+                    self.state = DecodeState::Body {
+                        info,
+                        plan,
+                        output,
+                        header,
+                    };
                     return Ok(DecodeStep::new(0, DecodeEvent::NeedInput));
                 }
-                check(&self.spec.pulse)?;
-                let pixels = self.codec.decode(input.bytes, &info, output)?;
+                check(pulse)?;
+                let pixels = self.codec.decode(DecodeRequest {
+                    bytes: input.bytes,
+                    info: &info,
+                    header,
+                    output,
+                    spec: &self.spec,
+                    pulse,
+                })?;
                 if pixels.descriptor() != output
                     || pixels.width() != info.width
                     || pixels.height() != info.height
@@ -240,7 +314,7 @@ impl<C: WholeImageDecode> Decoder for WholeDecoder<C> {
                         "decode returned a different image than probe described",
                     ));
                 }
-                check(&self.spec.pulse)?;
+                check(pulse)?;
                 sink.begin(&FrameHeader::still(plan.raster.clone()))?;
                 sink.frame(pixels)?;
                 sink.end()?;
@@ -264,6 +338,10 @@ impl<C: WholeImageEncode> EncodeCodec for WholeImage<C> {
 
     fn format(&self) -> ImageFormat {
         self.0.format()
+    }
+
+    fn embeds(&self) -> MetadataKinds {
+        self.0.embeds()
     }
 
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
@@ -349,9 +427,15 @@ struct WholeEncoder<C> {
 }
 
 impl<C: WholeImageEncode> WholeEncoder<C> {
-    fn finish(&mut self, pixels: PixelSlice<'_>) -> Result<()> {
-        check(&self.spec.pulse)?;
-        let bytes = self.codec.encode(pixels, self.plan.fidelity, &self.spec)?;
+    fn finish(&mut self, pixels: PixelSlice<'_>, pulse: &dyn Pulse) -> Result<()> {
+        check(pulse)?;
+        let bytes = self.codec.encode(EncodeRequest {
+            pixels,
+            fidelity: self.plan.fidelity,
+            spec: &self.spec,
+            pulse,
+        })?;
+        check(pulse)?;
         self.output.write_owned(bytes)?;
         self.output.release();
         self.done = true;
@@ -364,7 +448,7 @@ impl<C: WholeImageEncode> Encoder for WholeEncoder<C> {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
         if self.done {
             return match input {
                 EncodeInput::None => Ok(EncodeStep::new(0, EncodeEvent::Done)),
@@ -398,7 +482,7 @@ impl<C: WholeImageEncode> Encoder for WholeEncoder<C> {
                     "a whole-frame encoder takes the frame in one slice",
                 ));
             }
-            self.finish(rows)?;
+            self.finish(rows, pulse)?;
             return Ok(EncodeStep::new(given, EncodeEvent::Done));
         }
         if self.held.is_none() {
@@ -416,7 +500,7 @@ impl<C: WholeImageEncode> Encoder for WholeEncoder<C> {
             ));
         }
         let held = self.held.take().expect("allocated above");
-        self.finish(held.as_slice())?;
+        self.finish(held.as_slice(), pulse)?;
         Ok(EncodeStep::new(given, EncodeEvent::Done))
     }
 

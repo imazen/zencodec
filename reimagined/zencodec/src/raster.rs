@@ -69,6 +69,16 @@ impl Raster {
         }
     }
 
+    /// The size, format and color of packed pixels in hand.
+    pub fn of(pixels: &PixelSlice<'_>) -> Self {
+        Self {
+            width: pixels.width(),
+            height: pixels.rows(),
+            layout: Layout::Packed(pixels.descriptor()),
+            color: pixels.color_context().cloned(),
+        }
+    }
+
     /// Separate planes, with the color context that gives them meaning.
     pub fn planar(
         width: u32,

@@ -8,8 +8,8 @@
 
 use zencodec::decode::{DecodeEvent, Decoder, Sink};
 use zencodec::{
-    ByteRange, CodecError, ErrorKind, Input, InputRequest, LimitExceeded, LimitKind, Result,
-    SharedPulse, check, error_msg,
+    ByteRange, CodecError, ErrorKind, Input, InputRequest, LimitExceeded, LimitKind, Pulse, Result,
+    check, error_msg,
 };
 
 /// How a driver reads and schedules.
@@ -369,9 +369,14 @@ impl<S: Sink> Session<S> {
     /// Before every step the window that answers the decoder's first request
     /// is lent. When the window cannot answer it, the read that would is
     /// returned for the caller to perform, blocking or not.
-    pub(crate) fn run(&mut self, quota: usize, pulse: &SharedPulse) -> Result<Batch> {
-        for _ in 0..quota {
-            check(pulse)?;
+    ///
+    /// At least one step is attempted whatever the quota. The pulse is
+    /// checked before the first step and after every step, so a step that
+    /// succeeds cannot hide a stop raised while it ran, the last one
+    /// included. A decoder's own error comes first.
+    pub(crate) fn run(&mut self, quota: usize, pulse: &dyn Pulse) -> Result<Batch> {
+        check(pulse)?;
+        for _ in 0..quota.max(1) {
             let requests = self.decoder.requested();
             let request = requests.first().copied().unwrap_or(InputRequest::AtLeast {
                 offset: 0,
@@ -391,7 +396,8 @@ impl<S: Sink> Session<S> {
                     "decoder asked again for input it already holds",
                 ));
             }
-            let step = self.decoder.step(input, &mut self.sink)?;
+            let step = self.decoder.step(input, &mut self.sink, pulse)?;
+            check(pulse)?;
             if step.consumed > view.2 {
                 return Err(error_msg(
                     ErrorKind::Protocol,

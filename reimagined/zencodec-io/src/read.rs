@@ -5,7 +5,7 @@ use crate::memory::decode_slice;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use zencodec::decode::{Decoder, Sink};
 use zencodec::encode::{OutputBuffer, Patch};
-use zencodec::{CodecError, Error, ErrorKind, OutputAccess, Result, SharedPulse};
+use zencodec::{CodecError, Error, ErrorKind, OutputAccess, Pulse, Result};
 
 /// A source that can be read at a position.
 pub trait ReadAt {
@@ -134,14 +134,14 @@ pub fn decode_read_at(
     source: &mut dyn ReadAt,
     sink: &mut dyn Sink,
     opts: &DriveOptions,
+    pulse: &dyn Pulse,
 ) -> Result<Box<dyn Decoder>> {
     if let Some(bytes) = source.as_slice() {
-        return decode_slice(decoder, bytes, sink);
+        return decode_slice(decoder, bytes, sink, pulse);
     }
     let mut session = Session::new(decoder, sink, opts);
-    let pulse = SharedPulse::default();
     loop {
-        match session.run(usize::MAX, &pulse)? {
+        match session.run(usize::MAX, pulse)? {
             Batch::Done => return Ok(session.decoder),
             Batch::Yield => {}
             Batch::Read(next) => read_next(&mut session.window, source, next)?,

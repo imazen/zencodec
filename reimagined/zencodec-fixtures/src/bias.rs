@@ -28,7 +28,7 @@ use zencodec::encode::{
 };
 use zencodec::{
     Bound, ByteRange, CodecError, Demand, Error, ErrorKind, Fidelity, FormatInfo, FrameHeader,
-    ImageFormat, ImageInfo, Input, InputRequest, Layout, MetadataKinds, Pass, Raster,
+    ImageFormat, ImageInfo, Input, InputRequest, Layout, MetadataKinds, Pass, Pulse, Raster,
     ResourceEstimate, Result, Unsupported, check, copy_rows, error, error_msg,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
@@ -250,7 +250,12 @@ impl Decoder for BiasDecoder {
         }
     }
 
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep> {
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn Sink,
+        pulse: &dyn Pulse,
+    ) -> Result<DecodeStep> {
         match self.state {
             DecodeState::Header => self.header(&input),
             DecodeState::ExifFirst => {
@@ -272,7 +277,7 @@ impl Decoder for BiasDecoder {
                 self.sequential(&input)?;
                 let head = self.head.expect("set with the header");
                 if !begun {
-                    check(&self.spec.pulse)?;
+                    check(pulse)?;
                     let raster = self
                         .plan
                         .as_ref()
@@ -314,7 +319,7 @@ impl Decoder for BiasDecoder {
                         }
                     }
                 }
-                check(&self.spec.pulse)?;
+                check(pulse)?;
                 let used = rows as usize * row_bytes;
                 self.advance(used);
                 self.state = if y + rows == head.height {
@@ -369,6 +374,11 @@ impl EncodeCodec for BiasCodec {
 
     fn format(&self) -> ImageFormat {
         FORMAT
+    }
+
+    fn embeds(&self) -> MetadataKinds {
+        // EXIF is the one block this format carries.
+        MetadataKinds::EXIF
     }
 
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
@@ -498,7 +508,7 @@ impl BiasEncoder {
                 .extend(rows.row(y)[..row_bytes].iter().map(|s| s - self.min));
             self.output.write(&self.scratch)?;
         }
-        check(&self.spec.pulse)
+        Ok(())
     }
 
     fn write_trailer(&mut self) -> Result<()> {
@@ -510,9 +520,9 @@ impl BiasEncoder {
     }
 
     /// Both passes over rows that are all in hand.
-    fn encode_whole(&mut self, rows: &PixelSlice<'_>) -> Result<()> {
+    fn encode_whole(&mut self, rows: &PixelSlice<'_>, pulse: &dyn Pulse) -> Result<()> {
         self.scan(rows);
-        check(&self.spec.pulse)?;
+        check(pulse)?;
         self.write_header()?;
         self.write_rows(rows)?;
         self.write_trailer()
@@ -524,7 +534,8 @@ impl Encoder for BiasEncoder {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
+        check(pulse)?;
         let height = self.spec.raster.height;
         let need = |this: &Self| {
             if this.done {
@@ -561,7 +572,7 @@ impl Encoder for BiasEncoder {
                         "a whole-frame encoder takes the frame in one slice",
                     ));
                 }
-                self.encode_whole(&rows)?;
+                self.encode_whole(&rows, pulse)?;
             }
             Mode::Replay => {
                 if self.pass == 0 {
@@ -594,7 +605,7 @@ impl Encoder for BiasEncoder {
                 self.y += given;
                 if self.y == height {
                     let buffer = held.take().expect("allocated above");
-                    self.encode_whole(&buffer.as_slice())?;
+                    self.encode_whole(&buffer.as_slice(), pulse)?;
                 }
             }
         }

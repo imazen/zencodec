@@ -24,8 +24,8 @@ use zencodec::encode::{
 };
 use zencodec::{
     Bound, CodecError, Demand, Error, ErrorKind, Fidelity, FormatInfo, FrameDuration, FrameHeader,
-    ImageFormat, ImageInfo, Input, InputRequest, Layout, MetadataKinds, OutputAccess, Pass, Raster,
-    ResourceEstimate, Result, Sequence, Unsupported, check, error, error_msg,
+    ImageFormat, ImageInfo, Input, InputRequest, Layout, MetadataKinds, OutputAccess, Pass, Pulse,
+    Raster, ResourceEstimate, Result, Sequence, Unsupported, check, error, error_msg,
 };
 use zenpixels::plane::{
     AnyPlane, PlanarLayout, PlanarSlice, PlaneEncoding, PlaneRef, PlaneRole, PlaneSpec,
@@ -263,7 +263,12 @@ impl Decoder for RowsDecoder {
         self.plan.as_ref()
     }
 
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep> {
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn Sink,
+        pulse: &dyn Pulse,
+    ) -> Result<DecodeStep> {
         if input.offset != self.pos {
             return Err(error_msg(
                 ErrorKind::Protocol,
@@ -287,7 +292,7 @@ impl Decoder for RowsDecoder {
                 let duration = head
                     .animated
                     .then(|| FrameDuration::from_millis(le32(bytes, 0)));
-                check(&self.spec.pulse)?;
+                check(pulse)?;
                 sink.begin(&FrameHeader::in_sequence(raster, frame, duration))?;
                 self.state = DecodeState::Rows { frame, y: 0 };
                 Ok(self.emit(4, DecodeEvent::Rows))
@@ -344,7 +349,7 @@ impl Decoder for RowsDecoder {
                         (strip_bytes, luma_rows)
                     }
                 };
-                check(&self.spec.pulse)?;
+                check(pulse)?;
                 let y = y + rows;
                 if y < height {
                     self.state = DecodeState::Rows { frame, y };
@@ -380,6 +385,10 @@ impl EncodeCodec for RowsCodec {
 
     fn format(&self) -> ImageFormat {
         FORMAT
+    }
+
+    fn embeds(&self) -> MetadataKinds {
+        MetadataKinds::NONE
     }
 
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
@@ -520,7 +529,6 @@ impl RowsEncoder {
 
     /// Advance past `rows` rows, closing the frame at its last row.
     fn advance(&mut self, y: u32, rows: u32) -> Result<EncodeStep> {
-        check(&self.spec.pulse)?;
         let y = y + rows;
         if y < self.spec.raster.height {
             self.state = EncodeState::Rows { y };
@@ -605,7 +613,8 @@ impl Encoder for RowsEncoder {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
+        check(pulse)?;
         if self.state == EncodeState::Start {
             self.start()?;
         }

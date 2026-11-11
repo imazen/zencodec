@@ -15,8 +15,8 @@ use zencodec::encode::{
 };
 use zencodec::{
     Bound, Demand, ErrorKind, Fidelity, FrameDuration, ImageInfo, Input, InputRequest,
-    LimitExceeded, LimitKind, LossyTarget, Metadata, MetadataKinds, OutputAccess, Pass, Raster,
-    ResourceLimits, Result, Sequence, StopReason, Unsupported, find_cause,
+    LimitExceeded, LimitKind, LossyTarget, Metadata, MetadataKinds, NoPulse, OutputAccess, Pass,
+    Pulse, Raster, ResourceLimits, Result, Sequence, StopReason, Unsupported, find_cause,
 };
 use zencodec_fixtures::bias::BiasCodec;
 use zencodec_fixtures::rle::RleCodec;
@@ -44,6 +44,7 @@ fn encoded(
         codec,
         EncodeSpec::new(Raster::packed(w, h, d)),
         slice(&source, w, h, row, d),
+        &NoPulse,
     )
     .expect("encode");
     (bytes, source)
@@ -55,7 +56,7 @@ fn every_codec_round_trips_every_layout() {
         for d in PACKED {
             for (w, h) in SIZES {
                 let (bytes, source) = encoded(&**enc, w, h, d, 1);
-                let decoded = decode(&*dec, &bytes, &DecodeSpec::new()).expect("decode");
+                let decoded = decode(&*dec, &bytes, &DecodeSpec::new(), &NoPulse).expect("decode");
                 assert_eq!(decoded.info.format, enc.format());
                 assert_eq!((decoded.info.width, decoded.info.height), (w, h));
                 assert_eq!(decoded.info.lossless, Some(true));
@@ -76,6 +77,7 @@ fn strided_input_encodes_the_same_bytes() {
             &*enc,
             EncodeSpec::new(Raster::packed(w, h, d)),
             slice(&wide, w, h, stride, d),
+            &NoPulse,
         )
         .unwrap();
         assert_eq!(bytes, reference, "{}", enc.name());
@@ -95,6 +97,7 @@ fn a_one_byte_source_decodes_what_a_slice_decodes() {
                 &mut drip,
                 &mut collect,
                 &opts,
+                &NoPulse,
             )
             .expect("drip decode");
             assert_eq!(
@@ -112,6 +115,7 @@ fn a_one_byte_source_decodes_what_a_slice_decodes() {
             &mut forward,
             &mut collect,
             &DriveOptions::new().with_read_size(7),
+            &NoPulse,
         )
         .expect("sequential decode");
         assert_eq!(packed(&collect.frames()[0]), source);
@@ -128,9 +132,10 @@ fn every_codec_transcodes_to_every_codec() {
                 &bytes,
                 dst_enc.clone(),
                 |frame| EncodeSpec::new(frame.raster.clone()),
+                &NoPulse,
             )
             .expect("transcode");
-            let decoded = decode(&*dst_dec, &out, &DecodeSpec::new()).unwrap();
+            let decoded = decode(&*dst_dec, &out, &DecodeSpec::new(), &NoPulse).unwrap();
             assert_eq!(
                 packed(&decoded.frames[0]),
                 source,
@@ -153,7 +158,13 @@ fn short_loans_change_nothing() {
             max_loan: 1,
             ..Recording::default()
         };
-        decode_slice(dec.decoder(&DecodeSpec::new()).unwrap(), &bytes, &mut sink).unwrap();
+        decode_slice(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &bytes,
+            &mut sink,
+            &NoPulse,
+        )
+        .unwrap();
         assert_eq!(packed(&sink.inner.frames()[0]), source, "{}", enc.name());
     }
 }
@@ -182,6 +193,7 @@ fn sequences_round_trip_with_and_without_a_declared_count() {
                     FrameMeta::shown_for(FrameDuration::from_millis(40 * (i as u32 + 1))),
                 )
             }),
+            &NoPulse,
         )
         .expect("encode sequence");
         files.push(bytes);
@@ -193,6 +205,7 @@ fn sequences_round_trip_with_and_without_a_declared_count() {
         &RowsCodec,
         &files[0],
         &DecodeSpec::new().with_frames(Frames::All),
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(
@@ -211,7 +224,7 @@ fn sequences_round_trip_with_and_without_a_declared_count() {
         );
         assert_eq!(packed(frame), sources[i]);
     }
-    let first = decode(&RowsCodec, &files[0], &DecodeSpec::new()).unwrap();
+    let first = decode(&RowsCodec, &files[0], &DecodeSpec::new(), &NoPulse).unwrap();
     assert_eq!(first.frames.len(), 1);
 
     // Frame by frame through the transcoding sink.
@@ -224,6 +237,7 @@ fn sequences_round_trip_with_and_without_a_declared_count() {
         |frame| {
             EncodeSpec::new(frame.raster.clone()).with_sequence(SequenceSpec::new().with_loops(2))
         },
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(out, files[0]);
@@ -245,19 +259,19 @@ fn stream_sequence(
         .unwrap();
     let timing = encoder.plan().output;
     let mut sizes = Vec::new();
-    let mut event = encoder.step(EncodeInput::None).unwrap().event;
+    let mut event = encoder.step(EncodeInput::None, &NoPulse).unwrap().event;
     for source in sources {
         assert_eq!(event, EncodeEvent::NeedFrame);
         event = encoder
-            .step(EncodeInput::Frame(FrameMeta::default()))
+            .step(EncodeInput::Frame(FrameMeta::default()), &NoPulse)
             .unwrap()
             .event;
         let frame = slice(source, w, h, w as usize * d.bytes_per_pixel(), d);
-        event = feed_frame(&mut *encoder, &frame, event).unwrap();
+        event = feed_frame(&mut *encoder, &frame, event, &NoPulse).unwrap();
         sizes.push(write_output(encoder.output(), destination).unwrap());
     }
     assert_eq!(
-        encoder.step(EncodeInput::End).unwrap().event,
+        encoder.step(EncodeInput::End, &NoPulse).unwrap().event,
         EncodeEvent::Done
     );
     sizes.push(write_output(encoder.output(), destination).unwrap());
@@ -276,6 +290,7 @@ fn an_unknown_frame_count_is_patched_or_held_never_wrong() {
         sources
             .iter()
             .map(|s| (slice(s, w, h, w as usize * 3, d), FrameMeta::default())),
+        &NoPulse,
     )
     .unwrap();
 
@@ -322,7 +337,7 @@ fn encode_planar(source: &[PlaneBuf<u8>; 3], w: u32, h: u32, strip: u32) -> Vec<
         .encoder(&EncodeSpec::new(planar_raster(w, h)))
         .unwrap();
     assert_eq!(encoder.plan().strip_rows, 2);
-    let mut event = encoder.step(EncodeInput::None).unwrap().event;
+    let mut event = encoder.step(EncodeInput::None, &NoPulse).unwrap().event;
     while let EncodeEvent::NeedRows { y, .. } = event {
         let rows = strip.min(h - y);
         let (cy, crows) = ((y / 2) as usize, rows.div_ceil(2) as usize);
@@ -337,7 +352,7 @@ fn encode_planar(source: &[PlaneBuf<u8>; 3], w: u32, h: u32, strip: u32) -> Vec<
             AnyPlane::U8(source[2].sub(0, cy, cw, crows).unwrap()),
         ];
         let strip = PlanarSlice::new(&planes, &layout, w, rows, &color, None).unwrap();
-        let step = encoder.step(EncodeInput::Planes(strip)).unwrap();
+        let step = encoder.step(EncodeInput::Planes(strip), &NoPulse).unwrap();
         assert_eq!(step.rows, rows);
         event = step.event;
     }
@@ -356,7 +371,13 @@ fn planar_strips_pass_through_without_becoming_rgb() {
             "strip height is not in the file"
         );
 
-        let decoded = decode(&RowsCodec, &bytes, &DecodeSpec::new().with_planar(true)).unwrap();
+        let decoded = decode(
+            &RowsCodec,
+            &bytes,
+            &DecodeSpec::new().with_planar(true),
+            &NoPulse,
+        )
+        .unwrap();
         assert!(decoded.info.native.is_planar());
         let planar = decoded.frames[0].pixels.planar().expect("planar frame");
         for (got, want) in planar.planes.iter().zip(&source) {
@@ -368,7 +389,7 @@ fn planar_strips_pass_through_without_becoming_rgb() {
 
         // A sink that did not ask for planes is refused, not handed RGB it did
         // not expect.
-        let refused = decode(&RowsCodec, &bytes, &DecodeSpec::new()).unwrap_err();
+        let refused = decode(&RowsCodec, &bytes, &DecodeSpec::new(), &NoPulse).unwrap_err();
         assert_eq!(
             refused.error().kind(),
             ErrorKind::Unsupported(Unsupported::Planar)
@@ -382,6 +403,7 @@ fn planar_strips_pass_through_without_becoming_rgb() {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
+            &NoPulse,
         )
         .unwrap();
         assert_eq!(out, bytes);
@@ -392,7 +414,7 @@ fn planar_strips_pass_through_without_becoming_rgb() {
 fn step_to_info(decoder: &mut dyn Decoder, bytes: &[u8], sink: &mut dyn Sink) -> Result<()> {
     let mut input = Input::whole(bytes);
     loop {
-        let step = decoder.step(input, sink)?;
+        let step = decoder.step(input, sink, &NoPulse)?;
         match step.event {
             DecodeEvent::Info => return Ok(()),
             DecodeEvent::NeedInput => match decoder.requested()[0] {
@@ -435,7 +457,7 @@ fn gates_refuse_before_work_and_say_why() {
         let (bytes, _) = encoded(&**enc, 20, 20, PixelDescriptor::RGB8_SRGB, 7);
         let spec = DecodeSpec::new().with_limits(ResourceLimits::none().with_max_pixels(399));
         let mut sink = Recording::default();
-        let err = decode_slice(dec.decoder(&spec).unwrap(), &bytes, &mut sink)
+        let err = decode_slice(dec.decoder(&spec).unwrap(), &bytes, &mut sink, &NoPulse)
             .err()
             .unwrap();
         assert_eq!(
@@ -504,9 +526,9 @@ fn a_memory_gate_is_a_promise() {
     // Decoding: the RLE decoder states its bound, so the gate can admit it.
     let (bytes, _) = encoded(&RleCodec::codec(), 32, 32, PixelDescriptor::GRAY8_SRGB, 8);
     let within = DecodeSpec::new().with_limits(ResourceLimits::none().with_max_memory_bytes(1024));
-    assert!(decode(&RleCodec::codec(), &bytes, &within).is_ok());
+    assert!(decode(&RleCodec::codec(), &bytes, &within, &NoPulse).is_ok());
     let over = DecodeSpec::new().with_limits(ResourceLimits::none().with_max_memory_bytes(1023));
-    let err = decode(&RleCodec::codec(), &bytes, &over).unwrap_err();
+    let err = decode(&RleCodec::codec(), &bytes, &over, &NoPulse).unwrap_err();
     assert_eq!(err.error().kind(), ErrorKind::Limit(LimitKind::Memory));
 }
 
@@ -551,7 +573,7 @@ fn requirements_are_refused_and_preferences_are_reported() {
         let (bytes, _) = encoded(&**enc, 4, 4, PixelDescriptor::RGB8_SRGB, 9);
         let spec = DecodeSpec::new().with_accept(Accept::require(&[PixelDescriptor::RGBA8_SRGB]));
         let mut sink = Recording::default();
-        let err = decode_slice(dec.decoder(&spec).unwrap(), &bytes, &mut sink)
+        let err = decode_slice(dec.decoder(&spec).unwrap(), &bytes, &mut sink, &NoPulse)
             .err()
             .unwrap();
         assert_eq!(
@@ -561,7 +583,7 @@ fn requirements_are_refused_and_preferences_are_reported() {
         assert!(sink.log.is_empty());
         // A preference falls back to the native format.
         let spec = DecodeSpec::new().with_accept(Accept::prefer(&[PixelDescriptor::RGBA8_SRGB]));
-        let decoded = decode(&*dec, &bytes, &spec).unwrap();
+        let decoded = decode(&*dec, &bytes, &spec, &NoPulse).unwrap();
         assert_eq!(
             decoded.frames[0].header.raster.descriptor(),
             Some(PixelDescriptor::RGB8_SRGB)
@@ -574,11 +596,11 @@ fn the_codecs_own_error_survives_erasure() {
     for (enc, dec) in encoders().iter().zip(decoders()) {
         let (mut bytes, _) = encoded(&**enc, 8, 8, PixelDescriptor::RGB8_SRGB, 11);
         let truncated = &bytes[..bytes.len() - 5];
-        let err = decode(&*dec, truncated, &DecodeSpec::new()).unwrap_err();
+        let err = decode(&*dec, truncated, &DecodeSpec::new(), &NoPulse).unwrap_err();
         assert_eq!(err.error().kind(), ErrorKind::Truncated, "{}", enc.name());
 
         bytes[12] = 9; // a layout byte no fixture defines
-        let err = decode(&*dec, &bytes, &DecodeSpec::new()).unwrap_err();
+        let err = decode(&*dec, &bytes, &DecodeSpec::new(), &NoPulse).unwrap_err();
         assert_eq!(err.error().kind(), ErrorKind::Malformed);
         assert_eq!(
             err.error().native_as::<FixtureError>(),
@@ -597,6 +619,7 @@ fn the_codecs_own_error_survives_erasure() {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
+            &NoPulse,
         )
         .unwrap_err();
         assert_eq!(
@@ -641,9 +664,14 @@ fn a_sink_failure_ends_the_decode_with_the_sinks_own_error() {
     for (enc, dec) in encoders().iter().zip(decoders()) {
         let (bytes, _) = encoded(&**enc, 8, 8, PixelDescriptor::RGB8_SRGB, 12);
         let mut sink = Failing(Collect::new());
-        let err = decode_slice(dec.decoder(&DecodeSpec::new()).unwrap(), &bytes, &mut sink)
-            .err()
-            .unwrap();
+        let err = decode_slice(
+            dec.decoder(&DecodeSpec::new()).unwrap(),
+            &bytes,
+            &mut sink,
+            &NoPulse,
+        )
+        .err()
+        .unwrap();
         assert_eq!(err.error().kind(), ErrorKind::Sink, "{}", enc.name());
         assert_eq!(err.error().native_as::<DiskFull>(), Some(&DiskFull(0)));
     }
@@ -656,8 +684,11 @@ fn a_stop_before_the_first_row_reaches_no_sink() {
         let switch = Switch::default();
         switch.stop();
         let mut sink = Recording::default();
-        let spec = DecodeSpec::new().with_pulse(switch.pulse());
-        let err = decode_slice(dec.decoder(&spec).unwrap(), &bytes, &mut sink)
+        // A pulse that borrows the switch and cannot be shared is enough
+        // for work that stays on this thread.
+        let pulse = switch.borrowed();
+        let decoder = dec.decoder(&DecodeSpec::new()).unwrap();
+        let err = decode_slice(decoder, &bytes, &mut sink, &pulse)
             .err()
             .unwrap();
         assert_eq!(
@@ -670,12 +701,12 @@ fn a_stop_before_the_first_row_reaches_no_sink() {
         assert!(sink.log.is_empty(), "{}: {:?}", enc.name(), sink.log);
 
         let source = pattern(8, 8, PixelDescriptor::RGB8_SRGB, 13);
-        let spec = EncodeSpec::new(Raster::packed(8, 8, PixelDescriptor::RGB8_SRGB))
-            .with_pulse(switch.pulse());
+        let spec = EncodeSpec::new(Raster::packed(8, 8, PixelDescriptor::RGB8_SRGB));
         let err = encode(
             &**enc,
             spec,
             slice(&source, 8, 8, 24, PixelDescriptor::RGB8_SRGB),
+            &pulse,
         )
         .unwrap_err();
         assert_eq!(
@@ -688,13 +719,15 @@ fn a_stop_before_the_first_row_reaches_no_sink() {
 #[test]
 fn a_stop_mid_decode_is_seen_within_a_strip() {
     let (bytes, _) = encoded(&BiasCodec, 4, 64, PixelDescriptor::GRAY8_SRGB, 14);
-    let switch = Switch::tripping_at(3);
+    // The driver looks at the pulse around every step and the decoder looks
+    // within each one, so the twelfth look falls a few one-row strips in.
+    let switch = Switch::tripping_at(12);
     let mut sink = Recording {
         max_loan: 1,
         ..Recording::default()
     };
-    let spec = DecodeSpec::new().with_pulse(switch.pulse());
-    let err = decode_slice(BiasCodec.decoder(&spec).unwrap(), &bytes, &mut sink)
+    let decoder = BiasCodec.decoder(&DecodeSpec::new()).unwrap();
+    let err = decode_slice(decoder, &bytes, &mut sink, &switch.borrowed())
         .err()
         .unwrap();
     assert_eq!(
@@ -702,7 +735,7 @@ fn a_stop_mid_decode_is_seen_within_a_strip() {
         ErrorKind::Stopped(StopReason::Cancelled)
     );
     let lends = sink.log.iter().filter(|c| **c == "lend").count();
-    assert!((1..=3).contains(&lends), "stopped after {lends} strips");
+    assert!((1..=6).contains(&lends), "stopped after {lends} of 64 strips");
 }
 
 fn with_exif(exif: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -716,9 +749,9 @@ fn with_exif(exif: &[u8]) -> (Vec<u8>, Vec<u8>) {
         .encoder(&spec.clone().with_supply(RowSupply::Whole))
         .unwrap();
     assert_eq!(encoder.plan().embedded, MetadataKinds::EXIF);
-    drop(encoder.step(EncodeInput::None));
+    drop(encoder.step(EncodeInput::None, &NoPulse));
     (
-        encode(&BiasCodec, spec, slice(&source, w, h, 18, d)).unwrap(),
+        encode(&BiasCodec, spec, slice(&source, w, h, 18, d), &NoPulse).unwrap(),
         source,
     )
 }
@@ -736,7 +769,7 @@ fn metadata_after_the_pixels_is_late_unless_asked_for_first() {
     let info = decoder.info().unwrap();
     assert!(!info.settled.contains(MetadataKinds::EXIF) && info.metadata.exif.is_none());
     assert_eq!(decoder.plan().unwrap().access, Access::Sequential);
-    let decoded = decode(&BiasCodec, &bytes, &DecodeSpec::new()).unwrap();
+    let decoded = decode(&BiasCodec, &bytes, &DecodeSpec::new(), &NoPulse).unwrap();
     assert_eq!(decoded.info.metadata.exif.as_deref(), Some(&exif[..]));
     assert_eq!(decoded.info.settled, MetadataKinds::ALL);
 
@@ -754,7 +787,7 @@ fn metadata_after_the_pixels_is_late_unless_asked_for_first() {
     assert_eq!(decoder.plan().unwrap().access, Access::Random);
 
     // The in-memory driver answers the same request with a sub-slice.
-    let decoded = decode(&BiasCodec, &bytes, &first).unwrap();
+    let decoded = decode(&BiasCodec, &bytes, &first, &NoPulse).unwrap();
     assert_eq!(decoded.info.metadata.exif.as_deref(), Some(&exif[..]));
     assert_eq!(packed(&decoded.frames[0]), source);
 
@@ -766,6 +799,7 @@ fn metadata_after_the_pixels_is_late_unless_asked_for_first() {
         &mut drip,
         &mut collect,
         &DriveOptions::new().with_read_size(1),
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(drip.range_calls, 1);
@@ -795,7 +829,7 @@ fn one_encoder_three_ways_to_see_the_rows_twice() {
         assert_eq!(encoder.plan().estimate.memory_bytes, Bound::AtMost(held));
         // The same answer-the-request loop for all three, five rows at a time
         // unless the encoder asked for the frame whole.
-        let mut event = encoder.step(EncodeInput::None).unwrap().event;
+        let mut event = encoder.step(EncodeInput::None, &NoPulse).unwrap().event;
         let mut passes = 0;
         while let EncodeEvent::NeedRows { pass, y } = event {
             passes = passes.max(pass + 1);
@@ -805,7 +839,7 @@ fn one_encoder_three_ways_to_see_the_rows_twice() {
                 5.min(h - y)
             };
             let step = encoder
-                .step(EncodeInput::Rows(frame.sub_rows(y, rows)))
+                .step(EncodeInput::Rows(frame.sub_rows(y, rows)), &NoPulse)
                 .unwrap();
             assert_eq!(step.rows, rows);
             event = step.event;
@@ -830,7 +864,7 @@ impl Decoder for Stuck {
     fn plan(&self) -> Option<&DecodePlan> {
         None
     }
-    fn step(&mut self, _: Input<'_>, _: &mut dyn Sink) -> Result<DecodeStep> {
+    fn step(&mut self, _: Input<'_>, _: &mut dyn Sink, _: &dyn Pulse) -> Result<DecodeStep> {
         Ok(DecodeStep::new(0, DecodeEvent::NeedInput))
     }
 }
@@ -842,15 +876,21 @@ fn drivers_end_a_decoder_that_makes_no_progress() {
         min_len: 4,
     }];
     let bytes = [0u8; 16];
-    let err = decode_slice(Box::new(Stuck(request)), &bytes, &mut Collect::new())
-        .err()
-        .unwrap();
+    let err = decode_slice(
+        Box::new(Stuck(request)),
+        &bytes,
+        &mut Collect::new(),
+        &NoPulse,
+    )
+    .err()
+    .unwrap();
     assert_eq!(err.error().kind(), ErrorKind::Protocol);
     let err = decode_read_at(
         Box::new(Stuck(request)),
         &mut &bytes[..],
         &mut Collect::new(),
         &DriveOptions::new(),
+        &NoPulse,
     )
     .err()
     .unwrap();
@@ -861,19 +901,22 @@ fn drivers_end_a_decoder_that_makes_no_progress() {
 fn the_transcoding_sink_stages_at_most_one_strip() {
     // The bias decoder writes into lent rows; the sink lends from one strip.
     let (bytes, source) = encoded(&BiasCodec, 5, 100, PixelDescriptor::RGB8_SRGB, 17);
-    let mut sink = EncoderSink::new(Arc::new(RowsCodec), |frame| {
-        EncodeSpec::new(frame.raster.clone())
-    });
+    let mut sink = EncoderSink::new(
+        Arc::new(RowsCodec),
+        |frame| EncodeSpec::new(frame.raster.clone()),
+        &NoPulse,
+    );
     decode_slice(
         BiasCodec.decoder(&DecodeSpec::new()).unwrap(),
         &bytes,
         &mut sink,
+        &NoPulse,
     )
     .unwrap();
     sink.finish().unwrap();
     assert_eq!(sink.plan().unwrap().estimate.memory_bytes, Bound::AtMost(0));
     let out = sink.take_output();
-    let decoded = decode(&RowsCodec, &out, &DecodeSpec::new()).unwrap();
+    let decoded = decode(&RowsCodec, &out, &DecodeSpec::new(), &NoPulse).unwrap();
     assert_eq!(packed(&decoded.frames[0]), source);
 }
 
@@ -898,6 +941,7 @@ fn a_source_already_in_memory_is_borrowed_not_read() {
             &mut Resident(&bytes),
             &mut collect,
             &DriveOptions::new(),
+            &NoPulse,
         )
         .unwrap();
         assert_eq!(packed(&collect.frames()[0]), source, "{}", enc.name());
@@ -908,6 +952,7 @@ fn a_source_already_in_memory_is_borrowed_not_read() {
             &mut &bytes[..],
             &mut collect,
             &DriveOptions::new().with_max_input_bytes(1),
+            &NoPulse,
         )
         .expect("nothing is held, so the input gate has nothing to refuse");
         assert_eq!(packed(&collect.frames()[0]), source);
@@ -929,6 +974,7 @@ fn a_streaming_window_stays_as_small_as_the_decoder_lets_it() {
         &mut Drip::new(&bytes, 256),
         &mut collect,
         &opts,
+        &NoPulse,
     )
     .expect("a 512-byte window decodes a 19 KB file");
     assert_eq!(packed(&collect.frames()[0]), source);
@@ -940,6 +986,7 @@ fn a_streaming_window_stays_as_small_as_the_decoder_lets_it() {
         &mut Drip::new(&bytes, 256),
         &mut Collect::new(),
         &opts,
+        &NoPulse,
     )
     .err()
     .unwrap();

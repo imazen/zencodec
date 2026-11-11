@@ -184,8 +184,13 @@ impl Switch {
     pub fn stop(&self) {
         self.stopped.store(true, Ordering::SeqCst);
     }
+    /// An owned pulse, for work that leaves this thread.
     pub fn pulse(&self) -> SharedPulse {
         SharedPulse::new(how_far::StopOnly::new(self.clone()))
+    }
+    /// A pulse that borrows the switch. It cannot be shared.
+    pub fn borrowed(&self) -> how_far::StopOnly<'_> {
+        how_far::StopOnly::borrowed(self)
     }
 }
 

@@ -9,7 +9,7 @@
 //! | | decode | encode |
 //! |---|---|---|
 //! | A codec, shareable and erased | [`decode::DecodeCodec`] | [`encode::EncodeCodec`] |
-//! | The request, as owned data | [`decode::DecodeSpec`] | [`encode::EncodeSpec`] |
+//! | The request, as plain data | [`decode::DecodeSpec`] | [`encode::EncodeSpec`] |
 //! | What will happen | [`decode::DecodePlan`] | [`encode::EncodePlan`] |
 //! | The work, as a state machine | [`decode::Decoder`] | [`encode::Encoder`] |
 //! | Where the product goes | [`decode::Sink`] | [`encode::OutputBuffer`] |
@@ -57,7 +57,9 @@ pub use raster::{FrameDuration, FrameHeader, Layout, Pass, Raster, copy_rows};
 
 pub use bytes::{ByteRange, Input, InputRequest, OutputAccess};
 
-/// Progress and cancellation: one owned, shareable handle per operation.
-pub use how_far::{Pulse, SharedPulse, Stop};
+/// Progress and cancellation. Every step borrows a [`Pulse`]; [`NoPulse`]
+/// is the one that never stops and reports nowhere, and [`SharedPulse`] is
+/// the owned handle for work that leaves the caller's thread.
+pub use how_far::{NoPulse, Pulse, SharedPulse, Stop};
 /// The location-carrying wrapper behind [`Error`].
 pub use whereat::At;
