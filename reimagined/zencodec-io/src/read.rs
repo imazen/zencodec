@@ -135,7 +135,7 @@ pub fn decode_read_at(
 }
 
 /// Perform the read a session asked for.
-fn read_next(window: &mut Window, source: &mut dyn ReadAt, next: Next) -> Result<()> {
+pub(crate) fn read_next(window: &mut Window, source: &mut dyn ReadAt, next: Next) -> Result<()> {
     match next {
         Next::Ready => {}
         Next::Read { offset, len } => {

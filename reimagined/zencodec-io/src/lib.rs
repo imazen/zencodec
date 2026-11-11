@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 mod collect;
+pub mod document;
 mod drive;
 mod encoder_sink;
 mod memory;
