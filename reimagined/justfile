@@ -67,3 +67,9 @@ native-slice-run binary output *args:
 
 native-slice-profile binary output:
     python3 tools/native-slice/profile.py {{binary}} {{output}}
+
+cpu-profile-lease-build:
+    cargo build --manifest-path tools/native-slice/Cargo.toml --release --bin profile_lease --locked
+
+cpu-profile native synthetic output:
+    python3 tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}

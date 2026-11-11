@@ -39,5 +39,18 @@ isolated target directory. `native-slice-run` retains frozen zenbench evidence;
 1,000 additional operations, including the same warm operation in both captures.
 Borrowed cost arms use `&NoPulse`; the reporting observer is a separate behavior
 control, not a measured claim about arbitrary progress observers.
+
+`cpu-profile.py` measures a different diagnostic: inherited perf task-clock,
+duration, user and system CPU counters around the retained native and synthetic
+loop probes. Five shuffled blocks compare zero versus 10,000 extra in-memory
+decodes, with identical fixture creation and one warm operation in each process.
+The native 256-square RGB8 routes include an unchanged A/A control; synthetic
+256-square RGBA8 routes include typed, boxed, inline and worker paths. CPU is
+summed across threads. All samples, negative adjusted kernel-time noise and the
+realized schedule are retained; profiler wall time is not zenbench confirmation.
+No codec CLI is launched per decode. `profile_lease` keeps the published
+zenbench exclusive lock over the complete diagnostic. The launch separately
+records verified CPU placement and the resource wrapper. The existing invalid
+wall-time studies remain invalid.
 Use a fresh output directory. Invalid timing stays invalid; allocation calls do
 not establish latency or process memory.
