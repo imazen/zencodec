@@ -320,3 +320,73 @@ logs live at `/mnt/v/output/zencodec/reimagined-resident-2026-11-11/`, with the
 receipt identifying their source and binary hashes. Full codec conformance,
 malformed-input behavior, color/orientation/metadata policy, workspace bounds,
 document-driver borrowing and nonresident worker copies remain outside this gate.
+
+## Wall and process CPU accounting
+
+The [CPU/wall receipt](../benchmarks/wall_cpu_2026-11-11.json) adds external
+`perf stat` accounting over the **same retained probe binaries**, whose SHA-256
+identities match the allocation studies. No codec or measured loop was rebuilt.
+The accounting orchestrator is `25514d68`. Five fixed, shuffled blocks cover 24
+cases, including unchanged native and synthetic A/A controls. Each case pairs a
+process performing 10,000 extra direct in-memory decodes with a separate process
+performing zero extra decodes; both create the same fixture/runtime and perform
+one warm decode. All 240 captures and 120 adjusted pairs survive.
+
+CPU in these tables means process user plus system CPU, including worker
+threads. Perf inherited task-clock is retained separately; it is not silently
+substituted for the user/system total. Wall, user and system setup costs are
+subtracted separately. Small negative adjusted system-time values remain in the
+data as independent-control noise; they are not physical negative work.
+
+Mean microseconds per native 256-square RGB8 decode, **wall / CPU**:
+
+| Codec | Native | Borrowed dyn + NoPulse | Reimagined boxed | Existing erased |
+|---|---:|---:|---:|---:|
+| QOI | 112.13 / 112.11 | 112.07 / 112.04 | 112.37 / 112.35 | 136.91 / 136.89 |
+| BMP | 28.16 / 28.15 | 28.17 / 28.16 | 28.40 / 28.39 | 52.81 / 52.80 |
+| JPEG | 187.47 / 187.43 | 186.57 / 186.54 | 186.68 / 186.65 | 186.85 / 186.82 |
+
+These are profiler means, not confirmation or an API-equivalence result. The
+identical JPEG native A/A control averages 185.80 wall / 185.78 CPU, while the
+other native control averages 187.47 / 187.43. That variation is larger than
+the small differences among the borrowed/boxed/old JPEG bindings. The complete
+per-case ranges and all raw blocks remain available; no favorable subset is used.
+
+Synthetic 256-square RGBA8, four-row strips, step quota 64; microseconds/decode:
+
+| Route | Wall | CPU total | Kernel CPU |
+|---|---:|---:|---:|
+| Direct | 6.20 | 6.20 | -0.03 |
+| Old inline Tokio | 11.42 | 11.42 | -0.04 |
+| New inline Tokio | 6.45 | 6.44 | -0.02 |
+| Old Tokio pool | 68.06 | 69.28 | 42.13 |
+| New Tokio pool | 65.74 | 65.96 | 40.96 |
+| New resident one hop | 15.01 | 15.06 | 7.34 |
+
+Worker handoffs consume substantial kernel CPU on this workload. New pool and
+one-hop routes record means of 12.00218 and 2.00094 context switches per decode.
+CPU totals can exceed wall time because threads can execute concurrently. These
+observations support making worker scheduling optional; they do not quantify
+streaming uploads, other batch sizes, concurrent workloads or native codec pools.
+
+The complete diagnostic holds the published zenbench exclusive lease and runs
+through verified `zenbench exec` CPU placement: homogeneous detected class,
+hard cpuset CPUs 0–23. It uses run-heavy with two jobs and a 2 GiB ceiling.
+The first launcher rejected Auto policy before running the program; the next
+attempt refused an output directory before launching any probe. Both logs are
+preserved, followed by the one complete fixed plan. No data was removed to gain
+acceptance. The diagnostic has no cleanliness/latency acceptance verdict, and
+does not replace or repair the earlier rejected Confirm runs.
+
+```text
+run-heavy: done rc=0 98s | peak-RSS 0.03GiB | min-avail 10634MiB | peak-load 0.95
+```
+
+Raw perf counters, schedules, startup controls, binary copies and command logs
+live at `/mnt/v/output/zencodec/reimagined-wall-cpu-2026-11-11/`. The receipt
+distinguishes wall, user, system, total CPU and task-clock rather than inferring
+CPU usage from wall time or allocation counts.
+
+Perf counter collection itself adds overhead, particularly for paths with many
+context switches. The process-profile wall means are therefore kept separate
+from the earlier zenbench means and are not uninstrumented latency estimates.

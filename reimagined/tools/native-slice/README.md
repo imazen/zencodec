@@ -52,5 +52,7 @@ No codec CLI is launched per decode. `profile_lease` keeps the published
 zenbench exclusive lock over the complete diagnostic. The launch separately
 records verified CPU placement and the resource wrapper. The existing invalid
 wall-time studies remain invalid.
+Perf counter collection adds overhead, especially around context switches;
+these process-profile means must not be relabeled as uninstrumented latency.
 Use a fresh output directory. Invalid timing stays invalid; allocation calls do
 not establish latency or process memory.

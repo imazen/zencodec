@@ -1,0 +1,697 @@
+{
+  "date": "2026-11-11",
+  "source_revision": "25514d6800d7f4a83a56463ff16d48b7fce7eb7f",
+  "probe_sources": {
+    "native": "739bc0dfa3add545dcac2a9f58f43176b4dc76f9",
+    "synthetic": "e9066b1255b4d66e80466a16a9598cec8744a7d1"
+  },
+  "probe_sha256": {
+    "native": "db2587fa3f9adca51dd116eb98cfac71911fc26166d572a96397024c8b54b3b2",
+    "synthetic": "e44e98ce19fbb84ccdfb69da79003c1645bbe175216f175f21609d833a3db50c"
+  },
+  "artifact_root": "/mnt/v/output/zencodec/reimagined-wall-cpu-2026-11-11",
+  "method": "perf stat inherited task-clock and duration/user/system tool counters. For each shuffled case/block, subtract an independently launched zero-operation control from 10000 direct in-memory decode calls; both contain identical setup and one warm decode. No CLI launch per decode.",
+  "limits": "Profiler diagnostic; no cleanliness or latency acceptance claim. Background load/frequency/cache state can affect results. Existing invalid zenbench studies stay invalid. Borrowed native arm uses &NoPulse. Negative adjusted system time is preserved as control noise. Perf counter collection adds overhead, especially around context switches; profiled wall means are not uninstrumented latency estimates.",
+  "blocks": 5,
+  "extra_operations_per_process": 10000,
+  "cases": 24,
+  "captures": 240,
+  "cpu_definition": "CPU = process user + system CPU time, summed over worker threads. Perf inherited task-clock retained separately. Values subtract a zero-operation process with identical fixture creation/runtime/one warm decode; negative adjusted kernel values are retained as control noise.",
+  "cpu_placement": "zenbench exec, performance policy, enforced_uniform homogeneous core/cache class capacity1024_l332768K, hard cpuset CPUs 0-23. No target-cpu=native; retained probe bytes unchanged.",
+  "resource_wrapper": "run-heavy: done rc=0 98s | peak-RSS 0.03GiB | min-avail 10634MiB | peak-load 0.95",
+  "summary_sha256": "c9cb0d6426a367972353a2c9e6a2ff25065e6390bef2ab93b1e7b72b4ce704ae",
+  "rows": {
+    "native/bmp/borrowed_dyn": {
+      "wall_us": {
+        "mean": 28.172168699999997,
+        "min": 28.1024144,
+        "max": 28.3224693
+      },
+      "user_us": {
+        "mean": 28.16404,
+        "min": 27.9477,
+        "max": 28.3398
+      },
+      "kernel_us": {
+        "mean": -0.0020399999999999993,
+        "min": -0.060899999999999996,
+        "max": 0.1559
+      },
+      "cpu_us": {
+        "mean": 28.162,
+        "min": 28.0869,
+        "max": 28.313200000000002
+      },
+      "task_clock_us": {
+        "mean": 28.1472,
+        "min": 28.072,
+        "max": 28.297
+      },
+      "context_switches_per_decode_mean": 0.00082
+    },
+    "native/bmp/native": {
+      "wall_us": {
+        "mean": 28.159586179999998,
+        "min": 27.9849604,
+        "max": 28.3641866
+      },
+      "user_us": {
+        "mean": 28.1646,
+        "min": 28.019299999999998,
+        "max": 28.387900000000002
+      },
+      "kernel_us": {
+        "mean": -0.01502,
+        "min": -0.053700000000000005,
+        "max": 0.0357
+      },
+      "cpu_us": {
+        "mean": 28.14958,
+        "min": 27.9775,
+        "max": 28.3375
+      },
+      "task_clock_us": {
+        "mean": 28.145400000000002,
+        "min": 27.983,
+        "max": 28.349
+      },
+      "context_switches_per_decode_mean": 0.00066
+    },
+    "native/bmp/native_AA": {
+      "wall_us": {
+        "mean": 28.714424360000002,
+        "min": 27.9898977,
+        "max": 31.031807
+      },
+      "user_us": {
+        "mean": 28.625799999999998,
+        "min": 27.756,
+        "max": 30.9726
+      },
+      "kernel_us": {
+        "mean": 0.07832,
+        "min": -0.0541,
+        "max": 0.2309
+      },
+      "cpu_us": {
+        "mean": 28.70412,
+        "min": 27.982200000000002,
+        "max": 31.028299999999998
+      },
+      "task_clock_us": {
+        "mean": 28.689,
+        "min": 27.959,
+        "max": 30.994
+      },
+      "context_switches_per_decode_mean": 0.0011
+    },
+    "native/bmp/next_slice": {
+      "wall_us": {
+        "mean": 28.39758542,
+        "min": 28.2895339,
+        "max": 28.6131223
+      },
+      "user_us": {
+        "mean": 28.37748,
+        "min": 28.2054,
+        "max": 28.634400000000003
+      },
+      "kernel_us": {
+        "mean": 0.0133,
+        "min": -0.0438,
+        "max": 0.1011
+      },
+      "cpu_us": {
+        "mean": 28.39078,
+        "min": 28.2815,
+        "max": 28.5906
+      },
+      "task_clock_us": {
+        "mean": 28.377599999999997,
+        "min": 28.269,
+        "max": 28.576
+      },
+      "context_switches_per_decode_mean": 0.00104
+    },
+    "native/bmp/older_erased": {
+      "wall_us": {
+        "mean": 52.81022558,
+        "min": 52.5786439,
+        "max": 53.181545
+      },
+      "user_us": {
+        "mean": 52.7974,
+        "min": 52.6117,
+        "max": 53.2109
+      },
+      "kernel_us": {
+        "mean": 0.00156,
+        "min": -0.045899999999999996,
+        "max": 0.0434
+      },
+      "cpu_us": {
+        "mean": 52.79896,
+        "min": 52.5698,
+        "max": 53.1695
+      },
+      "task_clock_us": {
+        "mean": 52.790800000000004,
+        "min": 52.568,
+        "max": 53.167
+      },
+      "context_switches_per_decode_mean": 0.00104
+    },
+    "native/jpeg/borrowed_dyn": {
+      "wall_us": {
+        "mean": 186.5703791,
+        "min": 185.0676815,
+        "max": 187.6697814
+      },
+      "user_us": {
+        "mean": 186.46938,
+        "min": 184.8625,
+        "max": 187.6874
+      },
+      "kernel_us": {
+        "mean": 0.06946,
+        "min": -0.0637,
+        "max": 0.2001
+      },
+      "cpu_us": {
+        "mean": 186.53884,
+        "min": 185.04760000000002,
+        "max": 187.6369
+      },
+      "task_clock_us": {
+        "mean": 186.5216,
+        "min": 185.037,
+        "max": 187.624
+      },
+      "context_switches_per_decode_mean": 0.00352
+    },
+    "native/jpeg/native": {
+      "wall_us": {
+        "mean": 187.4645483,
+        "min": 184.9490652,
+        "max": 190.3402293
+      },
+      "user_us": {
+        "mean": 187.40488,
+        "min": 184.83360000000002,
+        "max": 190.4355
+      },
+      "kernel_us": {
+        "mean": 0.028239999999999994,
+        "min": -0.2053,
+        "max": 0.30019999999999997
+      },
+      "cpu_us": {
+        "mean": 187.43312,
+        "min": 184.9236,
+        "max": 190.31310000000002
+      },
+      "task_clock_us": {
+        "mean": 187.4054,
+        "min": 184.897,
+        "max": 190.308
+      },
+      "context_switches_per_decode_mean": 0.0037
+    },
+    "native/jpeg/native_AA": {
+      "wall_us": {
+        "mean": 185.80485756000002,
+        "min": 185.54302230000002,
+        "max": 186.43109589999997
+      },
+      "user_us": {
+        "mean": 185.86564,
+        "min": 185.4305,
+        "max": 186.63320000000002
+      },
+      "kernel_us": {
+        "mean": -0.0884,
+        "min": -0.2347,
+        "max": 0.0999
+      },
+      "cpu_us": {
+        "mean": 185.77723999999998,
+        "min": 185.5304,
+        "max": 186.3985
+      },
+      "task_clock_us": {
+        "mean": 185.7498,
+        "min": 185.523,
+        "max": 186.385
+      },
+      "context_switches_per_decode_mean": 0.00306
+    },
+    "native/jpeg/next_slice": {
+      "wall_us": {
+        "mean": 186.6767084,
+        "min": 184.5477481,
+        "max": 190.24446129999998
+      },
+      "user_us": {
+        "mean": 186.63172,
+        "min": 184.44,
+        "max": 190.4222
+      },
+      "kernel_us": {
+        "mean": 0.019300000000000005,
+        "min": -0.21409999999999998,
+        "max": 0.1999
+      },
+      "cpu_us": {
+        "mean": 186.65102,
+        "min": 184.5282,
+        "max": 190.2081
+      },
+      "task_clock_us": {
+        "mean": 186.6234,
+        "min": 184.515,
+        "max": 190.152
+      },
+      "context_switches_per_decode_mean": 0.00334
+    },
+    "native/jpeg/older_erased": {
+      "wall_us": {
+        "mean": 186.84630896,
+        "min": 184.2485559,
+        "max": 190.28283919999998
+      },
+      "user_us": {
+        "mean": 186.75752,
+        "min": 184.23420000000002,
+        "max": 190.2268
+      },
+      "kernel_us": {
+        "mean": 0.06204,
+        "min": -0.0062,
+        "max": 0.1001
+      },
+      "cpu_us": {
+        "mean": 186.81956,
+        "min": 184.228,
+        "max": 190.2584
+      },
+      "task_clock_us": {
+        "mean": 186.8082,
+        "min": 184.215,
+        "max": 190.259
+      },
+      "context_switches_per_decode_mean": 0.00284
+    },
+    "native/qoi/borrowed_dyn": {
+      "wall_us": {
+        "mean": 112.06514471999999,
+        "min": 111.7776653,
+        "max": 112.54667389999999
+      },
+      "user_us": {
+        "mean": 111.97488,
+        "min": 111.691,
+        "max": 112.4995
+      },
+      "kernel_us": {
+        "mean": 0.06772,
+        "min": 0.0052,
+        "max": 0.1114
+      },
+      "cpu_us": {
+        "mean": 112.04260000000001,
+        "min": 111.7589,
+        "max": 112.5047
+      },
+      "task_clock_us": {
+        "mean": 112.036,
+        "min": 111.75,
+        "max": 112.509
+      },
+      "context_switches_per_decode_mean": 0.00204
+    },
+    "native/qoi/native": {
+      "wall_us": {
+        "mean": 112.13249204,
+        "min": 111.8441776,
+        "max": 112.5788771
+      },
+      "user_us": {
+        "mean": 112.06569999999999,
+        "min": 111.7645,
+        "max": 112.3215
+      },
+      "kernel_us": {
+        "mean": 0.04616,
+        "min": -0.0838,
+        "max": 0.21919999999999998
+      },
+      "cpu_us": {
+        "mean": 112.11186000000001,
+        "min": 111.8328,
+        "max": 112.5407
+      },
+      "task_clock_us": {
+        "mean": 112.1002,
+        "min": 111.837,
+        "max": 112.499
+      },
+      "context_switches_per_decode_mean": 0.00226
+    },
+    "native/qoi/native_AA": {
+      "wall_us": {
+        "mean": 111.95964804,
+        "min": 111.7050846,
+        "max": 112.1701008
+      },
+      "user_us": {
+        "mean": 111.93430000000001,
+        "min": 111.7213,
+        "max": 112.1513
+      },
+      "kernel_us": {
+        "mean": 0.0054399999999999995,
+        "min": -0.0835,
+        "max": 0.1153
+      },
+      "cpu_us": {
+        "mean": 111.93974,
+        "min": 111.6936,
+        "max": 112.149
+      },
+      "task_clock_us": {
+        "mean": 111.9158,
+        "min": 111.666,
+        "max": 112.135
+      },
+      "context_switches_per_decode_mean": 0.00224
+    },
+    "native/qoi/next_slice": {
+      "wall_us": {
+        "mean": 112.36706034,
+        "min": 111.756408,
+        "max": 112.89281020000001
+      },
+      "user_us": {
+        "mean": 112.26718000000001,
+        "min": 111.8279,
+        "max": 112.7711
+      },
+      "kernel_us": {
+        "mean": 0.08318,
+        "min": -0.0823,
+        "max": 0.2003
+      },
+      "cpu_us": {
+        "mean": 112.35036,
+        "min": 111.74560000000001,
+        "max": 112.87610000000001
+      },
+      "task_clock_us": {
+        "mean": 112.3472,
+        "min": 111.736,
+        "max": 112.873
+      },
+      "context_switches_per_decode_mean": 0.0019399999999999999
+    },
+    "native/qoi/older_erased": {
+      "wall_us": {
+        "mean": 136.91049852,
+        "min": 136.660954,
+        "max": 137.1292133
+      },
+      "user_us": {
+        "mean": 136.90226,
+        "min": 136.72379999999998,
+        "max": 137.1015
+      },
+      "kernel_us": {
+        "mean": -0.00832,
+        "min": -0.0815,
+        "max": 0.0999
+      },
+      "cpu_us": {
+        "mean": 136.89394000000001,
+        "min": 136.64229999999998,
+        "max": 137.1149
+      },
+      "task_clock_us": {
+        "mean": 136.8784,
+        "min": 136.631,
+        "max": 137.091
+      },
+      "context_switches_per_decode_mean": 0.00178
+    },
+    "synthetic/syn1/direct": {
+      "wall_us": {
+        "mean": 6.2034821,
+        "min": 6.1093879,
+        "max": 6.278741699999999
+      },
+      "user_us": {
+        "mean": 6.22954,
+        "min": 6.131399999999999,
+        "max": 6.345
+      },
+      "kernel_us": {
+        "mean": -0.03138,
+        "min": -0.149,
+        "max": 0.1012
+      },
+      "cpu_us": {
+        "mean": 6.19816,
+        "min": 6.103899999999999,
+        "max": 6.275399999999999
+      },
+      "task_clock_us": {
+        "mean": 6.1918,
+        "min": 6.103,
+        "max": 6.279
+      },
+      "context_switches_per_decode_mean": 0.00028
+    },
+    "synthetic/syn1/direct_AA": {
+      "wall_us": {
+        "mean": 6.23481142,
+        "min": 6.1781226,
+        "max": 6.2854654
+      },
+      "user_us": {
+        "mean": 6.1763,
+        "min": 6.0526,
+        "max": 6.293699999999999
+      },
+      "kernel_us": {
+        "mean": 0.055,
+        "min": -0.0804,
+        "max": 0.2067
+      },
+      "cpu_us": {
+        "mean": 6.2313,
+        "min": 6.1776,
+        "max": 6.277100000000001
+      },
+      "task_clock_us": {
+        "mean": 6.2408,
+        "min": 6.189,
+        "max": 6.287
+      },
+      "context_switches_per_decode_mean": 0.00024
+    },
+    "synthetic/syn1/next_buffered_one_hop": {
+      "wall_us": {
+        "mean": 15.007362559999999,
+        "min": 14.1546417,
+        "max": 16.8092734
+      },
+      "user_us": {
+        "mean": 7.71436,
+        "min": 6.9503,
+        "max": 8.2493
+      },
+      "kernel_us": {
+        "mean": 7.34312,
+        "min": 6.0828,
+        "max": 8.6462
+      },
+      "cpu_us": {
+        "mean": 15.05748,
+        "min": 14.2828,
+        "max": 16.691
+      },
+      "task_clock_us": {
+        "mean": 13.976,
+        "min": 13.302,
+        "max": 15.359
+      },
+      "context_switches_per_decode_mean": 2.00094
+    },
+    "synthetic/syn1/next_slice_boxed": {
+      "wall_us": {
+        "mean": 6.19503688,
+        "min": 6.153605,
+        "max": 6.2417675
+      },
+      "user_us": {
+        "mean": 6.0691999999999995,
+        "min": 6.0188999999999995,
+        "max": 6.097899999999999
+      },
+      "kernel_us": {
+        "mean": 0.12268,
+        "min": 0.0745,
+        "max": 0.1981
+      },
+      "cpu_us": {
+        "mean": 6.19188,
+        "min": 6.150399999999999,
+        "max": 6.2373
+      },
+      "task_clock_us": {
+        "mean": 6.1804,
+        "min": 6.131,
+        "max": 6.233
+      },
+      "context_switches_per_decode_mean": 0.00026
+    },
+    "synthetic/syn1/next_tokio_inline": {
+      "wall_us": {
+        "mean": 6.44713884,
+        "min": 6.3708504999999995,
+        "max": 6.6335856
+      },
+      "user_us": {
+        "mean": 6.46276,
+        "min": 6.308,
+        "max": 6.6465
+      },
+      "kernel_us": {
+        "mean": -0.021079999999999998,
+        "min": -0.1143,
+        "max": 0.0588
+      },
+      "cpu_us": {
+        "mean": 6.44168,
+        "min": 6.3668000000000005,
+        "max": 6.6316999999999995
+      },
+      "task_clock_us": {
+        "mean": 6.4281999999999995,
+        "min": 6.366,
+        "max": 6.624
+      },
+      "context_switches_per_decode_mean": 0.00028
+    },
+    "synthetic/syn1/next_tokio_pool": {
+      "wall_us": {
+        "mean": 65.73770734000001,
+        "min": 61.5735211,
+        "max": 72.8628779
+      },
+      "user_us": {
+        "mean": 25.00206,
+        "min": 21.4662,
+        "max": 29.5335
+      },
+      "kernel_us": {
+        "mean": 40.959120000000006,
+        "min": 39.2367,
+        "max": 43.065
+      },
+      "cpu_us": {
+        "mean": 65.96118,
+        "min": 62.0937,
+        "max": 72.5985
+      },
+      "task_clock_us": {
+        "mean": 59.7884,
+        "min": 56.095,
+        "max": 66.303
+      },
+      "context_switches_per_decode_mean": 12.002180000000001
+    },
+    "synthetic/syn1/older_slice_typed": {
+      "wall_us": {
+        "mean": 6.86629496,
+        "min": 6.6448670000000005,
+        "max": 7.308787000000001
+      },
+      "user_us": {
+        "mean": 6.824739999999999,
+        "min": 6.6861999999999995,
+        "max": 7.2161
+      },
+      "kernel_us": {
+        "mean": 0.039920000000000004,
+        "min": -0.044899999999999995,
+        "max": 0.101
+      },
+      "cpu_us": {
+        "mean": 6.86466,
+        "min": 6.6435,
+        "max": 7.3168
+      },
+      "task_clock_us": {
+        "mean": 6.8622,
+        "min": 6.632,
+        "max": 7.318
+      },
+      "context_switches_per_decode_mean": 0.0002
+    },
+    "synthetic/syn1/older_tokio_inline": {
+      "wall_us": {
+        "mean": 11.4203054,
+        "min": 11.2207896,
+        "max": 12.107605
+      },
+      "user_us": {
+        "mean": 11.46238,
+        "min": 11.2135,
+        "max": 12.2524
+      },
+      "kernel_us": {
+        "mean": -0.04486,
+        "min": -0.147,
+        "max": 0.0351
+      },
+      "cpu_us": {
+        "mean": 11.41752,
+        "min": 11.2174,
+        "max": 12.1054
+      },
+      "task_clock_us": {
+        "mean": 11.409,
+        "min": 11.205,
+        "max": 12.112
+      },
+      "context_switches_per_decode_mean": 0.00024
+    },
+    "synthetic/syn1/older_tokio_pool": {
+      "wall_us": {
+        "mean": 68.06056471999999,
+        "min": 65.7852571,
+        "max": 69.6661777
+      },
+      "user_us": {
+        "mean": 27.14468,
+        "min": 25.3178,
+        "max": 29.143
+      },
+      "kernel_us": {
+        "mean": 42.131980000000006,
+        "min": 40.7485,
+        "max": 44.7632
+      },
+      "cpu_us": {
+        "mean": 69.27666,
+        "min": 67.79589999999999,
+        "max": 70.10730000000001
+      },
+      "task_clock_us": {
+        "mean": 63.3296,
+        "min": 62.001,
+        "max": 64.678
+      },
+      "context_switches_per_decode_mean": 12.00412
+    }
+  }
+}

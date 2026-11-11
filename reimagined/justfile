@@ -73,3 +73,6 @@ cpu-profile-lease-build:
 
 cpu-profile native synthetic output:
     python3 tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}
+
+cpu-profile-admitted lease executor native synthetic output:
+    {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}
