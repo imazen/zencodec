@@ -1,0 +1,22 @@
+[package]
+name = "zencodec"
+version = "0.0.0"
+description = "Spike: the zen codec contract, reimagined (not for publication)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# `std::io::Error` conversions and `find_cause` looking inside it.
+std = ["zenpixels/std"]
+
+[dependencies]
+zenpixels = { workspace = true }
+how-far = { workspace = true }
+whereat = { workspace = true }
+
+[lints]
+workspace = true

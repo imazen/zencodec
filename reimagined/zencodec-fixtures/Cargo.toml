@@ -1,0 +1,16 @@
+[package]
+name = "zencodec-fixtures"
+version = "0.0.0"
+description = "Spike: three small codecs written against the reimagined contract"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+zencodec = { path = "../zencodec" }
+zenpixels = { workspace = true }
+
+[lints]
+workspace = true

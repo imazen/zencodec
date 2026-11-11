@@ -1,0 +1,25 @@
+[package]
+name = "zencodec-io"
+version = "0.0.0"
+description = "Spike: drivers for the reimagined zen codec contract (not for publication)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+tokio = ["dep:tokio"]
+
+[dependencies]
+zencodec = { path = "../zencodec", features = ["std"] }
+zenpixels = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["rt", "io-util", "sync"], optional = true }
+
+[dev-dependencies]
+zencodec-fixtures = { path = "../zencodec-fixtures" }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "io-util", "sync", "macros", "time"] }
+
+[lints]
+workspace = true
