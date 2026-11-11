@@ -1,7 +1,7 @@
 //! Encoding: the decoder's mirror image.
 //!
 //! ```text
-//! EncodeCodec::prepare(&EncodeSpec) ──► Box<dyn Encoder>   (plan() is ready)
+//! EncodeCodec::encoder(&EncodeSpec) ──► Box<dyn Encoder>   (plan() is ready)
 //!
 //!        ┌──────────── EncodeInput (rows the driver holds) ◄── NeedRows { pass, y }
 //!        ▼
@@ -19,7 +19,7 @@
 //!
 //! The rules every encoder keeps:
 //!
-//! 1. **`prepare` decides everything.** It settles each [`Demand`] against
+//! 1. **[`encoder`](EncodeCodec::encoder) decides everything.** It settles each [`Demand`] against
 //!    what the codec can do, refuses unmet requirements with the requirement
 //!    named, checks the gates, and returns an encoder whose
 //!    [`plan`](Encoder::plan) states what will happen. It sees no pixels.
@@ -64,7 +64,7 @@ pub trait EncodeCodec: Send + Sync + 'static {
     fn format(&self) -> ImageFormat;
 
     /// Admit a request or refuse it, before any pixel moves.
-    fn prepare(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>>;
+    fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>>;
 }
 
 /// How the caller can present rows.
@@ -382,7 +382,7 @@ impl EncodeStep {
 
 /// An encode in progress. See the [module rules](self).
 pub trait Encoder: Send + 'static {
-    /// What this encode will do. Fixed at `prepare`.
+    /// What this encode will do. Fixed when the encoder is made.
     fn plan(&self) -> &EncodePlan;
 
     /// Take some rows and do some work.

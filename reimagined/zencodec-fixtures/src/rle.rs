@@ -87,9 +87,6 @@ impl WholeImageDecode for RleCodec {
             .try_reserve_exact(len)
             .map_err(|_| error(ErrorKind::OutOfMemory))?;
         let runs = &bytes[HEADER..];
-        if runs.len() % 2 != 0 {
-            return Err(bad(FixtureError::BadStream("odd run stream")));
-        }
         for run in runs.chunks_exact(2) {
             let (count, value) = (run[0] as usize, run[1]);
             if count == 0 || pixels.len() + count > len {

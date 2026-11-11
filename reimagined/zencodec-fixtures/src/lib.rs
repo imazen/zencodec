@@ -5,17 +5,17 @@
 //!
 //! | codec | shape | exercises |
 //! |---|---|---|
-//! | `rows::RowsCodec` (`ZRW1`, not written yet) | streams rows as bytes arrive | borrowed-row delivery, animation, planar strips, streaming output, a finish patch |
+//! | [`rows::RowsCodec`] (`ZRW1`) | streams rows as bytes arrive | borrowed-row delivery, animation, planar strips, streaming output, a finish patch |
 //! | [`rle::RleCodec`] (`ZWH1`) | whole file in, whole image out | the [`zencodec::simple`] adapters, owned-frame delivery |
-//! | `bias::BiasCodec` (`ZTP1`, not written yet) | two passes over the pixels | row replay, lent-row delivery, metadata after the pixels and a range read to reach it early |
+//! | [`bias::BiasCodec`] (`ZTP1`) | two passes over the pixels | row replay, lent-row delivery, metadata after the pixels and a range read to reach it early |
 //!
 //! Every sample they write is 8-bit and every one of them is lossless.
 
 #![forbid(unsafe_code)]
 
-// `rows` (ZRW1) and `bias` (ZTP1) are designed but not written yet; see the
-// workspace README once it lands. Only the whole-image codec exists so far.
+pub mod bias;
 pub mod rle;
+pub mod rows;
 
 use core::fmt;
 use zencodec::{ErrorKind, Layout, NativeError};

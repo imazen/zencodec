@@ -18,6 +18,7 @@ zenpixels = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["rt", "io-util", "sync"], optional = true }
 
 [dev-dependencies]
+how-far = { workspace = true }
 zencodec-fixtures = { path = "../zencodec-fixtures" }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "io-util", "sync", "macros", "time"] }
 

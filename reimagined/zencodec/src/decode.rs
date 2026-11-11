@@ -1,7 +1,7 @@
 //! Decoding: one state machine.
 //!
 //! ```text
-//! DecodeCodec::prepare(&DecodeSpec) ──► Box<dyn Decoder>
+//! DecodeCodec::decoder(&DecodeSpec) ──► Box<dyn Decoder>
 //!
 //!        ┌──────────── Input (bytes the driver holds) ◄── requested()
 //!        ▼
@@ -13,11 +13,13 @@
 //! One-shot, streaming, push, pull, animation and range-driven decoding are
 //! this loop under different drivers. The rules every decoder keeps:
 //!
-//! 1. **`prepare` is cheap.** It validates the spec and allocates nothing
+//! 1. **[`decoder`](DecodeCodec::decoder) is cheap.** It validates the spec and allocates nothing
 //!    proportional to an image; it has seen no input.
-//! 2. **`step` never waits.** It consumes a prefix of the input it is lent,
-//!    names what it needs next in [`requested`](Decoder::requested), and
-//!    returns.
+//! 2. **`step` never waits.** It consumes a prefix of the window it is lent
+//!    and returns. [`requested`](Decoder::requested) always names the window
+//!    the next step needs, and the driver lends the window that answers its
+//!    first entry before every step. [`NeedInput`](DecodeEvent::NeedInput)
+//!    says the window lent was not enough.
 //! 3. **[`Info`](DecodeEvent::Info) comes first and once**, before any sink
 //!    call and before any allocation proportional to the image. From then on
 //!    [`info`](Decoder::info) and [`plan`](Decoder::plan) are `Some`.
@@ -54,7 +56,7 @@ pub trait DecodeCodec: Send + Sync + 'static {
 
     /// Start a decode. Refuses, with the unmet requirement named, when the
     /// spec asks for something this codec can never do.
-    fn prepare(&self, spec: &DecodeSpec) -> Result<Box<dyn Decoder>>;
+    fn decoder(&self, spec: &DecodeSpec) -> Result<Box<dyn Decoder>>;
 }
 
 /// The pixel formats a caller will take, in order of preference.
@@ -301,12 +303,13 @@ impl DecodePlan {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DecodeEvent {
-    /// More input is needed; see [`Decoder::requested`].
+    /// The window lent was not enough; see [`Decoder::requested`].
     NeedInput,
     /// The header is read: [`Decoder::info`] and [`Decoder::plan`] are set and
     /// nothing has reached the sink.
     Info,
-    /// Rows reached the sink; there is more to do with the input in hand.
+    /// The sink was called (a frame began, or rows arrived) and there is more
+    /// to do with the input in hand. A driver may yield here.
     Rows,
     /// A frame is complete.
     FrameDone,
@@ -332,8 +335,9 @@ impl DecodeStep {
 
 /// A decode in progress. See the [module rules](self).
 pub trait Decoder: Send + 'static {
-    /// The bytes wanted next. Valid from `prepare` and after each
-    /// [`NeedInput`](DecodeEvent::NeedInput).
+    /// The bytes the next step needs: always current, from the start. The
+    /// first entry is the window to lend; later entries forecast ranges a
+    /// driver may fetch with it.
     fn requested(&self) -> &[InputRequest];
 
     /// What the file says about itself; `Some` from [`Info`](DecodeEvent::Info)

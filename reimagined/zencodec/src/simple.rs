@@ -107,7 +107,7 @@ impl<C: WholeImageDecode> DecodeCodec for WholeImage<C> {
         self.0.formats()
     }
 
-    fn prepare(&self, spec: &DecodeSpec) -> Result<Box<dyn Decoder>> {
+    fn decoder(&self, spec: &DecodeSpec) -> Result<Box<dyn Decoder>> {
         Ok(Box::new(WholeDecoder {
             codec: self.0.clone(),
             spec: spec.clone(),
@@ -258,7 +258,7 @@ impl<C: WholeImageEncode> EncodeCodec for WholeImage<C> {
         self.0.format()
     }
 
-    fn prepare(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
+    fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
         let refuse = |what| {
             CodecError::new(ErrorKind::Unsupported(what))
                 .with_codec(self.0.name())

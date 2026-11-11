@@ -2,8 +2,8 @@
 
 /// A request that is either a preference or a requirement.
 ///
-/// A codec that cannot honor [`Require`](Demand::Require) refuses in
-/// `prepare`. One that cannot honor [`Prefer`](Demand::Prefer) proceeds and
+/// A codec that cannot honor [`Require`](Demand::Require) refuses when
+/// asked for an encoder. One that cannot honor [`Prefer`](Demand::Prefer) proceeds and
 /// states what it chose in its plan. There is no third, silent outcome.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Demand<T> {
