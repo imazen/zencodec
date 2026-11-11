@@ -26,6 +26,20 @@ Private experiment crates are labelled in flows and excluded from the exported
 API catalog. Dependency-only APIs are not counted as zencodec's surface; pinned
 transcode and conversion snapshots appear beside the examples that use them.
 
+## Reading the existing entry points
+
+- Application code starts with `CodecSet` or a concrete config's one-shot methods.
+- `operation::DecodeRequest::with_output` is a requirement: an unsupported actual
+  output returns an error. `preferring_output` permits the native fallback.
+- Config/job/executor traits are codec authoring contracts. The `advanced` module
+  currently aliases existing modules; those aliases do not change their behavior.
+- Row delivery and incremental byte input do not promise bounded native memory.
+- Copying conveniences can still panic on allocation failure; moving a finished
+  collector with `into_buffer` avoids its separate copy/allocation.
+
+These describe current behavior. The [architectural critique](https://github.com/imazen/zencodec/blob/119f3133/docs/architecture-critique-2026-11-10.md)
+proposes future names and surfaces; it does not make them importable APIs.
+
 ## Keeping it current
 
 Versioned API review uses the existing `zenutils-apidoc` runner for all eight

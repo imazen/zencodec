@@ -17,7 +17,7 @@
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
 //! - [`UnsupportedOperation`] / [`CodecErrorExt`] — standard unsupported operation reporting and error chain inspection
 //! - [`inventory`] — a byte-exact map of a file's structural parts, for auditing what a decoder does and does not read
-//! - [`prelude`] — one-import bundle of all encode/decode traits
+//! - [`prelude`] — one-import bundle of common encode/decode traits
 //!
 //! # Re-exported crates
 //!
@@ -32,7 +32,32 @@
 //! [`encode`] and [`decode`] traits on their own config types.
 //! Format-specific methods live on the concrete types, not on the traits.
 //!
-//! `zencodecs` provides multi-format dispatch and convenience entry points.
+//! [`CodecSet`] provides multi-format registration and convenience operations.
+//! The separate `zencodecs` crate adds concrete-codec pipeline integration.
+//!
+//! # Application entry point
+//!
+//! With codecs registered in a set, decoding and encoding pixels need no
+//! config/job/executor plumbing:
+//!
+//! ```
+//! use zencodec::{CodecSet, CodecSetError, ImageFormat};
+//!
+//! fn convert_pixels(
+//!     codecs: &CodecSet, bytes: &[u8],
+//! ) -> Result<zencodec::encode::EncodeOutput, CodecSetError> {
+//!     let image = codecs.decode(bytes)?;
+//!     codecs.encode(ImageFormat::Png, image.pixels())
+//! }
+//! ```
+//!
+//! A pixel view does not carry all source descriptive/container metadata. Use
+//! the checked [`operation`] entry points when metadata retention or another
+//! supported configuration is required rather than advisory.
+//!
+//! Codec authors implement the traits in [`encode`] and [`decode`].
+//! [`advanced`] supplies alternate paths to existing authoring/adapter modules;
+//! it does not define a separate protocol or remove the original import paths.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -289,7 +314,7 @@ pub mod decode {
 
 /// One-import trait bundle: `use zencodec::prelude::*;`.
 ///
-/// Brings every encode/decode trait into scope so `.job()`, `.decoder()`,
+/// Brings common encode/decode traits into scope so `.job()`, `.decoder()`,
 /// `.encode()`, `.next_batch()`, and the other trait methods resolve without
 /// hunting down individual `use` lines. Types are *not* included — import
 /// those from the crate root or the [`encode`]/[`decode`] modules.

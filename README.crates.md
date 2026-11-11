@@ -63,7 +63,7 @@ let info = JpegDecoderConfig::new().probe(jpeg.data())?;   // header only
 let image = JpegDecoderConfig::new().decode(jpeg.data())?; // full decode
 ```
 
-`use zencodec::prelude::*;` brings every encode/decode trait into scope in one
+`use zencodec::prelude::*;` brings the common encode/decode traits into scope in one
 line.
 
 ### Multi-codec: `CodecSet`
@@ -544,7 +544,7 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
-| `zencodec::prelude` | One-import bundle of every encode/decode trait (generic + dyn) |
+| `zencodec::prelude` | One-import bundle of common encode/decode traits (generic + dyn) |
 | root | `CodecSet` / `CodecSetError` (multi-codec registry: registration-derived detection, format-keyed encode, shareable app-wide), `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `Pulse`, `SharedPulse`, `NoPulse` (legacy `StopToken` / `Unstoppable`) |
 
 The full API is always available. The only feature, `std`, lets

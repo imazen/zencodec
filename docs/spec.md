@@ -2199,7 +2199,7 @@ Semantics:
 
 ## Prelude
 
-`zencodec::prelude::*` imports every encode/decode trait (generic and dyn
+`zencodec::prelude::*` imports common encode/decode traits (generic and dyn
 variants) so `.job()`, `.decoder()`, `.encode()`, `.next_batch()`, … resolve
 with one `use`. Types are not included.
 
