@@ -20,3 +20,17 @@ tiff-clippy:
 fmt:
     cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures
     cargo fmt --manifest-path tools/native-tiff/Cargo.toml
+
+# A standalone same-binary old/new mechanism comparison, with unchanged old fixtures.
+ablation-check:
+    cargo test --manifest-path tools/ablation/Cargo.toml --locked
+    cargo clippy --manifest-path tools/ablation/Cargo.toml --all-targets --locked -- -D warnings
+
+ablation-build:
+    cargo bench --manifest-path tools/ablation/Cargo.toml --bench drivers --no-run --locked
+
+ablation-bench *args:
+    cargo bench --manifest-path tools/ablation/Cargo.toml --bench drivers --locked -- {{args}}
+
+ablation-run binary output *args:
+    python3 tools/ablation/run.py {{binary}} {{output}} -- {{args}}
