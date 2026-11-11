@@ -4,6 +4,12 @@ test:
 clippy:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+resident-check:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures --check
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+
 check-core:
     cargo check -p zencodec --no-default-features --locked
 

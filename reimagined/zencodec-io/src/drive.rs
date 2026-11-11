@@ -370,7 +370,7 @@ impl<S: Sink> Session<S> {
     /// is lent. When the window cannot answer it, the read that would is
     /// returned for the caller to perform, blocking or not.
     pub(crate) fn run(&mut self, quota: usize, pulse: &SharedPulse) -> Result<Batch> {
-        for _ in 0..quota {
+        for _ in 0..quota.max(1) {
             check(pulse)?;
             let requests = self.decoder.requested();
             let request = requests.first().copied().unwrap_or(InputRequest::AtLeast {

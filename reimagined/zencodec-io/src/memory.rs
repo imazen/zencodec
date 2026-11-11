@@ -54,10 +54,12 @@ impl SliceRun {
         bytes: &[u8],
         sink: &mut dyn Sink,
         quota: usize,
+        mut check_stop: impl FnMut() -> Result<()>,
     ) -> Result<bool> {
         let len = bytes.len() as u64;
         let at = |offset: u64| offset.min(len) as usize;
-        for _ in 0..quota {
+        for _ in 0..quota.max(1) {
+            check_stop()?;
             // The window that answers the decoder's first request, every step.
             let input = match decoder.requested().first() {
                 Some(InputRequest::AtLeast { offset, .. }) => {
@@ -77,6 +79,9 @@ impl SliceRun {
                 ));
             }
             let step = decoder.step(input, sink)?;
+            // Native errors retain precedence; a successful step cannot hide
+            // a stop raised while it ran, including its final Done step.
+            check_stop()?;
             if step.consumed > lent.1 {
                 return Err(error_msg(
                     ErrorKind::Protocol,
@@ -104,7 +109,7 @@ pub fn decode_slice(
     sink: &mut dyn Sink,
 ) -> Result<Box<dyn Decoder>> {
     let mut run = SliceRun::new();
-    while !run.run(&mut *decoder, bytes, sink, usize::MAX)? {}
+    while !run.run(&mut *decoder, bytes, sink, usize::MAX, || Ok(()))? {}
     Ok(decoder)
 }
 

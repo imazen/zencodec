@@ -226,3 +226,13 @@ blocking/async controls, existing document controls, doctests and strict workspa
 Clippy pass. These checks establish behavior on the fixture codecs, not a native
 codec performance result. The earlier timing/allocation receipt still describes
 the pre-repair source; measurements below must identify their own source.
+
+The independent resident-input control confirms pointer identity through the
+slice, positioned-slice and inline Tokio drivers, including ranges and yields.
+It also fails on the imported PR211 source: a driver-only Pulse raised during a
+step could be ignored until the next batch, or entirely on `Done`. The repaired
+slice runner checks the async Pulse before and after each successful native step,
+keeping native errors primary. Its synchronous instantiation supplies a no-op
+closure. Direct assignment of a zero public step quota now makes progress rather
+than yielding forever. These are driver-boundary checks; they do not preempt a
+native call.

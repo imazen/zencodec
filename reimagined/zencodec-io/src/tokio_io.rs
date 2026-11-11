@@ -299,7 +299,13 @@ where
             let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
             loop {
                 check(&pulse)?;
-                if run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)? {
+                if run.run(
+                    &mut *decoder,
+                    bytes,
+                    &mut sink,
+                    opts.steps_per_batch,
+                    || check(&pulse),
+                )? {
                     return Ok((decoder, sink));
                 }
                 tokio::task::yield_now().await;
@@ -390,7 +396,13 @@ where
             let mut written = 0u64;
             loop {
                 check(&pulse)?;
-                let done = run.run(&mut *decoder, bytes, &mut sink, opts.steps_per_batch)?;
+                let done = run.run(
+                    &mut *decoder,
+                    bytes,
+                    &mut sink,
+                    opts.steps_per_batch,
+                    || check(&pulse),
+                )?;
                 if done {
                     check(&pulse)?;
                     sink.finish()?;
