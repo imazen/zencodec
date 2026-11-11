@@ -26,3 +26,9 @@ the resource wrapper with an isolated output directory. Run the resulting
 retain full stdout/stderr, compiler flags and source/binary SHA-256 identities.
 Use `--format=json`; the JSON includes all resource and reliability flags.
 Do not drop flagged processes or disable admission to obtain acceptance.
+
+`just ablation-probe-build` builds the timer-free allocation probe.
+`just ablation-allocations BINARY NEW_DIRECTORY` uses the repository's existing
+heaptrack/flamegraph-leaf counting method for each arm at zero and 1,000 extra
+operations. Both captures include the same warm operation. Reports cover all
+threads, preserve raw captures and never infer memory or elapsed time from calls.

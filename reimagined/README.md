@@ -35,3 +35,7 @@ The synthetic controls cover discovery and exact sample selection. The native
 witness covers one uncompressed tiled Gray8 TIFF with two root directories and
 a reduced SubIFD. EXR, JXL and IMIJ have no native adapter in this candidate.
 See [validation](docs/validation-2026-11-11.md) for receipts and failed attempts.
+
+[The ablation evidence ledger](docs/ablation-evidence-2026-11-11.md) identifies
+which older responsibilities remain necessary, which mechanisms can be
+consolidated, and what the paired driver/heaptrack study actually establishes.
