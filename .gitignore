@@ -74,3 +74,4 @@ __pycache__/
 
 # The isolated reimagined experiment retains its exact resolved graph.
 !reimagined/Cargo.lock
+!reimagined/tools/native-tiff/Cargo.lock
