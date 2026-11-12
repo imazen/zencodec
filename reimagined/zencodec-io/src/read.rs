@@ -23,6 +23,39 @@ pub trait ReadAt {
         None
     }
 
+    /// Append everything from `offset` to the end of the input to `out`,
+    /// or `max` bytes if that comes first. Returns the bytes appended.
+    ///
+    /// A driver calls this when a decoder needs the whole file. The default
+    /// reads in pieces through [`read_at`](Self::read_at), filling memory
+    /// before each piece. A source over a reader overrides it with the
+    /// reader's own read-to-end, which fills nothing.
+    fn read_to_end(&mut self, offset: u64, max: usize, out: &mut Vec<u8>) -> io::Result<usize> {
+        let start = out.len();
+        if let Some(total) = self.total_len()? {
+            let rest = total.saturating_sub(offset).min(max as u64);
+            reserve(out, rest as usize)?;
+        }
+        let mut piece = PIECE;
+        loop {
+            let got = out.len() - start;
+            let want = piece.min(max - got);
+            if want == 0 {
+                break;
+            }
+            let at = out.len();
+            reserve(out, want)?;
+            out.resize(at + want, 0);
+            let n = self.read_at(offset + got as u64, &mut out[at..])?;
+            out.truncate(at + n);
+            if n == 0 {
+                break;
+            }
+            piece = piece.saturating_mul(2).min(PIECE_MAX);
+        }
+        Ok(out.len() - start)
+    }
+
     /// Read several spans. A source with slow round trips overrides this to
     /// fetch them together. A span the input ends inside is shortened.
     fn read_ranges(&mut self, ranges: &mut [RangeRead]) -> io::Result<()> {
@@ -38,6 +71,16 @@ pub trait ReadAt {
         }
         Ok(())
     }
+}
+
+/// The first piece a default read-to-end asks for, and the largest.
+pub(crate) const PIECE: usize = 64 * 1024;
+pub(crate) const PIECE_MAX: usize = 8 * 1024 * 1024;
+
+/// Make room for `more` bytes, reporting failure instead of aborting.
+pub(crate) fn reserve(out: &mut Vec<u8>, more: usize) -> io::Result<()> {
+    out.try_reserve(more)
+        .map_err(|_| io::Error::from(io::ErrorKind::OutOfMemory))
 }
 
 impl ReadAt for &[u8] {
@@ -69,6 +112,13 @@ impl<R: Read + Seek> ReadAt for SeekRead<R> {
 
     fn total_len(&mut self) -> io::Result<Option<u64>> {
         self.0.seek(SeekFrom::End(0)).map(Some)
+    }
+
+    fn read_to_end(&mut self, offset: u64, max: usize, out: &mut Vec<u8>) -> io::Result<usize> {
+        let end = self.0.seek(SeekFrom::End(0))?;
+        self.0.seek(SeekFrom::Start(offset))?;
+        reserve(out, end.saturating_sub(offset).min(max as u64) as usize)?;
+        (&mut self.0).take(max as u64).read_to_end(out)
     }
 }
 
@@ -115,6 +165,17 @@ impl<R: Read> ReadAt for Sequential<R> {
         self.position += n as u64;
         Ok(n)
     }
+
+    fn read_to_end(&mut self, offset: u64, max: usize, out: &mut Vec<u8>) -> io::Result<usize> {
+        // An empty read skips ahead to `offset`, or fails if it is behind.
+        self.read_at(offset, &mut [])?;
+        if self.position < offset {
+            return Ok(0);
+        }
+        let n = (&mut self.reader).take(max as u64).read_to_end(out)?;
+        self.position += n as u64;
+        Ok(n)
+    }
 }
 
 pub(crate) fn source_error(e: io::Error) -> Error {
@@ -158,6 +219,12 @@ fn read_next(window: &mut Window, source: &mut dyn ReadAt, next: Next) -> Result
                 .read_at(offset, window.spare(len))
                 .map_err(source_error)?;
             window.commit(len, n);
+        }
+        Next::ToEnd { offset, max } => {
+            source
+                .read_to_end(offset, max, window.tail())
+                .map_err(source_error)?;
+            window.ended(max)?;
         }
         Next::Ranges(mut reads) => {
             let wanted: Vec<usize> = reads.iter().map(|r| r.buf.len()).collect();

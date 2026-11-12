@@ -87,6 +87,9 @@ pub(crate) enum Next {
     Ready,
     /// Append up to `len` bytes at `offset` to the sequential window.
     Read { offset: u64, len: usize },
+    /// Append everything from `offset` to the end of the input, stopping at
+    /// `max` bytes: a decoder asked for the whole file.
+    ToEnd { offset: u64, max: usize },
     /// Read these spans.
     Ranges(Vec<RangeRead>),
     /// Learn the total length.
@@ -136,20 +139,25 @@ impl Window {
         self.total == Some(self.end())
     }
 
+    /// Bytes held now: the sequential run and every range read ahead.
+    fn held(&self) -> u64 {
+        self.live().len() as u64 + self.ranges.iter().map(|r| r.buf.len() as u64).sum::<u64>()
+    }
+
+    fn over_limit(limit: u64, actual: Option<u64>) -> zencodec::Error {
+        CodecError::new(ErrorKind::Limit(LimitKind::InputBytes))
+            .with_native(LimitExceeded {
+                kind: LimitKind::InputBytes,
+                limit,
+                actual,
+            })
+            .at()
+    }
+
     fn admit(&self, more: u64) -> Result<()> {
-        let held = self.live().len() as u64
-            + self.ranges.iter().map(|r| r.buf.len() as u64).sum::<u64>()
-            + more;
+        let held = self.held() + more;
         match self.max_bytes {
-            Some(limit) if held > limit => {
-                Err(CodecError::new(ErrorKind::Limit(LimitKind::InputBytes))
-                    .with_native(LimitExceeded {
-                        kind: LimitKind::InputBytes,
-                        limit,
-                        actual: Some(held),
-                    })
-                    .at())
-            }
+            Some(limit) if held > limit => Err(Self::over_limit(limit, Some(held))),
             _ => Ok(()),
         }
     }
@@ -211,14 +219,20 @@ impl Window {
                 if self.at_end() {
                     return Ok(Next::Ready);
                 }
-                let len = self
-                    .total
-                    .map_or(self.read_size, |t| (t - self.end()) as usize)
-                    .max(1);
-                self.admit(len as u64)?;
-                Ok(Next::Read {
+                // The rest of the input in one call, which a source over a
+                // reader serves with no fill before it and one allocation.
+                // A gate refuses a known length now; an unknown one is read
+                // to one byte past the gate, so an input that is too long is
+                // noticed without being held.
+                self.admit(self.total.map_or(1, |t| t - self.end()))?;
+                let max = self.max_bytes.map_or(usize::MAX, |limit| {
+                    usize::try_from(limit - self.held())
+                        .unwrap_or(usize::MAX)
+                        .saturating_add(1)
+                });
+                Ok(Next::ToEnd {
                     offset: self.end(),
-                    len,
+                    max,
                 })
             }
             InputRequest::Len => Ok(if self.total.is_some() {
@@ -296,6 +310,28 @@ impl Window {
         self.tail += n.min(len);
         if n == 0 {
             self.total = Some(self.end());
+        }
+    }
+
+    /// The vector a read to the end appends to: it ends where the live
+    /// bytes do.
+    pub(crate) fn tail(&mut self) -> &mut Vec<u8> {
+        // Past the live bytes is spare memory from earlier reads.
+        self.buf.truncate(self.tail);
+        &mut self.buf
+    }
+
+    /// Record a read to the end that was allowed `max` bytes.
+    pub(crate) fn ended(&mut self, max: usize) -> Result<()> {
+        let got = self.buf.len() - self.tail;
+        self.tail = self.buf.len();
+        match self.max_bytes {
+            // The cap was reached, and the cap is one byte past the gate.
+            Some(limit) if got >= max => Err(Self::over_limit(limit, None)),
+            _ => {
+                self.total = Some(self.end());
+                Ok(())
+            }
         }
     }
 

@@ -34,7 +34,7 @@
 use crate::drive::{Batch, DriveOptions, Next, RangeRead, Session, Window};
 use crate::encoder_sink::EncoderSink;
 use crate::memory::{SliceRun, decode_slice};
-use crate::read::{sink_error, source_error};
+use crate::read::{PIECE, PIECE_MAX, reserve, sink_error, source_error};
 use std::future::Future;
 use std::io;
 use std::sync::Arc;
@@ -56,12 +56,54 @@ pub trait AsyncSource: Send {
         async { Ok(None) }
     }
 
-    /// The whole input, when it is already in memory. An inline driver
-    /// borrows it instead of reading. A worker cannot borrow across threads:
-    /// for resident bytes and a worker, use [`decode_buffered`] or
-    /// [`transcode_buffered`], which hand the bytes over once.
+    /// The whole input, when it is already in memory. A driver that runs
+    /// steps on the polling task ([`Offload::Inline`], [`Offload::InPlace`])
+    /// borrows it instead of reading. A worker cannot borrow across threads
+    /// and would copy it: for resident bytes and a worker, use
+    /// [`decode_buffered`] or [`transcode_buffered`], which hand the bytes
+    /// over once.
     fn as_slice(&self) -> Option<&[u8]> {
         None
+    }
+
+    /// Append everything from `offset` to the end of the input to `out`,
+    /// or `max` bytes if that comes first. Returns the bytes appended.
+    ///
+    /// A driver calls this when a decoder needs the whole file. The default
+    /// reads in pieces through [`read_at`](Self::read_at), filling memory
+    /// before each piece. A source over a reader overrides it with the
+    /// reader's own read-to-end, which fills nothing.
+    fn read_to_end(
+        &mut self,
+        offset: u64,
+        max: usize,
+        out: &mut Vec<u8>,
+    ) -> impl Future<Output = io::Result<usize>> + Send {
+        async move {
+            let start = out.len();
+            if let Some(total) = self.total_len().await? {
+                let rest = total.saturating_sub(offset).min(max as u64);
+                reserve(out, rest as usize)?;
+            }
+            let mut piece = PIECE;
+            loop {
+                let got = out.len() - start;
+                let want = piece.min(max - got);
+                if want == 0 {
+                    break;
+                }
+                let at = out.len();
+                reserve(out, want)?;
+                out.resize(at + want, 0);
+                let n = self.read_at(offset + got as u64, &mut out[at..]).await?;
+                out.truncate(at + n);
+                if n == 0 {
+                    break;
+                }
+                piece = piece.saturating_mul(2).min(PIECE_MAX);
+            }
+            Ok(out.len() - start)
+        }
     }
 
     /// Read several spans. A source with slow round trips (HTTP ranges)
@@ -110,6 +152,20 @@ impl<B: AsRef<[u8]> + Send> AsyncSource for InMemory<B> {
     fn as_slice(&self) -> Option<&[u8]> {
         Some(self.0.as_ref())
     }
+
+    async fn read_to_end(
+        &mut self,
+        offset: u64,
+        max: usize,
+        out: &mut Vec<u8>,
+    ) -> io::Result<usize> {
+        let bytes = self.0.as_ref();
+        let from = (offset.min(bytes.len() as u64)) as usize;
+        let n = max.min(bytes.len() - from);
+        reserve(out, n)?;
+        out.extend_from_slice(&bytes[from..from + n]);
+        Ok(n)
+    }
 }
 
 /// A forward-only async reader as a source. A read behind the current
@@ -150,6 +206,22 @@ impl<R: AsyncRead + Unpin + Send> AsyncSource for Streamed<R> {
         self.position += n as u64;
         Ok(n)
     }
+
+    async fn read_to_end(
+        &mut self,
+        offset: u64,
+        max: usize,
+        out: &mut Vec<u8>,
+    ) -> io::Result<usize> {
+        // An empty read skips ahead to `offset`, or fails if it is behind.
+        self.read_at(offset, &mut []).await?;
+        if self.position < offset {
+            return Ok(0);
+        }
+        let n = (&mut self.reader).take(max as u64).read_to_end(out).await?;
+        self.position += n as u64;
+        Ok(n)
+    }
 }
 
 /// A unit of codec work handed to an executor.
@@ -162,6 +234,13 @@ pub enum Offload {
     /// On the task that polls the driver. For short steps on small images;
     /// costs nothing, and blocks that runtime thread while a step runs.
     Inline,
+    /// On the task that polls the driver, after telling the runtime that
+    /// its thread is about to block (`tokio::task::block_in_place`), so the
+    /// thread's other tasks move to other workers. Nothing crosses threads:
+    /// there is no hand-off, and bytes that are in memory are borrowed even
+    /// when the caller only lent them. Needs the multi-thread runtime; on a
+    /// current-thread runtime it is [`Inline`](Self::Inline).
+    InPlace,
     /// On Tokio's blocking pool.
     #[default]
     Blocking,
@@ -174,15 +253,28 @@ impl std::fmt::Debug for Offload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Inline => "Inline",
+            Self::InPlace => "InPlace",
             Self::Blocking => "Blocking",
             Self::Custom(_) => "Custom",
         })
     }
 }
 
-/// Work that has been handed off and, unless inline, is already running.
+/// Run `work` here, with the runtime warned that this thread will block.
+fn in_place<T>(work: impl FnOnce() -> T) -> T {
+    use tokio::runtime::{Handle, RuntimeFlavor};
+    match Handle::try_current().map(|handle| handle.runtime_flavor()) {
+        Ok(RuntimeFlavor::MultiThread) => tokio::task::block_in_place(work),
+        // A current-thread runtime has no other worker to move tasks to.
+        _ => work(),
+    }
+}
+
+/// Work that has been handed off and, unless it runs here, is already
+/// running.
 enum Pending<T, F> {
     Inline(F),
+    InPlace(F),
     Blocking(tokio::task::JoinHandle<T>),
     Custom(tokio::sync::oneshot::Receiver<T>),
 }
@@ -195,6 +287,7 @@ impl Offload {
     {
         match self {
             Self::Inline => Pending::Inline(work),
+            Self::InPlace => Pending::InPlace(work),
             Self::Blocking => Pending::Blocking(tokio::task::spawn_blocking(work)),
             Self::Custom(run) => {
                 let (tx, rx) = tokio::sync::oneshot::channel();
@@ -219,6 +312,7 @@ impl<T, F: FnOnce() -> T> Pending<T, F> {
         };
         match self {
             Self::Inline(work) => Ok(work()),
+            Self::InPlace(work) => Ok(in_place(work)),
             Self::Blocking(handle) => handle.await.map_err(|e| lost(Some(e))),
             Self::Custom(rx) => rx.await.map_err(|_| lost(None)),
         }
@@ -257,6 +351,13 @@ async fn read_next<Src: AsyncSource + ?Sized>(
                 .map_err(source_error)?;
             window.commit(len, n);
         }
+        Next::ToEnd { offset, max } => {
+            source
+                .read_to_end(offset, max, window.tail())
+                .await
+                .map_err(source_error)?;
+            window.ended(max)?;
+        }
         Next::Ranges(mut reads) => {
             let wanted: Vec<usize> = reads.iter().map(|r| r.buf.len()).collect();
             source.read_ranges(&mut reads).await.map_err(source_error)?;
@@ -293,12 +394,16 @@ where
     Src: AsyncSource + ?Sized,
 {
     async move {
-        if let (Offload::Inline, Some(bytes)) = (&offload, source.as_slice()) {
+        if let (Offload::Inline | Offload::InPlace, Some(bytes)) = (&offload, source.as_slice()) {
             // Resident bytes on the polling task: borrow them, read nothing.
             let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
+            let here = matches!(offload, Offload::Inline);
             loop {
                 let quota = opts.steps_per_batch;
-                if run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())? {
+                let mut batch =
+                    || run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse());
+                let done = if here { batch() } else { in_place(batch) };
+                if done? {
                     return Ok((decoder, sink));
                 }
                 tokio::task::yield_now().await;
@@ -307,6 +412,16 @@ where
         let mut session = Box::new(Session::new(decoder, sink, &opts));
         loop {
             check(&pulse)?;
+            // Reads are planned and awaited here, on the polling task. Only
+            // codec work crosses to a worker, so a decoder waiting for its
+            // whole file costs no hand-off while the file arrives.
+            loop {
+                let next = session.window.next_read(session.decoder.requested())?;
+                if matches!(next, Next::Ready) {
+                    break;
+                }
+                read_next(&mut session.window, source, next).await?;
+            }
             let shared = pulse.clone();
             let quota = opts.steps_per_batch;
             let (back, end) = offload
@@ -382,17 +497,22 @@ where
     W: AsyncWrite + Unpin + Send + ?Sized,
 {
     async move {
-        if let (Offload::Inline, Some(bytes)) = (&offload, source.as_slice()) {
+        if let (Offload::Inline | Offload::InPlace, Some(bytes)) = (&offload, source.as_slice()) {
             // Resident bytes on the polling task: borrow them, read nothing,
             // and reuse one output vector.
             let (mut decoder, mut sink, mut run) = (decoder, sink, SliceRun::new());
+            let here = matches!(offload, Offload::Inline);
             let mut written = 0u64;
             loop {
                 let quota = opts.steps_per_batch;
-                let done = run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())?;
-                if done {
-                    sink.finish()?;
-                }
+                let mut batch = || -> Result<bool> {
+                    let done = run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())?;
+                    if done {
+                        sink.finish()?;
+                    }
+                    Ok(done)
+                };
+                let done = if here { batch() } else { in_place(batch) }?;
                 let mut chunk = sink.take_output();
                 publish(out, &mut chunk, &mut written, &pulse).await?;
                 sink.recycle(chunk);
@@ -408,6 +528,16 @@ where
         let mut written = 0u64;
         loop {
             check(&pulse)?;
+            // Reads are planned and awaited here; see `decode`. Finished
+            // bytes go out before the driver waits for input.
+            loop {
+                let next = session.window.next_read(session.decoder.requested())?;
+                if matches!(next, Next::Ready) {
+                    break;
+                }
+                publish(out, &mut carry, &mut written, &pulse).await?;
+                read_next(&mut session.window, source, next).await?;
+            }
             if !opts.pipeline_writes {
                 publish(out, &mut carry, &mut written, &pulse).await?;
             }

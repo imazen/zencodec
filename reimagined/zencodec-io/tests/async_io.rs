@@ -16,6 +16,7 @@ use zencodec::{
     Result, SharedPulse, StopReason,
 };
 use zencodec_fixtures::bias::BiasCodec;
+use zencodec_fixtures::rle::RleCodec;
 use zencodec_fixtures::rows::RowsCodec;
 use zencodec_io::tokio_io::{
     self, AsyncSource, InMemory, Offload, Streamed, decode_buffered, transcode_buffered,
@@ -73,6 +74,7 @@ impl AsyncSource for Trickle {
 fn offloads() -> Vec<Offload> {
     vec![
         Offload::Inline,
+        Offload::InPlace,
         Offload::Blocking,
         Offload::Custom(Arc::new(|job| {
             std::thread::spawn(job);
@@ -424,7 +426,15 @@ impl AsyncSource for Resident {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_inline_driver_borrows_bytes_already_in_memory() {
+async fn a_driver_on_the_polling_task_borrows_bytes_already_in_memory() {
+    // `InPlace` warns the runtime and then works on this thread, so it can
+    // borrow what the caller only lent, as `Inline` does.
+    for here in [Offload::Inline, Offload::InPlace] {
+        borrows_resident_bytes(here).await;
+    }
+}
+
+async fn borrows_resident_bytes(here: Offload) {
     for (enc, dec) in encoders().iter().zip(decoders()) {
         let (bytes, source) = sample(&**enc, 14, 90, 8);
         let opts = DriveOptions::new().with_steps_per_batch(3);
@@ -432,7 +442,7 @@ async fn an_inline_driver_borrows_bytes_already_in_memory() {
             dec.decoder(&DecodeSpec::new()).unwrap(),
             &mut Resident(bytes.clone()),
             Collect::new(),
-            Offload::Inline,
+            here.clone(),
             opts,
             SharedPulse::default(),
         )
@@ -454,7 +464,7 @@ async fn an_inline_driver_borrows_bytes_already_in_memory() {
             to(Arc::new(RowsCodec)),
             &mut Resident(bytes),
             &mut out,
-            Offload::Inline,
+            here.clone(),
             opts,
             SharedPulse::default(),
         )
@@ -580,5 +590,80 @@ async fn a_step_quota_of_zero_still_makes_progress() {
                 .unwrap();
             assert!(!out.is_empty());
         }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_decoder_waiting_for_its_whole_file_costs_no_hand_off() {
+    // The file trickles in forty bytes at a time. A decoder that needs all
+    // of it can do nothing until the last byte, so no read may cost a trip
+    // to a worker: one hand-off reads the header, one decodes.
+    let (bytes, source) = sample(&RleCodec::codec(), 40, 60, 9);
+    assert!(bytes.len() > 4_000);
+    let jobs = Arc::new(AtomicUsize::new(0));
+    let counted = jobs.clone();
+    let offload = Offload::Custom(Arc::new(move |job| {
+        counted.fetch_add(1, Ordering::SeqCst);
+        std::thread::spawn(job);
+    }));
+    let mut trickle = Trickle::new(&bytes, 40);
+    let (_, collect) = tokio_io::decode(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &mut trickle,
+        Collect::new(),
+        offload,
+        DriveOptions::new().with_read_size(64),
+        SharedPulse::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), source);
+    assert!(
+        trickle.reads.load(Ordering::SeqCst) > 100,
+        "many small reads"
+    );
+    assert_eq!(jobs.load(Ordering::SeqCst), 2, "hand-offs to the worker");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stream_of_unknown_length_is_read_to_its_end_in_one_call() {
+    // A forward-only reader cannot say how long it is. A decoder that needs
+    // the whole file gets it through the reader's own read-to-end.
+    for offload in offloads() {
+        let (bytes, source) = sample(&RleCodec::codec(), 40, 60, 10);
+        let mut stream = Streamed::new(&bytes[..]);
+        let (_, collect) = tokio_io::decode(
+            RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+            &mut stream,
+            Collect::new(),
+            offload.clone(),
+            DriveOptions::new().with_read_size(64),
+            SharedPulse::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(packed(&collect.frames()[0]), source, "{offload:?}");
+
+        // With a gate, a stream that turns out too long is refused after at
+        // most one byte more than the gate allows has been taken from it.
+        let mut stream = Streamed::new(&bytes[..]);
+        let err = tokio_io::decode(
+            RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+            &mut stream,
+            Collect::new(),
+            offload.clone(),
+            DriveOptions::new()
+                .with_read_size(64)
+                .with_max_input_bytes(1_000),
+            SharedPulse::default(),
+        )
+        .await
+        .err()
+        .unwrap();
+        assert_eq!(
+            err.error().kind(),
+            ErrorKind::Limit(zencodec::LimitKind::InputBytes),
+            "{offload:?}"
+        );
     }
 }

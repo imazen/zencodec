@@ -24,8 +24,9 @@ use zencodec_fixtures::rle::RleCodec;
 use zencodec_fixtures::rows::{RowsCodec, bt601_full, planar_raster, yuv420};
 use zencodec_fixtures::{FixtureError, PACKED};
 use zencodec_io::{
-    Collect, DriveOptions, EncoderSink, Forward, SeekBack, Sequential, decode, decode_read_at,
-    decode_slice, encode, encode_sequence, feed_frame, probe, transcode, write_output,
+    Collect, DriveOptions, EncoderSink, Forward, SeekBack, SeekRead, Sequential, decode,
+    decode_read_at, decode_slice, encode, encode_sequence, feed_frame, probe, transcode,
+    write_output,
 };
 use zenpixels::plane::{AnyPlane, PlanarSlice, PlaneBuf};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
@@ -1309,4 +1310,120 @@ fn reads_end_where_the_decoder_s_rows_do() {
     assert_eq!(packed(&collect.frames()[0]), source);
     // One read per row, plus the header's, one top-up and the end.
     assert!(drip.reads <= 304, "{} reads for 300 rows", drip.reads);
+}
+
+/// Counts how a source is read.
+struct Counted<S> {
+    inner: S,
+    read_at: usize,
+    to_end: usize,
+    /// Bytes handed out, by either call.
+    bytes: usize,
+}
+
+impl<S> Counted<S> {
+    fn new(inner: S) -> Self {
+        Self {
+            inner,
+            read_at: 0,
+            to_end: 0,
+            bytes: 0,
+        }
+    }
+}
+
+impl<S: zencodec_io::ReadAt> zencodec_io::ReadAt for Counted<S> {
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> std::io::Result<usize> {
+        self.read_at += 1;
+        let n = self.inner.read_at(offset, out)?;
+        self.bytes += n;
+        Ok(n)
+    }
+    fn total_len(&mut self) -> std::io::Result<Option<u64>> {
+        self.inner.total_len()
+    }
+    fn read_to_end(
+        &mut self,
+        offset: u64,
+        max: usize,
+        out: &mut Vec<u8>,
+    ) -> std::io::Result<usize> {
+        self.to_end += 1;
+        let n = self.inner.read_to_end(offset, max, out)?;
+        self.bytes += n;
+        Ok(n)
+    }
+}
+
+#[test]
+fn a_decoder_that_needs_the_whole_file_gets_it_in_one_read() {
+    let (bytes, source) = encoded(&RleCodec::codec(), 40, 60, PixelDescriptor::RGB8_SRGB, 37);
+    assert!(bytes.len() > 4_000);
+    let opts = DriveOptions::new().with_read_size(64);
+
+    // A file: one read for the header, one for everything after it.
+    let mut file = Counted::new(SeekRead(Cursor::new(&bytes)));
+    let mut collect = Collect::new();
+    decode_read_at(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &mut file,
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), source);
+    assert_eq!((file.read_at, file.to_end), (1, 1));
+    assert_eq!(file.bytes, bytes.len(), "every byte was read once");
+
+    // A forward-only stream of unknown length: the same two reads.
+    let mut stream = Counted::new(Sequential::new(Cursor::new(&bytes)));
+    let mut collect = Collect::new();
+    decode_read_at(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &mut stream,
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), source);
+    assert_eq!((stream.read_at, stream.to_end), (1, 1));
+
+    // A streaming decoder never asks for the rest of the file.
+    let (bytes, source) = encoded(&RowsCodec, 40, 60, PixelDescriptor::RGB8_SRGB, 37);
+    let mut file = Counted::new(SeekRead(Cursor::new(&bytes)));
+    let mut collect = Collect::new();
+    decode_read_at(
+        RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
+        &mut file,
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), source);
+    assert_eq!(file.to_end, 0);
+}
+
+#[test]
+fn a_stream_longer_than_the_gate_is_refused_without_being_drained() {
+    let (bytes, _) = encoded(&RleCodec::codec(), 40, 60, PixelDescriptor::RGB8_SRGB, 38);
+    assert!(bytes.len() > 4_000);
+    let mut stream = Counted::new(Sequential::new(Cursor::new(&bytes)));
+    let err = decode_read_at(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &mut stream,
+        &mut Collect::new(),
+        &DriveOptions::new()
+            .with_read_size(64)
+            .with_max_input_bytes(1_000),
+        &NoPulse,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(err.error().kind(), ErrorKind::Limit(LimitKind::InputBytes));
+    // The stream's length is unknown, so the only way to learn it is too
+    // long is to take one byte more than the gate allows.
+    assert!(stream.bytes <= 1_001, "{} bytes taken", stream.bytes);
 }

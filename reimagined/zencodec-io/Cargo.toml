@@ -15,7 +15,7 @@ tokio = ["dep:tokio"]
 [dependencies]
 zencodec = { path = "../zencodec", features = ["std"] }
 zenpixels = { workspace = true, features = ["std"] }
-tokio = { workspace = true, features = ["rt", "io-util", "sync"], optional = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "io-util", "sync"], optional = true }
 
 [dev-dependencies]
 how-far = { workspace = true }
