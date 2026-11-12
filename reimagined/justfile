@@ -76,3 +76,10 @@ cpu-profile native synthetic output:
 
 cpu-profile-admitted lease executor native synthetic output:
     {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}
+
+# Owner-requested studies; hold the legacy rendezvous as well as the retained lease.
+bounded-rerun study binary output:
+    python3 tools/native-slice/bounded-rerun.py {{study}} {{binary}} {{output}}
+
+bounded-rerun-admitted lease executor study binary output:
+    flock --timeout 300 "${XDG_CACHE_HOME:-$HOME/.cache}/zenbench/zenbench.lock" {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/bounded-rerun.py {{study}} {{binary}} {{output}}

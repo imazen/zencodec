@@ -56,3 +56,25 @@ Perf counter collection adds overhead, especially around context switches;
 these process-profile means must not be relabeled as uninstrumented latency.
 Use a fresh output directory. Invalid timing stays invalid; allocation calls do
 not establish latency or process memory.
+
+## Two bounded follow-up studies
+
+`bounded-rerun.py` implements only the owner-requested tiny native and repaired
+1024-square synthetic process-accounting studies. It reuses the existing perf
+counter parser and native RGB8 probe. The synthetic probe accepts explicit
+size/strip/quota arguments; its warm decode checks exact active samples, row
+coverage and completion outside the extra-operation loop. Codec and driver
+implementations stay unchanged.
+
+Each cell calibrates by doubling the extra-operation count until its external
+perf duration minus its zero-extra baseline reaches 500 ms. The unchanged
+native A/A control uses the native count. Counts freeze before five shuffled
+blocks; every block survives. Calibration is for duration only, with a fixed
+10,240,000-operation ceiling, never a search for passing timing. Tiny allocation
+calls use separate zero/1,000-extra heaptrack captures for the same arms/sizes.
+
+`bounded-rerun-admitted` holds the legacy cache lock as well as the retained
+published zenbench lease, then uses the verified performance CPU boundary.
+These remain profiler diagnostics without a zenbench cleanliness/latency
+acceptance verdict. Report A/A variation beside derived costs; do not promote
+differences below that variation into wins or equivalence.
