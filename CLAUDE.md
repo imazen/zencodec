@@ -1,5 +1,23 @@
 # zencodec
 
+## Known Bugs: reimagined metadata readiness (2026-11-11 source review)
+
+The unpublished WholeImage helper accepts DecodeSpec::metadata_first but its
+WholeDecoder::header does not check ImageInfo::settled before its Info boundary.
+The selected-document driver does perform this check. The comparison page now
+records this source finding; no failing runtime control or repair is claimed.
+See reimagined/docs/document-design.md. Existing codec APIs are unchanged.
+
+## Known Bugs: resident experiment cancellation (2026-11-11, fixed in PR210)
+
+The PR211 resident inline shortcut checked the driver Pulse only between
+batches, allowing a successful native step to hide a stop, including on Done.
+PR210's failing-first resident control reproduces this. Its slice runner now
+checks before and after each successful step; native errors stay primary.
+Pointer controls retain caller input identity through ranges and async yields.
+The native borrowed-Pulse trial and timing limits are recorded in
+`reimagined/docs/ablation-evidence-2026-11-11.md`.
+
 ## Known Bugs: edited video presentation (2026-10-30)
 
 Native MP4 controls reproduce identical edit offsets for different segment

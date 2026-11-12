@@ -1,0 +1,26 @@
+[workspace]
+# A standalone spike workspace. It is not a member of the repository's root
+# workspace and nothing here is published. See README.md.
+members = ["zencodec", "zencodec-io", "zencodec-fixtures"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/imazen/zencodec"
+publish = false
+
+[workspace.dependencies]
+# zenpixels main: the first revision carrying `plane::PlanarSlice`.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3286169c7ef5b1e66ac841c3d8204eb54e390f8c", default-features = false, features = ["icc"] }
+how-far = { version = "0.1.0", default-features = false }
+whereat = { version = "0.1.5", default-features = false }
+tokio = { version = "1.49.0", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[profile.dev]
+opt-level = 1

@@ -71,3 +71,8 @@ __pycache__/
 
 # Build-only documentation catalogs and preserved local cache generations.
 /docs/.cache/
+
+# The isolated reimagined experiment retains its exact resolved graph.
+!reimagined/Cargo.lock
+!reimagined/tools/native-tiff/Cargo.lock
+!reimagined/tools/ablation/Cargo.lock

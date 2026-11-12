@@ -1,0 +1,694 @@
+{
+  "source_revision": "02a8aa35de6fe75020a422625087c876ddbd9a35",
+  "runtime_baseline": "3bfa754857020586c9d88cbeb11259186b5ea4d1",
+  "native_compiled_source": "739bc0dfa3add545dcac2a9f58f43176b4dc76f9",
+  "synthetic_probe_compiled_source": "283510da1d1075bf20c8de4f51bef1704e864851",
+  "artifact_root": "/mnt/v/output/zencodec/reimagined-rerun-2026-11-12",
+  "binary_identities": {
+    "native": {
+      "path": "/mnt/v/output/zencodec/reimagined-rerun-2026-11-12/binaries/native",
+      "sha256": "db2587fa3f9adca51dd116eb98cfac71911fc26166d572a96397024c8b54b3b2"
+    },
+    "synthetic": {
+      "path": "/mnt/v/output/zencodec/reimagined-rerun-2026-11-12/binaries/synthetic",
+      "sha256": "9ceb081d066956fb0a6bf662024e7268d417786153e5aba9afc6090d54f1bcd5"
+    },
+    "lease": {
+      "path": "/mnt/v/output/zencodec/reimagined-rerun-2026-11-12/binaries/lease",
+      "sha256": "a239eb1b3f6fa0c652c43e7415228c0092086274d1d1f083eef119b9602fa052"
+    },
+    "executor": {
+      "path": "/mnt/v/output/zencodec/reimagined-rerun-2026-11-12/binaries/executor",
+      "sha256": "da3358cc46a622194c63e5664aa666eeaa42e2cbe620e84ae217fb63287d3ccc"
+    }
+  },
+  "method": "Five shuffled blocks; each cell subtracts a zero-extra process with identical fixture, runtime and one warm decode. Direct in-memory function loops; no codec CLI per decode.",
+  "limits": "External perf diagnostic, not zenbench Confirm. No cleanliness verdict. All blocks, A/A variation, negative adjusted counters and interference observations retained. Profiler overhead remains.",
+  "cpu_placement": "zenbench exec performance: enforced_uniform hard cpuset CPUs 0-23, capacity1024_l332768K; legacy rendezvous plus retained published exclusive lease",
+  "blocks": 5,
+  "pairs": {
+    "tiny-native": 180,
+    "large-synthetic": 40
+  },
+  "allocation_cells": 36,
+  "heaptrack_extra_decodes": 1000,
+  "AA_definition": "For each codec/size and metric, maximum absolute native versus unchanged-native-A/A difference across the five corresponding blocks. Also retain absolute difference of the two means. This conservative observed spread is not a confidence interval.",
+  "calibration_repair": {
+    "previous_source": "283510da1d1075bf20c8de4f51bef1704e864851",
+    "previous_script_sha256": "5b9db8dd99187aa25a13326406e0e0a2996b794b155b97fa1b92cb9cc273fc9d",
+    "failure": "FileExistsError(17, 'File exists')",
+    "preserved_record": "run.before-calibration-repair.json",
+    "resumed": "2026-11-12T02:39:37.167093+00:00",
+    "completed_measured_pairs_before_repair": 0
+  },
+  "minimum_measured_loop_ms": 546.924773,
+  "source_unchanged": {
+    "tiny-native": true,
+    "large-synthetic": true
+  },
+  "tiny_native": [
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "native",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.15933866898437501,
+      "cpu_us": 0.15930562499999998,
+      "minimum_loop_ms": 812.343318,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1616319287109375,
+      "cpu_us": 0.16160320312499998,
+      "minimum_loop_ms": 825.742827,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1641404694921875,
+      "cpu_us": 0.16411597656250002,
+      "minimum_loop_ms": 837.406147,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 2560000,
+      "wall_us": 0.24658836046875002,
+      "cpu_us": 0.246479921875,
+      "minimum_loop_ms": 628.367188,
+      "allocation_calls_per_decode": 2.0
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 2560000,
+      "wall_us": 0.29609488914062504,
+      "cpu_us": 0.29603695312499995,
+      "minimum_loop_ms": 749.541895,
+      "allocation_calls_per_decode": 5.0
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1589512578515625,
+      "cpu_us": 0.158922734375,
+      "minimum_loop_ms": 810.64403,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "native",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 6.9085776475000005,
+      "cpu_us": 6.901925,
+      "minimum_loop_ms": 547.933059,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 6.9137032475,
+      "cpu_us": 6.9126175000000005,
+      "minimum_loop_ms": 550.323478,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 6.893283265,
+      "cpu_us": 6.891845,
+      "minimum_loop_ms": 548.188231,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 6.977954329999999,
+      "cpu_us": 6.97637,
+      "minimum_loop_ms": 555.959042,
+      "allocation_calls_per_decode": 2.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 8.518794025,
+      "cpu_us": 8.5172525,
+      "minimum_loop_ms": 677.017646,
+      "allocation_calls_per_decode": 5.0
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 80000,
+      "wall_us": 6.8950108475,
+      "cpu_us": 6.8937725,
+      "minimum_loop_ms": 546.924773,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "native",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1830882724609375,
+      "cpu_us": 0.1830590234375,
+      "minimum_loop_ms": 932.287086,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 2560000,
+      "wall_us": 0.22847932796875,
+      "cpu_us": 0.228432734375,
+      "minimum_loop_ms": 577.826382,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1887854559375,
+      "cpu_us": 0.18873921875,
+      "minimum_loop_ms": 953.089615,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 2560000,
+      "wall_us": 0.3169224659375,
+      "cpu_us": 0.316876953125,
+      "minimum_loop_ms": 800.853005,
+      "allocation_calls_per_decode": 2.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 2560000,
+      "wall_us": 0.32993782234374996,
+      "cpu_us": 0.32987820312500005,
+      "minimum_loop_ms": 832.759332,
+      "allocation_calls_per_decode": 5.0
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 5120000,
+      "wall_us": 0.1844179242578125,
+      "cpu_us": 0.1843858984375,
+      "minimum_loop_ms": 934.506732,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "native",
+      "extra_decodes_per_process": 320000,
+      "wall_us": 2.0033633062500003,
+      "cpu_us": 2.00274625,
+      "minimum_loop_ms": 635.963826,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 320000,
+      "wall_us": 2.041380015625,
+      "cpu_us": 2.04106625,
+      "minimum_loop_ms": 650.159788,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 320000,
+      "wall_us": 1.999967839375,
+      "cpu_us": 1.9995093750000001,
+      "minimum_loop_ms": 636.175538,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 320000,
+      "wall_us": 2.13172216125,
+      "cpu_us": 2.13128125,
+      "minimum_loop_ms": 679.675875,
+      "allocation_calls_per_decode": 2.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 3.6394157499999995,
+      "cpu_us": 3.63835375,
+      "minimum_loop_ms": 579.227222,
+      "allocation_calls_per_decode": 5.0
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 320000,
+      "wall_us": 1.985930585,
+      "cpu_us": 1.98563,
+      "minimum_loop_ms": 634.076942,
+      "allocation_calls_per_decode": 1.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "native",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 4.4712442025,
+      "cpu_us": 4.47028,
+      "minimum_loop_ms": 711.57592,
+      "allocation_calls_per_decode": 30.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 4.94535593875,
+      "cpu_us": 4.9446025,
+      "minimum_loop_ms": 773.803032,
+      "allocation_calls_per_decode": 32.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 4.5170411800000005,
+      "cpu_us": 4.5162275,
+      "minimum_loop_ms": 713.676389,
+      "allocation_calls_per_decode": 30.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 5.020211545,
+      "cpu_us": 5.018995,
+      "minimum_loop_ms": 794.104479,
+      "allocation_calls_per_decode": 33.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 5.12199990875,
+      "cpu_us": 5.12111,
+      "minimum_loop_ms": 815.476237,
+      "allocation_calls_per_decode": 36.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 160000,
+      "wall_us": 4.480154499999999,
+      "cpu_us": 4.4792700000000005,
+      "minimum_loop_ms": 712.320724,
+      "allocation_calls_per_decode": 30.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "native",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 19.44687398,
+      "cpu_us": 19.44302,
+      "minimum_loop_ms": 728.027144,
+      "allocation_calls_per_decode": 30.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "native_probed",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 18.733625125,
+      "cpu_us": 18.727285,
+      "minimum_loop_ms": 744.024526,
+      "allocation_calls_per_decode": 32.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "borrowed_dyn",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 18.414777719999996,
+      "cpu_us": 18.41109,
+      "minimum_loop_ms": 732.228593,
+      "allocation_calls_per_decode": 30.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "next_slice",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 18.856636105,
+      "cpu_us": 18.853369999999998,
+      "minimum_loop_ms": 746.265122,
+      "allocation_calls_per_decode": 33.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "older_erased",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 18.897976865,
+      "cpu_us": 18.894235000000002,
+      "minimum_loop_ms": 752.411034,
+      "allocation_calls_per_decode": 36.0
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "arm": "native_AA",
+      "extra_decodes_per_process": 40000,
+      "wall_us": 18.494031035,
+      "cpu_us": 18.490205000000003,
+      "minimum_loop_ms": 726.453566,
+      "allocation_calls_per_decode": 30.0
+    }
+  ],
+  "AA_controls": [
+    {
+      "codec": "qoi",
+      "size": 8,
+      "wall_spread_ns": 0.6300070312500168,
+      "wall_absolute_mean_difference_ns": 0.3874111328125025,
+      "cpu_spread_ns": 0.6244140625000227,
+      "cpu_absolute_mean_difference_ns": 0.3828906249999875
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "wall_spread_ns": 150.85501250000016,
+      "wall_absolute_mean_difference_ns": 13.566800000000512,
+      "cpu_spread_ns": 125.01249999999982,
+      "cpu_absolute_mean_difference_ns": 8.152500000000146
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "wall_spread_ns": 4.0622400390624875,
+      "wall_absolute_mean_difference_ns": 1.3296517968749981,
+      "cpu_spread_ns": 4.071679687499994,
+      "cpu_absolute_mean_difference_ns": 1.3268750000000011
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "wall_spread_ns": 32.88733124999999,
+      "wall_absolute_mean_difference_ns": 17.432721249999986,
+      "cpu_spread_ns": 32.378124999999955,
+      "cpu_absolute_mean_difference_ns": 17.11624999999981
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "wall_spread_ns": 62.01277500000015,
+      "wall_absolute_mean_difference_ns": 8.910297499999615,
+      "cpu_spread_ns": 62.806250000000546,
+      "cpu_absolute_mean_difference_ns": 8.990000000000691
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "wall_spread_ns": 2463.405775000003,
+      "wall_absolute_mean_difference_ns": 952.8429450000003,
+      "cpu_spread_ns": 2466.8250000000007,
+      "cpu_absolute_mean_difference_ns": 952.8149999999987
+    }
+  ],
+  "derived_differences": [
+    {
+      "codec": "qoi",
+      "size": 8,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 84.95643175781251,
+      "wall_AA_spread_ns": 0.6300070312500168,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 84.87671875000001,
+      "cpu_AA_spread_ns": 0.6244140625000227,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "qoi",
+      "size": 8,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": 2.2932597265624963,
+      "wall_AA_spread_ns": 0.6300070312500168,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 2.297578125000001,
+      "cpu_AA_spread_ns": 0.6244140625000227,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 64.25108249999994,
+      "wall_AA_spread_ns": 150.85501250000016,
+      "wall_status": "unresolved",
+      "cpu_delta_ns": 63.7524999999996,
+      "cpu_AA_spread_ns": 125.01249999999982,
+      "cpu_status": "unresolved"
+    },
+    {
+      "codec": "qoi",
+      "size": 63,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": 5.125599999999395,
+      "wall_AA_spread_ns": 150.85501250000016,
+      "wall_status": "unresolved",
+      "cpu_delta_ns": 10.69250000000011,
+      "cpu_AA_spread_ns": 125.01249999999982,
+      "cpu_status": "unresolved"
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 88.44313796875002,
+      "wall_AA_spread_ns": 4.0622400390624875,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 88.44421875,
+      "cpu_AA_spread_ns": 4.071679687499994,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "bmp",
+      "size": 8,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": 45.391055507812496,
+      "wall_AA_spread_ns": 4.0622400390624875,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 45.37371093749999,
+      "cpu_AA_spread_ns": 4.071679687499994,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 90.34214562499983,
+      "wall_AA_spread_ns": 32.88733124999999,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 90.21499999999992,
+      "cpu_AA_spread_ns": 32.378124999999955,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "bmp",
+      "size": 63,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": 38.01670937499989,
+      "wall_AA_spread_ns": 32.88733124999999,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 38.320000000000164,
+      "cpu_AA_spread_ns": 32.378124999999955,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 74.85560625000016,
+      "wall_AA_spread_ns": 62.01277500000015,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 74.39249999999993,
+      "cpu_AA_spread_ns": 62.806250000000546,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "jpeg",
+      "size": 8,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": 474.1117362499999,
+      "wall_AA_spread_ns": 62.01277500000015,
+      "wall_status": "exceeds observed A/A spread; diagnostic only",
+      "cpu_delta_ns": 474.3225000000002,
+      "cpu_AA_spread_ns": 62.806250000000546,
+      "cpu_status": "exceeds observed A/A spread; diagnostic only"
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "contrast": "boxed_step_path",
+      "wall_delta_ns": 123.01098000000275,
+      "wall_AA_spread_ns": 2463.405775000003,
+      "wall_status": "unresolved",
+      "cpu_delta_ns": 126.08499999999913,
+      "cpu_AA_spread_ns": 2466.8250000000007,
+      "cpu_status": "unresolved"
+    },
+    {
+      "codec": "jpeg",
+      "size": 63,
+      "contrast": "extra_header_probe",
+      "wall_delta_ns": -713.2488550000016,
+      "wall_AA_spread_ns": 2463.405775000003,
+      "wall_status": "unresolved",
+      "cpu_delta_ns": -715.7350000000006,
+      "cpu_AA_spread_ns": 2466.8250000000007,
+      "cpu_status": "unresolved"
+    }
+  ],
+  "large_synthetic": [
+    {
+      "arm": "direct",
+      "extra_decodes_per_process": 8000,
+      "wall_us": 96.790688775,
+      "cpu_us": 96.77742500000001,
+      "kernel_us": 0.23195,
+      "context_switches_per_decode": 0.001375,
+      "minimum_loop_ms": 763.163946
+    },
+    {
+      "arm": "older_tokio_inline",
+      "extra_decodes_per_process": 4000,
+      "wall_us": 164.41064175,
+      "cpu_us": 164.3183,
+      "kernel_us": 0.66625,
+      "context_switches_per_decode": 0.0031999999999999997,
+      "minimum_loop_ms": 649.940682
+    },
+    {
+      "arm": "next_tokio_inline",
+      "extra_decodes_per_process": 8000,
+      "wall_us": 97.77021957500001,
+      "cpu_us": 97.73827499999999,
+      "kernel_us": 0.17934999999999998,
+      "context_switches_per_decode": 0.003275,
+      "minimum_loop_ms": 772.826006
+    },
+    {
+      "arm": "older_tokio_pool",
+      "extra_decodes_per_process": 1000,
+      "wall_us": 740.8346278,
+      "cpu_us": 746.0232,
+      "kernel_us": 448.4296,
+      "context_switches_per_decode": 132.0404,
+      "minimum_loop_ms": 733.940946
+    },
+    {
+      "arm": "next_tokio_pool",
+      "extra_decodes_per_process": 1000,
+      "wall_us": 837.3901552,
+      "cpu_us": 843.2514,
+      "kernel_us": 465.253,
+      "context_switches_per_decode": 132.0362,
+      "minimum_loop_ms": 785.93848
+    },
+    {
+      "arm": "next_buffered_one_hop",
+      "extra_decodes_per_process": 8000,
+      "wall_us": 107.488788075,
+      "cpu_us": 107.568875,
+      "kernel_us": 5.718325,
+      "context_switches_per_decode": 2.0028,
+      "minimum_loop_ms": 845.951536
+    },
+    {
+      "arm": "older_read_at",
+      "extra_decodes_per_process": 8000,
+      "wall_us": 99.21527025,
+      "cpu_us": 99.192075,
+      "kernel_us": 0.00135,
+      "context_switches_per_decode": 0.0022,
+      "minimum_loop_ms": 776.70344
+    },
+    {
+      "arm": "next_read_at",
+      "extra_decodes_per_process": 8000,
+      "wall_us": 96.374810875,
+      "cpu_us": 96.361225,
+      "kernel_us": 0.19340000000000002,
+      "context_switches_per_decode": 0.00125,
+      "minimum_loop_ms": 766.902296
+    }
+  ],
+  "run_heavy": {
+    "build.log": [
+      "run-heavy: done rc=0 3s | peak-RSS 0.20GiB | min-avail 13108MiB | peak-load 0.55"
+    ],
+    "build-final.log": [
+      "run-heavy: done rc=0 3s | peak-RSS 0.20GiB | min-avail 12936MiB | peak-load 0.21"
+    ],
+    "clippy.log": [
+      "run-heavy: done rc=0 8s | peak-RSS 0.32GiB | min-avail 12572MiB | peak-load 0.80"
+    ],
+    "tiny-native.log": [
+      "run-heavy: done rc=1 4s | peak-RSS 0.03GiB | min-avail 13092MiB | peak-load 1.85"
+    ],
+    "tiny-native-resume.log": [
+      "run-heavy: done rc=0 203s | peak-RSS 0.10GiB | min-avail 11970MiB | peak-load 1.84"
+    ],
+    "process-observations.log": [],
+    "large-synthetic.log": [
+      "run-heavy: done rc=0 47s | peak-RSS 0.02GiB | min-avail 13074MiB | peak-load 1.82"
+    ]
+  },
+  "raw_summary_sha256": {
+    "tiny-native": "ae9d79159a7a8d4121c841d07452ef26d75a75738a5670ece312562d585f700c",
+    "large-synthetic": "41bbfe90b689a6648b0ec47d3679ca9d27632fcd0b5300fd125d4ac67f1c2c3a"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "purpose": "Preserve the full output of the native TIFF attempt that exceeded 60 seconds. This is a failed run, not a performance result.",
+  "date": "2026-11-11",
+  "command": "cargo test --manifest-path reimagined/tools/native-tiff/Cargo.toml --locked",
+  "failing_local_snapshot": "bbf8a5d52dbb852b9c9f301a22f8936962ee19c6",
+  "failing_bridge_source_sha256": "45adf003fe7b7e38cc32625bcf18d38250bb9debff27ed363dfd5e6c30adf6b4",
+  "fixed_native_revision": "fd98c4ea230d1a05d6dd780ad620c0527b82f747",
+  "tiff_revision": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+  "pixel_revision": "3286169c7ef5b1e66ac841c3d8204eb54e390f8c",
+  "run_limit": {
+    "memory": "4G cgroup hard cap",
+    "jobs": 2
+  },
+  "termination": "verified owned test PID 688862 received SIGTERM after source-failure teardown spun in read_exact retrying Interrupted",
+  "result": "rc=101; 109s; peak-RSS 0.24GiB; min-avail 10935MiB; peak-load 1.09",
+  "receipts": "/mnt/v/output/zencodec/reimagined-documents-2026-11-11/logs.json"
+}

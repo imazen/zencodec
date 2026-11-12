@@ -1,0 +1,88 @@
+test:
+    cargo test --workspace --all-features --locked
+
+clippy:
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+resident-check:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures --check
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+
+check-core:
+    cargo check -p zencodec --no-default-features --locked
+
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
+    cargo test --doc --workspace --all-features --locked
+
+tiff-test:
+    cargo test --manifest-path tools/native-tiff/Cargo.toml --locked
+
+tiff-clippy:
+    cargo clippy --manifest-path tools/native-tiff/Cargo.toml --all-targets --locked -- -D warnings
+
+fmt:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures
+    cargo fmt --manifest-path tools/native-tiff/Cargo.toml
+    cargo fmt --manifest-path tools/ablation/Cargo.toml
+
+# A standalone same-binary old/new mechanism comparison, with unchanged old fixtures.
+ablation-check:
+    cargo test --manifest-path tools/ablation/Cargo.toml --locked
+    cargo clippy --manifest-path tools/ablation/Cargo.toml --all-targets --locked -- -D warnings
+
+ablation-build:
+    cargo bench --manifest-path tools/ablation/Cargo.toml --bench drivers --no-run --locked
+
+ablation-bench *args:
+    cargo bench --manifest-path tools/ablation/Cargo.toml --bench drivers --locked -- {{args}}
+
+ablation-run binary output *args:
+    python3 tools/ablation/run.py {{binary}} {{output}} -- {{args}}
+
+ablation-probe-build:
+    cargo build --release --manifest-path tools/ablation/Cargo.toml --bin allocations --locked
+
+ablation-allocations binary output:
+    python3 tools/ablation/profile.py {{binary}} {{output}}
+
+# Explicitly selected RGB8 native witnesses, with no shipping codec changes.
+native-slice-setup:
+    python3 tools/native-slice/setup.py
+
+native-slice-check:
+    python3 tools/native-slice/verify-source.py
+    cargo fmt --manifest-path tools/native-slice/Cargo.toml -p reimagined-native-slice --check
+    cargo test --manifest-path tools/native-slice/Cargo.toml --locked
+    cargo clippy --manifest-path tools/native-slice/Cargo.toml --all-targets --locked -- -D warnings
+
+native-slice-build:
+    cargo bench --manifest-path tools/native-slice/Cargo.toml --bench native --no-run --locked
+    cargo build --manifest-path tools/native-slice/Cargo.toml --release --bin allocations --locked
+
+native-slice-run binary output *args:
+    python3 tools/native-slice/run.py {{binary}} {{output}} -- {{args}}
+
+native-slice-profile binary output:
+    python3 tools/native-slice/profile.py {{binary}} {{output}}
+
+cpu-profile-lease-build:
+    cargo build --manifest-path tools/native-slice/Cargo.toml --release --bin profile_lease --locked
+
+cpu-profile native synthetic output:
+    python3 tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}
+
+cpu-profile-admitted lease executor native synthetic output:
+    {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/cpu-profile.py {{native}} {{synthetic}} {{output}}
+
+# Owner-requested studies; hold the legacy rendezvous as well as the retained lease.
+bounded-rerun study binary output *args:
+    python3 tools/native-slice/bounded-rerun.py {{study}} {{binary}} {{output}} {{args}}
+
+bounded-rerun-admitted lease executor study binary output *args:
+    flock --timeout 300 "${XDG_CACHE_HOME:-$HOME/.cache}/zenbench/zenbench.lock" {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/bounded-rerun.py {{study}} {{binary}} {{output}} {{args}}
+
+bounded-rerun-report root report receipt:
+    python3 tools/native-slice/report-bounded.py {{root}} {{report}} {{receipt}}

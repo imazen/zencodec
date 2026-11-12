@@ -1,0 +1,30 @@
+[package]
+name = "reimagined-driver-ablation"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../../../", features = ["std"] }
+zencodec-io = { path = "../../../zencodec-io", features = ["tokio"] }
+zencodec-coroutine = { path = "../../../zencodec-coroutine" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078", default-features = false, features = ["std", "icc"] }
+next-codec = { package = "zencodec", path = "../../zencodec", features = ["std"] }
+next-io = { package = "zencodec-io", path = "../../zencodec-io", features = ["tokio"] }
+next-pixels = { package = "zenpixels", git = "https://github.com/imazen/zenpixels", rev = "3286169c7ef5b1e66ac841c3d8204eb54e390f8c", default-features = false, features = ["std", "icc"] }
+tokio = { version = "1.53.3", features = ["rt", "rt-multi-thread", "io-util", "sync"] }
+zenbench = "=0.1.11"
+
+[patch.crates-io]
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+
+[[bench]]
+name = "drivers"
+harness = false
+
+[profile.release]
+lto = "thin"
+debug = 1
