@@ -78,3 +78,9 @@ published zenbench lease, then uses the verified performance CPU boundary.
 These remain profiler diagnostics without a zenbench cleanliness/latency
 acceptance verdict. Report A/A variation beside derived costs; do not promote
 differences below that variation into wins or equivalence.
+
+The initial tiny-study controller stopped during calibration because its file
+names omitted the arm. No measured pair had started. The guarded
+`--resume-calibration` repair preserves that attempt and reuses its completed
+native calibration; it accepts only that failure, unchanged probes and zero
+completed measured pairs. It cannot resume or replace measured timing blocks.

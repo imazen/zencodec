@@ -38,10 +38,15 @@ def main():
     parser.add_argument('study', choices=['tiny-native', 'large-synthetic'])
     parser.add_argument('binary', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--resume-calibration', action='store_true',
+                        help='Resume only the pre-plan filename-collision failure, retaining completed calibration')
     args = parser.parse_args()
-    args.output.mkdir(parents=True, exist_ok=False)
+    args.output.mkdir(parents=True, exist_ok=args.resume_calibration)
     saved = args.output / 'probe'
-    shutil.copy2(args.binary, saved)
+    if args.resume_calibration:
+        assert digest(saved) == digest(args.binary), 'Changed probe on resume'
+    else:
+        shutil.copy2(args.binary, saved)
     saved = saved.resolve()
     repo = Path(__file__).resolve().parents[3]
     tracked = subprocess.check_output(['jj', '--ignore-working-copy', 'file', 'list'], cwd=repo, text=True).splitlines()
@@ -58,6 +63,22 @@ def main():
                   limits='External perf diagnostic, not zenbench Confirm. No cleanliness verdict. All blocks, A/A variation, negative adjusted counters and interference observations retained. Profiler overhead remains.',
                   env={k: os.environ.get(k) for k in ['TMPDIR', 'RUSTFLAGS', 'CARGO_BUILD_JOBS', 'RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'ZENBENCH_CPU_POLICY']})
     path = args.output / 'run.json'
+    if args.resume_calibration:
+        prior = json.loads(path.read_text())
+        assert prior['study'] == args.study and prior['stage'] == 'failed'
+        assert prior['completed_pairs'] == 0 and not prior['rows'] and 'plan' not in prior
+        assert prior['failure'] == "FileExistsError(17, 'File exists')", prior['failure']
+        changed = {p for p, want in prior['source_sha256'].items() if source.get(p) != want}
+        assert changed == {'reimagined/tools/native-slice/bounded-rerun.py'}, changed
+        backup = args.output / 'run.before-calibration-repair.json'
+        assert not backup.exists()
+        shutil.copy2(path, backup)
+        record['started'] = prior['started']
+        record['samples'] = prior['samples']
+        record['calibration'] = prior['calibration']
+        record['calibration_repair'] = dict(previous_source=prior['source_revision'], previous_script_sha256=prior['script_sha256'],
+                                           failure=prior['failure'], preserved_record=backup.name, resumed=now(),
+                                           completed_measured_pairs_before_repair=0)
 
     def save():
         path.write_text(json.dumps(record, indent=2) + '\n')
@@ -90,8 +111,12 @@ def main():
 
     def calibrate(case):
         # Fixed doubling rule based only on duration, before the shuffled plan.
+        previous = [r for r in record['calibration'] if r['case'] == case and r['adjusted_duration_ns'] >= 500_000_000]
+        if previous:
+            assert len(previous) == 1
+            return previous[0]['operations']
         count = 10000 if args.study == 'tiny-native' else 1000
-        prefix = f'cal-{case["codec"]}-{case["size"]}'
+        prefix = f'cal-{case["codec"]}-{case["size"]}-{case["arm"]}'
         baseline = measure(case, 0, prefix + '-0')
         while True:
             result = measure(case, count, prefix + f'-{count}')
