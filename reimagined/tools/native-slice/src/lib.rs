@@ -149,7 +149,27 @@ impl WholeImageDecode for Kind {
     } // explicit selection only in this experiment
     type Header = ();
     fn probe(&self, bytes: &[u8]) -> Result<Option<(ImageInfo, ())>> {
-        let (w, h) = self.dims(bytes);
+        // The native BMP probe validates the amount of compressed input as
+        // well as parsing the header. A prefix can therefore look like an
+        // amplification bomb until more file data has arrived. This bounded
+        // valid-file binding asks for more input rather than panicking.
+        let (w, h) = if matches!(self, Kind::Bmp) {
+            match zenbitmaps::probe_bmp(bytes) {
+                Ok(info) => (info.width, info.height),
+                Err(e)
+                    if matches!(
+                        e.error(),
+                        zenbitmaps::BitmapError::UnexpectedEof
+                            | zenbitmaps::BitmapError::DecompressionBomb(_)
+                    ) =>
+                {
+                    return Ok(None);
+                }
+                Err(e) => return Err(native_error(self, Box::new(e))),
+            }
+        } else {
+            self.dims(bytes)
+        };
         Ok(Some((
             ImageInfo::new(
                 self.format(),
@@ -433,6 +453,21 @@ pub fn qualify(kind: Kind, bytes: &Arc<[u8]>, rt: &tokio::runtime::Runtime) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bmp_probe_requests_more_of_a_valid_file_before_amplification_validation() {
+        let file = fixture(Kind::Bmp, 256);
+        assert!(matches!(
+            zenbitmaps::probe_bmp(&file[..128]).unwrap_err().error(),
+            zenbitmaps::BitmapError::DecompressionBomb(_)
+        ));
+        assert!(
+            WholeImageDecode::probe(&Kind::Bmp, &file[..128])
+                .unwrap()
+                .is_none()
+        );
+        let (info, ()) = WholeImageDecode::probe(&Kind::Bmp, &file).unwrap().unwrap();
+        assert_eq!((info.width, info.height), (256, 256));
+    }
     #[test]
     fn native_frontends_keep_exact_samples_and_adopt_the_output_allocation() {
         let rt = tokio::runtime::Builder::new_multi_thread()

@@ -12,7 +12,9 @@ Source adapted from zencodec `05b73f5f4e26a45c4bb4f584b590831117bb36a2`.
 `setup.py` exports zenbitmaps `9d71b356f290f6438b810cc53d99f29301f6d247`
 and adds only two accessors: a QOI probe and native output ownership extraction.
 `verify-source.py` checks every original tracked source blob against that commit.
-No native decoder kernel changes. JPEG is pinned in Cargo.toml and the tracked
+No native decoder kernel changes. The BMP probe treats native EOF/amplification
+refusals on a prefix as a request for more bytes. It still does not qualify
+general malformed-file classification, because the hook has no EOF argument. JPEG is pinned in Cargo.toml and the tracked
 `dependencies.lock` preserves the complete dependency graph.
 
 The older erased bitmap adapter copies the complete decoded output in
