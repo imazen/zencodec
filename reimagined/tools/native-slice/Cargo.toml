@@ -1,0 +1,44 @@
+[package]
+name = "reimagined-native-slice"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+exclude = ["vendor/zenbitmaps"]
+
+[dependencies]
+next-codec = { package = "zencodec", path = "../../zencodec", features = ["std"] }
+next-io = { package = "zencodec-io", path = "../../zencodec-io", features = ["tokio"] }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3286169c7ef5b1e66ac841c3d8204eb54e390f8c", default-features = false, features = ["std", "icc"] }
+old-codec = { package = "zencodec", path = "../../../", features = ["std"] }
+zenbitmaps = { path = "vendor/zenbitmaps", default-features = false, features = ["std", "qoi", "bmp", "zencodec"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "6d6539dfaf3b9e09d74ad9ef7a56b4e4e7518dd0", default-features = false, features = ["zencodec"] }
+enough = "0.4.4"
+how-far = "0.1.0"
+tokio = { version = "1.54.1", features = ["rt", "rt-multi-thread", "io-util", "sync"] }
+zenbench = "=0.1.11"
+
+[patch.crates-io]
+zencodec = { path = "../../../" }
+zenmeta = { path = "../../../zenmeta" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+garb = { git = "https://github.com/imazen/garb", rev = "8f9aa10d09f84bb0a1e3fdbd1773f610eec1b784" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "2969ee846e92a4f00f34ab447edaf1eb6857ebe0" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "5a3b158c35cdabc5e9de1ef4fb79e0242c99b815" }
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../../../" }
+zenmeta = { path = "../../../zenmeta" }
+
+[[bench]]
+name = "native"
+harness = false
+
+[profile.release]
+lto = "thin"
+debug = 1
+
+[lints.rust]
+unsafe_code = "forbid"
