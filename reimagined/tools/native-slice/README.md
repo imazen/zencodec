@@ -84,3 +84,6 @@ names omitted the arm. No measured pair had started. The guarded
 `--resume-calibration` repair preserves that attempt and reuses its completed
 native calibration; it accepts only that failure, unchanged probes and zero
 completed measured pairs. It cannot resume or replace measured timing blocks.
+
+The [bounded rerun report](../../docs/bounded-rerun-2026-11-12.md) records the
+completed cells, per-cell counts, A/A spreads, exact commands and limitations.

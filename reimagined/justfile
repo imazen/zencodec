@@ -83,3 +83,6 @@ bounded-rerun study binary output *args:
 
 bounded-rerun-admitted lease executor study binary output *args:
     flock --timeout 300 "${XDG_CACHE_HOME:-$HOME/.cache}/zenbench/zenbench.lock" {{lease}} {{executor}} exec --cpu-policy performance python3 -- tools/native-slice/bounded-rerun.py {{study}} {{binary}} {{output}} {{args}}
+
+bounded-rerun-report root report receipt:
+    python3 tools/native-slice/report-bounded.py {{root}} {{report}} {{receipt}}
