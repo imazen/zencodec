@@ -9,9 +9,10 @@ Status on 2026-11-12: the fixture tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been ported to a real
-codec. A separate review lane (PR 210) bound three real decoders to an
-earlier revision and measured them; see "What it costs and saves an async
-host".
+codec. Three bounded native RGB8 bindings now live under `tools/`, alongside
+the synthetic driver trial. The [4096² / 8192² report](docs/optional-pulse-large-2026-11-12.md)
+records wall and CPU time, A/A variation and the remaining scope. Earlier
+measurements live on PR 210; see "What it costs and saves an async host".
 
 ```text
 zencodec/           the contract: no_std + alloc, forbid(unsafe_code)
@@ -22,7 +23,7 @@ zencodec-fixtures/  three codecs that exercise it
 ## The whole contract
 
 A decoder names the bytes it wants and is lent a window. An encoder names the
-rows it wants and is lent a window. Neither ever blocks, awaits or calls back.
+rows it wants and is lent a window. Neither owns I/O or awaits it; the driver supplies the requested input.
 
 | | decode | encode |
 |---|---|---|
@@ -148,8 +149,28 @@ worker thread moves finalization with them.
 
 ## What it costs and saves an async host
 
-This spike measures nothing itself. These are structural differences read off
-the code:
+The [current bounded study](docs/optional-pulse-large-2026-11-12.md) measures
+all listed native and synthetic driver routes at 4096² and 8192². These are
+external profiler diagnostics, not zenbench Confirm. Source and binary hashes,
+all five shuffled blocks, A/A controls and failures are retained.
+
+For an existing QOI input owner at 8192², the buffered one-hop route measured
+183.846 ms wall / 183.818 ms CPU, versus 302.343 / 302.180 ms through the
+generic pool route over a borrowed resident source. The owner route avoids
+copying its input into the generic window. The 8192² boxed slice contrasts
+remain unresolved against A/A variation for all three native codecs; 4096²
+BMP has a positive diagnostic contrast beyond its spread. Synthetic 4096²
+still has a positive new-pool contrast against the older pool; the 8192²
+contrast is unresolved. The window repair does not establish that the earlier
+pool regression disappeared.
+
+The native trials use a minimal sink. The public collecting convenience
+wrapper, current-head allocation counts, native metadata/general-error
+conformance, actual file/network throughput and tile browsing remain unmeasured.
+InPlace runs outside a runtime worker in this study, so worker replacement
+and concurrent fairness remain unqualified.
+
+These additional structural differences are read off the code:
 
 - A batch hand-off to a worker moves one pointer. The current async driver
   moves the decoder, sink and window by value into a boxed job, per batch.
@@ -220,15 +241,16 @@ per decode:
 | Tokio, inline, bytes in memory | 164.4 | 97.8 |
 | Positioned source, bytes in memory | 99.2 | 96.4 |
 | One hand-off, bytes in memory | | 107.5 |
-| Tokio worker pool, streamed source | 740.8 | 837.4 |
+| Tokio worker pool, per-read hand-offs | 740.8 | 837.4 |
 
 Both pool routes made 132 context switches per decode: a hand-off per read.
 The pool route here was slower than the current one. A cause that fits the
 size of the gap: with strips exactly one read long behind a header, the
 window slid most of a strip forward before every read, a second pass over
 the whole input. Reads are now sized to end where the decoder's units do (a
-test decodes rows one read long through a window of one row). The effect of
-that change on the pool route has not been measured.
+test decodes rows one read long through a window of one row). The earlier 1024² shape has not been rerun on this head. The current
+4096² / 8192² study uses 64-row strips and does not establish removal of
+the pool regression.
 
 One cost it measured remains by design: with a worker and a source that is
 not in memory, every read is a hand-off. Larger reads mean fewer of them

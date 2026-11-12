@@ -39,3 +39,9 @@ probe-setup:
 
 large-profile output:
     flock --timeout 300 "{{env('HOME')}}/.cache/zenbench/zenbench.lock" "{{env('PROBE_TARGET')}}/native-target/release/profile_lease" "{{env('ZENBENCH_EXECUTOR')}}" exec --cpu-policy performance python3 -- tools/large-decode/run.py "{{env('PROBE_TARGET')}}/native-target/release/allocations" "{{env('PROBE_TARGET')}}/synthetic-target/release/allocations" "{{output}}"
+
+large-report run:
+    python3 tools/large-decode/report.py "{{run}}" docs/optional-pulse-large-2026-11-12.md docs/optional-pulse-large-2026-11-12.json
+    python3 tools/large-decode/page.py docs/optional-pulse-large-2026-11-12.json "{{run}}/index.html"
+    cp --update=none docs/optional-pulse-large-2026-11-12.md "{{run}}/report.md"
+    cp --update=none docs/optional-pulse-large-2026-11-12.json "{{run}}/receipt.json"

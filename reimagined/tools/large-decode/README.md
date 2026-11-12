@@ -35,3 +35,9 @@ of replacing a blocked runtime worker.
 The run directory records stage, source/binary identity, exact commands, child
 PID, completed/required pairs, calibration counts, raw counters and fixtures.
 Before reporting progress inspect this record and verify its live child PID.
+
+`just large-report RUN` renders every cell and the native resident-path
+contrasts into a bounded Markdown report and compact JSON receipt, then creates
+a filterable HTML page in the run directory. It refuses incomplete studies and
+checks the expected 670 pairs / 134 cells. The HTML states the distinction
+between the minimal measured sink and the public collecting convenience call.
