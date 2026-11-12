@@ -40,7 +40,7 @@ def counters(path):
 
 def arms(path):
     text = path.read_text().split('pub const ARMS:', 1)[1].split('];', 1)[0]
-    return re.findall(r'"([a-z_]+)"', text)
+    return re.findall(r'"([A-Za-z_]+)"', text)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
