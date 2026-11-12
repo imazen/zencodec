@@ -5,7 +5,7 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-11: it compiles, 43 tests pass, clippy and rustdoc are clean
+Status on 2026-11-11: it compiles, 44 tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been ported to a real
@@ -182,10 +182,17 @@ step signatures have changed since.
   and 45. Two of JPEG's three extra calls came from that binding reading the
   header twice, which `WholeImageDecode::Header` now lets a codec avoid.
 - Its process-CPU accounting of the same decodes put the boxed loop within
-  0.24 microseconds of native on QOI (112.37 against 112.13) and BMP (28.40
-  against 28.16), inside the 1.67 microsecond spread of its own repeated
-  JPEG control. Timing was taken only at 256x256; a fixed cost that small
-  could still matter on an 8x8 image, and that has not been measured.
+  0.24 microseconds of native at 256x256 on QOI (112.37 against 112.13) and
+  BMP (28.40 against 28.16), inside the 1.67 microsecond spread of its own
+  repeated JPEG control.
+- On tiny images the same accounting resolves a fixed cost for the step
+  path (admission, the box, the sink calls): 64 to 90 nanoseconds per decode
+  over a native decode that also reads the header. At 8x8 that is 0.247
+  microseconds against 0.159 for QOI. It is unresolved against run-to-run
+  spread at 63x63 for QOI and JPEG. A borrowed call through a trait object
+  stayed within 6 nanoseconds of native.
+- Reading the header twice cost a further 45 nanoseconds for BMP and 474
+  for JPEG at 8x8. That is the cost `WholeImageDecode::Header` removes.
 
 It also found two costs in its first capture, both fixed here:
 
@@ -199,9 +206,24 @@ It also found two costs in its first capture, both fixed here:
 
 After those two fixes it counted 2,000 allocation calls per 1,000 decodes on
 the positioned route (down from 4,000) and 3,000 on inline Tokio (down from
-5,000). At 1024x1024, the only timings are from before the fixes, when the
-inline and pool routes here were slower than the current ones; that size has
-not been measured since.
+5,000). Its accounting at 1024x1024 RGBA with 16-row strips, in microseconds
+per decode:
+
+| Route | Current drivers | These drivers |
+|---|---|---|
+| Direct call, no driver | 96.8 | |
+| Tokio, inline, bytes in memory | 164.4 | 97.8 |
+| Positioned source, bytes in memory | 99.2 | 96.4 |
+| One hand-off, bytes in memory | | 107.5 |
+| Tokio worker pool, streamed source | 740.8 | 837.4 |
+
+Both pool routes made 132 context switches per decode: a hand-off per read.
+The pool route here was slower than the current one. A cause that fits the
+size of the gap: with strips exactly one read long behind a header, the
+window slid most of a strip forward before every read, a second pass over
+the whole input. Reads are now sized to end where the decoder's units do (a
+test decodes rows one read long through a window of one row). The effect of
+that change on the pool route has not been measured.
 
 One cost it measured remains by design: with a worker and a source that is
 not in memory, every read is a hand-off. Larger reads mean fewer of them
@@ -280,10 +302,11 @@ merging. This spike is not that consumer yet.
   input and peak memory". Whether to keep the bound in the contract or move
   it to the drivers that offload is undecided.
 - **No borrowed one-shot entry point.** The review lane proposes one that
-  skips the boxed decoder. Its measurements put the box at one allocation
-  and an unresolved fraction of a microsecond at 256x256, and the entry
-  point would be a second implementation of decode per codec. It is left
-  out until a tiny-image measurement says otherwise; adding it later breaks
+  skips the boxed decoder. Its measurements put the whole step path at one
+  allocation and 64 to 90 nanoseconds per decode: half again the cost of an
+  8x8 QOI decode, about one percent at 63x63, and lost in the noise at
+  256x256. The entry point would be a second implementation of decode per
+  codec, with no admission point. It is left out; adding it later breaks
   nothing.
 - **No capability record.** What a codec can do is learned by asking:
   admission refuses with the unmet requirement named and the plan reports
@@ -339,4 +362,4 @@ cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown
 to see the contract used: round trips, transcodes between every pair of
 fixtures, sequences, planar strips, gates, refusals, error causes,
 cancellation (including codecs that never look at the pulse), late metadata,
-header-only reads, and the Tokio drivers on three executors.
+header-only reads, window sizing, and the Tokio drivers on three executors.

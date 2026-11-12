@@ -1284,3 +1284,29 @@ fn a_still_goes_in_and_comes_out_without_restating_its_shape() {
         assert_eq!(tight(&image), source, "{}", enc.name());
     }
 }
+
+#[test]
+fn reads_end_where_the_decoder_s_rows_do() {
+    // Rows exactly one read long, behind a header that puts them out of step
+    // with reads. A window capped at one row is enough only when each read is
+    // sized to end on a row boundary; reading a fixed amount instead leaves
+    // most of a row behind every time, to be held and slid forward.
+    let d = PixelDescriptor::RGBA8_SRGB;
+    let (bytes, source) = encoded(&RowsCodec, 64, 300, d, 36);
+    let opts = DriveOptions::new()
+        .with_read_size(256)
+        .with_max_input_bytes(256);
+    let mut collect = Collect::new();
+    let mut drip = Drip::new(&bytes, 256);
+    decode_read_at(
+        RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
+        &mut drip,
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .expect("a window of one row is enough");
+    assert_eq!(packed(&collect.frames()[0]), source);
+    // One read per row, plus the header's, one top-up and the end.
+    assert!(drip.reads <= 304, "{} reads for 300 rows", drip.reads);
+}

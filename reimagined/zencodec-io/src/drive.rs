@@ -16,7 +16,9 @@ use zencodec::{
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct DriveOptions {
-    /// Bytes to ask a source for beyond what the decoder needs at minimum.
+    /// About how many bytes to ask a source for at a time. A read is sized
+    /// to whole units of what the decoder asks for (a row, a strip), so it
+    /// can be somewhat smaller, and is larger when one unit is.
     pub read_size: usize,
     /// Most input bytes the driver will hold at once.
     pub max_input_bytes: Option<u64>,
@@ -185,10 +187,19 @@ impl Window {
             InputRequest::AtLeast { offset, min_len } => {
                 self.seek(offset);
                 let have = self.live().len();
-                if have >= min_len.max(1) || self.at_end() {
+                let unit = min_len.max(1);
+                if have >= unit || self.at_end() {
                     return Ok(Next::Ready);
                 }
-                let len = (min_len - have).max(self.read_size);
+                // Fill the window to a whole number of the decoder's units:
+                // as many as fit in `read_size`, and at least one. A decoder
+                // that takes what it asked for (a row, a strip) then drains
+                // the window exactly, so nothing is left to slide forward
+                // before the next read. Reading `read_size` regardless left
+                // most of a strip behind on every read whenever a header put
+                // strips out of step with reads.
+                let units = (self.read_size / unit).max(1);
+                let len = unit.saturating_mul(units) - have;
                 self.admit(len as u64)?;
                 Ok(Next::Read {
                     offset: self.end(),
