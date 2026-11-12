@@ -5,16 +5,18 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-11: it compiles, 33 tests pass, clippy and rustdoc are clean
+Status on 2026-11-11: it compiles, 43 tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
-fixture codecs written for the purpose. It has not been proven on a real codec,
-and nothing about its speed has been measured.
+fixture codecs written for the purpose. It has not been ported to a real
+codec. A separate review lane (PR 210) bound three real decoders to an
+earlier revision and measured them; see "What it costs and saves an async
+host".
 
 ```text
-zencodec/           the contract: 2,806 lines, no_std + alloc, forbid(unsafe_code)
-zencodec-io/        the loops: memory, blocking I/O, Tokio (2,045 lines)
-zencodec-fixtures/  three codecs that exercise it (1,507 lines)
+zencodec/           the contract: 2,906 lines, no_std + alloc, forbid(unsafe_code)
+zencodec-io/        the loops: memory, blocking I/O, Tokio (2,189 lines)
+zencodec-fixtures/  three codecs that exercise it (1,546 lines)
 ```
 
 ## The whole contract
@@ -25,7 +27,7 @@ rows it wants and is lent a window. Neither ever blocks, awaits or calls back.
 | | decode | encode |
 |---|---|---|
 | A codec, shareable and erased | `DecodeCodec` | `EncodeCodec` |
-| The request, as owned data | `DecodeSpec` | `EncodeSpec` |
+| The request, as plain data | `DecodeSpec` | `EncodeSpec` |
 | What will happen | `DecodePlan` | `EncodePlan` |
 | The work, as a state machine | `Decoder` | `Encoder` |
 | Where the product goes | `Sink` | `OutputBuffer` |
@@ -41,18 +43,20 @@ pub trait Decoder: Send + 'static {
     fn requested(&self) -> &[InputRequest];
     fn info(&self) -> Option<&ImageInfo>;
     fn plan(&self) -> Option<&DecodePlan>;
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink) -> Result<DecodeStep>;
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink, pulse: &dyn Pulse)
+        -> Result<DecodeStep>;
 }
 
 pub trait EncodeCodec: Send + Sync + 'static {
     fn name(&self) -> &'static str;
     fn format(&self) -> ImageFormat;
+    fn embeds(&self) -> MetadataKinds;
     fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>>;
 }
 
 pub trait Encoder: Send + 'static {
     fn plan(&self) -> &EncodePlan;
-    fn step(&mut self, input: EncodeInput<'_>) -> Result<EncodeStep>;
+    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep>;
     fn output(&mut self) -> &mut OutputBuffer;
 }
 ```
@@ -89,7 +93,8 @@ calling a row source. A host that must await its rows answers when it has
 them. This is what the pull and replay paths could not offer an async or
 foreign host before: a synchronous callback cannot await.
 
-**No setters.** A spec is plain owned data. Each negotiable knob is a
+**No setters.** A spec is plain data: no handles, no lifetimes. Each
+negotiable knob is a
 `Demand`: `Default`, `Prefer(x)` or `Require(x)`. `decoder()` and `encoder()`
 are the only admission points. They refuse an unmet requirement with the
 requirement named, and the plan they return states what a preference became.
@@ -122,8 +127,20 @@ the buffer in place and records a `Patch` only for bytes already taken, so
 the header-patching protocol is one method. An encoder that will patch a
 forward-only destination calls `hold()`.
 
-**One pulse.** Progress and cancellation arrive in the spec as a
-`SharedPulse`. There is no per-step pulse and so no rule about honoring both.
+**One pulse, lent to each step.** Progress and cancellation arrive as a
+`&dyn Pulse` argument of `step`, and nowhere else, so there is no rule about
+honoring two. Work that stays on the caller's thread borrows the caller's
+pulse, including one that cannot be shared; a driver that moves steps to a
+worker holds the owned `SharedPulse` and lends it there. A driver also checks
+the pulse itself before the first step and after every step, so a codec that
+never looks cannot turn a stopped operation into a success. An earlier
+revision kept a `SharedPulse` in the spec, which forced sharing on every
+caller and made the caller of an async driver hand over the same pulse
+twice, once in the spec and once to the driver.
+
+**Encoders say what they can carry.** `EncodeCodec::embeds` names the metadata
+kinds a codec can write, so a caller choosing a color carrier knows before it
+builds a spec. `EncodePlan::embedded` then states what one request will carry.
 
 **Finishing is a step.** There is no `finish`. A driver that moves steps to a
 worker thread moves finalization with them.
@@ -149,16 +166,28 @@ the code:
   A concrete codec called directly would save that call; nothing prevents a
   codec from also offering inherent methods.
 
-A separate lane did measure an earlier capture of this code against the
+A separate lane did measure earlier revisions of this code against the
 current drivers (PR 210, `reimagined/docs/ablation-evidence-2026-11-11.md` on
-`review/reimagined-documents`). Its timing run was rejected by its own
-resource gates, so its timings confirm nothing. Its allocation counts
-(heaptrack, 1,000 decodes of 256x256 RGBA) are exact: the pool route here made
-11,013 allocation calls against 21,013 for the current pool driver, and the
-boxed in-memory route matched the current boxed route at 2,000.
+`review/reimagined-documents`). None of its timing runs passed its own
+resource gates, so its timings are descriptive only. Its allocation counts
+(heaptrack) are exact. Nothing below was measured on this revision, whose
+step signatures have changed since.
 
-It also found two costs in that capture, both fixed here and neither
-re-measured:
+- Synthetic decoder, 1,000 decodes of 256x256 RGBA: the pool route here made
+  11,013 allocation calls against 21,013 for the current pool driver, and the
+  boxed in-memory route matched the current boxed route at 2,000.
+- Real QOI and BMP decoders bound through the whole-image adapter, 256x256
+  RGB: one allocation call per decode natively, two through this contract
+  (the boxed decoder), five through the current erased API. JPEG: 39, 42
+  and 45. Two of JPEG's three extra calls came from that binding reading the
+  header twice, which `WholeImageDecode::Header` now lets a codec avoid.
+- Its process-CPU accounting of the same decodes put the boxed loop within
+  0.24 microseconds of native on QOI (112.37 against 112.13) and BMP (28.40
+  against 28.16), inside the 1.67 microsecond spread of its own repeated
+  JPEG control. Timing was taken only at 256x256; a fixed cost that small
+  could still matter on an 8x8 image, and that has not been measured.
+
+It also found two costs in its first capture, both fixed here:
 
 - A positioned source that was already in memory was copied into a window.
   `ReadAt::as_slice` and `AsyncSource::as_slice` now let a driver borrow it;
@@ -168,10 +197,44 @@ re-measured:
   the decoder leaves unconsumed (a test decodes a 19 KB file through a
   512-byte window).
 
+After those two fixes it counted 2,000 allocation calls per 1,000 decodes on
+the positioned route (down from 4,000) and 3,000 on inline Tokio (down from
+5,000). At 1024x1024, the only timings are from before the fixes, when the
+inline and pool routes here were slower than the current ones; that size has
+not been measured since.
+
 One cost it measured remains by design: with a worker and a source that is
 not in memory, every read is a hand-off. Larger reads mean fewer of them
 (`DriveOptions::read_size`), and bytes that are in memory should take the
 buffered route.
+
+## Borrowed input and peak memory
+
+No driver copies input that is already in memory. What a caller must hold,
+by call shape, for a large file borrowed from a foreign runtime:
+
+| Call shape | What happens to the input |
+|---|---|
+| The caller blocks in the call | `decode_slice` answers every request with a sub-slice of the caller's bytes. |
+| The caller awaits and a worker finishes | `decode_buffered` takes any owner of the bytes that can travel to the worker: a vector, an `Arc<[u8]>`, or a handle that keeps a foreign buffer pinned until it is dropped. A foreign-function layer that copies instead adds the file's size to peak memory; that choice is its own. |
+| Rows stream out as they decode | The decoder is lent the same slice at every step. It keeps positions, not references. |
+
+The third row is where the contract can push a codec toward a copy. A
+decoder is `'static`, so it cannot hold a reference to the file between
+steps. One that keeps offsets and is lent the slice again copies nothing; a
+port that stores the bytes inside the decoder copies the whole file, which
+in a streaming transcode can be most of the footprint. zenjpeg's scanline
+reader already holds a `Cow` and positions, so it fits. Other codecs have
+not been surveyed.
+
+Two ways to deal with it, neither built: a conformance check with a counting
+allocator that fails a decoder exceeding the memory bound in its plan, which
+makes a hidden copy visible to the caller's memory gate; or dropping `'static`
+from `Decoder` and adding one provided method that builds a decoder over
+resident bytes, with the `'static` requirement moved to the drivers that use
+a worker. The second costs a lifetime in driver signatures and a second
+constructor for codecs that override it; the step loop and the admission
+point stay single.
 
 ## zenpixels
 
@@ -212,9 +275,24 @@ merging. This spike is not that consumer yet.
   hold, and nothing tracks a buffer after it is handed over.
 - **`Send + 'static` is required of every decoder and encoder.** That is what
   lets one erased type serve a registry, a worker pool and a foreign host.
-  It also rules out a codec that borrows its source or is bound to a thread,
-  which the current collection factories allow. Whether to keep the bound in
-  the contract or move it to the drivers that offload is undecided.
+  It also rules out a codec that borrows its source across steps or is bound
+  to a thread, which the current collection factories allow. See "Borrowed
+  input and peak memory". Whether to keep the bound in the contract or move
+  it to the drivers that offload is undecided.
+- **No borrowed one-shot entry point.** The review lane proposes one that
+  skips the boxed decoder. Its measurements put the box at one allocation
+  and an unresolved fraction of a microsecond at 256x256, and the entry
+  point would be a second implementation of decode per codec. It is left
+  out until a tiny-image measurement says otherwise; adding it later breaks
+  nothing.
+- **No capability record.** What a codec can do is learned by asking:
+  admission refuses with the unmet requirement named and the plan reports
+  the rest. `formats()` and `embeds()` are the only standing declarations.
+  A descriptive record for user interfaces is not modeled.
+- **Callers' conveniences.** `probe`, `decode`, `encode`,
+  `EncodeSpec::for_pixels` and `Decoded::into_still` are the short path
+  here. A registry with detection, and methods on a configured codec, belong
+  to the layer above and are not written.
 - **Planar:** only borrowed strips. No owned planar hand-off.
 - **Provisional passes** are in the signatures (`Pass`) and no fixture
   produces one.
@@ -231,6 +309,23 @@ merging. This spike is not that consumer yet.
 - A sink that accepts planar strips of any height needs somewhere to keep a
   remainder. See the zenpixels note.
 
+What the review on PR 210 turned up, all fixed here with a test that fails
+without the fix:
+
+- The inline in-memory Tokio route checked the pulse only between batches, so
+  a stop raised during the last batch came back as success. Every driver now
+  checks after every step.
+- A step quota of zero, settable through the public field, made the async
+  drivers yield forever.
+- The whole-image decode hook received no pulse, so a simple codec could not
+  be stopped or report progress while it worked. Both hooks now receive the
+  pulse and the spec.
+- The whole-image adapter reported `Info` without checking that metadata the
+  caller asked to see first was settled. It now asks for the whole file once
+  and refuses if the codec still cannot say.
+- One-call encode made the caller state the image's geometry twice, a still
+  came back as a list of frames, and there was no header-only helper.
+
 ## Running it
 
 ```sh
@@ -243,4 +338,5 @@ cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown
 `zencodec-io/tests/blocking.rs` and `tests/async_io.rs` are the quickest way
 to see the contract used: round trips, transcodes between every pair of
 fixtures, sequences, planar strips, gates, refusals, error causes,
-cancellation, late metadata, and the Tokio drivers on three executors.
+cancellation (including codecs that never look at the pulse), late metadata,
+header-only reads, and the Tokio drivers on three executors.

@@ -464,3 +464,121 @@ async fn an_inline_driver_borrows_bytes_already_in_memory() {
         assert_eq!(out, reference, "{}", enc.name());
     }
 }
+
+fn stopped(err: &zencodec::Error) -> bool {
+    err.error().kind() == ErrorKind::Stopped(StopReason::Cancelled)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn no_route_lets_a_successful_step_hide_a_stop() {
+    // The decoder never looks at its pulse, and the stop is raised inside a
+    // step that returns success: once mid-image, once in the step that
+    // reports `Done`. Every route must report the stop.
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let (bytes, _) = sample(&**enc, 9, 21, 7);
+        for on in [DecodeEvent::Info, DecodeEvent::Done] {
+            for offload in offloads() {
+                let switch = Switch::default();
+                let err = tokio_io::decode(
+                    Deaf::over(&*dec, &switch, on),
+                    &mut InMemory(&bytes[..]),
+                    Collect::new(),
+                    offload.clone(),
+                    DriveOptions::new().with_steps_per_batch(3),
+                    switch.pulse(),
+                )
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("{} {on:?} {offload:?}: resident", enc.name()));
+                assert!(stopped(&err), "{} {on:?} {offload:?}: {err}", enc.name());
+
+                let switch = Switch::default();
+                let err = tokio_io::decode(
+                    Deaf::over(&*dec, &switch, on),
+                    &mut Trickle::new(&bytes, 40),
+                    Collect::new(),
+                    offload.clone(),
+                    DriveOptions::new()
+                        .with_read_size(40)
+                        .with_steps_per_batch(3),
+                    switch.pulse(),
+                )
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("{} {on:?} {offload:?}: streamed", enc.name()));
+                assert!(stopped(&err), "{} {on:?} {offload:?}: {err}", enc.name());
+            }
+
+            let switch = Switch::default();
+            let err = decode_buffered(
+                Deaf::over(&*dec, &switch, on),
+                bytes.clone(),
+                Collect::new(),
+                switch.pulse(),
+            )
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("{} {on:?}: buffered", enc.name()));
+            assert!(stopped(&err), "{} {on:?}: {err}", enc.name());
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_step_quota_of_zero_still_makes_progress() {
+    // The builder refuses a zero quota; the field can still be set to one.
+    let mut opts = DriveOptions::new().with_read_size(64);
+    opts.steps_per_batch = 0;
+    let limit = std::time::Duration::from_secs(20);
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let (bytes, source) = sample(&**enc, 9, 21, 8);
+        for offload in offloads() {
+            let mut in_memory = InMemory(&bytes[..]);
+            let resident = tokio_io::decode(
+                dec.decoder(&DecodeSpec::new()).unwrap(),
+                &mut in_memory,
+                Collect::new(),
+                offload.clone(),
+                opts,
+                SharedPulse::default(),
+            );
+            let (_, collect) = tokio::time::timeout(limit, resident)
+                .await
+                .unwrap_or_else(|_| panic!("{} {offload:?}: resident decode hung", enc.name()))
+                .unwrap();
+            assert_eq!(packed(&collect.frames()[0]), source);
+
+            let mut trickle = Trickle::new(&bytes, 64);
+            let streamed = tokio_io::decode(
+                dec.decoder(&DecodeSpec::new()).unwrap(),
+                &mut trickle,
+                Collect::new(),
+                offload.clone(),
+                opts,
+                SharedPulse::default(),
+            );
+            let (_, collect) = tokio::time::timeout(limit, streamed)
+                .await
+                .unwrap_or_else(|_| panic!("{} {offload:?}: streamed decode hung", enc.name()))
+                .unwrap();
+            assert_eq!(packed(&collect.frames()[0]), source);
+
+            let mut out = Vec::new();
+            let mut trickle = Trickle::new(&bytes, 64);
+            let transcoded = tokio_io::transcode(
+                dec.decoder(&DecodeSpec::new()).unwrap(),
+                to(Arc::new(RowsCodec)),
+                &mut trickle,
+                &mut out,
+                offload.clone(),
+                opts,
+                SharedPulse::default(),
+            );
+            tokio::time::timeout(limit, transcoded)
+                .await
+                .unwrap_or_else(|_| panic!("{} {offload:?}: transcode hung", enc.name()))
+                .unwrap();
+            assert!(!out.is_empty());
+        }
+    }
+}

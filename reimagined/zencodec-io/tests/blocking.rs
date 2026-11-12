@@ -13,6 +13,7 @@ use zencodec::encode::{
     EncodeCodec, EncodeEvent, EncodeInput, EncodeSpec, FrameMeta, OutputTiming, RowDemand,
     RowSupply, SequenceSpec,
 };
+use zencodec::simple::WholeImage;
 use zencodec::{
     Bound, Demand, ErrorKind, Fidelity, FrameDuration, ImageInfo, Input, InputRequest,
     LimitExceeded, LimitKind, LossyTarget, Metadata, MetadataKinds, NoPulse, OutputAccess, Pass,
@@ -24,7 +25,7 @@ use zencodec_fixtures::rows::{RowsCodec, bt601_full, planar_raster, yuv420};
 use zencodec_fixtures::{FixtureError, PACKED};
 use zencodec_io::{
     Collect, DriveOptions, EncoderSink, Forward, SeekBack, Sequential, decode, decode_read_at,
-    decode_slice, encode, encode_sequence, feed_frame, transcode, write_output,
+    decode_slice, encode, encode_sequence, feed_frame, probe, transcode, write_output,
 };
 use zenpixels::plane::{AnyPlane, PlanarSlice, PlaneBuf};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
@@ -735,7 +736,10 @@ fn a_stop_mid_decode_is_seen_within_a_strip() {
         ErrorKind::Stopped(StopReason::Cancelled)
     );
     let lends = sink.log.iter().filter(|c| **c == "lend").count();
-    assert!((1..=6).contains(&lends), "stopped after {lends} of 64 strips");
+    assert!(
+        (1..=6).contains(&lends),
+        "stopped after {lends} of 64 strips"
+    );
 }
 
 fn with_exif(exif: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -991,4 +995,292 @@ fn a_streaming_window_stays_as_small_as_the_decoder_lets_it() {
     .err()
     .unwrap();
     assert_eq!(err.error().kind(), ErrorKind::Limit(LimitKind::InputBytes));
+}
+
+fn stopped(err: &zencodec::Error) -> bool {
+    err.error().kind() == ErrorKind::Stopped(StopReason::Cancelled)
+}
+
+#[test]
+fn a_step_that_succeeds_cannot_hide_a_stop_raised_while_it_ran() {
+    // The decoder never looks at its pulse. The stop is raised inside a step
+    // that returns success: once mid-image, once in the step that reports
+    // `Done`. The driver must report the stop either way, from memory and
+    // through a window.
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        for on in [DecodeEvent::Info, DecodeEvent::Done] {
+            let (bytes, _) = encoded(&**enc, 9, 21, PixelDescriptor::RGB8_SRGB, 31);
+            let switch = Switch::default();
+            let err = decode_slice(
+                Deaf::over(&*dec, &switch, on),
+                &bytes,
+                &mut Collect::new(),
+                &switch.borrowed(),
+            )
+            .err()
+            .unwrap_or_else(|| panic!("{} {on:?}: a stopped decode succeeded", enc.name()));
+            assert!(stopped(&err), "{} {on:?}: {err}", enc.name());
+
+            let switch = Switch::default();
+            let err = decode_read_at(
+                Deaf::over(&*dec, &switch, on),
+                &mut Drip::new(&bytes, 64),
+                &mut Collect::new(),
+                &DriveOptions::new().with_read_size(64),
+                &switch.borrowed(),
+            )
+            .err()
+            .unwrap_or_else(|| {
+                panic!("{} {on:?}: a stopped windowed decode succeeded", enc.name())
+            });
+            assert!(stopped(&err), "{} {on:?}: {err}", enc.name());
+        }
+    }
+}
+
+#[test]
+fn an_encode_stopped_in_its_last_step_returns_no_file() {
+    for enc in encoders() {
+        let d = PixelDescriptor::RGB8_SRGB;
+        let source = pattern(9, 21, d, 32);
+        let pixels = slice(&source, 9, 21, 27, d);
+        let switch = Switch::default();
+        let deaf = DeafCodec {
+            inner: enc.clone(),
+            switch: switch.clone(),
+        };
+        let err = encode(
+            &deaf,
+            EncodeSpec::for_pixels(&pixels),
+            pixels,
+            &switch.borrowed(),
+        )
+        .unwrap_err();
+        assert!(stopped(&err), "{}: {err}", enc.name());
+
+        // The same through the transcoding sink, whose encoder observes the
+        // sink's own pulse.
+        let (bytes, _) = encoded(&RowsCodec, 9, 21, d, 32);
+        let switch = Switch::default();
+        let deaf = Arc::new(DeafCodec {
+            inner: enc.clone(),
+            switch: switch.clone(),
+        });
+        let err = transcode(
+            RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
+            &bytes,
+            deaf,
+            |frame| EncodeSpec::new(frame.raster.clone()),
+            &switch.borrowed(),
+        )
+        .unwrap_err();
+        assert!(stopped(&err), "{}: {err}", enc.name());
+    }
+}
+
+#[test]
+fn a_whole_image_codec_is_stopped_inside_its_own_decode() {
+    // Nearly every byte of this image is its own run, so the decode hook
+    // looks at the pulse dozens of times. The eighth look at the pulse falls
+    // inside the hook: three belong to the driver and the adapter before it.
+    let (bytes, _) = encoded(&RleCodec::codec(), 64, 33, PixelDescriptor::RGB8_SRGB, 33);
+    assert!(bytes.len() > 4 * 256 * 2, "enough runs for several looks");
+    let switch = Switch::tripping_at(8);
+    // The pulse borrows the switch and refuses to be shared: nothing on this
+    // path needs an owned handle.
+    let pulse = switch.borrowed();
+    assert!(pulse.share().is_err());
+    let mut sink = Recording::default();
+    let err = decode_slice(
+        RleCodec::codec().decoder(&DecodeSpec::new()).unwrap(),
+        &bytes,
+        &mut sink,
+        &pulse,
+    )
+    .err()
+    .unwrap();
+    assert!(stopped(&err), "{err}");
+    assert!(sink.log.is_empty(), "no frame began: {:?}", sink.log);
+    // The look that saw the stop was the last one.
+    assert_eq!(switch.checks.load(std::sync::atomic::Ordering::SeqCst), 8);
+}
+
+#[test]
+fn a_whole_image_header_is_parsed_once_and_handed_to_decode() {
+    let (file, pixels) = Tail::file(10, 10);
+    let tail = Tail::new(true);
+    let decoded = decode(
+        &WholeImage(tail.clone()),
+        &file,
+        &DecodeSpec::new(),
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&decoded.frames[0]), pixels);
+    assert_eq!(tail.probes.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_whole_image_codec_settles_requested_metadata_before_info_or_refuses() {
+    let (file, pixels) = Tail::file(10, 10);
+    let first = DecodeSpec::new().with_metadata_first(MetadataKinds::EXIF);
+    let opts = DriveOptions::new().with_read_size(16);
+
+    // The first window is a prefix, which cannot settle a block that follows
+    // the pixels. The adapter asks for the whole file and looks again.
+    let tail = Tail::new(true);
+    let mut sink = Recording::default();
+    let mut decoder = WholeImage(tail.clone()).decoder(&first).unwrap();
+    let prefix = Input::new(0, &file[..64]).with_total_len(Some(file.len() as u64));
+    let step = decoder.step(prefix, &mut sink, &NoPulse).unwrap();
+    assert_eq!(step.event, DecodeEvent::NeedInput);
+    assert!(matches!(decoder.requested(), [InputRequest::All]));
+    assert!(decoder.info().is_none(), "no Info from an unsettled prefix");
+    let step = decoder
+        .step(Input::whole(&file), &mut sink, &NoPulse)
+        .unwrap();
+    assert_eq!(step.event, DecodeEvent::Info);
+    let info = decoder.info().expect("Info was reported");
+    assert!(info.settled.contains(MetadataKinds::EXIF));
+    assert_eq!(info.metadata.exif.as_deref(), Some(&b"EX"[..]));
+    assert!(sink.log.is_empty(), "nothing reached the sink before Info");
+    assert_eq!(tail.probes.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+    // The same through the windowed driver, start to finish.
+    let tail = Tail::new(true);
+    let mut collect = Collect::new();
+    let decoder = decode_read_at(
+        WholeImage(tail.clone()).decoder(&first).unwrap(),
+        &mut Drip::new(&file, 16),
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), pixels);
+    assert_eq!(
+        decoder.info().unwrap().metadata.exif.as_deref(),
+        Some(&b"EX"[..])
+    );
+    assert_eq!(tail.probes.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+    // Without the request, one look at the prefix is enough.
+    let tail = Tail::new(true);
+    let mut collect = Collect::new();
+    decode_read_at(
+        WholeImage(tail.clone())
+            .decoder(&DecodeSpec::new())
+            .unwrap(),
+        &mut Drip::new(&file, 16),
+        &mut collect,
+        &opts,
+        &NoPulse,
+    )
+    .unwrap();
+    assert_eq!(packed(&collect.frames()[0]), pixels);
+    assert_eq!(tail.probes.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    // A codec that can never settle the kind is refused, with the whole file
+    // in hand and before anything reaches the sink.
+    for resident in [true, false] {
+        let mut sink = Recording::default();
+        let decoder = WholeImage(Tail::new(false)).decoder(&first).unwrap();
+        let result = if resident {
+            decode_slice(decoder, &file, &mut sink, &NoPulse)
+        } else {
+            decode_read_at(
+                decoder,
+                &mut Drip::new(&file, 16),
+                &mut sink,
+                &opts,
+                &NoPulse,
+            )
+        };
+        let err = result.err().unwrap();
+        assert_eq!(
+            err.error().kind(),
+            ErrorKind::Unsupported(Unsupported::Metadata),
+            "resident: {resident}"
+        );
+        assert!(sink.log.is_empty(), "{:?}", sink.log);
+    }
+}
+
+#[test]
+fn encoders_say_what_they_can_embed_and_plans_stay_inside_it() {
+    let d = PixelDescriptor::RGB8_SRGB;
+    let all = Metadata::none()
+        .with_icc(vec![1u8, 2, 3])
+        .with_exif(vec![4u8, 5])
+        .with_xmp(vec![6u8]);
+    for enc in encoders() {
+        let can = enc.embeds();
+        let spec = EncodeSpec::new(Raster::packed(4, 4, d))
+            .with_metadata(all.clone(), MetadataKinds::NONE);
+        let plan = enc.encoder(&spec).unwrap().plan().clone();
+        assert_eq!(
+            plan.embedded,
+            all.kinds().intersection(can),
+            "{}: a plan embeds what was given and can be written",
+            enc.name()
+        );
+        for kind in [MetadataKinds::ICC, MetadataKinds::EXIF, MetadataKinds::XMP] {
+            let spec = EncodeSpec::new(Raster::packed(4, 4, d)).with_metadata(all.clone(), kind);
+            let admitted = enc.encoder(&spec);
+            if can.contains(kind) {
+                assert!(admitted.is_ok(), "{} writes {kind:?}", enc.name());
+            } else {
+                assert_eq!(
+                    admitted.err().unwrap().error().kind(),
+                    ErrorKind::Unsupported(Unsupported::Metadata),
+                    "{} cannot write {kind:?} and says so",
+                    enc.name()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_header_is_read_from_a_prefix_without_decoding() {
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let (bytes, _) = encoded(&**enc, 7, 5, PixelDescriptor::RGB8_SRGB, 34);
+        let spec = DecodeSpec::new();
+        assert!(probe(&*dec, &[], &spec).unwrap().is_none());
+        assert!(probe(&*dec, &bytes[..3], &spec).unwrap().is_none());
+        let info = probe(&*dec, &bytes, &spec).unwrap().expect("a header");
+        assert_eq!((info.width, info.height), (7, 5), "{}", enc.name());
+        assert_eq!(info.format, enc.format());
+    }
+
+    // EXIF after the pixels: a prefix cannot settle it, the whole file can.
+    let (bytes, _) = with_exif(b"late");
+    let first = DecodeSpec::new().with_metadata_first(MetadataKinds::EXIF);
+    assert!(probe(&BiasCodec, &bytes[..40], &first).unwrap().is_none());
+    let info = probe(&BiasCodec, &bytes, &first)
+        .unwrap()
+        .expect("a header");
+    assert_eq!(info.metadata.exif.as_deref(), Some(&b"late"[..]));
+    // Without the request the prefix is enough, and says EXIF is not settled.
+    let info = probe(&BiasCodec, &bytes[..40], &DecodeSpec::new())
+        .unwrap()
+        .expect("a header");
+    assert!(!info.settled.contains(MetadataKinds::EXIF));
+}
+
+#[test]
+fn a_still_goes_in_and_comes_out_without_restating_its_shape() {
+    for (enc, dec) in encoders().iter().zip(decoders()) {
+        let d = PixelDescriptor::RGBA8_SRGB;
+        let source = pattern(11, 6, d, 35);
+        let (strided, stride) = padded(&source, 11, 6, d, 5);
+        let pixels = slice(&strided, 11, 6, stride, d);
+        let bytes = encode(&**enc, EncodeSpec::for_pixels(&pixels), pixels, &NoPulse).unwrap();
+        let (info, image) = decode(&*dec, &bytes, &DecodeSpec::new(), &NoPulse)
+            .unwrap()
+            .into_still()
+            .expect("one packed frame");
+        assert_eq!((info.width, info.height), (11, 6));
+        assert_eq!(tight(&image), source, "{}", enc.name());
+    }
 }

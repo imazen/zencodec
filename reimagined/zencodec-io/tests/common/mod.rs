@@ -4,9 +4,18 @@
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use zencodec::decode::{DecodeCodec, Sink};
-use zencodec::encode::EncodeCodec;
-use zencodec::{FrameHeader, Pass, Result, SharedPulse, Stop, StopReason};
+use zencodec::decode::{
+    DecodeCodec, DecodeEvent, DecodePlan, DecodeSpec, DecodeStep, Decoder, Sink,
+};
+use zencodec::encode::{
+    EncodeCodec, EncodeEvent, EncodeInput, EncodePlan, EncodeSpec, EncodeStep, Encoder,
+    OutputBuffer,
+};
+use zencodec::simple::{DecodeRequest, WholeImageDecode};
+use zencodec::{
+    ErrorKind, FormatInfo, FrameHeader, ImageFormat, ImageInfo, Input, InputRequest, Layout,
+    Metadata, MetadataKinds, NoPulse, Pass, Pulse, Result, SharedPulse, Stop, StopReason, error,
+};
 use zencodec_fixtures::{bias::BiasCodec, rle::RleCodec, rows::RowsCodec};
 use zencodec_io::{Collect, Frame, RangeRead, ReadAt};
 use zenpixels::plane::PlanarSlice;
@@ -202,5 +211,178 @@ impl Stop for Switch {
         } else {
             Ok(())
         }
+    }
+}
+
+/// A decoder that never looks at its pulse, and under which the test raises
+/// a stop in the middle of a step: when the wrapped decoder reports `on`,
+/// the switch is thrown and the step still returns success.
+pub struct Deaf {
+    pub inner: Box<dyn Decoder>,
+    pub switch: Switch,
+    pub on: DecodeEvent,
+}
+
+impl Deaf {
+    pub fn over(codec: &dyn DecodeCodec, switch: &Switch, on: DecodeEvent) -> Box<dyn Decoder> {
+        Box::new(Self {
+            inner: codec.decoder(&DecodeSpec::new()).expect("admitted"),
+            switch: switch.clone(),
+            on,
+        })
+    }
+}
+
+impl Decoder for Deaf {
+    fn requested(&self) -> &[InputRequest] {
+        self.inner.requested()
+    }
+    fn info(&self) -> Option<&ImageInfo> {
+        self.inner.info()
+    }
+    fn plan(&self) -> Option<&DecodePlan> {
+        self.inner.plan()
+    }
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink, _: &dyn Pulse) -> Result<DecodeStep> {
+        let step = self.inner.step(input, sink, &NoPulse)?;
+        if step.event == self.on {
+            self.switch.stop();
+        }
+        Ok(step)
+    }
+}
+
+/// An encoder codec that never looks at its pulse; the switch is thrown
+/// during the step that completes the output.
+pub struct DeafCodec {
+    pub inner: Arc<dyn EncodeCodec>,
+    pub switch: Switch,
+}
+
+impl EncodeCodec for DeafCodec {
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+    fn format(&self) -> ImageFormat {
+        self.inner.format()
+    }
+    fn embeds(&self) -> MetadataKinds {
+        self.inner.embeds()
+    }
+    fn encoder(&self, spec: &EncodeSpec) -> Result<Box<dyn Encoder>> {
+        Ok(Box::new(DeafEncoder {
+            inner: self.inner.encoder(spec)?,
+            switch: self.switch.clone(),
+        }))
+    }
+}
+
+struct DeafEncoder {
+    inner: Box<dyn Encoder>,
+    switch: Switch,
+}
+
+impl Encoder for DeafEncoder {
+    fn plan(&self) -> &EncodePlan {
+        self.inner.plan()
+    }
+    fn step(&mut self, input: EncodeInput<'_>, _: &dyn Pulse) -> Result<EncodeStep> {
+        let step = self.inner.step(input, &NoPulse)?;
+        if step.event == EncodeEvent::Done {
+            self.switch.stop();
+        }
+        Ok(step)
+    }
+    fn output(&mut self) -> &mut OutputBuffer {
+        self.inner.output()
+    }
+}
+
+static TAIL_INFO: FormatInfo = FormatInfo::new("tail", "image/x-tail", "tail", 4, |b| {
+    b.starts_with(b"TAIL")
+});
+
+/// The `TAIL` test format: `"TAIL" width:u8 height:u8`, gray rows, then a
+/// two-byte EXIF block after the pixels.
+pub const TAIL: ImageFormat = ImageFormat::new(&TAIL_INFO);
+
+/// A whole-image decoder whose EXIF sits after the pixels, so a probe of a
+/// prefix cannot settle it. It counts its probes, and `decode` works only
+/// from what `probe` kept.
+#[derive(Clone)]
+pub struct Tail {
+    pub probes: Arc<AtomicUsize>,
+    /// Whether a probe of the whole file settles EXIF. `false` models a
+    /// codec that never parses it.
+    pub settles: bool,
+}
+
+impl Tail {
+    pub fn new(settles: bool) -> Self {
+        Self {
+            probes: Arc::default(),
+            settles,
+        }
+    }
+
+    pub fn file(width: u8, height: u8) -> (Vec<u8>, Vec<u8>) {
+        let pixels = pattern(width.into(), height.into(), PixelDescriptor::GRAY8_SRGB, 23);
+        let mut file = b"TAIL".to_vec();
+        file.extend_from_slice(&[width, height]);
+        file.extend_from_slice(&pixels);
+        file.extend_from_slice(b"EX");
+        (file, pixels)
+    }
+}
+
+impl WholeImageDecode for Tail {
+    /// Width and height, parsed once.
+    type Header = (u8, u8);
+
+    fn name(&self) -> &'static str {
+        "tail"
+    }
+
+    fn formats(&self) -> &[ImageFormat] {
+        &[TAIL]
+    }
+
+    fn probe(&self, bytes: &[u8]) -> Result<Option<(ImageInfo, (u8, u8))>> {
+        self.probes.fetch_add(1, Ordering::SeqCst);
+        if bytes.len() < 6 {
+            return Ok(None);
+        }
+        let (width, height) = (bytes[4], bytes[5]);
+        let total = 6 + usize::from(width) * usize::from(height) + 2;
+        let mut info = ImageInfo::new(
+            TAIL,
+            width.into(),
+            height.into(),
+            Layout::Packed(PixelDescriptor::GRAY8_SRGB),
+        );
+        info = if self.settles && bytes.len() >= total {
+            info.with_metadata(
+                Metadata::none().with_exif(bytes[total - 2..total].to_vec()),
+                MetadataKinds::ALL,
+            )
+        } else {
+            info.with_metadata(
+                Metadata::none(),
+                MetadataKinds::ALL.difference(MetadataKinds::EXIF),
+            )
+        };
+        Ok(Some((info, (width, height))))
+    }
+
+    fn decode(&self, request: DecodeRequest<'_, (u8, u8)>) -> Result<PixelBuffer> {
+        let (width, height) = request.header;
+        let len = usize::from(width) * usize::from(height);
+        PixelBuffer::from_vec(
+            request.bytes[6..6 + len].to_vec(),
+            width.into(),
+            height.into(),
+            request.output,
+        )
+        .map_err(|_| error(ErrorKind::Internal))
     }
 }
