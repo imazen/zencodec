@@ -45,3 +45,9 @@ large-report run:
     python3 tools/large-decode/page.py docs/optional-pulse-large-2026-11-12.json "{{run}}/index.html"
     cp --update=none docs/optional-pulse-large-2026-11-12.md "{{run}}/report.md"
     cp --update=none docs/optional-pulse-large-2026-11-12.json "{{run}}/receipt.json"
+
+large-status run:
+    python3 tools/large-decode/status.py "{{run}}"
+
+large-verify run receipt:
+    python3 tools/large-decode/verify.py "{{run}}" "{{receipt}}"
