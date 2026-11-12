@@ -1,0 +1,53 @@
+test:
+    cargo test --workspace --all-features --locked
+
+clippy:
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+fmt:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures --check
+
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
+
+check-core:
+    cargo check -p zencodec --no-default-features --locked
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+    cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
+
+gates: fmt test clippy docs check-core
+
+# Owned benchmark source only; path dependencies are not reformatted.
+probe-fmt:
+    cargo fmt --manifest-path tools/native-slice/Cargo.toml -p reimagined-native-slice
+    cargo fmt --manifest-path tools/ablation/Cargo.toml -p reimagined-driver-ablation
+
+probe-check:
+    python3 tools/native-slice/verify-source.py
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/native-target" cargo test --manifest-path tools/native-slice/Cargo.toml --release --locked
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/native-target" cargo clippy --manifest-path tools/native-slice/Cargo.toml --all-targets --locked -- -D warnings
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/synthetic-target" cargo test --manifest-path tools/ablation/Cargo.toml --release --locked
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/synthetic-target" cargo clippy --manifest-path tools/ablation/Cargo.toml --all-targets --locked -- -D warnings
+
+probe-build:
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/native-target" cargo build --manifest-path tools/native-slice/Cargo.toml --release --bins --locked
+    CARGO_TARGET_DIR="{{env('PROBE_TARGET')}}/synthetic-target" cargo build --manifest-path tools/ablation/Cargo.toml --release --bin allocations --locked
+
+probe-setup:
+    python3 tools/native-slice/setup.py
+    cp tools/ablation/dependencies.lock tools/ablation/Cargo.lock
+
+large-profile output:
+    flock --timeout 300 "{{env('HOME')}}/.cache/zenbench/zenbench.lock" "{{env('PROBE_TARGET')}}/native-target/release/profile_lease" "{{env('ZENBENCH_EXECUTOR')}}" exec --cpu-policy performance python3 -- tools/large-decode/run.py "{{env('PROBE_TARGET')}}/native-target/release/allocations" "{{env('PROBE_TARGET')}}/synthetic-target/release/allocations" "{{output}}"
+
+large-report run:
+    python3 tools/large-decode/report.py "{{run}}" docs/optional-pulse-large-2026-11-12.md docs/optional-pulse-large-2026-11-12.json
+    python3 tools/large-decode/page.py docs/optional-pulse-large-2026-11-12.json "{{run}}/index.html"
+    cp --update=none docs/optional-pulse-large-2026-11-12.md "{{run}}/report.md"
+    cp --update=none docs/optional-pulse-large-2026-11-12.json "{{run}}/receipt.json"
+
+large-status run:
+    python3 tools/large-decode/status.py "{{run}}"
+
+large-verify run receipt:
+    python3 tools/large-decode/verify.py "{{run}}" "{{receipt}}"

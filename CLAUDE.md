@@ -1,5 +1,13 @@
 # zencodec
 
+## Known Bugs: reimagined input-planning cancellation (2026-11-12)
+
+The unpublished async input-planning loop continued source reads after a
+successful short read signalled cancellation. The failing-first control observed
+22 reads instead of one. Decode and transcode now check the optional Pulse before
+each planning iteration. Source failures remain primary when the read itself
+fails. This does not interrupt a pending source call or native computation.
+
 ## Known Bugs: edited video presentation (2026-10-30)
 
 Native MP4 controls reproduce identical edit offsets for different segment
@@ -913,3 +921,16 @@ fingerprints even when public signatures are unchanged. The sibling cohort's
 runtime/fuzz CI passed, but its Documentation workflow failed the stale-catalog
 gate. Regenerate through `just sibling-docs-catalog-check` with its pinned nightly;
 the generator, ownership control, site build and all 27 Node tests pass locally.
+
+## Known Bugs: reimagined pool diagnostic (2026-11-12)
+
+The standalone spike's repaired window does not establish removal of its older
+pool regression. On measured source `2a7849d9`, synthetic 4096² RGBA8 with 64-row
+strips/quota 64 measured older/newer pool wall 30.394/31.278 ms and CPU
+30.397/31.268 ms, beyond the observed A/A spreads of 0.683/0.674 ms. The 8192²
+contrast is unresolved. All 670 profiler pairs and exact-pixel/stride controls
+are retained; this is diagnostic evidence, not zenbench Confirm or a production
+codec qualification. Resident owned inputs have a separate one-hop route;
+the generic worker route over a borrowed source copies input into its window.
+Run resource line: `run-heavy: done rc=0 1411s | peak-RSS 0.88GiB | min-avail 12239MiB | peak-load 1.44`.
+See [the report](reimagined/docs/optional-pulse-large-2026-11-12.md).
