@@ -15,7 +15,7 @@ host".
 
 ```text
 zencodec/           the contract: 2,906 lines, no_std + alloc, forbid(unsafe_code)
-zencodec-io/        the loops: memory, blocking I/O, Tokio (2,189 lines)
+zencodec-io/        the loops: memory, blocking I/O, Tokio (2,200 lines)
 zencodec-fixtures/  three codecs that exercise it (1,546 lines)
 ```
 
