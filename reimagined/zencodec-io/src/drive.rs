@@ -421,7 +421,7 @@ impl<S: Sink> Session<S> {
     /// checked before the first step and after every step, so a step that
     /// succeeds cannot hide a stop raised while it ran, the last one
     /// included. A decoder's own error comes first.
-    pub(crate) fn run(&mut self, quota: usize, pulse: &dyn Pulse) -> Result<Batch> {
+    pub(crate) fn run(&mut self, quota: usize, pulse: Option<&dyn Pulse>) -> Result<Batch> {
         check(pulse)?;
         for _ in 0..quota.max(1) {
             let requests = self.decoder.requested();

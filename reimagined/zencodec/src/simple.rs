@@ -1,7 +1,7 @@
 //! The short path for codec authors: bytes in, pixels out, and the reverse.
 //!
 //! A codec that works on a whole file and a whole image implements
-//! [`WholeImageDecode`] or [`WholeImageEncode`] (two or three functions) and
+//! [`WholeImageDecode`] or [`WholeImageEncode`] and
 //! wraps itself in [`WholeImage`]. The wrapper supplies the state machine,
 //! the gates, format negotiation, cancellation checks and the requirement
 //! refusals, so a simple codec is a full citizen of the contract without
@@ -81,7 +81,7 @@ pub struct DecodeRequest<'a, H> {
     /// The caller's request; its targets apply to this work.
     pub spec: &'a DecodeSpec,
     /// Progress and cancellation for this work.
-    pub pulse: &'a dyn Pulse,
+    pub pulse: Option<&'a dyn Pulse>,
 }
 
 /// An encoder that takes the whole image and returns the whole file.
@@ -125,7 +125,7 @@ pub struct EncodeRequest<'a> {
     /// The caller's request: metadata to embed, targets.
     pub spec: &'a EncodeSpec,
     /// Progress and cancellation for this work.
-    pub pulse: &'a dyn Pulse,
+    pub pulse: Option<&'a dyn Pulse>,
 }
 
 /// Makes a [`WholeImageDecode`] or [`WholeImageEncode`] a contract codec.
@@ -270,7 +270,7 @@ impl<C: WholeImageDecode> Decoder for WholeDecoder<C> {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn Sink,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<DecodeStep> {
         match core::mem::replace(&mut self.state, DecodeState::Failed) {
             DecodeState::Header => {
@@ -427,7 +427,7 @@ struct WholeEncoder<C> {
 }
 
 impl<C: WholeImageEncode> WholeEncoder<C> {
-    fn finish(&mut self, pixels: PixelSlice<'_>, pulse: &dyn Pulse) -> Result<()> {
+    fn finish(&mut self, pixels: PixelSlice<'_>, pulse: Option<&dyn Pulse>) -> Result<()> {
         check(pulse)?;
         let bytes = self.codec.encode(EncodeRequest {
             pixels,
@@ -448,7 +448,7 @@ impl<C: WholeImageEncode> Encoder for WholeEncoder<C> {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: Option<&dyn Pulse>) -> Result<EncodeStep> {
         if self.done {
             return match input {
                 EncodeInput::None => Ok(EncodeStep::new(0, EncodeEvent::Done)),

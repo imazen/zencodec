@@ -57,9 +57,9 @@ pub use raster::{FrameDuration, FrameHeader, Layout, Pass, Raster, copy_rows};
 
 pub use bytes::{ByteRange, Input, InputRequest, OutputAccess};
 
-/// Progress and cancellation. Every step borrows a [`Pulse`]; [`NoPulse`]
-/// is the one that never stops and reports nowhere, and [`SharedPulse`] is
-/// the owned handle for work that leaves the caller's thread.
+/// Progress and cancellation. Steps take `Option<&dyn Pulse>`: `None` disables
+/// both without a no-op observer. [`SharedPulse`] is the owned handle for work
+/// that leaves the caller's thread; [`NoPulse`] remains available explicitly.
 pub use how_far::{NoPulse, Pulse, SharedPulse, Stop};
 /// The location-carrying wrapper behind [`Error`].
 pub use whereat::At;

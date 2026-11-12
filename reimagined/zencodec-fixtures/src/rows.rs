@@ -267,7 +267,7 @@ impl Decoder for RowsDecoder {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn Sink,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<DecodeStep> {
         if input.offset != self.pos {
             return Err(error_msg(
@@ -613,7 +613,7 @@ impl Encoder for RowsEncoder {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: Option<&dyn Pulse>) -> Result<EncodeStep> {
         check(pulse)?;
         if self.state == EncodeState::Start {
             self.start()?;

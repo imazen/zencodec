@@ -1,0 +1,18 @@
+test:
+    cargo test --workspace --all-features --locked
+
+clippy:
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+fmt:
+    cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures --check
+
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
+
+check-core:
+    cargo check -p zencodec --no-default-features --locked
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+    cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
+
+gates: fmt test clippy docs check-core

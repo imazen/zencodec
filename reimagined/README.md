@@ -5,7 +5,7 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-11: it compiles, 44 tests pass, clippy and rustdoc are clean
+Status on 2026-11-12: the fixture tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been ported to a real
@@ -14,9 +14,9 @@ earlier revision and measured them; see "What it costs and saves an async
 host".
 
 ```text
-zencodec/           the contract: 2,906 lines, no_std + alloc, forbid(unsafe_code)
-zencodec-io/        the loops: memory, blocking I/O, Tokio (2,200 lines)
-zencodec-fixtures/  three codecs that exercise it (1,546 lines)
+zencodec/           the contract: no_std + alloc, forbid(unsafe_code)
+zencodec-io/        the loops: memory, blocking I/O, Tokio
+zencodec-fixtures/  three codecs that exercise it
 ```
 
 ## The whole contract
@@ -43,7 +43,7 @@ pub trait Decoder: Send + 'static {
     fn requested(&self) -> &[InputRequest];
     fn info(&self) -> Option<&ImageInfo>;
     fn plan(&self) -> Option<&DecodePlan>;
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink, pulse: &dyn Pulse)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink, pulse: Option<&dyn Pulse>)
         -> Result<DecodeStep>;
 }
 
@@ -56,7 +56,7 @@ pub trait EncodeCodec: Send + Sync + 'static {
 
 pub trait Encoder: Send + 'static {
     fn plan(&self) -> &EncodePlan;
-    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep>;
+    fn step(&mut self, input: EncodeInput<'_>, pulse: Option<&dyn Pulse>) -> Result<EncodeStep>;
     fn output(&mut self) -> &mut OutputBuffer;
 }
 ```
@@ -65,8 +65,8 @@ Those four, plus `Sink` (which the caller implements), are the contract. Every
 method returns the same `Result`. Every trait is object safe, so there is no
 second "dyn" family: `Box<dyn Decoder>` is what a codec returns and what a
 registry of dozens of codecs holds. One trait classifies a codec's own error
-type, and two optional traits in `simple` let a codec that has nothing to
-stream implement two functions and get the rest.
+type, and the optional `simple` traits let a whole-image codec provide its native
+operations and format declarations while an adapter supplies the protocol.
 
 The surface this stands in for, counted on the 0.2 review branch (`63f136f0`):
 11 typed codec traits and 9 `Dyn*` mirrors, with shims between them and three
@@ -127,10 +127,11 @@ the buffer in place and records a `Patch` only for bytes already taken, so
 the header-patching protocol is one method. An encoder that will patch a
 forward-only destination calls `hold()`.
 
-**One pulse, lent to each step.** Progress and cancellation arrive as a
-`&dyn Pulse` argument of `step`, and nowhere else, so there is no rule about
-honoring two. Work that stays on the caller's thread borrows the caller's
-pulse, including one that cannot be shared; a driver that moves steps to a
+**One optional pulse, lent to each step.** Progress and cancellation arrive as
+`Option<&dyn Pulse>` on `step`. `None` disables observation without a no-op
+adapter; `Some` retains both progress and cancellation. Worker drivers take
+`Option<SharedPulse>` to retain an observer across a hand-off. Blocking
+local work borrows the caller's pulse, including one that cannot be shared; a driver that moves steps to a
 worker holds the owned `SharedPulse` and lends it there. A driver also checks
 the pulse itself before the first step and after every step, so a codec that
 never looks cannot turn a stopped operation into a success. An earlier
@@ -183,16 +184,20 @@ step signatures have changed since.
   header twice, which `WholeImageDecode::Header` now lets a codec avoid.
 - Its process-CPU accounting of the same decodes put the boxed loop within
   0.24 microseconds of native at 256x256 on QOI (112.37 against 112.13) and
-  BMP (28.40 against 28.16), inside the 1.67 microsecond spread of its own
-  repeated JPEG control.
+  BMP (28.40 against 28.16). Its repeated JPEG control differed by 1.67
+  microseconds; that is not a noise bound for QOI or BMP. These means do not
+  establish latency parity.
 - On tiny images the same accounting resolves a fixed cost for the step
   path (admission, the box, the sink calls): 64 to 90 nanoseconds per decode
   over a native decode that also reads the header. At 8x8 that is 0.247
   microseconds against 0.159 for QOI. It is unresolved against run-to-run
-  spread at 63x63 for QOI and JPEG. A borrowed call through a trait object
-  stayed within 6 nanoseconds of native.
+  spread at 63x63 for QOI and JPEG. The borrowed trait-object controls at 8x8 differed from native by 4.8 ns
+  for QOI, 5.7 ns for BMP and 45.8 ns for JPEG; this is not a universal
+  overhead bound, and the larger cells have their own A/A variation.
 - Reading the header twice cost a further 45 nanoseconds for BMP and 474
-  for JPEG at 8x8. That is the cost `WholeImageDecode::Header` removes.
+  for JPEG at 8x8. The header hand-off lets a native binding avoid that cost when its native
+  API can reuse the parsed state. This revision has not established that
+  removal with native measurements.
 
 It also found two costs in its first capture, both fixed here:
 
@@ -232,7 +237,10 @@ buffered route.
 
 ## Borrowed input and peak memory
 
-No driver copies input that is already in memory. What a caller must hold,
+The slice, polling-task resident and buffered-owner routes preserve input
+ownership. A generic worker route over an async source can still copy into
+its owned window; use the buffered route for an existing owner, or the
+polling-task route for a borrow. What a caller must hold,
 by call shape, for a large file borrowed from a foreign runtime:
 
 | Call shape | What happens to the input |
@@ -305,9 +313,9 @@ merging. This spike is not that consumer yet.
   skips the boxed decoder. Its measurements put the whole step path at one
   allocation and 64 to 90 nanoseconds per decode: half again the cost of an
   8x8 QOI decode, about one percent at 63x63, and lost in the noise at
-  256x256. The entry point would be a second implementation of decode per
-  codec, with no admission point. It is left out; adding it later breaks
-  nothing.
+  256x256. Such an entry point would need the same admission guarantees as the step
+  path; its measured cost control did not implement those guarantees. It is
+  left out of this experiment.
 - **No capability record.** What a codec can do is learned by asking:
   admission refuses with the unmet requirement named and the plan reports
   the rest. `formats()` and `embeds()` are the only standing declarations.

@@ -29,8 +29,8 @@
 //!    [`FrameDone`](DecodeEvent::FrameDone). After the last frame,
 //!    [`Done`](DecodeEvent::Done).
 //! 5. **An error is final.** A decoder is not stepped after one.
-//! 6. **Progress and cancellation** arrive with every step as a borrowed
-//!    [`Pulse`]. A decoder checks it around expensive work and reports a stop
+//! 6. **Progress and cancellation** arrive with every step as an optional borrowed
+//!    [`Pulse`]. `None` disables both. A decoder checks it around expensive work and reports a stop
 //!    as [`ErrorKind::Stopped`]. It keeps no reference to the pulse between
 //!    steps; a decoder with threads of its own that outlive a step asks for
 //!    [`Pulse::share`] and refuses when the pulse cannot be shared.
@@ -347,7 +347,7 @@ pub trait Decoder: Send + 'static {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn Sink,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<DecodeStep>;
 }
 

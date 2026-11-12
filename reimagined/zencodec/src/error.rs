@@ -299,9 +299,11 @@ pub fn unsupported(what: Unsupported) -> Error {
 }
 
 /// Check the pulse, turning a stop into a located error.
+/// `None` succeeds without calling an observer or allocating an adapter.
+#[inline]
 #[track_caller]
-pub fn check(pulse: &dyn how_far::Stop) -> Result<()> {
-    match pulse.check() {
+pub fn check(pulse: Option<&dyn how_far::Pulse>) -> Result<()> {
+    match pulse.map_or(Ok(()), how_far::Stop::check) {
         Ok(()) => Ok(()),
         Err(reason) => Err(At::wrap(CodecError::from(reason)).at()),
     }

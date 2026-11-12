@@ -26,9 +26,10 @@
 //!   their input per step, so [`decode_buffered`] and [`transcode_buffered`]
 //!   are a single `spawn_blocking` around the in-memory driver.
 //!
-//! Each driver takes one [`SharedPulse`], the owned handle a pulse gives out
-//! for work that leaves the caller's thread, and lends it to every step
-//! wherever that step runs. Dropping a driver's future does not stop a batch
+//! Each driver takes an optional [`SharedPulse`], the owned handle a pulse gives
+//! out for work that leaves the caller's thread, and lends it to every step.
+//! `None` disables observation without constructing a no-op handle.
+//! Dropping a driver's future does not stop a batch
 //! that has already been handed to a worker: signal the pulse as well.
 
 use crate::drive::{Batch, DriveOptions, Next, RangeRead, Session, Window};
@@ -323,10 +324,10 @@ impl<T, F: FnOnce() -> T> Pending<T, F> {
 fn batch<S: Sink>(
     mut session: Box<Session<S>>,
     quota: usize,
-    pulse: &SharedPulse,
+    pulse: &Option<SharedPulse>,
     done: impl FnOnce(&mut S) -> Result<()>,
 ) -> (Box<Session<S>>, Result<Batch>) {
-    let mut end = session.run(quota, pulse.as_pulse());
+    let mut end = session.run(quota, pulse.as_ref().map(SharedPulse::as_pulse));
     if matches!(end, Ok(Batch::Done)) {
         // Whatever finishing the sink needs runs here, on the worker.
         if let Err(e) = done(&mut session.sink) {
@@ -387,7 +388,7 @@ pub fn decode<'a, S, Src>(
     sink: S,
     offload: Offload,
     opts: DriveOptions,
-    pulse: SharedPulse,
+    pulse: Option<SharedPulse>,
 ) -> impl Future<Output = Result<(Box<dyn Decoder>, S)>> + Send + 'a
 where
     S: Sink + Send + 'static,
@@ -400,8 +401,15 @@ where
             let here = matches!(offload, Offload::Inline);
             loop {
                 let quota = opts.steps_per_batch;
-                let mut batch =
-                    || run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse());
+                let mut batch = || {
+                    run.run(
+                        &mut *decoder,
+                        bytes,
+                        &mut sink,
+                        quota,
+                        pulse.as_ref().map(SharedPulse::as_pulse),
+                    )
+                };
                 let done = if here { batch() } else { in_place(batch) };
                 if done? {
                     return Ok((decoder, sink));
@@ -411,11 +419,12 @@ where
         }
         let mut session = Box::new(Session::new(decoder, sink, &opts));
         loop {
-            check(&pulse)?;
+            check(pulse.as_ref().map(SharedPulse::as_pulse))?;
             // Reads are planned and awaited here, on the polling task. Only
             // codec work crosses to a worker, so a decoder waiting for its
             // whole file costs no hand-off while the file arrives.
             loop {
+                check(pulse.as_ref().map(SharedPulse::as_pulse))?;
                 let next = session.window.next_read(session.decoder.requested())?;
                 if matches!(next, Next::Ready) {
                     break;
@@ -447,10 +456,10 @@ async fn publish<W: AsyncWrite + Unpin + Send + ?Sized>(
     out: &mut W,
     carry: &mut Vec<u8>,
     written: &mut u64,
-    pulse: &SharedPulse,
+    pulse: &Option<SharedPulse>,
 ) -> Result<()> {
     if !carry.is_empty() {
-        check(pulse)?;
+        check(pulse.as_ref().map(SharedPulse::as_pulse))?;
         out.write_all(carry).await.map_err(sink_error)?;
         *written += carry.len() as u64;
         carry.clear();
@@ -463,14 +472,14 @@ async fn finish_output<W: AsyncWrite + Unpin + Send + ?Sized>(
     out: &mut W,
     sink: &mut EncoderSink,
     written: u64,
-    pulse: &SharedPulse,
+    pulse: &Option<SharedPulse>,
 ) -> Result<u64> {
     if !sink.take_patches().is_empty() {
         return Err(CodecError::new(ErrorKind::Sink)
             .with_message("an async writer cannot be patched")
             .at());
     }
-    check(pulse)?;
+    check(pulse.as_ref().map(SharedPulse::as_pulse))?;
     out.flush().await.map_err(sink_error)?;
     Ok(written)
 }
@@ -490,7 +499,7 @@ pub fn transcode<'a, Src, W>(
     out: &'a mut W,
     offload: Offload,
     opts: DriveOptions,
-    pulse: SharedPulse,
+    pulse: Option<SharedPulse>,
 ) -> impl Future<Output = Result<u64>> + Send + 'a
 where
     Src: AsyncSource + ?Sized,
@@ -506,7 +515,13 @@ where
             loop {
                 let quota = opts.steps_per_batch;
                 let mut batch = || -> Result<bool> {
-                    let done = run.run(&mut *decoder, bytes, &mut sink, quota, pulse.as_pulse())?;
+                    let done = run.run(
+                        &mut *decoder,
+                        bytes,
+                        &mut sink,
+                        quota,
+                        pulse.as_ref().map(SharedPulse::as_pulse),
+                    )?;
                     if done {
                         sink.finish()?;
                     }
@@ -527,10 +542,11 @@ where
         let (mut carry, mut spare) = (Vec::new(), Vec::new());
         let mut written = 0u64;
         loop {
-            check(&pulse)?;
+            check(pulse.as_ref().map(SharedPulse::as_pulse))?;
             // Reads are planned and awaited here; see `decode`. Finished
             // bytes go out before the driver waits for input.
             loop {
+                check(pulse.as_ref().map(SharedPulse::as_pulse))?;
                 let next = session.window.next_read(session.decoder.requested())?;
                 if matches!(next, Next::Ready) {
                     break;
@@ -580,7 +596,7 @@ pub async fn decode_buffered<S, B>(
     decoder: Box<dyn Decoder>,
     bytes: B,
     mut sink: S,
-    pulse: SharedPulse,
+    pulse: Option<SharedPulse>,
 ) -> Result<(Box<dyn Decoder>, S)>
 where
     S: Sink + Send + 'static,
@@ -588,7 +604,13 @@ where
 {
     Offload::Blocking
         .start(move || {
-            decode_slice(decoder, bytes.as_ref(), &mut sink, pulse.as_pulse()).map(|d| (d, sink))
+            decode_slice(
+                decoder,
+                bytes.as_ref(),
+                &mut sink,
+                pulse.as_ref().map(SharedPulse::as_pulse),
+            )
+            .map(|d| (d, sink))
         })
         .finish()
         .await?
@@ -600,14 +622,19 @@ pub async fn transcode_buffered<B>(
     decoder: Box<dyn Decoder>,
     bytes: B,
     mut sink: EncoderSink,
-    pulse: SharedPulse,
+    pulse: Option<SharedPulse>,
 ) -> Result<Vec<u8>>
 where
     B: AsRef<[u8]> + Send + 'static,
 {
     Offload::Blocking
         .start(move || {
-            decode_slice(decoder, bytes.as_ref(), &mut sink, pulse.as_pulse())?;
+            decode_slice(
+                decoder,
+                bytes.as_ref(),
+                &mut sink,
+                pulse.as_ref().map(SharedPulse::as_pulse),
+            )?;
             sink.finish()?;
             Ok(sink.take_output())
         })

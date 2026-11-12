@@ -254,7 +254,7 @@ impl Decoder for BiasDecoder {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn Sink,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<DecodeStep> {
         match self.state {
             DecodeState::Header => self.header(&input),
@@ -520,7 +520,7 @@ impl BiasEncoder {
     }
 
     /// Both passes over rows that are all in hand.
-    fn encode_whole(&mut self, rows: &PixelSlice<'_>, pulse: &dyn Pulse) -> Result<()> {
+    fn encode_whole(&mut self, rows: &PixelSlice<'_>, pulse: Option<&dyn Pulse>) -> Result<()> {
         self.scan(rows);
         check(pulse)?;
         self.write_header()?;
@@ -534,7 +534,7 @@ impl Encoder for BiasEncoder {
         &self.plan
     }
 
-    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep> {
+    fn step(&mut self, input: EncodeInput<'_>, pulse: Option<&dyn Pulse>) -> Result<EncodeStep> {
         check(pulse)?;
         let height = self.spec.raster.height;
         let need = |this: &Self| {

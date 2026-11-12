@@ -24,14 +24,14 @@ type SpecFn = Box<dyn FnMut(&FrameHeader) -> EncodeSpec + Send>;
 /// encoder in place. Rows the decoder wants to write are lent from one strip
 /// buffer, sized to the encoder's strip height. No other copy is made.
 ///
-/// The encoder's steps observe the sink's own pulse `P`: a borrowed
+/// The encoder's steps observe the sink's optional pulse `P`: a borrowed
 /// `&dyn Pulse` when the transcode stays on the caller's thread, a
-/// [`SharedPulse`] when the sink travels to a worker. It may be the pulse
+/// [`SharedPulse`] when the sink travels to a worker, or `None`. It may be the pulse
 /// the decoder observes or a different stage of the same plan.
 pub struct EncoderSink<P = SharedPulse> {
     codec: Arc<dyn EncodeCodec>,
     spec: SpecFn,
-    pulse: P,
+    pulse: Option<P>,
     encoder: Option<Box<dyn Encoder>>,
     raster: Option<Raster>,
     sequence: bool,
@@ -52,7 +52,7 @@ impl<P: Pulse> EncoderSink<P> {
     pub fn new(
         codec: Arc<dyn EncodeCodec>,
         spec: impl FnMut(&FrameHeader) -> EncodeSpec + Send + 'static,
-        pulse: P,
+        pulse: Option<P>,
     ) -> Self {
         Self {
             codec,
@@ -105,7 +105,12 @@ impl<P: Pulse> EncoderSink<P> {
             ));
         };
         if self.need == EncodeEvent::NeedFrame {
-            self.need = encoder_step(&mut **encoder, EncodeInput::End, &self.pulse)?.event;
+            self.need = encoder_step(
+                &mut **encoder,
+                EncodeInput::End,
+                self.pulse.as_ref().map(|pulse| pulse as &dyn Pulse),
+            )?
+            .event;
         }
         if self.need == EncodeEvent::Done {
             Ok(())
@@ -123,7 +128,11 @@ impl<P: Pulse> EncoderSink<P> {
             .encoder
             .as_deref_mut()
             .ok_or_else(|| error_msg(ErrorKind::Protocol, "rows outside a frame"))?;
-        let step = encoder_step(encoder, input, &self.pulse)?;
+        let step = encoder_step(
+            encoder,
+            input,
+            self.pulse.as_ref().map(|pulse| pulse as &dyn Pulse),
+        )?;
         self.need = step.event;
         Ok(step.rows)
     }
@@ -135,7 +144,11 @@ impl<P: Pulse> EncoderSink<P> {
             let strip = self.strip.as_ref().expect("rows are staged in it");
             let rows = strip.rows(0, self.staged);
             let encoder = self.encoder.as_mut().expect("prepared at begin");
-            let step = encoder_step(&mut **encoder, EncodeInput::Rows(rows), &self.pulse)?;
+            let step = encoder_step(
+                &mut **encoder,
+                EncodeInput::Rows(rows),
+                self.pulse.as_ref().map(|pulse| pulse as &dyn Pulse),
+            )?;
             self.need = step.event;
             let used = step.rows.min(self.staged);
             if used == 0 {
@@ -215,7 +228,12 @@ impl<P: Pulse> Sink for EncoderSink<P> {
             spec.supply = RowSupply::Once;
             self.sequence = spec.sequence.is_some();
             let mut encoder = self.codec.encoder(&spec)?;
-            self.need = encoder_step(&mut *encoder, EncodeInput::None, &self.pulse)?.event;
+            self.need = encoder_step(
+                &mut *encoder,
+                EncodeInput::None,
+                self.pulse.as_ref().map(|pulse| pulse as &dyn Pulse),
+            )?
+            .event;
             // A strip of at least 16 rows, in whole encoder strips, and no
             // taller than the frame.
             let unit = encoder.plan().strip_rows.max(1);

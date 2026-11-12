@@ -1,5 +1,13 @@
 # zencodec
 
+## Known Bugs: reimagined input-planning cancellation (2026-11-12)
+
+The unpublished async input-planning loop continued source reads after a
+successful short read signalled cancellation. The failing-first control observed
+22 reads instead of one. Decode and transcode now check the optional Pulse before
+each planning iteration. Source failures remain primary when the read itself
+fails. This does not interrupt a pending source call or native computation.
+
 ## Known Bugs: edited video presentation (2026-10-30)
 
 Native MP4 controls reproduce identical edit offsets for different segment

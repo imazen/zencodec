@@ -390,7 +390,7 @@ pub trait Encoder: Send + 'static {
     fn plan(&self) -> &EncodePlan;
 
     /// Take some rows and do some work, observed by `pulse`.
-    fn step(&mut self, input: EncodeInput<'_>, pulse: &dyn Pulse) -> Result<EncodeStep>;
+    fn step(&mut self, input: EncodeInput<'_>, pulse: Option<&dyn Pulse>) -> Result<EncodeStep>;
 
     /// The encoded bytes not yet taken.
     fn output(&mut self) -> &mut OutputBuffer;

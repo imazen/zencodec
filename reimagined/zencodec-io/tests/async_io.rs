@@ -12,8 +12,8 @@ use zencodec::decode::{
 };
 use zencodec::encode::{EncodeCodec, EncodeSpec};
 use zencodec::{
-    ErrorKind, ImageInfo, Input, InputRequest, Metadata, MetadataKinds, NoPulse, Pulse, Raster,
-    Result, SharedPulse, StopReason,
+    ErrorKind, ImageInfo, Input, InputRequest, Metadata, MetadataKinds, Pulse, Raster, Result,
+    SharedPulse, StopReason,
 };
 use zencodec_fixtures::bias::BiasCodec;
 use zencodec_fixtures::rle::RleCodec;
@@ -89,18 +89,18 @@ fn sample(codec: &dyn EncodeCodec, w: u32, h: u32, seed: u8) -> (Vec<u8>, Vec<u8
         codec,
         EncodeSpec::new(Raster::packed(w, h, d)),
         slice(&source, w, h, w as usize * 3, d),
-        &NoPulse,
+        None,
     )
     .unwrap();
     (bytes, source)
 }
 
 fn to(codec: Arc<dyn EncodeCodec>) -> EncoderSink {
-    observed(codec, SharedPulse::default())
+    observed(codec, None)
 }
 
 /// A transcoding sink whose encoder observes `pulse`.
-fn observed(codec: Arc<dyn EncodeCodec>, pulse: SharedPulse) -> EncoderSink {
+fn observed(codec: Arc<dyn EncodeCodec>, pulse: Option<SharedPulse>) -> EncoderSink {
     EncoderSink::new(codec, |frame| EncodeSpec::new(frame.raster.clone()), pulse)
 }
 
@@ -119,7 +119,7 @@ async fn a_trickling_source_decodes_on_every_executor() {
                 Collect::new(),
                 offload.clone(),
                 opts,
-                SharedPulse::default(),
+                None,
             )
             .await
             .expect("async decode");
@@ -145,7 +145,7 @@ async fn an_async_transcode_writes_what_a_blocking_one_does() {
                 &bytes,
                 dst_enc.clone(),
                 |frame| EncodeSpec::new(frame.raster.clone()),
-                &NoPulse,
+                None,
             )
             .unwrap();
             for offload in offloads() {
@@ -163,7 +163,7 @@ async fn an_async_transcode_writes_what_a_blocking_one_does() {
                         &mut out,
                         offload.clone(),
                         opts,
-                        SharedPulse::default(),
+                        None,
                     )
                     .await
                     .expect("async transcode");
@@ -190,7 +190,7 @@ async fn a_slow_reader_of_the_output_only_slows_it() {
         &bytes,
         Arc::new(RowsCodec),
         |frame| EncodeSpec::new(frame.raster.clone()),
-        &NoPulse,
+        None,
     )
     .unwrap();
 
@@ -219,7 +219,7 @@ async fn a_slow_reader_of_the_output_only_slows_it() {
             DriveOptions::new()
                 .with_read_size(100)
                 .with_steps_per_batch(4),
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -240,7 +240,7 @@ async fn the_buffered_route_is_one_hand_off() {
             dec.decoder(&DecodeSpec::new()).unwrap(),
             bytes.clone(),
             Collect::new(),
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -252,14 +252,14 @@ async fn the_buffered_route_is_one_hand_off() {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
-            &NoPulse,
+            None,
         )
         .unwrap();
         let out = transcode_buffered(
             dec.decoder(&DecodeSpec::new()).unwrap(),
             Arc::<[u8]>::from(&bytes[..]),
             to(Arc::new(RowsCodec)),
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -278,7 +278,7 @@ async fn a_forward_only_stream_is_enough_for_a_sequential_decoder() {
             Collect::new(),
             Offload::Inline,
             DriveOptions::new().with_read_size(11),
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -292,7 +292,7 @@ async fn a_forward_only_stream_is_enough_for_a_sequential_decoder() {
         Collect::new(),
         Offload::Blocking,
         DriveOptions::new(),
-        SharedPulse::default(),
+        None,
     )
     .await
     .unwrap();
@@ -307,7 +307,7 @@ async fn a_stop_ends_a_transcode_and_leaves_a_prefix() {
         &bytes,
         Arc::new(RowsCodec),
         |frame| EncodeSpec::new(frame.raster.clone()),
-        &NoPulse,
+        None,
     )
     .unwrap();
     for offload in offloads() {
@@ -316,14 +316,14 @@ async fn a_stop_ends_a_transcode_and_leaves_a_prefix() {
         let mut out = Vec::new();
         let err = tokio_io::transcode(
             RowsCodec.decoder(&DecodeSpec::new()).unwrap(),
-            observed(Arc::new(RowsCodec), switch.pulse()),
+            observed(Arc::new(RowsCodec), Some(switch.pulse())),
             &mut source,
             &mut out,
             offload.clone(),
             DriveOptions::new()
                 .with_read_size(200)
                 .with_steps_per_batch(2),
-            switch.pulse(),
+            Some(switch.pulse()),
         )
         .await
         .unwrap_err();
@@ -346,7 +346,7 @@ async fn metadata_wanted_first_costs_one_range_fetch() {
         Metadata::none().with_exif(exif.to_vec()),
         MetadataKinds::EXIF,
     );
-    let bytes = encode(&BiasCodec, spec, slice(&source, w, h, 18, d), &NoPulse).unwrap();
+    let bytes = encode(&BiasCodec, spec, slice(&source, w, h, 18, d), None).unwrap();
 
     let first = DecodeSpec::new().with_metadata_first(MetadataKinds::EXIF);
     let mut trickle = Trickle::new(&bytes, 4);
@@ -356,7 +356,7 @@ async fn metadata_wanted_first_costs_one_range_fetch() {
         Collect::new(),
         Offload::Blocking,
         DriveOptions::new().with_read_size(4),
-        SharedPulse::default(),
+        None,
     )
     .await
     .unwrap();
@@ -380,7 +380,12 @@ impl Decoder for Panics {
     fn plan(&self) -> Option<&DecodePlan> {
         None
     }
-    fn step(&mut self, _: Input<'_>, _: &mut dyn Sink, _: &dyn Pulse) -> Result<DecodeStep> {
+    fn step(
+        &mut self,
+        _: Input<'_>,
+        _: &mut dyn Sink,
+        _: Option<&dyn Pulse>,
+    ) -> Result<DecodeStep> {
         if self.0.len() == 1 {
             panic!("codec bug");
         }
@@ -404,7 +409,7 @@ async fn a_codec_that_dies_on_its_worker_is_an_error_not_a_hang() {
                 Collect::new(),
                 offload.clone(),
                 DriveOptions::new(),
-                SharedPulse::default(),
+                None,
             ),
         )
         .await
@@ -444,7 +449,7 @@ async fn borrows_resident_bytes(here: Offload) {
             Collect::new(),
             here.clone(),
             opts,
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -455,7 +460,7 @@ async fn borrows_resident_bytes(here: Offload) {
             &bytes,
             Arc::new(RowsCodec),
             |frame| EncodeSpec::new(frame.raster.clone()),
-            &NoPulse,
+            None,
         )
         .unwrap();
         let mut out = Vec::new();
@@ -466,7 +471,7 @@ async fn borrows_resident_bytes(here: Offload) {
             &mut out,
             here.clone(),
             opts,
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -495,7 +500,7 @@ async fn no_route_lets_a_successful_step_hide_a_stop() {
                     Collect::new(),
                     offload.clone(),
                     DriveOptions::new().with_steps_per_batch(3),
-                    switch.pulse(),
+                    Some(switch.pulse()),
                 )
                 .await
                 .err()
@@ -511,7 +516,7 @@ async fn no_route_lets_a_successful_step_hide_a_stop() {
                     DriveOptions::new()
                         .with_read_size(40)
                         .with_steps_per_batch(3),
-                    switch.pulse(),
+                    Some(switch.pulse()),
                 )
                 .await
                 .err()
@@ -524,7 +529,7 @@ async fn no_route_lets_a_successful_step_hide_a_stop() {
                 Deaf::over(&*dec, &switch, on),
                 bytes.clone(),
                 Collect::new(),
-                switch.pulse(),
+                Some(switch.pulse()),
             )
             .await
             .err()
@@ -550,7 +555,7 @@ async fn a_step_quota_of_zero_still_makes_progress() {
                 Collect::new(),
                 offload.clone(),
                 opts,
-                SharedPulse::default(),
+                None,
             );
             let (_, collect) = tokio::time::timeout(limit, resident)
                 .await
@@ -565,7 +570,7 @@ async fn a_step_quota_of_zero_still_makes_progress() {
                 Collect::new(),
                 offload.clone(),
                 opts,
-                SharedPulse::default(),
+                None,
             );
             let (_, collect) = tokio::time::timeout(limit, streamed)
                 .await
@@ -582,7 +587,7 @@ async fn a_step_quota_of_zero_still_makes_progress() {
                 &mut out,
                 offload.clone(),
                 opts,
-                SharedPulse::default(),
+                None,
             );
             tokio::time::timeout(limit, transcoded)
                 .await
@@ -613,7 +618,7 @@ async fn a_decoder_waiting_for_its_whole_file_costs_no_hand_off() {
         Collect::new(),
         offload,
         DriveOptions::new().with_read_size(64),
-        SharedPulse::default(),
+        None,
     )
     .await
     .unwrap();
@@ -638,7 +643,7 @@ async fn a_stream_of_unknown_length_is_read_to_its_end_in_one_call() {
             Collect::new(),
             offload.clone(),
             DriveOptions::new().with_read_size(64),
-            SharedPulse::default(),
+            None,
         )
         .await
         .unwrap();
@@ -655,7 +660,7 @@ async fn a_stream_of_unknown_length_is_read_to_its_end_in_one_call() {
             DriveOptions::new()
                 .with_read_size(64)
                 .with_max_input_bytes(1_000),
-            SharedPulse::default(),
+            None,
         )
         .await
         .err()

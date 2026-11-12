@@ -14,7 +14,7 @@ use zencodec::encode::{
 use zencodec::simple::{DecodeRequest, WholeImageDecode};
 use zencodec::{
     ErrorKind, FormatInfo, FrameHeader, ImageFormat, ImageInfo, Input, InputRequest, Layout,
-    Metadata, MetadataKinds, NoPulse, Pass, Pulse, Result, SharedPulse, Stop, StopReason, error,
+    Metadata, MetadataKinds, Pass, Pulse, Result, SharedPulse, Stop, StopReason, error,
 };
 use zencodec_fixtures::{bias::BiasCodec, rle::RleCodec, rows::RowsCodec};
 use zencodec_io::{Collect, Frame, RangeRead, ReadAt};
@@ -243,8 +243,13 @@ impl Decoder for Deaf {
     fn plan(&self) -> Option<&DecodePlan> {
         self.inner.plan()
     }
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn Sink, _: &dyn Pulse) -> Result<DecodeStep> {
-        let step = self.inner.step(input, sink, &NoPulse)?;
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn Sink,
+        _: Option<&dyn Pulse>,
+    ) -> Result<DecodeStep> {
+        let step = self.inner.step(input, sink, None)?;
         if step.event == self.on {
             self.switch.stop();
         }
@@ -286,8 +291,8 @@ impl Encoder for DeafEncoder {
     fn plan(&self) -> &EncodePlan {
         self.inner.plan()
     }
-    fn step(&mut self, input: EncodeInput<'_>, _: &dyn Pulse) -> Result<EncodeStep> {
-        let step = self.inner.step(input, &NoPulse)?;
+    fn step(&mut self, input: EncodeInput<'_>, _: Option<&dyn Pulse>) -> Result<EncodeStep> {
+        let step = self.inner.step(input, None)?;
         if step.event == EncodeEvent::Done {
             self.switch.stop();
         }

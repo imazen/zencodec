@@ -195,7 +195,7 @@ pub fn decode_read_at(
     source: &mut dyn ReadAt,
     sink: &mut dyn Sink,
     opts: &DriveOptions,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Box<dyn Decoder>> {
     if let Some(bytes) = source.as_slice() {
         return decode_slice(decoder, bytes, sink, pulse);

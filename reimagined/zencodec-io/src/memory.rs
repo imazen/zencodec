@@ -8,8 +8,8 @@ use zencodec::encode::{
     EncodeCodec, EncodeEvent, EncodeInput, EncodeSpec, EncodeStep, Encoder, FrameMeta, RowSupply,
 };
 use zencodec::{
-    ErrorKind, FrameHeader, ImageInfo, Input, InputRequest, NoPulse, Pass, Pulse, Result, check,
-    error, error_msg,
+    ErrorKind, FrameHeader, ImageInfo, Input, InputRequest, Pass, Pulse, Result, check, error,
+    error_msg,
 };
 use zenpixels::{PixelBuffer, PixelSlice, PixelSliceMut};
 
@@ -43,7 +43,7 @@ pub fn decode(
     codec: &dyn DecodeCodec,
     bytes: &[u8],
     spec: &DecodeSpec,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Decoded> {
     let mut collect = Collect::new();
     let decoder = decode_slice(codec.decoder(spec)?, bytes, &mut collect, pulse)?;
@@ -98,7 +98,7 @@ pub fn probe(
         if stalled == Some(lent) {
             return Ok(None);
         }
-        let step = decoder.step(input, &mut NoRows, &NoPulse)?;
+        let step = decoder.step(input, &mut NoRows, None)?;
         match step.event {
             DecodeEvent::Info => return Ok(decoder.info().cloned()),
             DecodeEvent::NeedInput => stalled = (step.consumed == 0).then_some(lent),
@@ -138,7 +138,7 @@ impl SliceRun {
         bytes: &[u8],
         sink: &mut dyn Sink,
         quota: usize,
-        pulse: &dyn Pulse,
+        pulse: Option<&dyn Pulse>,
     ) -> Result<bool> {
         let len = bytes.len() as u64;
         let at = |offset: u64| offset.min(len) as usize;
@@ -189,7 +189,7 @@ pub fn decode_slice(
     mut decoder: Box<dyn Decoder>,
     bytes: &[u8],
     sink: &mut dyn Sink,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Box<dyn Decoder>> {
     let mut run = SliceRun::new();
     while !run.run(&mut *decoder, bytes, sink, usize::MAX, pulse)? {}
@@ -201,7 +201,7 @@ pub fn decode_slice(
 pub(crate) fn encoder_step(
     encoder: &mut dyn Encoder,
     input: EncodeInput<'_>,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<EncodeStep> {
     let step = encoder.step(input, pulse)?;
     check(pulse)?;
@@ -217,7 +217,7 @@ pub fn feed_frame(
     encoder: &mut dyn Encoder,
     frame: &PixelSlice<'_>,
     mut event: EncodeEvent,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<EncodeEvent> {
     loop {
         let EncodeEvent::NeedRows { y, .. } = event else {
@@ -250,7 +250,7 @@ pub fn encode(
     codec: &dyn EncodeCodec,
     spec: EncodeSpec,
     pixels: PixelSlice<'_>,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Vec<u8>> {
     let mut encoder = codec.encoder(&spec.with_supply(RowSupply::Whole))?;
     let first = encoder_step(&mut *encoder, EncodeInput::None, pulse)?.event;
@@ -268,7 +268,7 @@ pub fn encode_sequence<'a>(
     codec: &dyn EncodeCodec,
     spec: EncodeSpec,
     frames: impl IntoIterator<Item = (PixelSlice<'a>, FrameMeta)>,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Vec<u8>> {
     if spec.sequence.is_none() {
         return Err(error_msg(
@@ -309,7 +309,7 @@ pub fn transcode(
     bytes: &[u8],
     codec: Arc<dyn EncodeCodec>,
     spec: impl FnMut(&FrameHeader) -> EncodeSpec + Send + 'static,
-    pulse: &dyn Pulse,
+    pulse: Option<&dyn Pulse>,
 ) -> Result<Vec<u8>> {
     let mut sink = EncoderSink::new(codec, spec, pulse);
     decode_slice(decoder, bytes, &mut sink, pulse)?;
