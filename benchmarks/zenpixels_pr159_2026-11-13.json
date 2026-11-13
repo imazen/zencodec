@@ -46,8 +46,15 @@
       "log": "default.log",
       "sha256": "1b7cb445399d98d82395168ea530c1461074e4b507f7a5e12480a26bc38c83d5",
       "resource": "run-heavy: done rc=0 2s | peak-RSS 0.20GiB | min-avail 17210MiB | peak-load 0.46"
+    },
+    {
+      "log": "legacy-lint-fix.log",
+      "sha256": "cd7778dd3bf03b1749ea8e5ec2e1e968655b03312b77ed637e652b380f70512f",
+      "resource": "run-heavy: done rc=0 12s | peak-RSS 0.33GiB | min-avail 16969MiB | peak-load 0.29"
     }
   ],
   "compiled_inputs_unchanged_by_final_documentation": true,
-  "performance_remeasured": false
+  "performance_remeasured": false,
+  "legacy_fixture_maintenance_source": "48d28134c281fc8fc39d1f632582126e1e80fb7b",
+  "legacy_fixture_check": "cargo +beta test -p zenmeta --all-features xmp::gainmap::tests && cargo +beta clippy -p zenmeta --all-targets --all-features --locked -- -D warnings"
 }

@@ -73,6 +73,15 @@ under `/mnt/v/output/zencodec/pixel159-adaptation-2026-11-13/` on r7900x, with
 an archive mirror. The initial new-test compilation errors are retained too;
 they were corrected without changing any established expectation.
 
+The final documentation head also passes all eight standalone jobs:
+[run 43417304883](https://github.com/imazen/zencodec/actions/runs/43417304883).
+The older workspace's Rust 1.100 Clippy rejected an index-only loop in a
+pre-existing gain-map test fixture. The equivalent iterator preserves every
+fixture value and assertion; all 14 focused gain-map tests and strict Clippy
+pass under local Rust 1.100 beta. This changes no production metadata API.
+The older native-guide jobs retain their documented dependency-resolution
+failure and are not qualified by the prototype workflow.
+
 ## Limits
 
 The codec contract still delivers borrowed planar strips. Upstream owned and
