@@ -1,3 +1,7 @@
+# Recreate the ignored Cargo lock from the reviewed dependency graph.
+prepare:
+    python3 -c 'from pathlib import Path; expected = Path("dependencies.lock").read_bytes(); lock = Path("Cargo.lock"); assert not lock.exists() or lock.read_bytes() == expected, "Cargo.lock differs; preserve and inspect it before replacing"; lock.write_bytes(expected)'
+
 test:
     cargo test --workspace --all-features --locked
 
@@ -15,7 +19,7 @@ check-core:
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
     cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
 
-gates: fmt test clippy docs check-core
+gates: prepare fmt test clippy docs check-core
 
 # Owned benchmark source only; path dependencies are not reformatted.
 probe-fmt:

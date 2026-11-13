@@ -1048,6 +1048,10 @@ None.
 
 ## [Unreleased]
 
+- Reimagined prototype: adapt to zenpixels PR 159 (`240ed475`), consume borrowed
+  planar iterators without temporary vectors, and qualify PixelEncoding,
+  single-profile authority, RowAlign and owned-planar borrowing. (`68049bae`, `7375a9e3`)
+
 - Add `CheckedCollection::decode_with` for adapter processing before the single
   publication decision. Preserve concrete transform errors, recoverable request
   refusal and terminal cancellation/unwind. The private renderer's

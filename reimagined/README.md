@@ -5,7 +5,7 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-12: the fixture tests pass, clippy and rustdoc are clean
+Status on 2026-11-13: the fixture tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been ported to a real
@@ -296,16 +296,24 @@ frame, `PlanarSlice` for a planar strip, `PlanarLayout` and `ColorContext` in
 the raster description, and `Cicp`, `Orientation` and the HDR types in
 `Metadata`.
 
-zenpixels needed no change. The planar strip view this design wanted,
-`plane::PlanarSlice`, landed on zenpixels main while the design was being
-worked out, and the spike pins that revision.
+This branch pins [zenpixels PR 159](https://github.com/imazen/zenpixels/pull/159)
+at `240ed475`. Current samples have one active ICC or CICP authority in
+`ColorContext`; file metadata may still retain both claims. `PixelEncoding`
+borrows the descriptor and current context without retaining another Arc.
 
-One gap showed up and is deliberately not filled: there is no mutable or
-owned planar strip. `EncoderSink` passes planar strips from a decoder straight
-to an encoder with no copy, but only when the decoder's strip height suits
-the encoder; it cannot hold a planar remainder. Adding the type means public
-API in zenpixels, whose rule is no public item without a consumer that is
-merging. This spike is not that consumer yet.
+`PlanarBuffer` and `PlanarSliceMut` now exist upstream. Owned, independently
+strided planes can be lent into this contract with `PlanarBuffer::as_slice()`;
+the new foundation controls verify odd 4:2:0 edges through encode and decode.
+The collector and fixture encoder consume the new borrowed plane iterator or
+indexed plane loans directly, without a temporary descriptor vector.
+
+`EncoderSink` still forwards borrowed strips and cannot retain a planar
+remainder when strip heights disagree. The upstream ownership types are
+available; an owned delivery/remainder-buffering protocol is not added here.
+See [the adaptation and its evidence](docs/zenpixels-159.md).
+
+Earlier timing tables retain their original source and pixel revisions. This
+adaptation reruns correctness and compilation checks, not performance.
 
 ## What is slim or missing
 
@@ -346,7 +354,8 @@ merging. This spike is not that consumer yet.
   `EncodeSpec::for_pixels` and `Decoded::into_still` are the short path
   here. A registry with detection, and methods on a configured codec, belong
   to the layer above and are not written.
-- **Planar:** only borrowed strips. No owned planar hand-off.
+- **Planar:** borrowed delivery, including views lent by `PlanarBuffer`. No
+  owned planar hand-off or retained-remainder protocol.
 - **Provisional passes** are in the signatures (`Pass`) and no fixture
   produces one.
 
@@ -383,6 +392,7 @@ without the fix:
 
 ```sh
 cd reimagined
+just prepare # restore the reviewed Cargo dependency graph
 cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown
