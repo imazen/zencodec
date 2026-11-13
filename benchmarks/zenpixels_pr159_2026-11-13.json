@@ -1,0 +1,53 @@
+{
+  "migration_source": "68049bae7a2f",
+  "qualification_source": "7375a9e3963fc9e4c147c63ea4da1ecd25e5e332",
+  "zenpixels_pr": "https://github.com/imazen/zenpixels/pull/159",
+  "zenpixels_revision": "240ed47585e7a9c2c94d7cd46a8c44f52d9129f5",
+  "commands": {
+    "core": "just -f reimagined/justfile gates",
+    "msrv": "cargo +1.88.0 check --manifest-path reimagined/Cargo.toml --workspace --all-targets --all-features --locked",
+    "default": "cargo test --manifest-path reimagined/Cargo.toml --workspace --locked",
+    "probes": "PROBE_TARGET=... just -f reimagined/justfile probe-check"
+  },
+  "artifact_host": "r7900x",
+  "artifact_directory": "/mnt/v/output/zencodec/pixel159-adaptation-2026-11-13",
+  "logs": [
+    {
+      "log": "first.log",
+      "sha256": "d69d2968e0eb677cbb149c87485b104cd3b0675880b0ae94460a493caee90c30",
+      "resource": "run-heavy: done rc=0 11s | peak-RSS 0.36GiB | min-avail 17312MiB | peak-load 0.52"
+    },
+    {
+      "log": "gates-first.log",
+      "sha256": "dffd08a3cfd2c09681eb8258a77fe2968ff18fe0e84dc0b4cdcc0084613aa1da",
+      "resource": "run-heavy: done rc=0 8s | peak-RSS 0.30GiB | min-avail 17261MiB | peak-load 0.56"
+    },
+    {
+      "log": "probes.log",
+      "sha256": "f5d814c8a6a1202722a51938e93e359ee88461f55e974173b32c7e05e3bebfc2",
+      "resource": "run-heavy: done rc=0 102s | peak-RSS 0.65GiB | min-avail 16734MiB | peak-load 1.81"
+    },
+    {
+      "log": "foundation-first.log",
+      "sha256": "e6f07de9262394b8784176160634dc8fb739497501235db8b9f3a087749fc2a7",
+      "resource": "run-heavy: done rc=101 0s | peak-RSS 0.14GiB | min-avail 17697MiB | peak-load 0.27"
+    },
+    {
+      "log": "foundation-second.log",
+      "sha256": "16958cadd4a4930cfb4bcc96aa50204f7b69dcc0632df059fa7da504b55145bb",
+      "resource": "run-heavy: done rc=0 2s | peak-RSS 0.19GiB | min-avail 17679MiB | peak-load 0.16"
+    },
+    {
+      "log": "msrv.log",
+      "sha256": "aaae85496ba25ff1b0806e341fdd2e05623c3390d7e697e19e644de7a9f56c9e",
+      "resource": "run-heavy: done rc=0 4s | peak-RSS 0.28GiB | min-avail 17311MiB | peak-load 0.32"
+    },
+    {
+      "log": "default.log",
+      "sha256": "1b7cb445399d98d82395168ea530c1461074e4b507f7a5e12480a26bc38c83d5",
+      "resource": "run-heavy: done rc=0 2s | peak-RSS 0.20GiB | min-avail 17210MiB | peak-load 0.46"
+    }
+  ],
+  "compiled_inputs_unchanged_by_final_documentation": true,
+  "performance_remeasured": false
+}
