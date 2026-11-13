@@ -420,12 +420,12 @@ mod tests {
 
     fn test_metadata() -> zencodec::GainMapParams {
         let mut m = zencodec::GainMapParams::default();
-        for i in 0..3 {
-            m.channels[i].min = 0.0;
-            m.channels[i].max = 2.0;
-            m.channels[i].gamma = 1.0;
-            m.channels[i].base_offset = 1.0 / 64.0;
-            m.channels[i].alternate_offset = 1.0 / 64.0;
+        for channel in &mut m.channels {
+            channel.min = 0.0;
+            channel.max = 2.0;
+            channel.gamma = 1.0;
+            channel.base_offset = 1.0 / 64.0;
+            channel.alternate_offset = 1.0 / 64.0;
         }
         m.base_hdr_headroom = 0.0;
         m.alternate_hdr_headroom = 2.0;
