@@ -12,8 +12,8 @@ repository = "https://github.com/imazen/zencodec"
 publish = false
 
 [workspace.dependencies]
-# zenpixels main: the first revision carrying `plane::PlanarSlice`.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3286169c7ef5b1e66ac841c3d8204eb54e390f8c", default-features = false, features = ["icc"] }
+# zenpixels PR159: single-authority ColorContext, PixelEncoding and RowAlign.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "240ed47585e7a9c2c94d7cd46a8c44f52d9129f5", default-features = false, features = ["icc"] }
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
 tokio = { version = "1.49.0", default-features = false }
