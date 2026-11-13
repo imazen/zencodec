@@ -12,8 +12,8 @@ repository = "https://github.com/imazen/zencodec"
 publish = false
 
 [workspace.dependencies]
-# zenpixels PR159: single-authority ColorContext, PixelEncoding and RowAlign.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "240ed47585e7a9c2c94d7cd46a8c44f52d9129f5", default-features = false, features = ["icc"] }
+# zenpixels PR160: generic CMYK, parametric color and compact pixel carriers.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1e12d48d49b587e84eac028f16f40dba293c93da", default-features = false, features = ["icc"] }
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
 tokio = { version = "1.49.0", default-features = false }
