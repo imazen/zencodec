@@ -297,7 +297,7 @@ the raster description, and `Cicp`, `Orientation` and the HDR types in
 `Metadata`.
 
 This branch pins [zenpixels PR 160](https://github.com/imazen/zenpixels/pull/160)
-at `1e12d48d`, extending the PR 159 foundation. Current samples have one active
+at `80fd4278` (with `features = ["icc", "planar"]`), extending the PR 159 foundation. Current samples have one active
 ICC, CICP or parametric profile in `ColorContext`, including explicit rendering
 intent; file metadata may still retain both ICC and CICP claims. `PixelEncoding`
 borrows the descriptor and current context without retaining another Arc.

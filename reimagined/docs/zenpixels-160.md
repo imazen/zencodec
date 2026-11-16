@@ -2,7 +2,8 @@
 
 [zencodec PR 212](https://github.com/imazen/zencodec/pull/212) now targets
 [zenpixels PR 160](https://github.com/imazen/zenpixels/pull/160) at
-`1e12d48d49b587e84eac028f16f40dba293c93da`. It remains stacked on
+`80fd4278b2d90ba4fa2b27584fb17857e75e4746`, enabling `features = ["icc", "planar"]`
+now that `zenpixels` gates planar carriers off by default. It remains stacked on
 [PR 211](https://github.com/imazen/zencodec/pull/211). The earlier
 [PR 159 qualification](zenpixels-159.md) is historical.
 

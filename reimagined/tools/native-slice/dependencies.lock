@@ -639,7 +639,7 @@ dependencies = [
  "zencodec 0.2.0",
  "zencodec-io",
  "zenjpeg",
- "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=1e12d48d49b587e84eac028f16f40dba293c93da)",
+ "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=80fd4278b2d90ba4fa2b27584fb17857e75e4746)",
 ]
 
 [[package]]
@@ -1219,7 +1219,7 @@ version = "0.0.0"
 dependencies = [
  "how-far",
  "whereat",
- "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=1e12d48d49b587e84eac028f16f40dba293c93da)",
+ "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=80fd4278b2d90ba4fa2b27584fb17857e75e4746)",
 ]
 
 [[package]]
@@ -1241,7 +1241,7 @@ version = "0.0.0"
 dependencies = [
  "tokio",
  "zencodec 0.0.0",
- "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=1e12d48d49b587e84eac028f16f40dba293c93da)",
+ "zenpixels 0.3.1 (git+https://github.com/imazen/zenpixels?rev=80fd4278b2d90ba4fa2b27584fb17857e75e4746)",
 ]
 
 [[package]]
@@ -1292,7 +1292,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=1e12d48d49b587e84eac028f16f40dba293c93da#1e12d48d49b587e84eac028f16f40dba293c93da"
+source = "git+https://github.com/imazen/zenpixels?rev=80fd4278b2d90ba4fa2b27584fb17857e75e4746#80fd4278b2d90ba4fa2b27584fb17857e75e4746"
 dependencies = [
  "bytemuck",
  "whereat",
