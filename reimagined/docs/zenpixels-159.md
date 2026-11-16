@@ -1,5 +1,8 @@
 # zenpixels PR 159 adaptation
 
+Historical qualification at the revision below. The branch now follows
+[PR 160](zenpixels-160.md); these results retain their original source identity.
+
 This review is stacked on [zencodec PR 211](https://github.com/imazen/zencodec/pull/211).
 It targets [zenpixels PR 159](https://github.com/imazen/zenpixels/pull/159) at
 `240ed47585e7a9c2c94d7cd46a8c44f52d9129f5`, including the owned-planar foundation

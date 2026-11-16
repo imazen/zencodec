@@ -1048,6 +1048,10 @@ None.
 
 ## [Unreleased]
 
+- Reimagined prototype: follow zenpixels PR 160 (`1e12d48d`); qualify parametric
+  color/intent retention, strided CMYK/CMYKA and refusal of undeclared polarity
+  changes without changing codec trait signatures. (`c19db8bf`, `24a20afd`)
+
 - Reimagined prototype: adapt to zenpixels PR 159 (`240ed475`), consume borrowed
   planar iterators without temporary vectors, and qualify PixelEncoding,
   single-profile authority, RowAlign and owned-planar borrowing. (`68049bae`, `7375a9e3`)

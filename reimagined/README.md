@@ -5,7 +5,7 @@ codec and whatever drives it. It lives in its own Cargo workspace. Nothing in
 the repository's real crates changes, nothing here is published, and backward
 compatibility was not a goal.
 
-Status on 2026-11-13: the fixture tests pass, clippy and rustdoc are clean
+Status on 2026-11-16: the fixture tests pass, clippy and rustdoc are clean
 with warnings denied, and the contract crate builds for `wasm32-unknown-unknown`
 and `thumbv7em-none-eabihf` without `std`. It has been proven on three small
 fixture codecs written for the purpose. It has not been ported to a real
@@ -296,10 +296,13 @@ frame, `PlanarSlice` for a planar strip, `PlanarLayout` and `ColorContext` in
 the raster description, and `Cicp`, `Orientation` and the HDR types in
 `Metadata`.
 
-This branch pins [zenpixels PR 159](https://github.com/imazen/zenpixels/pull/159)
-at `240ed475`. Current samples have one active ICC or CICP authority in
-`ColorContext`; file metadata may still retain both claims. `PixelEncoding`
+This branch pins [zenpixels PR 160](https://github.com/imazen/zenpixels/pull/160)
+at `1e12d48d`, extending the PR 159 foundation. Current samples have one active
+ICC, CICP or parametric profile in `ColorContext`, including explicit rendering
+intent; file metadata may still retain both ICC and CICP claims. `PixelEncoding`
 borrows the descriptor and current context without retaining another Arc.
+Generic CMYK/CMYKA descriptors retain ink polarity through collection and format
+admission. New pixel models do not imply that a codec accepts them.
 
 `PlanarBuffer` and `PlanarSliceMut` now exist upstream. Owned, independently
 strided planes can be lent into this contract with `PlanarBuffer::as_slice()`;
@@ -310,7 +313,8 @@ indexed plane loans directly, without a temporary descriptor vector.
 `EncoderSink` still forwards borrowed strips and cannot retain a planar
 remainder when strip heights disagree. The upstream ownership types are
 available; an owned delivery/remainder-buffering protocol is not added here.
-See [the adaptation and its evidence](docs/zenpixels-159.md).
+See [the current adaptation and its evidence](docs/zenpixels-160.md), and the
+[earlier PR 159 qualification](docs/zenpixels-159.md).
 
 Earlier timing tables retain their original source and pixel revisions. This
 adaptation reruns correctness and compilation checks, not performance.

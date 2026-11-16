@@ -1,0 +1,124 @@
+{
+  "migration_source": "c19db8bf57ca41a32e04aeb6f464b35706dfae28",
+  "qualified_tests": "24a20afd51a771756968940417348178257b668d",
+  "catalog_source": "057f3ba424519aa1e4ee581f4d028d1d5d08f98b",
+  "zenpixels_pr": "https://github.com/imazen/zenpixels/pull/160",
+  "zenpixels_revision": "1e12d48d49b587e84eac028f16f40dba293c93da",
+  "artifact_host": "r7900x",
+  "artifact_directory": "/mnt/v/output/zencodec/pixel160-adaptation-2026-11-16",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "commands": {
+    "core": "just -f reimagined/justfile pixel-models gates test-default check-msrv",
+    "probes": "Native and synthetic release tests, source verification and strict Clippy; see probes.log for exact commands. Refreshed dependency locks, then used --locked. No timing benchmark ran.",
+    "catalog": "generate-code-catalog.py, restricted to zenmeta through its PACKAGES input, with immutable source export and the previously qualified root lock; catalog-export.log retains exact invocation",
+    "site": "just --justfile /home/lilith/tmp/zencodec-pixel160/catalog-export/justfile docs-site-check; GITHUB_SHA=24a20afd51a771756968940417348178257b668d; source inputs and generated zenmeta output matched; copied updated manifest"
+  },
+  "standalone_ci": {
+    "url": "https://github.com/imazen/zencodec/actions/runs/43839701976",
+    "source": "24a20afd51a771756968940417348178257b668d",
+    "result": "8/8 jobs passed"
+  },
+  "input_sha256": {
+    "reimagined/Cargo.toml": "5663c1addbd4b4bcf935b906b4632dbab66683a554d83a49ea7319b609120562",
+    "reimagined/dependencies.lock": "f440ff294394a029da6a25902189bf268a760d2594be06cb5a4b16e0a0fab47a",
+    "reimagined/tools/native-slice/Cargo.toml": "2f6e3945485fb94dbd4af1f0ae954517dd2ec3d2b9037b6222bf57f2bfb5e703",
+    "reimagined/tools/native-slice/dependencies.lock": "2bf2c0fda4ae95c59fd387ef7f918e3eff9d6124569385096dfb680cd62e5b16",
+    "reimagined/tools/ablation/Cargo.toml": "9b38584951f4e050082efbd350427020d2a8629d8f6d8306c64efde264c06249",
+    "reimagined/tools/ablation/dependencies.lock": "9f6f8354e306f7eec27bbff8c1006accb5c07fad1e073a20a068983fa05081fb",
+    "reimagined/zencodec-io/tests/pixel_color_models.rs": "923f0db98e7b19651ddfc5052c49d8e7c96f22011b45cb327581740d1fc79098"
+  },
+  "logs": [
+    {
+      "file": "catalog-diagnostic.log",
+      "sha256": "7b3cf19b249a5d1266121ae9e75443aa942a6ad1e1d2afd773d05e2f41964f10",
+      "bytes": 1756,
+      "resource": "run-heavy: done rc=1 0s | peak-RSS 0.03GiB | min-avail 17107MiB | peak-load 0.30"
+    },
+    {
+      "file": "catalog-export.log",
+      "sha256": "3c194a75f12b0bb2e43483e98e309b41dbc823c0672bee2631130db19b1585db",
+      "bytes": 1328,
+      "resource": "run-heavy: done rc=0 3s | peak-RSS 0.28GiB | min-avail 16905MiB | peak-load 1.58"
+    },
+    {
+      "file": "catalog-site-export.log",
+      "sha256": "679153a851b7877859d519347aa6dc104b1839c6a9b751d1805ff642835c9f91",
+      "bytes": 1531,
+      "resource": "run-heavy: done rc=1 0s | peak-RSS 0.05GiB | min-avail 17091MiB | peak-load 0.81"
+    },
+    {
+      "file": "catalog-site-final.log",
+      "sha256": "1e6949dc5cf06788c12cc71ff66596086ef4e044da8b00210b99f35ffd127208",
+      "bytes": 3285,
+      "resource": "run-heavy: done rc=0 4s | peak-RSS 0.31GiB | min-avail 16856MiB | peak-load 0.70"
+    },
+    {
+      "file": "catalog-site.log",
+      "sha256": "d6df58d44fcbc0d3018d5a64324b78ae007700361cfeb5d1cb3316889605e5b7",
+      "bytes": 800,
+      "resource": "run-heavy: done rc=1 1s | peak-RSS 0.14GiB | min-avail 17077MiB | peak-load 1.13"
+    },
+    {
+      "file": "catalog.log",
+      "sha256": "9e4b57672bbf953b0e47040e875b5549dc301aaac94eca3c9e18a41530f41a13",
+      "bytes": 1033,
+      "resource": "run-heavy: done rc=1 0s | peak-RSS 0.03GiB | min-avail 17122MiB | peak-load 0.35"
+    },
+    {
+      "file": "ci-guide-build.log",
+      "sha256": "892ed426723160034b80d029db28de0cdbf32c0e7292c5ec73b28a36dd06e670",
+      "bytes": 44610
+    },
+    {
+      "file": "ci-guide-examples.log",
+      "sha256": "e4c0d0c5d4d3e0b1d315768e71e4cd7090a8986f6f9d4386f7f5795abb79b25f",
+      "bytes": 40508
+    },
+    {
+      "file": "color-models-first.log",
+      "sha256": "aa7cc451be93fa3d309f16f4d37df88ec14d5aa8202ea56f9ba95c1966612609",
+      "bytes": 2010,
+      "resource": "run-heavy: done rc=101 0s | peak-RSS 0.13GiB | min-avail 17170MiB | peak-load 0.39"
+    },
+    {
+      "file": "core-first.log",
+      "sha256": "b78a8f8af8cf1e63b6b8001940e6969ba502e20e79225e5fc8580738c6e4f991",
+      "bytes": 7344,
+      "resource": "run-heavy: done rc=0 12s | peak-RSS 0.36GiB | min-avail 16620MiB | peak-load 0.76"
+    },
+    {
+      "file": "final-gates.log",
+      "sha256": "c66296e62ebc0ef2d64c76510f538bda4ef50e31422db13b8d0e770b5552d0b9",
+      "bytes": 15288,
+      "resource": "run-heavy: done rc=0 7s | peak-RSS 0.28GiB | min-avail 16800MiB | peak-load 0.58"
+    },
+    {
+      "file": "gates-first.log",
+      "sha256": "5583700132a35ca2ac3cfba9e2d6df86ee545bcf42b8112dec9a6cb4e7df9c19",
+      "bytes": 9798,
+      "resource": "run-heavy: done rc=0 8s | peak-RSS 0.30GiB | min-avail 16803MiB | peak-load 0.38"
+    },
+    {
+      "file": "probes.log",
+      "sha256": "0b67acab71293c66e64d2a9f746d573c5edd8d7f8d7affb4de0542815520efbe",
+      "bytes": 24490,
+      "resource": "run-heavy: done rc=0 102s | peak-RSS 0.64GiB | min-avail 16174MiB | peak-load 2.01"
+    },
+    {
+      "file": "standalone-ci.json",
+      "sha256": "02de42ae7c9736bb9845034bd582f6a5e57f91dbcf6222a26e53cb01cb7685c6",
+      "bytes": 14414
+    }
+  ],
+  "corrected_attempts": [
+    "New test initially needed an explicit Arc<[u8]> type; no established expectation changed.",
+    "Direct root catalog regeneration encountered a frozen archmage resolver conflict; used the previously verified root lock in an isolated export.",
+    "Existing local site output had a reference revision mismatch; used a fresh isolated export, provided its Node dependencies and explicit source identity."
+  ],
+  "limits": [
+    "No performance rerun or process-memory comparison.",
+    "No full native color/metadata or upstream conversion-kernel qualification.",
+    "No new planar sample types, owned strip delivery or remainder buffering.",
+    "Older native guide dependency-resolution failures remain outside this update."
+  ]
+}
