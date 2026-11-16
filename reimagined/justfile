@@ -5,6 +5,15 @@ prepare:
 test:
     cargo test --workspace --all-features --locked
 
+test-default:
+    cargo test --workspace --locked
+
+pixel-models:
+    cargo test -p zencodec-io --test pixel_color_models --all-features --locked
+
+check-msrv:
+    cargo +1.88.0 check --workspace --all-targets --all-features --locked
+
 clippy:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
