@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- `xmp::gainmap::Strictness` and `parse_xmp_with`: `Strict` accepts only the
+  gain-map XMP schema's forms; `Lenient` (what `parse_xmp` uses) also accepts
+  an unrecognized `hdrgm:Version` and comma-separated per-channel values.
+- `validate_for_xmp`, `try_generate_xmp`, `try_generate_gainmap_xmp` and
+  `try_generate_xmp_with_items`, which refuse parameters XMP cannot carry or
+  readers must reject. `XmpError::MissingRequired`.
+
+### Changed
+
+- Gain-map XMP reading follows the Ultra HDR v1.1 rules libultrahdr also
+  applies, in both modes: `Version`, `GainMapMax` and `HDRCapacityMax` are
+  required; offsets must be 0 or greater, `HDRCapacityMin` 0 or greater and
+  `HDRCapacityMax` greater than `HDRCapacityMin`. A packet with only
+  `hdrgm:Version` (the primary image's) is `MissingRequired`, not defaults.
+- Per-channel values are written as an `rdf:Seq` of three Reals instead of a
+  comma-separated attribute, which the schema does not define.
+
 ### Fixed
 
 - TIFF inventories locate external old-style JPEG tables (519–521) instead of
