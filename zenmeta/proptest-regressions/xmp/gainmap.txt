@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 989997a9ff5bd881234c3402506ae4623c2d19cc4ae0b8dfd93645bfe43281ae # shrinks to params = GainMapParams { channels: [GainMapChannel { min: 0.0, max: 0.0, gamma: 0.01, base_offset: 0.0, alternate_offset: 0.0 }, GainMapChannel { min: 0.0, max: 0.0, gamma: 0.01, base_offset: 0.0, alternate_offset: 0.0 }, GainMapChannel { min: 0.0, max: 0.0, gamma: 0.01, base_offset: 0.0, alternate_offset: 0.0 }], base_hdr_headroom: -5.626913187389085, alternate_hdr_headroom: 0.0, use_base_color_space: false, backward_direction: false }, length = 1
