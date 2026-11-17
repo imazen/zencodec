@@ -6,9 +6,9 @@ use zencodec::{ErrorKind, FrameHeader, Pass, Raster, Unsupported, copy_rows};
 use zencodec_fixtures::rows::RowsCodec;
 use zencodec_io::Collect;
 use zenpixels::{
-    AlphaMode, ChannelType, CieXy, ColorContext, ColorProfile, GammaCurve, ParametricColor,
-    ParametricPrimaries, ParametricTransfer, PixelBuffer, PixelDescriptor, PixelSlice,
-    PixelSliceMut, RenderingIntent, WhitePoint,
+    AlphaMode, ChannelLayout, ChannelType, CieXy, ColorContext, ColorProfile, GammaCurve,
+    ParametricColor, ParametricPrimaries, ParametricTransfer, PixelBuffer, PixelDescriptor,
+    PixelSlice, PixelSliceMut, RenderingIntent, TransferFunction, WhitePoint,
 };
 
 #[test]
@@ -149,8 +149,18 @@ fn new_pixel_models_do_not_imply_codec_support() {
         PixelDescriptor::CMYK8,
         PixelDescriptor::CMYK8_INVERTED,
         PixelDescriptor::cmyka(ChannelType::U8, AlphaMode::Straight),
-        PixelDescriptor::OKLCHF32,
-        PixelDescriptor::HSLF32_SRGB,
+        PixelDescriptor::new(
+            ChannelType::F32,
+            ChannelLayout::Oklch,
+            None,
+            TransferFunction::Unknown,
+        ),
+        PixelDescriptor::new(
+            ChannelType::F32,
+            ChannelLayout::Hsl,
+            None,
+            TransferFunction::Srgb,
+        ),
     ] {
         let spec = EncodeSpec::new(Raster::packed(3, 2, descriptor));
         let error = match RowsCodec.encoder(&spec) {

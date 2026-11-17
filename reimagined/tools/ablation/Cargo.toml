@@ -14,7 +14,7 @@ zencodec-coroutine = { path = "../../../zencodec-coroutine" }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078", default-features = false, features = ["std", "icc"] }
 next-codec = { package = "zencodec", path = "../../zencodec", features = ["std"] }
 next-io = { package = "zencodec-io", path = "../../zencodec-io", features = ["tokio"] }
-next-pixels = { package = "zenpixels", git = "https://github.com/imazen/zenpixels", rev = "80fd4278b2d90ba4fa2b27584fb17857e75e4746", default-features = false, features = ["std", "icc", "planar"] }
+next-pixels = { package = "zenpixels", git = "https://github.com/imazen/zenpixels", rev = "66c7f39e3e754061c3b4de5a28571d2e22c2fe61", default-features = false, features = ["std", "icc", "planar"] }
 tokio = { version = "1.53.3", features = ["rt", "rt-multi-thread", "io-util", "sync"] }
 zenbench = "=0.1.11"
 

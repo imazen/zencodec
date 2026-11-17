@@ -186,7 +186,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=80fd4278b2d90ba4fa2b27584fb17857e75e4746#80fd4278b2d90ba4fa2b27584fb17857e75e4746"
+source = "git+https://github.com/imazen/zenpixels?rev=66c7f39e3e754061c3b4de5a28571d2e22c2fe61#66c7f39e3e754061c3b4de5a28571d2e22c2fe61"
 dependencies = [
  "bytemuck",
  "whereat",

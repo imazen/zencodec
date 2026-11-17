@@ -13,7 +13,7 @@ publish = false
 
 [workspace.dependencies]
 # zenpixels PR160: generic CMYK, parametric color and compact pixel carriers.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "80fd4278b2d90ba4fa2b27584fb17857e75e4746", default-features = false, features = ["icc", "planar"] }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "66c7f39e3e754061c3b4de5a28571d2e22c2fe61", default-features = false, features = ["icc", "planar"] }
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
 tokio = { version = "1.49.0", default-features = false }
