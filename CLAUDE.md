@@ -1,5 +1,13 @@
 # zencodec
 
+## Known Bugs: PR159 fixture catalog invalidation (2026-11-16, fixed)
+
+The equivalent gain-map test iterator change left zenmeta's code-catalog source
+fingerprint stale. PR212's PR160 follow-up regenerates it from the frozen root
+graph: API declarations and extracted documentation remain byte-identical.
+The source-ownership control, site build and all 27 Node checks pass. See
+`reimagined/docs/zenpixels-160.md`; native guide dependency conflicts remain open.
+
 ## Known Bugs: reimagined input-planning cancellation (2026-11-12)
 
 The unpublished async input-planning loop continued source reads after a

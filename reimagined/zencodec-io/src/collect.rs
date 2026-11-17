@@ -247,16 +247,16 @@ impl Sink for Collect {
                 "planar rows after packed rows",
             ));
         };
-        for (index, (src, dst)) in strip.planes().iter().zip(&mut owned.planes).enumerate() {
+        for (index, (src, dst)) in strip.planes().zip(&mut owned.planes).enumerate() {
             // Rows of this plane that precede the strip.
             let at = layout
                 .plane_size(index, raster.width, y)
                 .ok_or_else(|| error(ErrorKind::Internal))?
                 .1 as usize;
             match (src, dst) {
-                (AnyPlane::U8(s), OwnedPlane::U8(d)) => copy_plane(s, d, at)?,
-                (AnyPlane::U16(s), OwnedPlane::U16(d)) => copy_plane(s, d, at)?,
-                (AnyPlane::F32(s), OwnedPlane::F32(d)) => copy_plane(s, d, at)?,
+                (AnyPlane::U8(s), OwnedPlane::U8(d)) => copy_plane(&s, d, at)?,
+                (AnyPlane::U16(s), OwnedPlane::U16(d)) => copy_plane(&s, d, at)?,
+                (AnyPlane::F32(s), OwnedPlane::F32(d)) => copy_plane(&s, d, at)?,
                 _ => return Err(error_msg(ErrorKind::Protocol, "plane sample type changed")),
             }
         }

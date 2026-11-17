@@ -1,0 +1,109 @@
+name: Reimagined contract
+
+on:
+  pull_request:
+    paths:
+      - 'reimagined/**'
+      - '.github/workflows/reimagined.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reimagined-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Prototype (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest]
+    defaults:
+      run:
+        working-directory: reimagined
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: reimagined -> target
+      - name: Restore reviewed lock
+        run: cp dependencies.lock Cargo.lock
+      - name: Default and Tokio paths
+        run: |
+          cargo test --workspace --locked
+          cargo test --workspace --all-features --locked
+
+  i686:
+    name: Prototype (i686 via cross)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reimagined
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-gnu
+      - uses: taiki-e/install-action@cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: reimagined -> target
+          key: reimagined-i686
+      - name: Restore reviewed lock
+        run: cp dependencies.lock Cargo.lock
+      - name: Test 32-bit paths
+        run: cross test --workspace --all-features --target i686-unknown-linux-gnu --locked
+
+  quality:
+    name: Prototype lint, docs and no_std
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reimagined
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown, thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: reimagined -> target
+      - name: Restore reviewed lock
+        run: cp dependencies.lock Cargo.lock
+      - name: Format and strict lint
+        run: |
+          cargo fmt -p zencodec -p zencodec-io -p zencodec-fixtures --check
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Strict Rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --all-features --no-deps --locked
+      - name: Genuine no_std targets
+        run: |
+          cargo check -p zencodec --no-default-features --locked
+          cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+          cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
+
+  msrv:
+    name: Prototype MSRV (1.88)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reimagined
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: reimagined -> target
+          key: reimagined-msrv
+      - name: Restore reviewed lock
+        run: cp dependencies.lock Cargo.lock
+      - name: Check all targets
+        run: cargo check --workspace --all-targets --all-features --locked

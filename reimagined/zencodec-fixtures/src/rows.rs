@@ -581,7 +581,12 @@ impl RowsEncoder {
         // reaches the last row. Otherwise the odd row waits for its pair.
         let last = y + given == raster.height;
         let take = if last { given } else { given & !1 };
-        let [AnyPlane::U8(luma), AnyPlane::U8(cb), AnyPlane::U8(cr)] = strip.planes() else {
+        let [
+            Some(AnyPlane::U8(luma)),
+            Some(AnyPlane::U8(cb)),
+            Some(AnyPlane::U8(cr)),
+        ] = [strip.plane(0), strip.plane(1), strip.plane(2)]
+        else {
             return Err(error(ErrorKind::Internal));
         };
         let mut row = 0;
