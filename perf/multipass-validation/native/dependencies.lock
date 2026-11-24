@@ -77,7 +77,7 @@ dependencies = [
  "magetypes",
  "zencodec",
  "zenhash",
- "zenpixels",
+ "zenpixels 0.2.16",
 ]
 
 [[package]]
@@ -107,7 +107,7 @@ dependencies = [
  "multipass-validation",
  "zencodec",
  "zencodec-io",
- "zenpixels",
+ "zenpixels 0.5.0",
 ]
 
 [[package]]
@@ -117,7 +117,7 @@ dependencies = [
  "enough",
  "zencodec",
  "zencodec-io",
- "zenpixels",
+ "zenpixels 0.5.0",
 ]
 
 [[package]]
@@ -187,25 +187,26 @@ checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 
 [[package]]
 name = "zencodec"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "almost-enough",
+ "bytemuck",
  "enough",
  "how-far",
  "libm",
  "spin",
  "whereat",
- "zenpixels",
+ "zenpixels 0.5.0",
 ]
 
 [[package]]
 name = "zencodec-io"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "enough",
  "how-far",
  "zencodec",
- "zenpixels",
+ "zenpixels 0.5.0",
 ]
 
 [[package]]
@@ -219,14 +220,34 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
+dependencies = [
+ "bytemuck",
+ "whereat",
+]
+
+[[package]]
+name = "zenpixels"
+version = "0.5.0"
+source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"
 dependencies = [
  "bytemuck",
  "whereat",
 ]
 
 [[patch.unused]]
+name = "garb"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=457ff8b9153e9d675a39dc098052b2ffeb6206fa#457ff8b9153e9d675a39dc098052b2ffeb6206fa"
+
+[[patch.unused]]
+name = "linear-srgb"
+version = "0.6.13"
+source = "git+https://github.com/imazen/linear-srgb?rev=ae83f19426737635fee3dd16f228681019f52585#ae83f19426737635fee3dd16f228681019f52585"
+
+[[patch.unused]]
 name = "zenpixels-convert"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+version = "0.5.0"
+source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"
