@@ -533,17 +533,23 @@ Metadata retention, color emission, and orientation are the three *correctness* 
 
 ## Color Emission
 
-The encode-side dual of color resolution: which color carriers (ICC vs CICP) should an encode *write*? `resolve_color_emit` decides — a pure, `no_std`, CMS-free function of the source color, the target's carrier capabilities, and a policy:
+Pass the source provenance, current pixel interpretation and target capabilities
+to the color resolver before creating an output header.
 
 ```rust,ignore
-use zencodec::{resolve_color_emit, ColorEmitPolicy, IccDisposition};
+use zencodec::{ColorEmitPolicy, resolve_color_emit};
 
-let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Balanced);
-// plan.cicp: Option<Cicp>   — write this CICP (JXL/AVIF/HEIC nclx, PNG cICP) if the format carries it
-// plan.icc:  IccDisposition — KeepSource | SynthesizeFrom(Cicp) | Drop
+let plan = resolve_color_emit(&source_color, &pixels.spec().color, &target_caps,
+                              ColorEmitPolicy::Balanced)?;
 ```
 
-`ColorEmitPolicy` picks the tradeoff: `Compatibility` (widest reader support), `Balanced` (default — CICP where it's a spec-mandated *safe sole carrier*, an ICC companion otherwise), `Compact` (smallest — prefer CICP, drop the ICC), `Verbatim` (carry the source's signals unchanged), or `Custom(ColorEmitFields)`. A target advertises its carriers via `EncodeCapabilities::{cicp_is_valid_carrier, cicp_safe_sole_carrier}`. The plan never emits a redundant `SynthesizeFrom(sRGB)`; a codec lowers a `SynthesizeFrom` through `zenpixels-convert`'s transfer-aware `synthesize_icc_for_cicp` (a bundled `const` profile, or — with its `cms-moxcms` feature — a generated one) so an HDR transfer is not mis-tagged with an SDR profile. ICC synthesis is best-effort: callers must handle unavailable synthesis or container carriers rather than assume every plan preserves the color description. The names carry the emit direction so they can't be confused with the decode-side `SourceColor`. Design + rejected alternatives: [docs/color-emit-model.md](https://github.com/imazen/zencodec/blob/main/docs/color-emit-model.md).
+The resolver admits ICC and CICP only when the target supports the carrier.
+It returns a typed refusal when no permitted carrier expresses the current
+color. Lower `SynthesizeFrom` with `SynthesizedIcc::for_cicp` and
+`SynthesizeGrayFrom` with `SynthesizedIcc::for_gray_cicp`. A missing required
+profile must fail before publication unless the plan carries equivalent CICP.
+HLG uses native CICP when supported. Gray and GrayAlpha use the same color model.
+See [the color emission contract](docs/color-emit-model.md).
 
 ## What's in this crate
 

@@ -26,65 +26,38 @@ codec dependencies**.
 
 ```rust
 pub fn resolve_color_emit(
-    src: &SourceColor,            // what the source file signalled (cicp / icc / channel_count)
-    target: &EncodeCapabilities,  // which carriers the target format has + their quality
+    source: &SourceColor,
+    current: &zenpixels::ColorSpace,
+    target: &EncodeCapabilities,
     policy: ColorEmitPolicy,
-) -> ColorEmitPlan;                   // { cicp: Option<Cicp>, icc: IccDisposition }
-
-pub enum ColorEmitPolicy { Compatibility, Balanced /*default*/, Compact, Verbatim, Custom(ColorEmitFields) }
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
-pub struct ColorEmitFields { icc: IccRetention, cicp: CicpEmission }   // ::new(icc, cicp)
-pub enum CicpEmission { WhereValidCarrier /*default*/, WhereverSupported, Never }
+) -> Result<ColorEmitPlan, ColorEmitError>;
 ```
 
-Pure, `no_std`, **no CMS, no codec deps**. It emits a *plan*; the bytes are
-materialized one layer up. `SourceColor` is the type the pipeline actually
-produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
-`Metadata`). The resolver also handles the grayscale/CMYK terminal states
-(suppress CICP, keep ICC) and never emits a redundant `SynthesizeFrom(sRGB)`.
+The active color model determines ICC class. RGB and gray synthesis have
+separate dispositions. Gray with alpha uses the same synthesis route as gray
+without alpha. ICC profiles carried from the source must describe the current
+model and interpretation. For converted pixels, pass their current color
+space along with the untouched source provenance.
 
-### Capabilities (three flags drive it)
+### Capabilities
 
-- `cicp()` — has a CICP carrier slot at all.
-- `cicp_is_valid_carrier()` — the carrier is standardized/honored, so CICP is
-  emitted by default (JXL enum, AVIF/HEIC `nclx`, **PNG `cICP`**). Distinct from
-  authority — PNG isn't the decode authority but is a valid carrier.
-- `cicp_safe_sole_carrier()` — safe to ship CICP-only and drop the ICC (JXL only;
-  AVIF/HEIC/PNG keep the ICC alongside).
+- `icc()` and `cicp()` declare the available carriers.
+- `cicp_is_valid_carrier()` admits CICP under the default policy.
+- `cicp_safe_sole_carrier()` permits omitting a redundant ICC under Balanced.
 
-## Lowering the plan (where the bytes happen)
+## Lowering the plan
 
-A codec or the pipeline lowers `ColorEmitPlan` to bytes **by hand, per codec** —
-each codec maps the plan's fields onto its own container carriers:
+Preserve `KeepSource` bytes. Use
+`SynthesizedIcc::for_cicp` for `SynthesizeFrom` and
+`SynthesizedIcc::for_gray_cicp` for `SynthesizeGrayFrom`. The converter's
+`icc-db` feature supplies the full supported export grid. A caller must check
+the result before writing the header. If synthesis is unavailable and emitted
+CICP cannot express the current color, refuse or require an explicit conversion.
 
-- `ColorEmitPlan.cicp` → the format's native CICP carrier (JXL enum colour,
-  AVIF/HEIC `nclx`, PNG `cICP`).
-- `IccDisposition::KeepSource` → re-embed the source ICC bytes unchanged.
-- `IccDisposition::SynthesizeFrom(cicp)` →
-  `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
-  transfer-aware and returns a typed `SynthesizedIcc`: embed the bytes on
-  `Profile`; on `NotNeeded` (sRGB) / `NeedsCms` / `CmsUnsupported` embed no ICC
-  and let `cicp` carry the colour. The bundled `const` set (no CMS) reaches
-  Display-P3 and SDR BT.2020; the `cms-moxcms` feature generates the rest.
-- `IccDisposition::Drop` → no ICC.
-
-**What this is not:** a type-enforced atomic step. zenpixels-convert does ship
-`finalize_for_output_with` / `EncodeReady` (convert pixels *and* emit matching
-output metadata in one call, so they cannot diverge), but as of 2026-08 no codec
-or pipeline crate calls it — a consumer audit across the zen workspace found its
-only callers inside zenpixels-convert itself (zencodec#119). The real path is
-weaker and by convention: `resolve_color_emit` reads its `SourceColor` from the
-caller-supplied `Metadata { cicp, icc }`, a separate input from the pixel buffer
-that is never cross-checked against the buffer's descriptor or `ColorContext`. If
-upstream mislabels the source, the codec emits that label faithfully wrong. The
-pipeline keeps the two in agreement by building `Metadata` from the same decode
-that produced the pixels. Routing encode through `finalize_for_output_with` to
-get the atomic guarantee is a possible cross-crate change, not something this
-model relies on today.
-
-"Synthesize an ICC" therefore never silently loses colour — the typed
-`SynthesizedIcc` names every case where no profile is embedded — and never needs a
-CMS in the codec for the bundled set.
+HLG has no complete generic ICC export. The resolver preserves representable
+native CICP where supported, and `IccRetention::Drop` prevents synthesis.
+ICC profiles describe full-range reconstructed samples, so copying raw coded
+matrix or narrow-range samples requires a suitable carrier or a conversion.
 
 ## Orientation (separate, tiny)
 

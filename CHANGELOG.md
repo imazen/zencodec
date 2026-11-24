@@ -9,6 +9,15 @@
   `SourceColor`. Native plane and exact-grid contracts are available through
   `zencodec::plane` and `zencodec::sample` during the integration draft.
 
+- zencodec 0.3 replaces the local sample types with zenpixels re-exports.
+  Exact sample facts retain independent color and alpha grids.
+- Animation sink completion carries exact timing. Erased frame decoders expose
+  borrowed rendering and owned copies return allocation failures.
+- Color emission, decoded ICC projection and ISO 21496-1 and XMP writers have
+  checked results. Binary gain maps preserve rational pairs and wire channel count.
+- Exact encode admission is separate from layout compatibility. Row adapters
+  preserve pixel evidence and validate sink lifecycle and declared geometry.
+
 ### Added
 
 - Testkit `check_metadata_retained` compares required resolved metadata against

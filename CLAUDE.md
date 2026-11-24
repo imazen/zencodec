@@ -1,5 +1,21 @@
 # zencodec
 
+## Known Bugs: zenpixels 0.5 codec boundary integration
+
+- Keep separate exact color and alpha grids at startup and row delivery, including
+  narrow-range color. Aggregate evidence for different strips by finding a common
+  representable grid. An intersection of claims about the same samples cannot
+  establish a combined raster's lower-depth representation.
+- Copy-based decode must carry the applied crop and orientation into completion.
+  Native animation sink implementations must also report exact source duration,
+  display index and PTS. Source color provenance remains independent of the active
+  pixel interpretation and may contain opaque ICC bytes. Keep those bytes out of
+  retained decisions and default diagnostics.
+- Binary ISO 21496-1 transport preserves unreduced fractions and record arity.
+  Numerical equality alone cannot establish wire equality. Check the gain-map
+  sample spec before ingestion and qualify XMP's supported SDR-base subset before
+  serializing.
+
 ## Known Bugs: edited video presentation (2026-10-30)
 
 Native MP4 controls reproduce identical edit offsets for different segment
