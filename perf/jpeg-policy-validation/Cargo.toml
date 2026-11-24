@@ -17,9 +17,9 @@ native-preflight = []
 
 [dependencies]
 zenbench = { version = "0.1.11", optional = true }
-zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
+zencodec = { path = "../..", version = ">=0.3.0, <0.5.0", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }
-zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
+zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.2.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
@@ -55,7 +55,7 @@ zenmeta = { path = "../../zenmeta" }
 
 [dev-dependencies]
 zenpng = { version = "0.2.0", default-features = false, features = ["controlled-decode"] }
-zencodec-testkit = { path = "../../zencodec-testkit", version = "0.2.0" }
+zencodec-testkit = { path = "../../zencodec-testkit", version = ">=0.3.0, <0.5.0" }
 how-far-along = { version = "0.1.0", default-features = false, features = ["std"] }
 how-far-really = "0.1.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "time"] }

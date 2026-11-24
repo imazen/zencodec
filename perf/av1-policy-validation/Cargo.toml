@@ -7,8 +7,8 @@ publish = false
 [workspace]
 
 [dependencies]
-zencodec-io = { path = "../../zencodec-io", version = "0.1.0", features = ["std"] }
-zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", version = "0.2.0", features = ["std"] }
+zencodec = { path = "../..", version = ">=0.3.0, <0.5.0", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media", features = ["std"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", default-features = false }
@@ -43,5 +43,5 @@ debug = 1
 lto = "thin"
 
 [dev-dependencies]
-zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.1.0" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.2.0" }
 presentation-map-experiment = { path = "../presentation-map" }
