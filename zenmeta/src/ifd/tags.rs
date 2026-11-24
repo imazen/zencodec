@@ -115,7 +115,7 @@ const TIFF_TAGS: &[(u16, &str)] = &[
     (293, "T6Options"),
     (296, "ResolutionUnit"),
     (297, "PageNumber"),
-    (301, "Transfer"),
+    (301, "TransferFunction"),
     (305, "Software"),
     (306, "DateTime"),
     (315, "Artist"),
@@ -434,6 +434,11 @@ const TIFF_TAGS: &[(u16, &str)] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tiff_301_is_the_transfer_function_tag() {
+        assert_eq!(tag_name(Kind::Page(0), 301), "TransferFunction");
+    }
 
     #[test]
     fn tag_tables_are_sorted() {

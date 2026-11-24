@@ -551,10 +551,11 @@ impl<T: PlaneSample> Plane<&mut [T]> {
         } = self;
         let at = if y == 0 || width == 0 {
             start
+        } else if y == height {
+            start + (y - 1) * stride + width
         } else {
             start + y * stride
         };
-        let at = at.min(buf.len());
         let (top, bottom) = buf.split_at_mut(at);
         Ok((
             Plane {
@@ -1115,5 +1116,25 @@ impl PlanarLayout {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::*;
+
+    #[test]
+    fn terminal_split_of_shifted_single_row_uses_active_end() {
+        let mut words = [27u16, 91];
+        let pointer = words[1..].as_ptr();
+        let mut plane = Plane::new(&mut words[..], 2, 1, usize::MAX).unwrap();
+        let row = plane.sub_mut(1, 0, 1, 1).unwrap();
+        let (mut top, bottom) = row.split_at_row(1).unwrap();
+        assert_eq!(top.strided_samples().as_ptr(), pointer);
+        assert_eq!(top.strided_samples(), &[91]);
+        assert_eq!(bottom.height(), 0);
+        assert!(bottom.strided_samples().is_empty());
+        top.row_mut(0).unwrap()[0] = 123;
+        assert_eq!(words, [27, 123]);
     }
 }
