@@ -1416,7 +1416,7 @@ impl IsoGainMapWire {
             backward_direction: self.flags & FLAG_BACKWARD_DIRECTION != 0,
             ..GainMapParams::default()
         };
-        for channel in 0..3 {
+        for (channel, params) in params.channels.iter_mut().enumerate() {
             let i = 2 + 5 * channel.min(self.channel_count() - 1);
             let min = self.value(i);
             let max = self.value(i + 1);
@@ -1427,7 +1427,7 @@ impl IsoGainMapWire {
             {
                 return Err(GainMapParseError::MinExceedsMax { channel, min, max });
             }
-            params.channels[channel] = GainMapChannel {
+            *params = GainMapChannel {
                 min,
                 max,
                 gamma: self.value(i + 2),
