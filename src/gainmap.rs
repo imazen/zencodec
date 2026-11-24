@@ -285,10 +285,10 @@ pub struct GainMapParams {
     pub use_base_color_space: bool,
     /// ISO 21496-1 backward direction flag (bit 2 of flags byte).
     ///
-    /// When `true`, the base and alternate roles are reversed: the base
-    /// image is the HDR rendition and the alternate is SDR. This is the
-    /// authoritative encoder signal — [`direction()`](Self::direction)
-    /// derives the same information from headroom comparison as a fallback.
+    /// A set flag declares that the base is the HDR rendition. A clear flag
+    /// leaves the rendering direction to the headroom ordering. Binary parsing
+    /// preserves the flag. [`exact_metadata()`](Self::exact_metadata) rejects
+    /// a set flag that contradicts the headrooms.
     pub backward_direction: bool,
     wire: Option<alloc::sync::Arc<IsoGainMapWire>>,
 }
@@ -331,8 +331,8 @@ impl GainMapParams {
     /// Project to zenpixels' checked rational rendering metadata.
     ///
     /// Parsed pairs and record arity are preserved. The rendering contract also
-    /// requires distinct headrooms, even though the wire parser can transport
-    /// metadata with equal headrooms.
+    /// requires distinct headrooms and consistent direction. The wire parser
+    /// can transport equal headrooms and preserve the backward direction bit.
     pub fn exact_metadata(&self) -> Result<zenpixels::GainMapMetadata, GainMapParseError> {
         use zenpixels::{GainMapChannels, GainMapColorSpace, GainMapComponent, GainMapMetadata};
         let wire = IsoGainMapWire::encode(self)?;
@@ -356,11 +356,32 @@ impl GainMapParams {
         } else {
             GainMapColorSpace::Alternate
         };
-        GainMapMetadata::try_new(channels, wire.unsigned(0), wire.unsigned(1), space)
-            .map(|metadata| metadata.with_backward_direction(self.backward_direction))
-            .ok_or(GainMapParseError::UnrepresentableValue {
+        let metadata =
+            GainMapMetadata::try_new(channels, wire.unsigned(0), wire.unsigned(1), space).ok_or(
+                GainMapParseError::UnrepresentableValue {
+                    field: "rendering headroom",
+                },
+            )?;
+        let direction = match self.direction() {
+            GainMapDirection::BaseIsHdr => zenpixels::GainMapDirection::Reverse,
+            GainMapDirection::BaseIsSdr => zenpixels::GainMapDirection::Forward,
+        };
+        if self.base_hdr_headroom == self.alternate_hdr_headroom
+            || metadata.direction() != Some(direction)
+        {
+            return Err(GainMapParseError::UnrepresentableValue {
                 field: "rendering headroom",
-            })
+            });
+        }
+        if self.backward_direction {
+            if direction != zenpixels::GainMapDirection::Reverse {
+                return Err(GainMapParseError::UnrepresentableValue {
+                    field: "backward_direction",
+                });
+            }
+            return Ok(metadata.with_backward_direction(true));
+        }
+        Ok(metadata)
     }
 
     /// Derive direction from headroom comparison.
@@ -2561,6 +2582,64 @@ mod tests {
 
         let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(!parsed.backward_direction);
+    }
+
+    #[test]
+    fn hdr_base_with_clear_backward_bit_renders_in_reverse() {
+        use zenpixels_convert::gainmap::signed_weight;
+
+        let params = GainMapParams {
+            base_hdr_headroom: 3.0,
+            ..Default::default()
+        };
+        let wire = serialize_iso21496_fmt(&params, Iso21496Format::JxlJhgm).unwrap();
+        let decoded = parse_iso21496_fmt(&wire, Iso21496Format::JxlJhgm).unwrap();
+        assert_eq!(decoded.direction(), GainMapDirection::BaseIsHdr);
+        assert!(!decoded.backward_direction);
+        assert_eq!(
+            serialize_iso21496_fmt(&decoded, Iso21496Format::JxlJhgm).unwrap(),
+            wire
+        );
+
+        let metadata = decoded.exact_metadata().unwrap();
+        assert_eq!(metadata.backward_direction, None);
+        assert_eq!(
+            metadata.direction(),
+            Some(zenpixels::GainMapDirection::Reverse)
+        );
+        assert!(metadata.is_valid());
+        assert_eq!(signed_weight(&metadata, 0.0), Some(-1.0));
+
+        let mut explicit = decoded;
+        explicit.backward_direction = true;
+        let metadata = explicit.exact_metadata().unwrap();
+        assert_eq!(metadata.backward_direction, Some(true));
+        assert_eq!(
+            metadata.direction(),
+            Some(zenpixels::GainMapDirection::Reverse)
+        );
+    }
+
+    #[test]
+    fn contradictory_backward_bit_is_rejected_by_rendering_projection() {
+        let params = GainMapParams {
+            alternate_hdr_headroom: 3.0,
+            backward_direction: true,
+            ..Default::default()
+        };
+        let wire = serialize_iso21496_fmt(&params, Iso21496Format::JxlJhgm).unwrap();
+        let decoded = parse_iso21496_fmt(&wire, Iso21496Format::JxlJhgm).unwrap();
+        assert_eq!(decoded.direction(), GainMapDirection::BaseIsSdr);
+        assert_eq!(
+            serialize_iso21496_fmt(&decoded, Iso21496Format::JxlJhgm).unwrap(),
+            wire
+        );
+        assert!(matches!(
+            decoded.exact_metadata(),
+            Err(GainMapParseError::UnrepresentableValue {
+                field: "backward_direction"
+            })
+        ));
     }
 
     // --- common_denominator compact format parsing ---

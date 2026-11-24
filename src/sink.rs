@@ -73,7 +73,7 @@ impl RowMetadata {
             .facts
             .depth
             .zip(other.facts.depth)
-            .and_then(|(a, b)| common_depth(a, b));
+            .and_then(|(a, b)| crate::sample::ExactDepth::union(a, b));
         self.facts.float = self.facts.float.intersect(other.facts.float);
         self.facts.all_opaque &= other.facts.all_opaque;
         self.facts.all_grayscale &= other.facts.all_grayscale;
@@ -99,36 +99,6 @@ impl RowMetadata {
         }
         buffer
     }
-}
-
-fn common_depth(
-    a: crate::sample::ExactDepth,
-    b: crate::sample::ExactDepth,
-) -> Option<crate::sample::ExactDepth> {
-    use crate::sample::{ExactDepth, full_range_grid_nests, narrow_range_grid_nests};
-    use zenpixels::SignalRange;
-
-    if a.storage() != b.storage() || a.range() != b.range() {
-        return None;
-    }
-    let storage = (a.storage().byte_size() * 8) as u8;
-    let common = |a: u8, b: u8, nests: fn(u8, u8) -> bool| {
-        (a.max(b)..storage)
-            .find(|&candidate| nests(a, candidate) && nests(b, candidate))
-            .unwrap_or(storage)
-    };
-    let color_grid = if a.range() == SignalRange::Narrow {
-        narrow_range_grid_nests
-    } else {
-        full_range_grid_nests
-    };
-    ExactDepth::new(
-        a.storage(),
-        a.range(),
-        common(a.color_bits(), b.color_bits(), color_grid),
-        common(a.alpha_bits(), b.alpha_bits(), full_range_grid_nests),
-    )
-    .ok()
 }
 
 /// Receives decoded rows during streaming decode.

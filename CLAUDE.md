@@ -1,5 +1,15 @@
 # zencodec
 
+## Known Bugs: anchored color emission and gain-map direction (fixed)
+
+Diffuse-white-anchored PQ and reconstructed linear samples previously failed
+CICP emission. The emitter projects their sample coding while the image spec
+retains the anchor. Recognized ICC profiles can carry colors without CICP
+codes, and verbatim CICP keeps the original BT.709 transfer alias. The checked
+gain-map projection derives reverse rendering for HDR-base headrooms with a
+clear backward bit and refuses contradictory set bits. ISO transport preserves
+the wire flag independently of rendering admission.
+
 ## Known Bugs: zenpixels 0.5 codec boundary integration
 
 - Keep separate exact color and alpha grids at startup and row delivery, including

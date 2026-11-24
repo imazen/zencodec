@@ -61,11 +61,22 @@
 
 ### Deprecated
 
+- Deprecated zenpixels 0.5 migration shims remain available to codec adapters
+  during the rollout.
+
 - Best-effort `EncodeJob::with_metadata_policy` and
   `DynEncodeJob::set_metadata_policy`; use the checked metadata setters.
   Compatibility behavior remains unchanged and native support is explicit.
 
 ### Fixed
+
+- Color emission can project the coding of diffuse-white-anchored samples to
+  CICP, retain matching Adobe RGB and other recognized ICC profiles without a
+  CICP representation, and preserve BT.709 transfer aliases in verbatim CICP.
+- ISO gain-map projection derives reverse rendering from HDR-base headrooms
+  when the backward bit is clear and rejects a contradictory set bit at the
+  rendering boundary. Binary metadata round-trips the original bit.
+- Row metadata merging uses zenpixels' shared exact-depth grid union.
 
 - Coroutine polling preserves a native failure when cancellation is signalled
   during the same poll, retaining typed causes and terminal cleanup.

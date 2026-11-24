@@ -6,7 +6,7 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorSpace, IccColorSpace, SignalRange};
+use zenpixels::{Cicp, ColorSpace, HlgMode, IccColorSpace, Primaries, SignalRange, Transfer};
 
 use crate::capabilities::EncodeCapabilities;
 use crate::info::{AuthoritativeColor, SourceColor};
@@ -251,26 +251,50 @@ pub fn resolve_color_emit(
     {
         return Err(ColorEmitError::ProfileModel);
     }
+    // CICP describes the sample coding. Diffuse white lives outside the tuple.
     let repr_cicp = match color {
         ColorSpace::Rgb {
-            primaries: zenpixels::Primaries::Unknown,
-            white: None,
+            transfer: Transfer::Hlg(HlgMode::Display(_)),
+            ..
+        }
+        | ColorSpace::Gray {
+            transfer: Transfer::Hlg(HlgMode::Display(_)),
+            ..
+        } => None,
+        ColorSpace::Rgb {
+            primaries: Primaries::Unknown,
+            range,
             ..
         }
         | ColorSpace::Rgb {
-            transfer: zenpixels::Transfer::Unknown,
-            white: None,
+            transfer: Transfer::Unknown,
+            range,
             ..
         } => match src.authoritative() {
-            Some(AuthoritativeColor::Cicp(c)) if c.matrix_coefficients == 0 => Some(c),
+            Some(AuthoritativeColor::Cicp(c))
+                if c.matrix_coefficients == 0 && c.full_range == (*range == SignalRange::Full) =>
+            {
+                Some(c)
+            }
             _ => None,
         },
-        ColorSpace::Rgb { .. } => color.try_cicp().ok(),
-        ColorSpace::Gray {
+        ColorSpace::Rgb {
+            primaries,
             transfer,
             range,
-            white: None,
+            alpha,
             ..
+        } => ColorSpace::Rgb {
+            primaries: *primaries,
+            transfer: *transfer,
+            range: *range,
+            alpha: *alpha,
+            white: None,
+        }
+        .try_cicp()
+        .ok(),
+        ColorSpace::Gray {
+            transfer, range, ..
         } => transfer
             .to_cicp()
             .map(|tc| Cicp::new(1, tc, 0, *range == SignalRange::Full)),
@@ -279,7 +303,13 @@ pub fn resolve_color_emit(
     };
     let src_has_icc = profile.is_some_and(|profile| {
         IccColorSpace::from_icc(profile) == Some(model)
-            && (active_icc || repr_cicp.is_some_and(|cicp| icc_as_cicp(profile) == Some(cicp)))
+            && (active_icc
+                || match repr_cicp {
+                    Some(cicp) => {
+                        icc_as_cicp(profile).is_some_and(|icc| cicp_equivalent(icc, cicp))
+                    }
+                    None => icc_matches_active_color(profile, color),
+                })
     });
     let cicp_represents = repr_cicp.is_some();
     let has_carrier = target.cicp() && model == IccColorSpace::Rgb;
@@ -292,7 +322,13 @@ pub fn resolve_color_emit(
 
     // Whether to emit CICP.
     let emit_cicp = match policy {
-        ColorEmitPolicy::Verbatim => has_carrier && src.cicp.is_some() && src.cicp == repr_cicp,
+        ColorEmitPolicy::Verbatim => {
+            has_carrier
+                && src
+                    .cicp
+                    .zip(repr_cicp)
+                    .is_some_and(|(src, repr)| cicp_equivalent(src, repr))
+        }
         _ => match fields.cicp {
             CicpEmission::Never => false,
             CicpEmission::WhereValidCarrier => has_carrier && is_valid_carrier && cicp_represents,
@@ -372,7 +408,9 @@ pub fn resolve_color_emit(
         IccDisposition::Drop
     };
 
-    let cicp_carries_color = cicp_out.is_some() && cicp_out == repr_cicp;
+    let cicp_carries_color = cicp_out
+        .zip(repr_cicp)
+        .is_some_and(|(out, repr)| cicp_equivalent(out, repr));
     let color_is_default = repr_cicp
         .is_some_and(|c| c.full_range && c.matrix_coefficients == 0 && is_assumed_default(&c));
     if !cicp_carries_color && icc == IccDisposition::Drop && !color_is_default {
@@ -382,6 +420,36 @@ pub fn resolve_color_emit(
         cicp: cicp_out,
         icc,
     })
+}
+
+fn cicp_equivalent(a: Cicp, b: Cicp) -> bool {
+    let is_bt709_transfer = |code| matches!(code, 1 | 6 | 14 | 15);
+    a.color_primaries == b.color_primaries
+        && a.matrix_coefficients == b.matrix_coefficients
+        && a.full_range == b.full_range
+        && (a.transfer_characteristics == b.transfer_characteristics
+            || (is_bt709_transfer(a.transfer_characteristics)
+                && is_bt709_transfer(b.transfer_characteristics)))
+}
+
+fn icc_matches_active_color(profile: &[u8], color: &ColorSpace) -> bool {
+    let Some(id) = icc::IccIdentification::from_icc(profile) else {
+        return false;
+    };
+    match color {
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range: SignalRange::Full,
+            ..
+        } => id.primaries == *primaries && id.transfer == *transfer,
+        ColorSpace::Gray {
+            transfer,
+            range: SignalRange::Full,
+            ..
+        } => id.transfer == *transfer,
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -450,6 +518,145 @@ mod tests {
             panic!("test requires a real RGB profile");
         };
         profile.into_owned()
+    }
+
+    #[test]
+    fn decoded_png_pq_with_diffuse_white_emits_avif_cicp() {
+        use zenpixels::{DiffuseWhite, SampleLayout};
+        let mut source = src_cicp(Cicp::BT2100_PQ_RGB);
+        source.diffuse_white = Some(DiffuseWhite::BT2408);
+        let spec =
+            crate::helpers::descriptor_for_decoded_pixels_v2(SampleLayout::RGB16, &source, None)
+                .unwrap();
+        assert_eq!(spec.color.white(), Some(DiffuseWhite::BT2408));
+        let plan = resolve_color_emit(&source, &spec.color, &caps_avif(), ColorEmitPolicy::Compact)
+            .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::new(9, 16, 0, true)));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn reconstructed_gain_map_linear_color_emits_avif_cicp() {
+        use zenpixels::{AlphaMode, DiffuseWhite, ImageSpec, PixelBuf, SampleLayout};
+        use zenpixels_convert::{DualLayerHdrView, GainMapApplyConfig, apply_gain_map_with};
+
+        let base = PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+        let gain = PixelBuf::new(
+            1,
+            1,
+            ImageSpec::new(
+                SampleLayout::GRAY8,
+                ColorSpace::Untagged {
+                    channels: 1,
+                    alpha: AlphaMode::None,
+                },
+            ),
+        )
+        .unwrap();
+        let dual = DualLayerHdrView::new(
+            base.as_view(),
+            gain.as_view(),
+            zenpixels::GainMapMetadata::symmetric(3.0),
+            None,
+            zenpixels::Orientation::Identity,
+        )
+        .unwrap();
+        let hdr = apply_gain_map_with(
+            &dual,
+            &GainMapApplyConfig::alternate_rendition(),
+            &enough::Unstoppable,
+        )
+        .unwrap();
+        assert_eq!(hdr.spec().color.white(), Some(DiffuseWhite::BT2408));
+        let plan = resolve_color_emit(
+            &src_cicp(Cicp::SRGB),
+            &hdr.spec().color,
+            &caps_avif(),
+            ColorEmitPolicy::Compact,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::new(1, 8, 0, true)));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn anchored_gray_color_can_synthesize_gray_icc() {
+        let gray = ColorSpace::Gray {
+            transfer: Transfer::Linear,
+            range: SignalRange::Full,
+            alpha: zenpixels::AlphaMode::None,
+            white: Some(zenpixels::DiffuseWhite::BT2408),
+        };
+        let plan = resolve_color_emit(
+            &SourceColor::default(),
+            &gray,
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, None);
+        assert_eq!(
+            plan.icc,
+            IccDisposition::SynthesizeGrayFrom(Cicp::new(1, 8, 0, true))
+        );
+    }
+
+    #[test]
+    fn jpeg_keeps_matching_adobe_rgb_profile() {
+        use zenpixels_convert::icc_profiles::ADOBE_RGB;
+        let source = SourceColor::default().with_icc_profile(ADOBE_RGB);
+        let jpeg_plan = |transfer, range| {
+            resolve_color_emit(
+                &source,
+                &ColorSpace::Rgb {
+                    primaries: Primaries::AdobeRgb,
+                    transfer,
+                    range,
+                    alpha: zenpixels::AlphaMode::None,
+                    white: None,
+                },
+                &caps_jpeg(),
+                ColorEmitPolicy::Balanced,
+            )
+        };
+        let plan = jpeg_plan(Transfer::AdobeRgb, SignalRange::Full).unwrap();
+        assert_eq!(plan.icc, IccDisposition::KeepSource);
+        assert_eq!(plan.cicp, None);
+        assert_eq!(
+            jpeg_plan(Transfer::Linear, SignalRange::Full),
+            Err(ColorEmitError::Unrepresentable)
+        );
+        assert_eq!(
+            jpeg_plan(Transfer::AdobeRgb, SignalRange::Narrow),
+            Err(ColorEmitError::Unrepresentable)
+        );
+    }
+
+    #[test]
+    fn verbatim_preserves_bt709_transfer_aliases() {
+        let active = Cicp::new(9, 1, 0, true)
+            .to_color_space(zenpixels::AlphaMode::None)
+            .unwrap();
+        let plan = |raw| {
+            resolve_color_emit(
+                &src_cicp(raw),
+                &active,
+                &caps_avif(),
+                ColorEmitPolicy::Verbatim,
+            )
+        };
+        for tc in [1, 6, 14, 15] {
+            let raw = Cicp::new(9, tc, 0, true);
+            assert_eq!(plan(raw).unwrap().cicp, Some(raw));
+        }
+        for raw in [
+            Cicp::new(1, 14, 0, true),
+            Cicp::new(9, 14, 9, true),
+            Cicp::new(9, 14, 0, false),
+            Cicp::new(9, 13, 0, true),
+        ] {
+            assert_eq!(plan(raw), Err(ColorEmitError::Unrepresentable));
+        }
     }
 
     #[test]

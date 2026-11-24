@@ -284,32 +284,17 @@ pub struct SourceColor {
     pub content_light_level: Option<ContentLightLevel>,
     /// Mastering Display Color Volume (SMPTE ST 2086) for HDR content.
     pub mastering_display: Option<MasteringDisplay>,
-    /// Absolute-luminance anchor — the nits that a relative-linear sample
-    /// value of `1.0` represents (gain-map reconstruction yields 203, the
-    /// BT.2408 diffuse white).
+    /// Luminance in cd/m² represented by a relative-linear sample of `1.0`.
     ///
-    /// # Codec contract
+    /// Use the diffuse-white anchor signalled by the format when available.
+    /// If the codec adopts the BT.2408 reference white, set
+    /// [`DiffuseWhite::BT2408`] (203 cd/m²). Use `None` when the anchor is
+    /// unspecified. Gain-map reconstruction uses the BT.2408 anchor.
     ///
-    /// Codecs SHOULD populate this with `Some(value)` whenever they can
-    /// deliver a useful absolute-luminance anchor — including format-defined
-    /// implicit defaults that consumer code would otherwise have to
-    /// reconstruct independently. Consumer omission is worse than codec
-    /// double-signalling, so prefer to set the default at the source layer:
-    ///
-    /// - **Explicitly signalled** (JPEG XL `intensity_target`, OpenEXR
-    ///   `whiteLuminance`, HEIF `ndwt`, JXL gain-map `alternate_hdr_headroom`
-    ///   reconstruction): pass it through.
-    /// - **Spec-defined implicit default** (JPEG XL `intensity_target = 255`
-    ///   when the field is omitted, PQ container peak 10 000, HLG nominal
-    ///   peak per BT.2100 §6 + ambient): emit the format default so callers
-    ///   don't have to know per-codec rules.
-    /// - **Cross-format conventions** when the codec has a strong opinion:
-    ///   PNG with `cICP` transfer = PQ → emit `DiffuseWhite::BT2408` (203)
-    ///   as the cross-vendor relative-linear convention.
-    ///
-    /// `None` is reserved for genuinely-ambiguous cases (e.g. an unknown
-    /// transfer function paired with no metadata). When unsignalled, the
-    /// converter falls back to `DiffuseWhite::BT2408`.
+    /// PQ's 10,000 cd/m² endpoint and HLG's nominal display peak describe
+    /// transfer or display behavior. Record signalled content and mastering
+    /// peaks in [`zenpixels::HdrMetadata`] using
+    /// [`Self::content_light_level`] and [`Self::mastering_display`] as applicable.
     pub diffuse_white: Option<DiffuseWhite>,
 }
 
@@ -384,23 +369,32 @@ impl SourceColor {
         false
     }
 
-    /// Derive the transfer function from CICP metadata.
+    /// Read the transfer function from the raw source CICP tuple.
+    ///
+    /// This inspects [`Self::cicp`] even when ICC is authoritative. An absent
+    /// or unrecognized CICP transfer yields [`Transfer::Unknown`]. For the
+    /// selected source carrier, use [`Self::authoritative_origin`]. For
+    /// decoded samples, consult their [`zenpixels::ImageSpec`].
     pub fn transfer_function(&self) -> Transfer {
         self.cicp
             .and_then(|c| Transfer::from_cicp(c.transfer_characteristics))
             .unwrap_or(Transfer::Unknown)
     }
 
-    /// Derive the color primaries from CICP metadata.
+    /// Read the primaries from the raw source CICP tuple.
+    ///
+    /// This inspects [`Self::cicp`] even when ICC is authoritative. An absent
+    /// tuple yields [`Primaries::Bt709`] and an unrecognized code yields
+    /// [`Primaries::Unknown`]. For the selected source carrier, use
+    /// [`Self::authoritative_origin`].
     pub fn color_primaries(&self) -> Primaries {
         self.cicp
             .map(|c| Primaries::from_cicp(c.color_primaries).unwrap_or(Primaries::Unknown))
             .unwrap_or(Primaries::Bt709)
     }
 
-    /// The color source that decides this image's color: the authoritative one when
-    /// it is present, otherwise the other. Every reader chooses through this, so
-    /// they cannot disagree.
+    /// Select the source carrier for color interpretation, falling back to the
+    /// other carrier when the authoritative one is absent.
     pub(crate) fn authoritative(&self) -> Option<AuthoritativeColor<'_>> {
         self.color_authority.select(
             self.icc_profile.as_ref().map(AuthoritativeColor::Icc),
@@ -818,20 +812,15 @@ impl ImageInfo {
         }
     }
 
-    /// Derive the transfer function from CICP metadata.
+    /// Read the transfer function from the raw source CICP tuple.
     ///
-    /// Delegates to [`SourceColor::transfer_function()`].
-    ///
-    /// Use this to resolve a [`zenpixels::ImageSpec`]'s unknown transfer function:
-    ///
-    /// ```ignore
-    /// let desc = pixels.descriptor().with_transfer(info.transfer_function());
-    /// ```
+    /// Delegates to [`SourceColor::transfer_function()`]. Consult the decoded
+    /// pixels' [`zenpixels::ImageSpec`] for their current transfer function.
     pub fn transfer_function(&self) -> Transfer {
         self.source_color.transfer_function()
     }
 
-    /// Derive the color primaries from CICP metadata.
+    /// Read the primaries from the raw source CICP tuple.
     ///
     /// Delegates to [`SourceColor::color_primaries()`].
     pub fn color_primaries(&self) -> Primaries {
@@ -1236,6 +1225,20 @@ mod tests {
             assert_eq!(sc.has_hdr_transfer(), !cicp_is_hdr);
             assert!(sc.any_tag_has_hdr_transfer());
         }
+    }
+
+    #[test]
+    fn source_cicp_accessors_report_raw_codes_with_authoritative_icc() {
+        let source = SourceColor::default()
+            .with_icc_profile(build_icc_with_cicp(1, 13, 0, true))
+            .with_color_authority(ColorAuthority::Icc);
+        assert_eq!(source.transfer_function(), Transfer::Unknown);
+        assert_eq!(source.color_primaries(), Primaries::Bt709);
+
+        let source = source.with_cicp(Cicp::BT2100_PQ);
+        assert_eq!(source.transfer_function(), Transfer::Pq);
+        assert_eq!(source.color_primaries(), Primaries::Bt2020);
+        assert!(!source.has_hdr_transfer());
     }
 
     #[test]

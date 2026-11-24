@@ -73,7 +73,7 @@ spin = { version = "0.12.3", default-features = false, features = ["once"] }
 libm = { version = "0.2.16", default-features = false }
 
 [dev-dependencies]
-zenpixels-convert = { version = ">=0.5.0, <0.6.0", default-features = false, features = ["icc-db"] }
+zenpixels-convert = { version = ">=0.5.0, <0.6.0", default-features = false, features = ["gainmap", "icc-db"] }
 tokio = { version = "1", features = ["rt", "io-util", "macros"] }
 # Differential-test oracle for the EXIF parser (tests/exif_differential.rs).
 # Pure-Rust, BSD-2-Clause; only built for tests, never shipped.
@@ -99,5 +99,5 @@ harness = false
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
 garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e0dba0052a839ecfe17e4c911a3761e793605adf" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e0dba0052a839ecfe17e4c911a3761e793605adf" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
