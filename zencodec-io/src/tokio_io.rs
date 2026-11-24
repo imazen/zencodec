@@ -816,6 +816,10 @@ where
             if outcome.is_ok() {
                 check_shared_pulse(pulse.as_ref())?;
             }
+            if let Ok(BatchEnd::Done(ref info)) = outcome {
+                sink.validate_completion(info)
+                    .map_err(|error| AsyncDriveError::Step(StepError::Sink(error)))?;
+            }
             let pending = sink.pending_output().len();
             if pending > 0 && matches!(outcome, Ok(BatchEnd::Need | BatchEnd::Done(_))) {
                 out.write_all(sink.pending_output())
@@ -1242,7 +1246,7 @@ pub enum StripEvent {
 /// to block.
 pub struct ChannelRowSink {
     tx: mpsc::Sender<StripEvent>,
-    current: Option<(BatchMeta, PixelBuf)>,
+    current: Option<(BatchMeta, PixelBuf, zencodec::decode::RowMetadata)>,
     provisional: bool,
     pulse: Option<SharedPulse>,
 }
@@ -1303,8 +1307,11 @@ impl ChannelRowSink {
     }
 
     fn ship(&mut self) -> Result<(), SinkError> {
-        if let Some((meta, pixels)) = self.current.take() {
-            self.send(StripEvent::Strip { meta, pixels })?;
+        if let Some((meta, pixels, metadata)) = self.current.take() {
+            self.send(StripEvent::Strip {
+                meta,
+                pixels: metadata.attach_owned(pixels),
+            })?;
         }
         Ok(())
     }
@@ -1315,12 +1322,15 @@ impl ChannelRowSink {
         height: u32,
         width: u32,
         descriptor: ImageSpec,
+        metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.ship()?;
-        let (_, pixels) = self
-            .current
-            .insert((meta, PixelBuf::new(width, height, descriptor)?));
-        Ok(pixels.as_view_mut())
+        let (_, pixels, _) = self.current.insert((
+            meta,
+            PixelBuf::new(width, height, descriptor)?,
+            metadata.clone(),
+        ));
+        Ok(pixels.as_view_mut().with_hdr(metadata.hdr))
     }
 }
 
@@ -1340,7 +1350,13 @@ impl DecodeRowSink for ChannelRowSink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.strip(BatchMeta::final_rows(y), height, width, descriptor)
+        self.strip(
+            BatchMeta::final_rows(y),
+            height,
+            width,
+            descriptor,
+            &Default::default(),
+        )
     }
 
     fn accepts_provisional(&self) -> bool {
@@ -1354,7 +1370,18 @@ impl DecodeRowSink for ChannelRowSink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.strip(meta, height, width, descriptor)
+        self.strip(meta, height, width, descriptor, &Default::default())
+    }
+
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &zencodec::decode::RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        self.strip(meta, height, width, descriptor, metadata)
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {

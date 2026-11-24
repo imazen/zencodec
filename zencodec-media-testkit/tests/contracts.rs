@@ -347,7 +347,7 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
     );
     assert_eq!(frames[0].timing().packet_ordinal, None);
     assert_eq!(
-        zencodec::sample::CodePlane::new(
+        zencodec::image::CodePlane::new(
             frames[2].map().unwrap().plane(0).unwrap(),
             frames[2]
                 .interpretation()
@@ -388,7 +388,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     };
     drop(dec);
     assert_eq!(
-        zencodec::sample::CodePlane::new(
+        zencodec::image::CodePlane::new(
             plane,
             first
                 .interpretation()
@@ -400,7 +400,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
         Some(9)
     );
     assert_eq!(
-        zencodec::sample::CodePlane::new(
+        zencodec::image::CodePlane::new(
             second.map().unwrap().plane(0).unwrap(),
             second
                 .interpretation()

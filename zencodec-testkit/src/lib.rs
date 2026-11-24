@@ -103,16 +103,20 @@ use zencodec::{
     MasteringDisplay, Metadata, MetadataFields, MetadataPolicy, Orientation, SourceColor,
     UnsupportedOperation,
 };
-use zenpixels::{ColorSpace, ImageSpec, PixelBuf, PixelView, PixelViewMut, SampleLayout, Transfer};
+use zenpixels::{
+    AlignedSamples, ByteStorage, ColorSpace, ImageSpec, PixelBuf, PixelStorage, PixelView,
+    PixelViewMut, SampleLayout, Transfer,
+};
 
 mod adversarial;
 mod contracts;
 mod metadata_retention;
 pub use adversarial::{
-    ExpectedError, PrefixCase, PrefixOutcome, TimingCase, check_animation_cases,
-    check_decode_prefix_cases,
+    DisplayFrameCase, ExpectedError, PrefixCase, PrefixOutcome, TimingCase,
+    check_animation_begin_refusal, check_animation_cases, check_animation_delivery,
+    check_decode_preferences, check_decode_prefix_cases,
 };
-pub use metadata_retention::check_metadata_retained;
+pub use metadata_retention::{check_metadata_inspector, check_metadata_retained};
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
 /// tests, so it is compiled only with them.
@@ -173,7 +177,7 @@ pub struct TestImage {
     width: u32,
     height: u32,
     desc: ImageSpec,
-    data: Vec<u8>,
+    data: PixelStorage,
 }
 
 impl TestImage {
@@ -211,23 +215,19 @@ impl TestImage {
             6,
             "rgb16_gradient needs a U16 RGB descriptor"
         );
-        let mut data = vec![0u8; width as usize * height as usize * 6];
+        let mut data = Vec::with_capacity(width as usize * height as usize * 3);
         for y in 0..height as usize {
             for x in 0..width as usize {
-                let p = (y * width as usize + x) * 6;
-                let r = (x * 1031 + y * 517) as u16;
-                let g = (x * 257 + y * 3079) as u16;
-                let b = ((x ^ y) * 4111 + 12345) as u16;
-                data[p..p + 2].copy_from_slice(&r.to_ne_bytes());
-                data[p + 2..p + 4].copy_from_slice(&g.to_ne_bytes());
-                data[p + 4..p + 6].copy_from_slice(&b.to_ne_bytes());
+                data.push((x * 1031 + y * 517) as u16);
+                data.push((x * 257 + y * 3079) as u16);
+                data.push(((x ^ y) * 4111 + 12345) as u16);
             }
         }
         Self {
             width,
             height,
             desc,
-            data,
+            data: PixelStorage::U16(data),
         }
     }
 
@@ -250,7 +250,7 @@ impl TestImage {
             width,
             height,
             desc,
-            data,
+            data: PixelStorage::U8(data),
         }
     }
 
@@ -261,7 +261,7 @@ impl TestImage {
     /// Borrow the whole image as a [`PixelView`].
     pub fn as_slice(&self) -> PixelView<'_> {
         PixelView::new(
-            &self.data,
+            self.data.as_bytes(),
             self.width,
             self.height,
             self.row_bytes(),
@@ -272,7 +272,7 @@ impl TestImage {
 
     fn strip(&self, y: u32, h: u32) -> PixelView<'_> {
         let rb = self.row_bytes();
-        let bytes = &self.data[y as usize * rb..(y as usize + h as usize) * rb];
+        let bytes = &self.data.as_bytes()[y as usize * rb..(y as usize + h as usize) * rb];
         PixelView::new(bytes, self.width, h, rb, self.desc.clone())
             .expect("strip dimensions are valid")
     }
@@ -359,22 +359,42 @@ fn grab_ref(ps: &PixelView<'_>) -> Pixels {
 // Collecting decode sink
 // ===========================================================================
 
-/// A [`DecodeRowSink`] that gathers all strips into one contiguous buffer.
+/// A conformance sink with aligned, independently checked padded rows.
 #[derive(Default)]
 struct CollectSink {
     width: u32,
     rows: u32,
     desc: Option<ImageSpec>,
-    buf: Vec<u8>,
+    stride: usize,
+    next: u32,
+    buf: Option<AlignedSamples>,
+    finished: bool,
+    metadata: Option<zencodec::decode::RowMetadata>,
 }
 
 impl DecodeRowSink for CollectSink {
     fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+        if self.desc.is_some() {
+            return Err("decoder began more than once".into());
+        }
+        descriptor.validate()?;
+        let active = (width as usize)
+            .checked_mul(descriptor.layout.bytes_per_pixel())
+            .ok_or("conformance row width overflows")?;
+        let stride = active
+            .checked_add(64)
+            .ok_or("conformance stride overflows")?
+            & !63;
+        let len = stride
+            .checked_mul(height as usize)
+            .ok_or("conformance raster overflows")?;
+        let mut buf = AlignedSamples::try_zeroed_bytes(len)?;
+        buf.as_bytes_mut().fill(0xA7);
         self.width = width;
         self.rows = height;
-        self.desc = Some(descriptor.clone());
-        self.buf =
-            vec![0u8; width as usize * height as usize * descriptor.layout.bytes_per_pixel()];
+        self.desc = Some(descriptor);
+        self.stride = stride;
+        self.buf = Some(buf);
         Ok(())
     }
 
@@ -385,32 +405,99 @@ impl DecodeRowSink for CollectSink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        let stride = width as usize * descriptor.layout.bytes_per_pixel();
-        let end = (y as usize + height as usize) * stride;
-        if self.buf.len() < end {
-            self.buf.resize(end, 0);
+        if self.finished
+            || self.desc.as_ref() != Some(&descriptor)
+            || width != self.width
+            || y != self.next
+            || height == 0
+            || y.checked_add(height).is_none_or(|end| end > self.rows)
+        {
+            return Err(
+                "decoder strip disagrees with declared lifecycle, coordinates or spec".into(),
+            );
         }
-        self.width = width;
-        self.desc = Some(descriptor.clone());
-        self.rows = self.rows.max(y + height);
-        let off = y as usize * stride;
-        // Dimensions and span are exact by construction, so this never fails.
-        Ok(
-            PixelViewMut::new(&mut self.buf[off..end], width, height, stride, descriptor)
-                .expect("collect sink buffer dimensions are valid"),
-        )
+        let buf = self.buf.as_mut().ok_or("rows requested before begin")?;
+        self.next += height;
+        let off = y as usize * self.stride;
+        let end = (y + height) as usize * self.stride;
+        Ok(PixelViewMut::new(
+            &mut buf.as_bytes_mut()[off..end],
+            width,
+            height,
+            self.stride,
+            descriptor,
+        )?)
+    }
+
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: zencodec::decode::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &zencodec::decode::RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        if !meta.is_final {
+            return Err("unsolicited provisional rows".into());
+        }
+        if let Some(prior) = &mut self.metadata {
+            prior.merge(metadata)?;
+        } else {
+            self.metadata = Some(metadata.clone());
+        }
+        Ok(self
+            .provide_next_buffer(meta.y, height, width, descriptor)?
+            .with_hdr(metadata.hdr))
+    }
+
+    fn finish(&mut self) -> Result<(), SinkError> {
+        if self.finished || self.desc.is_none() || self.next != self.rows {
+            return Err("decoder finished early, twice or before begin".into());
+        }
+        self.finished = true;
+        Ok(())
     }
 }
 
 impl CollectSink {
+    fn pixels(&self) -> Result<Pixels, String> {
+        if !self.finished {
+            return Err("decoder did not finish the sink".into());
+        }
+        let desc = self.desc.as_ref().ok_or("sink received no buffers")?;
+        let buf = self.buf.as_ref().ok_or("sink has no storage")?;
+        let active = self.width as usize * desc.layout.bytes_per_pixel();
+        if buf
+            .as_bytes()
+            .chunks_exact(self.stride)
+            .any(|row| row[active..].iter().any(|b| *b != 0xA7))
+        {
+            return Err("decoder overwrote row padding".into());
+        }
+        let view = PixelView::new(
+            buf.as_bytes(),
+            self.width,
+            self.rows,
+            self.stride,
+            desc.clone(),
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(grab(view))
+    }
+
+    fn verify_completion(&self, info: &zencodec::decode::OutputInfo) -> Result<(), String> {
+        if !self.finished
+            || info.width != self.width
+            || info.height != self.rows
+            || self.desc.as_ref() != Some(&info.native_format)
+        {
+            return Err("decode completion disagrees with actual sink raster".into());
+        }
+        Ok(())
+    }
+
     fn into_pixels(self) -> Result<Pixels, String> {
-        let desc = self.desc.ok_or("sink received no buffers")?;
-        Ok(Pixels {
-            width: self.width,
-            rows: self.rows,
-            desc,
-            bytes: self.buf,
-        })
+        self.pixels()
     }
 }
 
@@ -481,16 +568,25 @@ fn dec_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, Stri
         .streaming_decoder(Cow::Borrowed(bytes), &[])
         .map_err(|e| e.to_string())?;
     let mut width = 0;
-    let mut rows = 0;
+    let mut rows = 0u32;
     let mut desc = None;
     let mut bytes_out = Vec::new();
-    while let Some((_, strip)) = sd.next_batch().map_err(|e| e.to_string())? {
+    while let Some((y, strip)) = sd.next_batch().map_err(|e| e.to_string())? {
         let p = grab(strip);
-        if desc.is_none() {
+        if y != rows || p.rows == 0 {
+            return Err("pull decoder skipped, reordered or repeated rows".into());
+        }
+        if let Some(desc) = &desc {
+            if p.width != width || &p.desc != desc {
+                return Err("pull decoder changed its width or spec".into());
+            }
+        } else {
             width = p.width;
             desc = Some(p.desc);
         }
-        rows += p.rows;
+        rows = rows
+            .checked_add(p.rows)
+            .ok_or("pull decoder row coordinate overflow")?;
         bytes_out.extend_from_slice(&p.bytes);
     }
     Ok(Pixels {
@@ -503,10 +599,12 @@ fn dec_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, Stri
 
 fn dec_push<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, String> {
     let mut sink = CollectSink::default();
-    cfg.clone()
+    let completion = cfg
+        .clone()
         .job()
         .push_decoder(Cow::Borrowed(bytes), &mut sink, &[])
         .map_err(|e| e.to_string())?;
+    sink.verify_completion(&completion)?;
     sink.into_pixels()
 }
 
@@ -1019,7 +1117,17 @@ where
     Ok(a.finish(None).map_err(|e| e.to_string())?.into_vec())
 }
 
-fn decode_anim_borrowed<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+#[derive(PartialEq)]
+struct AnimationObservation {
+    timing: zencodec::decode::FrameCompletion,
+    pixels: Pixels,
+    metadata: zencodec::decode::RowMetadata,
+}
+
+fn decode_anim_borrowed<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1028,12 +1136,23 @@ fn decode_anim_borrowed<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<P
     let mut out = Vec::new();
     // The borrowed frame is invalidated by the next call, so copy before looping.
     while let Some(frame) = d.render_next_frame(None).map_err(|e| e.to_string())? {
-        out.push(grab_ref(frame.pixels()));
+        out.push(AnimationObservation {
+            timing: zencodec::decode::FrameCompletion {
+                duration: frame.duration(),
+                frame_index: frame.frame_index(),
+                pts: frame.pts(),
+            },
+            pixels: grab_ref(frame.pixels()),
+            metadata: zencodec::decode::RowMetadata::from_view(frame.pixels()),
+        });
     }
     Ok(out)
 }
 
-fn decode_anim_owned<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+fn decode_anim_owned<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1041,12 +1160,24 @@ fn decode_anim_owned<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixe
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     while let Some(frame) = d.render_next_frame_owned(None).map_err(|e| e.to_string())? {
-        out.push(grab(frame.pixels()));
+        let pixels = frame.pixels();
+        out.push(AnimationObservation {
+            timing: zencodec::decode::FrameCompletion {
+                duration: frame.duration(),
+                frame_index: frame.frame_index(),
+                pts: frame.pts(),
+            },
+            pixels: grab_ref(&pixels),
+            metadata: zencodec::decode::RowMetadata::from_view(&pixels),
+        });
     }
     Ok(out)
 }
 
-fn decode_anim_sink<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+fn decode_anim_sink<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1059,8 +1190,18 @@ fn decode_anim_sink<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixel
             .render_next_frame_to_sink(None, &mut sink)
             .map_err(|e| e.to_string())?
         {
-            Some(_info) => out.push(sink.into_pixels()?),
-            None => break,
+            Some(info) => {
+                sink.verify_completion(&info)?;
+                out.push(AnimationObservation {
+                    timing: info
+                        .frame
+                        .ok_or("animation sink completion omitted timing")?,
+                    pixels: sink.pixels()?,
+                    metadata: sink.metadata.unwrap_or_default(),
+                });
+            }
+            None if sink.desc.is_none() => break,
+            None => return Err("end of animation had sink effects".into()),
         }
     }
     Ok(out)
@@ -1099,62 +1240,38 @@ where
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
 
-    // Keep timing in the published one-call suite too, without adding the
-    // static bounds needed by erased-dispatch conformance checks.
-    let mut borrowed = dec
-        .clone()
-        .job()
-        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
-        .map_err(|e| fail(CHECK, e.to_string()))?;
-    let mut owned = dec
-        .clone()
-        .job()
-        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
-        .map_err(|e| fail(CHECK, e.to_string()))?;
-    for index in 0..frames.len() {
-        let expected = zencodec::animation::FrameDuration::from_millis(40 + index as u32 * 10);
-        let a = borrowed
-            .render_next_frame(None)
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .ok_or_else(|| fail(CHECK, "missing borrowed frame"))?;
-        let b = owned
-            .render_next_frame_owned(None)
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .ok_or_else(|| fail(CHECK, "missing owned frame"))?;
-        if a.duration() != expected || b.duration() != expected {
-            return Err(fail(
-                CHECK,
-                format!(
-                    "frame {index} lost timing: {:?}/{:?}, expected {expected:?}",
-                    a.duration(),
-                    b.duration()
-                ),
-            ));
-        }
-    }
-
-    let paths = [
-        ("render_next_frame", decode_anim_borrowed(&dec, &bytes)),
-        ("render_next_frame_owned", decode_anim_owned(&dec, &bytes)),
-        ("render_next_frame_to_sink", decode_anim_sink(&dec, &bytes)),
-    ];
-    for (name, res) in paths {
+    let baseline = decode_anim_borrowed(&dec, &bytes).map_err(|e| fail(CHECK, e))?;
+    for (name, res) in [
+        ("borrowed", decode_anim_borrowed(&dec, &bytes)),
+        ("owned", decode_anim_owned(&dec, &bytes)),
+        ("sink", decode_anim_sink(&dec, &bytes)),
+    ] {
         let got = res.map_err(|e| fail(CHECK, format!("{name}: {e}")))?;
         if got.len() != want.len() {
             return Err(fail(
                 CHECK,
                 format!(
-                    "{name} produced {} frames, expected {}",
+                    "{name} delivered {} frames, expected {}",
                     got.len(),
                     want.len()
                 ),
             ));
         }
-        for (i, (g, w)) in got.iter().zip(&want).enumerate() {
-            if g != w {
+        if got != baseline {
+            return Err(fail(
+                CHECK,
+                format!("{name} changed pixels, PTS, duration, or evidence"),
+            ));
+        }
+        for (i, (frame, pixels)) in got.iter().zip(&want).enumerate() {
+            let expected = zencodec::animation::FrameDuration::from_millis(40 + i as u32 * 10);
+            if frame.timing.frame_index != i as u32
+                || frame.timing.duration != expected
+                || frame.pixels != *pixels
+            {
                 return Err(fail(
                     CHECK,
-                    format!("{name} frame {i} pixels differ from the input"),
+                    format!("{name} frame {i} differs from its original content or timing"),
                 ));
             }
         }
@@ -1504,11 +1621,14 @@ where
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
 {
     const CHECK: &str = "metadata_no_leak";
+    let (cll, md) = hdr_envelope();
     let rich = Metadata::none()
         .with_exif(fixtures::rich_exif_le())
         .with_xmp(fixtures::sample_xmp())
         .with_icc(fixtures::sample_icc())
-        .with_cicp(Cicp::SRGB);
+        .with_cicp(Cicp::SRGB)
+        .with_content_light_level(cll)
+        .with_mastering_display(md);
 
     let policies = [
         ("Web", MetadataPolicy::Web),
@@ -1531,8 +1651,19 @@ where
     ];
 
     for (name, policy) in policies {
-        #[allow(deprecated)] // The published codec wrapper still uses this compatibility path.
-        let expected = rich.clone().filtered(&policy);
+        // These are the fixture's authored expectations. Deriving them through the
+        // production filter would let the same privacy error occur on both sides.
+        let discard_all = name == "Custom(DISCARD_ALL)";
+        let preserve = name == "PreserveExact";
+        let expect_camera_time = name == "Web + camera/timestamps";
+        let mut expected = if discard_all {
+            Metadata::none()
+        } else {
+            rich.clone()
+        };
+        if !preserve {
+            expected.xmp = None;
+        }
         let bytes = enc_oneshot(&enc, img, rich.clone(), policy)
             .map_err(|e| fail(CHECK, format!("[{name}] encode: {e}")))?;
         let (_, decoded) =
@@ -1545,6 +1676,31 @@ where
         let (_, intrinsic) = dec_oneshot(&dec, &clean)
             .map_err(|e| fail(CHECK, format!("[{name}] clean decode: {e}")))?;
         assert_no_leak(CHECK, name, &decoded, &expected, &intrinsic)?;
+        if !preserve {
+            if bytes.windows(4).any(|bytes| bytes == b"PII\0") {
+                return Err(fail(
+                    CHECK,
+                    format!("[{name}] raw identifier canary survived"),
+                ));
+            }
+            if let Some(exif) = decoded.exif.as_deref().and_then(Exif::parse) {
+                let leaks = exif.has_gps()
+                    || exif.has_thumbnail()
+                    || exif.has_device_ids()
+                    || exif.has_camera_owner()
+                    || exif.has_image_unique_id()
+                    || exif.has_time_offsets()
+                    || (!expect_camera_time && (exif.has_camera() || exif.has_datetimes()))
+                    || (name == "ColorAndRotation"
+                        && (exif.artist().is_some() || exif.copyright().is_some()));
+                if leaks {
+                    return Err(fail(
+                        CHECK,
+                        format!("[{name}] forbidden EXIF field survived"),
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -1854,7 +2010,13 @@ where
         let img = if sixteen {
             TestImage::rgb16_gradient(20, 14, desc16.clone())
         } else {
-            TestImage::rgb8_gradient(20, 14)
+            TestImage::gradient(
+                20,
+                14,
+                ImageSpec::new(SampleLayout::RGB8, desc16.color.clone()),
+                3,
+                0,
+            )
         };
         let meta = Metadata::none()
             .with_cicp(cicp)
@@ -1889,10 +2051,13 @@ where
                 ),
             ));
         }
-        if sixteen && desc != desc16 {
+        if desc != want_px.desc {
             return Err(fail(
                 CHECK,
-                format!("[{name}] 16-bit decode descriptor is {desc:?}, expected {desc16:?}"),
+                format!(
+                    "[{name}] decode spec is {desc:?}, expected {:?}",
+                    want_px.desc
+                ),
             ));
         }
 
@@ -2215,7 +2380,14 @@ fn compare_gain_map(
             got.info.alternate_cicp, want_info.alternate_cicp
         ));
     }
-    if got.pixels.desc.layout.bytes_per_pixel() != want_px.desc.layout.bytes_per_pixel() {
+    if got.pixels.desc != want_px.desc
+        || got.info.bit_depth != want_info.bit_depth
+        || got.info.alternate_icc != want_info.alternate_icc
+        || want_info
+            .params
+            .iso_channel_count()
+            .is_some_and(|count| got.info.params.iso_channel_count() != Some(count))
+    {
         return Err(format!(
             "{what}: gain map came back as {:?}, expected an 8-bit {}-channel layout",
             got.pixels.desc, want_info.channels
@@ -2632,9 +2804,12 @@ where
 /// plus sRGB CICP. `SourceColor`'s default authority is ICC, so a faithful
 /// decoder's drop-dupe context carries the ICC alone.
 fn color_context_metadata() -> Metadata {
+    let (cll, md) = hdr_envelope();
     Metadata::none()
         .with_icc(fixtures::sample_icc())
         .with_cicp(Cicp::SRGB)
+        .with_content_light_level(cll)
+        .with_mastering_display(md)
 }
 
 fn dec_output<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<DecodeOutput, String> {
@@ -2714,9 +2889,26 @@ where
     let bytes = enc_oneshot(&enc, img, meta.clone(), MetadataPolicy::PreserveExact)
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    use zencodec::decode::RowMetadata;
     let oneshot = out.buffer().spec();
+    let oneshot_metadata = RowMetadata::from_view(&out.pixels());
     validate_buffer_context(oneshot).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
 
+    let mut sink = CollectSink::default();
+    let completion = dec
+        .clone()
+        .job()
+        .push_decoder(Cow::Borrowed(&bytes), &mut sink, &[])
+        .map_err(|e| fail(CHECK, format!("push decode: {e}")))?;
+    sink.verify_completion(&completion)
+        .map_err(|e| fail(CHECK, e))?;
+    if completion.native_format != *oneshot || sink.metadata.unwrap_or_default() != oneshot_metadata
+    {
+        return Err(fail(
+            CHECK,
+            "push decode changed active spec, HDR, or source evidence",
+        ));
+    }
     if D::capabilities().streaming() {
         let mut sd = dec
             .clone()
@@ -2729,10 +2921,12 @@ where
         {
             validate_buffer_context(strip.spec())
                 .map_err(|e| fail(CHECK, format!("streaming strip at y={y}: {e}")))?;
-            if strip.spec().color != oneshot.color {
+            if strip.spec() != oneshot || RowMetadata::from_view(&strip) != oneshot_metadata {
                 return Err(fail(
                     CHECK,
-                    format!("streaming strip at y={y} changed current color"),
+                    format!(
+                        "streaming strip at y={y} changed active spec, HDR, or source evidence"
+                    ),
                 ));
             }
         }
@@ -2748,6 +2942,7 @@ where
         let primary = dec_output(&dec, &anim)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
         let primary_spec = primary.buffer().spec();
+        let primary_metadata = RowMetadata::from_view(&primary.pixels());
         validate_buffer_context(primary_spec)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
 
@@ -2764,10 +2959,12 @@ where
             let px = frame.pixels();
             validate_buffer_context(px.spec())
                 .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
-            if px.spec().color != primary_spec.color {
+            if px.spec() != primary_spec || RowMetadata::from_view(px) != primary_metadata {
                 return Err(fail(
                     CHECK,
-                    format!("render_next_frame_owned frame {i} changed current color"),
+                    format!(
+                        "render_next_frame_owned frame {i} changed active spec, HDR, or source evidence"
+                    ),
                 ));
             }
         }
@@ -2785,10 +2982,12 @@ where
             let px = frame.pixels();
             validate_buffer_context(px.spec())
                 .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
-            if px.spec().color != primary_spec.color {
+            if px.spec() != primary_spec || RowMetadata::from_view(&px) != primary_metadata {
                 return Err(fail(
                     CHECK,
-                    format!("render_next_frame_owned frame {i} changed current color"),
+                    format!(
+                        "render_next_frame_owned frame {i} changed active spec, HDR, or source evidence"
+                    ),
                 ));
             }
         }
@@ -2970,6 +3169,25 @@ pub fn check_source_color_authority(format: ImageFormat, sc: &SourceColor) -> Co
     ))
 }
 
+/// Require exact source carrier presence, values and authority from an independent fixture.
+pub fn check_source_color_fixture(
+    actual: &SourceColor,
+    expected_cicp: Option<Cicp>,
+    expected_icc: Option<&[u8]>,
+    authority: ColorAuthority,
+) -> Conformance {
+    if actual.cicp != expected_cicp
+        || actual.icc_profile.as_deref() != expected_icc
+        || actual.color_authority != authority
+    {
+        return Err(fail(
+            "source color fixture",
+            "source carrier presence, payload or authority differs from the fixture",
+        ));
+    }
+    Ok(())
+}
+
 /// Decoded colour authority follows the format spec on every metadata mix.
 ///
 /// Encodes `img` with an ICC only, a CICP only, both, and neither (each
@@ -3007,6 +3225,19 @@ where
     }
     let mut v: Vec<String> = Vec::new();
     for (name, meta) in mixes {
+        let supplied = meta.clone();
+        let verify = |source: &SourceColor| {
+            if D::capabilities().cicp() && supplied.cicp.is_some() && source.cicp != supplied.cicp {
+                return Err(fail(CHECK, "fixture CICP was lost or changed"));
+            }
+            if D::capabilities().icc()
+                && supplied.icc_profile.is_some()
+                && source.icc_profile != supplied.icc_profile
+            {
+                return Err(fail(CHECK, "fixture ICC was lost or changed"));
+            }
+            check_source_color_authority(format, source)
+        };
         let bytes = match enc_oneshot(&enc, img, meta, MetadataPolicy::PreserveExact) {
             Ok(b) => b,
             Err(e) => {
@@ -3017,7 +3248,7 @@ where
         match dec_output(&dec, &bytes) {
             Err(e) => v.push(format!("{name}: decode failed: {e}")),
             Ok(out) => {
-                if let Err(f) = check_source_color_authority(format, &out.info().source_color) {
+                if let Err(f) = verify(&out.info().source_color) {
                     v.push(format!("{name}, decode: {}", f.detail));
                 }
             }
@@ -3025,7 +3256,7 @@ where
         match dec.clone().job().probe(&bytes) {
             Err(e) => v.push(format!("{name}: probe failed: {e}")),
             Ok(info) => {
-                if let Err(f) = check_source_color_authority(format, &info.source_color) {
+                if let Err(f) = verify(&info.source_color) {
                     v.push(format!("{name}, probe: {}", f.detail));
                 }
             }
@@ -3108,7 +3339,7 @@ where
             let s = (next + r) as usize * rb;
             let dst = buf.row_mut(r);
             let n = dst.len().min(rb);
-            dst[..n].copy_from_slice(&img.data[s..s + n]);
+            dst[..n].copy_from_slice(&img.data.as_bytes()[s..s + n]);
         }
         next += want;
         want as usize
@@ -3363,11 +3594,14 @@ fn check_metadata_channel_honesty(
         if !dec_reads {
             continue; // not observable through this decoder
         }
+        let expected = metadata.clone();
         match roundtrip(metadata) {
             Err(e) => violations.push(format!("{name}: metadata-channel round trip failed: {e}")),
-            Ok(actual) if enc_writes && !present(&actual) => violations.push(format!(
-                "{name}: declared by encoder+decoder, but did not survive a PreserveExact round trip"
-            )),
+            Ok(actual) if enc_writes => {
+                if let Err(error) = check_metadata_retained(&expected, &actual) {
+                    violations.push(format!("{name}: requested value did not survive PreserveExact ({error})"));
+                }
+            }
             Ok(actual) if !enc_writes && present(&actual) => violations.push(format!(
                 "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
             )),
@@ -3722,21 +3956,20 @@ where
             dyn_cfg
                 .dyn_job()
                 .push_decode(Cow::Borrowed(truncated), &mut sink, &[])
+                .map(|completion| {
+                    sink.verify_completion(&completion)
+                        .and_then(|()| sink.into_pixels().map(|_| ()))
+                })
         }));
 
         match outcome {
             Err(_panic) => violations.push(format!(
                 "decode panicked on truncation at {n}/{len} bytes — truncated input must never panic"
             )),
-            Ok(Ok(_output)) => {
-                if n <= len / 4 {
-                    violations.push(format!(
-                        "decode SUCCEEDED on a truncated header ({n} of {len} bytes) — a truncated \
-                         valid image must not silently decode (pixels are sacred)"
-                    ));
-                }
-                // n > len/4: trailing-marker / already-complete-payload leniency — tolerated.
-            }
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => violations.push(format!(
+                "recovery at {n}/{len} bytes returned an invalid sink completion: {error}"
+            )),
             Ok(Err(erased)) => match erased.error_category() {
                 None => {
                     // Pattern A: the category is unrecoverable once erased. Report it
@@ -4191,7 +4424,8 @@ mod tests {
         for case in GAIN_MAP_CASES {
             let p = gain_map_params(case);
             for fmt in [Iso21496Format::JxlJhgm, Iso21496Format::AvifTmap] {
-                let back = parse_iso21496_fmt(&serialize_iso21496_fmt(&p, fmt), fmt).unwrap();
+                let back =
+                    parse_iso21496_fmt(&serialize_iso21496_fmt(&p, fmt).unwrap(), fmt).unwrap();
                 assert_eq!(back, p, "{} via {fmt:?}", case.name);
             }
         }

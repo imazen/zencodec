@@ -356,15 +356,21 @@ impl SourceColor {
         self
     }
 
-    /// Whether this content uses an HDR transfer function (PQ or HLG).
+    /// Whether the authoritative source carrier signals PQ or HLG.
     ///
-    /// Checks CICP first (cheap), then falls back to inspecting the ICC
-    /// profile's cicp tag via lightweight tag table scan. Does NOT require
-    /// a full ICC profile parse.
-    ///
-    /// When true, a colorimetric CMS transform to an SDR destination will
-    /// clip highlights — tone mapping is required first.
+    /// The ICC check reads its CICP tag. For decoded pixels, use their current
+    /// image spec, which can differ from the source carriers after conversion.
     pub fn has_hdr_transfer(&self) -> bool {
+        let cicp = match self.authoritative() {
+            Some(AuthoritativeColor::Cicp(cicp)) => Some(cicp),
+            Some(AuthoritativeColor::Icc(icc)) => zenpixels::Cicp::from_icc(icc),
+            None => None,
+        };
+        cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+    }
+
+    /// Check whether either original source carrier signals PQ or HLG.
+    pub fn any_tag_has_hdr_transfer(&self) -> bool {
         if let Some(c) = self.cicp
             && matches!(c.transfer_characteristics, 16 | 18)
         {
@@ -1200,28 +1206,36 @@ mod tests {
         assert!(!sc.has_hdr_transfer());
     }
 
-    // --- has_hdr_transfer() priority: CICP checked before ICC ---
+    // --- Conflicting carrier diagnostics and authority ---
 
     #[test]
     fn has_hdr_transfer_cicp_wins_over_icc() {
-        // CICP says PQ, ICC says sRGB → CICP checked first → HDR
+        // CICP is explicitly selected over the SDR ICC.
         let icc = build_icc_with_cicp(1, 13, 0, true);
         let sc = SourceColor::default()
             .with_cicp(Cicp::BT2100_PQ)
-            .with_icc_profile(icc);
+            .with_icc_profile(icc)
+            .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn has_hdr_transfer_cicp_sdr_but_icc_hdr_still_detects() {
-        // CICP says sRGB (tc=13) → first check doesn't match (not PQ/HLG).
-        // Falls through to ICC check → finds PQ cicp tag → HDR.
-        // Conservative: if ANY signal says HDR, we report HDR.
-        let icc = build_icc_with_cicp(9, 16, 0, true);
-        let sc = SourceColor::default()
-            .with_cicp(Cicp::SRGB)
-            .with_icc_profile(icc);
-        assert!(sc.has_hdr_transfer());
+    fn has_hdr_transfer_chooses_authority_in_both_directions() {
+        let cases = [
+            (Cicp::SRGB, build_icc_with_cicp(9, 16, 0, true), false),
+            (Cicp::BT2100_PQ, build_icc_with_cicp(1, 13, 0, true), true),
+        ];
+        for (cicp, icc, cicp_is_hdr) in cases {
+            let sc = SourceColor::default()
+                .with_cicp(cicp)
+                .with_icc_profile(icc)
+                .with_color_authority(ColorAuthority::Cicp);
+            assert_eq!(sc.has_hdr_transfer(), cicp_is_hdr);
+            assert!(sc.any_tag_has_hdr_transfer());
+            let sc = sc.with_color_authority(ColorAuthority::Icc);
+            assert_eq!(sc.has_hdr_transfer(), !cicp_is_hdr);
+            assert!(sc.any_tag_has_hdr_transfer());
+        }
     }
 
     #[test]
@@ -1230,7 +1244,8 @@ mod tests {
         // Even garbage ICC doesn't prevent detection.
         let sc = SourceColor::default()
             .with_cicp(Cicp::BT2100_PQ)
-            .with_icc_profile(alloc::vec![0xFF; 10]);
+            .with_icc_profile(alloc::vec![0xFF; 10])
+            .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
     }
 
@@ -1429,7 +1444,7 @@ mod tests {
             .with_cicp(Cicp::BT2100_PQ)
             .with_color_authority(ColorAuthority::Icc);
         // Authority says ICC, but only CICP present — codec bug.
-        // has_hdr_transfer still detects HDR via CICP (ignores authority).
+        // The present CICP carrier is the fallback.
         assert!(sc.has_hdr_transfer());
         assert!(sc.icc_profile.is_none()); // the mismatch
     }
@@ -1442,7 +1457,7 @@ mod tests {
             .with_icc_profile(icc_pq)
             .with_color_authority(ColorAuthority::Cicp);
         // Authority says CICP, but only ICC present — codec bug.
-        // has_hdr_transfer still detects HDR via ICC cicp tag.
+        // The present ICC carrier is the fallback.
         assert!(sc.has_hdr_transfer());
         assert!(sc.cicp.is_none()); // the mismatch
     }

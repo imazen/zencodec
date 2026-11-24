@@ -181,3 +181,83 @@ fn registration_is_frozen_through_clones_and_both_color_replacement_owners() {
         }
     }
 }
+
+#[test]
+fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
+    use zencodec::gainmap::{DecodedGainMap, GainMapInfo, GainMapIngestError, GainMapParams};
+    use zenpixels::{
+        AlphaMode, BitPacking, ColorSpace, DualLayerHdr, ImageSpec, Orientation, PixelBuf,
+        SampleLayout,
+    };
+    let spec = ImageSpec::new(
+        SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 10 }),
+        ColorSpace::Untagged {
+            channels: 1,
+            alpha: AlphaMode::None,
+        },
+    );
+    let mut params = GainMapParams::default();
+    params.alternate_hdr_headroom = 2.0;
+    params
+        .channels
+        .iter_mut()
+        .for_each(|channel| channel.max = 2.0);
+    params.use_base_color_space = false;
+    let stale = GainMapInfo::new(params, 9, 11, 3)
+        .with_alternate_cicp(zencodec::Cicp::new(12, 16, 0, true));
+    let samples = PixelBuf::from_vec(vec![0u16, 1023], 2, 1, spec.clone()).unwrap();
+    let map = DecodedGainMap::try_new(samples, stale.clone()).unwrap();
+    assert_eq!(
+        (
+            map.metadata.width,
+            map.metadata.height,
+            map.metadata.channels,
+            map.metadata.bit_depth
+        ),
+        (2, 1, 1, 10)
+    );
+    assert_eq!(
+        map.metadata.alternate_cicp,
+        Some(zencodec::Cicp::new(12, 16, 0, true))
+    );
+    let alternate = map
+        .metadata
+        .alternate_cicp
+        .unwrap()
+        .to_color_space(AlphaMode::None)
+        .unwrap();
+    let pair = DualLayerHdr::new_with_alternate(
+        PixelBuf::new(3, 2, ImageSpec::rgb8_srgb()).unwrap(),
+        map.pixels,
+        map.metadata.params.exact_metadata().unwrap(),
+        Some(alternate.clone()),
+        Orientation::Rotate90,
+    )
+    .unwrap();
+    assert_eq!(pair.as_view().display_dimensions(), (2, 3));
+    let parts = pair.into_parts();
+    assert_eq!(parts.orientation, Orientation::Rotate90);
+    assert_eq!(parts.alternate_color_space, Some(alternate));
+    assert_eq!(
+        parts.gain_map.as_view().row(0),
+        [0u16.to_ne_bytes(), 1023u16.to_ne_bytes()].concat()
+    );
+    assert!(DualLayerHdr::try_from_parts(parts).is_ok());
+    assert!(zenpixels::GainMapMetadata::try_symmetric(2.0).is_some());
+    assert!(zenpixels::GainMapMetadata::try_symmetric(f32::NAN).is_none());
+
+    let rgba = PixelBuf::new(2, 1, ImageSpec::rgba8_srgb()).unwrap();
+    assert!(matches!(
+        DecodedGainMap::try_new(rgba, stale.clone()),
+        Err(GainMapIngestError::Layout)
+    ));
+    let unsupported = ImageSpec::new(
+        SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 9 }),
+        spec.color,
+    );
+    let samples = PixelBuf::from_vec(vec![0u16, 511], 2, 1, unsupported).unwrap();
+    assert!(matches!(
+        DecodedGainMap::try_new(samples, stale),
+        Err(GainMapIngestError::BitDepth)
+    ));
+}

@@ -50,6 +50,12 @@ fn verify(
             format!("{path} preparation descriptor contradicts actual output"),
         ));
     }
+    if output.pixels().facts() != baseline.pixels().facts() {
+        return Err(fail(
+            CHECK,
+            format!("{path} preparation changed sample facts"),
+        ));
+    }
     if grab(output.pixels()) != grab(baseline.pixels()) {
         return Err(fail(
             CHECK,

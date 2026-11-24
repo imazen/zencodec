@@ -103,7 +103,7 @@ mod traits;
 // =========================================================================
 
 pub use color::{
-    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
+    CicpEmission, ColorEmitError, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
     resolve_color_emit,
 };
 // `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
@@ -220,7 +220,7 @@ pub mod encode {
     pub use crate::fidelity::{
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };
-    pub use crate::negotiate::best_encode_format;
+    pub use crate::negotiate::{best_encode_format, best_encode_layout};
     pub use crate::output::{AnimationOutputTiming, EncodeOutput, OutputTiming};
     pub use crate::output_buffer::OutputBuffer;
     pub use crate::policy::{EncodeOrientation, EncodePolicy};
@@ -268,13 +268,16 @@ pub mod decode {
 
     // Types
     pub use crate::capabilities::DecodeCapabilities;
-    pub use crate::cost::OutputInfo;
+    pub use crate::cost::{FrameCompletion, OutputInfo};
     pub use crate::output::{AnimationFrame, DecodeDetails, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
-    pub use crate::sink::{DecodeRowSink, SinkError};
+    pub use crate::sink::{DecodeRowSink, RowMetadata, SinkError};
     pub use crate::traits::ByteRange;
 
-    pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
+    pub use crate::negotiate::{
+        FormatMatch, NegotiatedFormat, is_format_available, negotiate_pixel_format,
+        negotiate_pixel_format_match,
+    };
 
     // Source encoding detection
     pub use crate::detect::SourceEncodingDetails;

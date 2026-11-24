@@ -67,42 +67,55 @@ impl Stop for Tripped {
     }
 }
 
-/// Every plane's samples in order, as bytes: what a frame shows.
-fn frame_pixels(frame: &Frame) -> Result<Vec<u8>, String> {
-    let mapped = frame.map().map_err(|e| e.to_string())?;
-    let mut out = Vec::new();
-    for i in 0..mapped.plane_count() {
-        let plane = mapped.plane(i).ok_or("plane disappeared")?;
-        match plane {
-            AnyPlane::U8(p) => p.rows().for_each(|r| out.extend_from_slice(r)),
-            AnyPlane::U16(p) => {
-                for r in p.rows() {
-                    for v in r {
-                        out.extend_from_slice(&v.to_le_bytes());
-                    }
-                }
-            }
-            _ => return Err("unsupported plane sample type".into()),
-        }
-    }
-    Ok(out)
+/// Active typed samples, including exact floating-point payload bits.
+#[derive(Debug, PartialEq, Eq)]
+enum PlaneSamples {
+    U8(Vec<u8>),
+    U16(Vec<u16>),
+    F32(Vec<u32>),
 }
 
-/// What a decoded frame is, for comparing two decodes.
+#[derive(Debug, PartialEq, Eq)]
+struct PlaneSnapshot {
+    dimensions: (usize, usize),
+    samples: PlaneSamples,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Shown {
-    pts: Option<Timestamp>,
-    keyframe: bool,
-    show_existing: bool,
-    pixels: Vec<u8>,
+    timing: zencodec::frame::FrameTiming,
+    presentation: zencodec::frame::Presentation,
+    interpretation: Arc<zencodec::frame::FrameInterpretation>,
+    planes: Vec<PlaneSnapshot>,
 }
 
 fn shown(frame: &Frame) -> Result<Shown, String> {
+    let mapped = frame.map().map_err(|e| e.to_string())?;
+    let planes = (0..mapped.plane_count())
+        .map(|i| {
+            let plane = mapped.plane(i).ok_or("plane disappeared")?;
+            let dimensions = (plane.width(), plane.height());
+            let samples = match plane {
+                AnyPlane::U8(plane) => PlaneSamples::U8(plane.rows().flatten().copied().collect()),
+                AnyPlane::U16(plane) => {
+                    PlaneSamples::U16(plane.rows().flatten().copied().collect())
+                }
+                AnyPlane::F32(plane) => {
+                    PlaneSamples::F32(plane.rows().flatten().map(|v| v.to_bits()).collect())
+                }
+                _ => return Err("new plane storage requires an exact sample snapshot"),
+            };
+            Ok(PlaneSnapshot {
+                dimensions,
+                samples,
+            })
+        })
+        .collect::<Result<_, &str>>()?;
     Ok(Shown {
-        pts: frame.timing().pts,
-        keyframe: frame.presentation().keyframe,
-        show_existing: frame.presentation().show_existing,
-        pixels: frame_pixels(frame)?,
+        timing: frame.timing(),
+        presentation: frame.presentation(),
+        interpretation: Arc::clone(frame.interpretation()),
+        planes,
     })
 }
 
@@ -938,6 +951,11 @@ where
         }
     }
 
+    let clock = make_encoder()
+        .output_config()
+        .ok_or_else(|| fail(CHECK, "missing encoder clock"))?
+        .time_base;
+    let mut expected_tick = 0i64;
     let mut anim = VideoAnimationDecoder::new(
         Arc::<[u8]>::from(drained),
         make_demuxer(),
@@ -969,9 +987,28 @@ where
                 return Err(fail(CHECK, format!("frame {index} row {y} differs")));
             }
         }
-        if f.pts().is_none() {
-            return Err(fail(CHECK, format!("frame {index} has no timestamp")));
+        if f.frame_index() != index as u32
+            || f.pts()
+                .is_none_or(|pts| !pts.same_instant(Timestamp::new(expected_tick, clock)))
+            || f.pixels().spec() != want.spec()
+            || f.pixels().width() != w
+            || f.pixels().rows() != h
+        {
+            return Err(fail(
+                CHECK,
+                format!("frame {index} lost its timing, index or display spec"),
+            ));
         }
+        let duration = durations[index];
+        let n = u128::from(duration.numerator()) * u128::from(clock.denominator());
+        let d = u128::from(duration.denominator()) * u128::from(clock.numerator());
+        if n % d != 0 {
+            return Err(fail(CHECK, "duration is not exact in the encoder clock"));
+        }
+        expected_tick = i64::try_from(n / d)
+            .ok()
+            .and_then(|ticks| expected_tick.checked_add(ticks))
+            .ok_or_else(|| fail(CHECK, "expected timestamp overflow"))?;
         index += 1;
     }
     if index != frames.len() {

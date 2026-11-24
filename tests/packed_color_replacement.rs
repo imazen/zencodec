@@ -43,10 +43,16 @@ impl PackedImageOwner for Owner {
             2,
             9,
             if mode == 3 {
+                use zenpixels_convert::icc_profiles::SynthesizedIcc;
+                let SynthesizedIcc::Profile(profile) =
+                    SynthesizedIcc::for_cicp(zencodec::Cicp::DISPLAY_P3)
+                else {
+                    panic!("expected a real RGB profile");
+                };
                 ImageSpec::new(
                     zenpixels::SampleLayout::RGB8,
                     ColorSpace::Icc {
-                        profile: Arc::from([1, 2, 3]),
+                        profile: Arc::from(profile.as_ref()),
                         channels: 3,
                         alpha: zenpixels::AlphaMode::None,
                         intent: zenpixels::RenderingIntent::RelativeColorimetric,

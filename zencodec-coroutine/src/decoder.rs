@@ -607,7 +607,7 @@ fn copy_rows(
         return Err("decoder wrote provisional rows to a sink that does not accept them".into());
     }
     let pixels = zenpixels::PixelView::new(
-        rows.data.as_slice(),
+        &rows.data.as_slice()[rows.offset..],
         rows.width,
         rows.rows,
         rows.stride,
@@ -622,11 +622,13 @@ fn copy_rows(
     }
     let mut meta = rows.meta;
     meta.y += offset;
-    let mut destination = if meta.is_final {
-        sink.provide_next_buffer(meta.y, count, rows.width, rows.descriptor.clone())?
-    } else {
-        sink.provide_pass_buffer(meta, count, rows.width, rows.descriptor.clone())?
-    };
+    let mut destination = sink.provide_buffer_with_metadata(
+        meta,
+        count,
+        rows.width,
+        rows.descriptor.clone(),
+        &rows.metadata,
+    )?;
     if destination.width() != rows.width
         || destination.rows() != count
         || destination.spec() != &rows.descriptor

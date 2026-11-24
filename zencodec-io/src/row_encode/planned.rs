@@ -47,7 +47,7 @@ impl<S: Source> Input<'_, S> {
             && (pixels.width() != desc.width
                 || pixels.rows() != desc.height
                 || pixels.spec() != &desc.descriptor
-                || ExactDepth::from_view(pixels).is_some_and(|claim| {
+                || pixels.facts().depth.is_some_and(|claim| {
                     desc.exact_depth.is_none_or(|declared| {
                         !claim.color_exact_at(declared.color_bits())
                             || !claim.alpha_exact_at(declared.alpha_bits())
@@ -182,7 +182,7 @@ impl<S: Source> Filler<'_, S> {
         let Input::Raster { pixels, .. } = &self.input else {
             return Err(Refusal::PullProtocol.into());
         };
-        let mut rows = pixels.sub_rows(first, count)?;
+        let rows = pixels.sub_rows(first, count)?;
         for row in 0..count {
             self.boundary = if self.desc.exact_depth.is_some() {
                 Stage::Encode
@@ -200,9 +200,6 @@ impl<S: Source> Filler<'_, S> {
                 .into());
             }
         }
-        if let Some(exact) = self.desc.exact_depth {
-            rows = exact.attach_verified(rows);
-        }
         self.boundary = Stage::Read;
         check(self.control)?;
         self.validate()?;
@@ -211,7 +208,7 @@ impl<S: Source> Filler<'_, S> {
         self.validate()?;
         self.next_row = first + count;
         self.boundary = Stage::Encode;
-        encoder.push_rows(rows)?;
+        encoder.push_rows(self.desc.attach_to_verified_rows(rows))?;
         Ok(())
     }
     fn fill_inner(&mut self, demand: RowDemand<'_>) -> Result<(), Cause> {
@@ -530,12 +527,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             OutputAccess::Forward
         };
-        let mut declaration =
-            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor.clone())
-                .with_access(access);
-        if let Some(exact) = desc.exact_depth {
-            declaration = declaration.with_exact_depth(exact);
-        }
+        let declaration = desc.encode_declaration(access);
         declaration.validate_exact_depth()?;
         let plan = startup.plan(&declaration)?;
         let declared = match plan.input {
@@ -803,17 +795,14 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                     out.boundary = stage;
                     return Err(cause);
                 }
-                let mut pixels = PixelView::new(
+                let pixels = PixelView::new(
                     &buffer.as_slice()[..size],
                     desc.width,
                     count,
                     row_bytes,
                     desc.descriptor.clone(),
                 )?;
-                if let Some(exact) = desc.exact_depth {
-                    pixels = exact.attach_verified(pixels);
-                }
-                encoder.push_rows(pixels)?;
+                encoder.push_rows(desc.attach_to_verified_rows(pixels))?;
             } else {
                 let progress = encoder.pull_rows(&mut filler, pulse);
                 // A source/control/verification cause wins even if native code

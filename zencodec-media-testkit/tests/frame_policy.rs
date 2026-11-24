@@ -382,7 +382,7 @@ fn stale_policy_choice_publishes_no_second_frame_and_releases_all_native_owners(
     );
     assert_finished(&mut decoder);
     assert_eq!(
-        zencodec::sample::CodePlane::new(
+        zencodec::image::CodePlane::new(
             old.map().unwrap().plane(0).unwrap(),
             old.interpretation()
                 .uniform_code_encoding()

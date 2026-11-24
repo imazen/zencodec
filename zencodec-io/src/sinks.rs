@@ -3,7 +3,7 @@
 use alloc::format;
 use alloc::vec::Vec;
 
-use zencodec::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
 use zenpixels::{
     ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelBufParts, PixelView, PixelViewMut,
 };
@@ -25,6 +25,7 @@ pub struct CollectSink {
     covered_rows: Vec<u64>,
     unique_rows: u32,
     finished: bool,
+    metadata: Option<RowMetadata>,
 }
 
 impl CollectSink {
@@ -68,25 +69,29 @@ impl CollectSink {
     /// A zero-copy view of the collected image.
     pub fn as_pixel_slice(&self) -> Option<PixelView<'_>> {
         let parts = self.data.as_ref()?;
-        PixelView::new(
-            parts.storage.as_bytes(),
+        let view = PixelView::new(
+            &parts.storage.as_bytes()[parts.offset..],
             parts.width,
             parts.height,
             parts.stride,
             parts.spec.clone(),
         )
-        .ok()
+        .ok()?;
+        Some(match (&self.metadata, self.finished) {
+            (Some(metadata), true) => metadata.attach(view),
+            _ => view,
+        })
     }
 
     /// Take the finished image without copying its pixels or allocating.
     ///
     /// Returns `None` before [`DecodeRowSink::finish`] succeeds. Call this only
     /// after the driver returns success: a sink's finish is not proof that the
-    /// decoder's later validation succeeded. This does not include metadata;
-    /// retain the decoder's completion details separately.
+    /// decoder's later validation succeeded. Pixel evidence and provenance are
+    /// retained. Container metadata remains in the decoder's completion details.
     pub fn into_buffer(self) -> Option<PixelBuf> {
         let parts = self.finished.then_some(self.data).flatten()?;
-        PixelBuf::from_parts(
+        let buffer = PixelBuf::from_parts(
             parts.storage,
             parts.offset,
             parts.width,
@@ -94,7 +99,8 @@ impl CollectSink {
             parts.stride,
             parts.spec,
         )
-        .ok()
+        .ok()?;
+        Some(self.metadata.unwrap_or_default().attach_owned(buffer))
     }
 
     /// Copy the collected image into an owned [`PixelBuf`].
@@ -143,6 +149,27 @@ impl DecodeRowSink for CollectSink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
+        self.provide_buffer_with_metadata(
+            BatchMeta::final_rows(y),
+            height,
+            width,
+            descriptor,
+            &RowMetadata::default(),
+        )
+    }
+
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        if !meta.is_final {
+            return Err("CollectSink: provisional rows are not admitted".into());
+        }
+        let y = meta.y;
         if self.finished {
             return Err("CollectSink: rows after finish".into());
         }
@@ -173,6 +200,13 @@ impl DecodeRowSink for CollectSink {
             parts.stride,
             descriptor,
         )?;
+        if height != 0 {
+            if let Some(prior) = &mut self.metadata {
+                prior.merge(metadata)?;
+            } else {
+                self.metadata = Some(metadata.clone());
+            }
+        }
         for row in y..y + height {
             let word = &mut self.covered_rows[(row / 64) as usize];
             let bit = 1u64 << (row % 64);
@@ -182,10 +216,13 @@ impl DecodeRowSink for CollectSink {
             }
         }
         self.rows_written += height as u64;
-        Ok(rows)
+        Ok(rows.with_hdr(metadata.hdr))
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
+        if self.finished {
+            return Err("CollectSink: finish called twice".into());
+        }
         if self.data.is_none() {
             return Err("CollectSink: finish before begin".into());
         }
@@ -319,5 +356,57 @@ mod tests {
         );
         assert!(sink.bytes().is_empty());
         assert_eq!(sink.descriptor(), None);
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+    use zencodec::sample::ExactDepth;
+    use zenpixels::{ColorOrigin, HdrMetadata, SampleFacts, SampleType, SignalRange};
+
+    #[test]
+    fn collected_strip_facts_cover_both_grids_and_keep_original_provenance() {
+        let spec = ImageSpec::gray16_srgb();
+        let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
+        let hdr = HdrMetadata {
+            cll: Some(zencodec::ContentLightLevel::new(1111, 227)),
+            mastering: None,
+        };
+        let mut sink = CollectSink::new();
+        sink.begin(1, 2, spec.clone()).unwrap();
+        // Nonoverlapping five-bit and three-bit full-range code grids first
+        // share a 15-bit grid: lcm(5, 3). The loan order is deliberately reversed.
+        for (row, bits, sample) in [(1, 3, 9362u16), (0, 5, 2114u16)] {
+            let mut buffer = PixelBuf::from_vec(alloc::vec![sample], 1, 1, spec.clone())
+                .unwrap()
+                .with_origin(origin.clone())
+                .with_hdr(hdr);
+            buffer.set_facts(SampleFacts::NONE.with_depth(
+                ExactDepth::new(SampleType::U16, SignalRange::Full, bits, 16).unwrap(),
+            ));
+            zencodec::helpers::copy_rows_to_sink(
+                &mut sink,
+                BatchMeta::final_rows(row),
+                &buffer.as_view(),
+            )
+            .unwrap();
+        }
+        assert_eq!(sink.as_pixel_slice().unwrap().facts(), SampleFacts::NONE);
+        sink.finish().unwrap();
+        let view = sink.as_pixel_slice().unwrap();
+        let depth = view.facts().depth.unwrap();
+        assert_eq!((depth.color_bits(), depth.alpha_bits()), (15, 16));
+        assert!(depth.holds_for(&view).unwrap());
+        assert_eq!(view.row(0), 2114u16.to_ne_bytes());
+        assert_eq!(view.row(1), 9362u16.to_ne_bytes());
+        assert_eq!(view.origin(), Some(&origin));
+        assert_eq!(view.hdr(), hdr);
+        let address = sink.bytes().as_ptr();
+        let output = sink.into_buffer().unwrap();
+        assert_eq!(output.as_view().row(0).as_ptr(), address);
+        assert_eq!(output.facts().depth, Some(depth));
+        assert_eq!(output.origin(), &origin);
+        assert_eq!(output.hdr(), hdr);
     }
 }

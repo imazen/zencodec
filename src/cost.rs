@@ -5,6 +5,17 @@
 use crate::Orientation;
 use zenpixels::ImageSpec;
 
+/// Exact timing of a successfully delivered animation frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameCompletion {
+    /// Duration as stored by the source.
+    pub duration: crate::animation::FrameDuration,
+    /// Zero-based display index.
+    pub frame_index: u32,
+    /// Source presentation timestamp, when available.
+    pub pts: Option<crate::time::Timestamp>,
+}
+
 /// Predicted output from a decode operation.
 ///
 /// Returned by [`DecodeJob::output_info()`](crate::decode::DecodeJob::output_info).
@@ -54,6 +65,8 @@ pub struct OutputInfo {
     /// May differ from the crop hint due to block alignment (JPEG MCU
     /// boundaries, AV1 superblock alignment, etc.). `None` if no crop.
     pub crop_applied: Option<[u32; 4]>,
+    /// Timing of an animation frame delivered to a sink.
+    pub frame: Option<FrameCompletion>,
 }
 
 impl OutputInfo {
@@ -66,6 +79,7 @@ impl OutputInfo {
             native_format,
             orientation_applied: Orientation::Identity,
             crop_applied: None,
+            frame: None,
         }
     }
 
@@ -84,6 +98,12 @@ impl OutputInfo {
     /// Set the crop the decoder will apply.
     pub fn with_crop_applied(mut self, rect: [u32; 4]) -> Self {
         self.crop_applied = Some(rect);
+        self
+    }
+
+    /// Attach exact timing for a completed animation frame.
+    pub fn with_frame(mut self, frame: FrameCompletion) -> Self {
+        self.frame = Some(frame);
         self
     }
 

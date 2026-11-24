@@ -54,7 +54,7 @@ fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
         (FrameDuration::new(u64::MAX, 1).unwrap(), u32::MAX),
     ] {
         let borrowed = AnimationFrame::with_duration(pixels.as_view(), duration, 7);
-        let owned = borrowed.to_owned_frame();
+        let owned = borrowed.try_to_owned_frame().unwrap();
         assert_eq!(owned.duration(), duration);
         assert_eq!(owned.duration_ms(), legacy);
         assert_eq!(owned.frame_index(), 7);

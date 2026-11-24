@@ -58,7 +58,7 @@ fn main() {
                     g.bench("to_owned_frame", move |bench| {
                         bench.iter(|| {
                             let frame = AnimationFrame::new(source.as_view(), 10, 0);
-                            black_box(frame.to_owned_frame())
+                            black_box(frame.try_to_owned_frame().unwrap())
                         });
                     });
                 });

@@ -52,32 +52,59 @@ pub fn negotiate_pixel_format(
     preferred: &[ImageSpec],
     available: &[ImageSpec],
 ) -> Option<ImageSpec> {
-    if available.is_empty() {
-        return None;
-    }
+    negotiate_pixel_format_match(preferred, available).map(|matched| matched.spec.clone())
+}
 
+/// How a decoder chose a format relative to the preference list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FormatMatch {
+    /// The complete image spec matched the ranked preference.
+    Exact,
+    /// The sample layout matched. The returned spec supplies the actual interpretation.
+    Layout,
+    /// No preference matched, or none was supplied.
+    Default,
+}
+
+/// A negotiation result and the decoder's actual available spec.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NegotiatedFormat<'a> {
+    /// Actual spec the decoder offers.
+    pub spec: &'a ImageSpec,
+    /// Match quality.
+    pub kind: FormatMatch,
+}
+
+/// Negotiate a ranked preference with the exact/layout/default distinction intact.
+pub fn negotiate_pixel_format_match<'a>(
+    preferred: &[ImageSpec],
+    available: &'a [ImageSpec],
+) -> Option<NegotiatedFormat<'a>> {
     for pref in preferred {
-        // Tier 1: exact match
-        for avail in available {
-            if *avail == *pref {
-                return Some(avail.clone());
-            }
+        if let Some(spec) = available.iter().find(|spec| *spec == pref) {
+            return Some(NegotiatedFormat {
+                spec,
+                kind: FormatMatch::Exact,
+            });
         }
-        // Tier 2: same physical pixel format, different color metadata
-        for avail in available {
-            if avail.layout == pref.layout {
-                return Some(avail.clone());
-            }
+        if let Some(spec) = available.iter().find(|spec| spec.layout == pref.layout) {
+            return Some(NegotiatedFormat {
+                spec,
+                kind: FormatMatch::Layout,
+            });
         }
     }
-
-    Some(available[0].clone())
+    Some(NegotiatedFormat {
+        spec: available.first()?,
+        kind: FormatMatch::Default,
+    })
 }
 
 /// Select the best encode format for given pixel data.
 ///
-/// Returns the first `supported` descriptor whose [`SampleLayout`] matches
-/// `source`, or `None` if no supported format is layout-compatible.
+/// Returns an exact supported spec for `source`, including its color and alpha,
+/// or `None`. Use [`best_encode_layout`] to find a conversion candidate.
 ///
 /// Encoders can use this to check whether they can accept the caller's
 /// pixel data without conversion.
@@ -94,19 +121,17 @@ pub fn negotiate_pixel_format(
 /// assert_eq!(best_encode_format(source, supported), Some(ImageSpec::rgb8_srgb()));
 /// ```
 pub fn best_encode_format(source: ImageSpec, supported: &[ImageSpec]) -> Option<ImageSpec> {
-    // Exact match first
-    for s in supported {
-        if *s == source {
-            return Some(s.clone());
-        }
-    }
-    // Same physical format, different metadata
-    for s in supported {
-        if s.layout == source.layout {
-            return Some(s.clone());
-        }
-    }
-    None
+    supported.iter().find(|spec| **spec == source).cloned()
+}
+
+/// Find a layout-compatible encode candidate for conversion or checked reinterpretation.
+pub fn best_encode_layout(source: &ImageSpec, supported: &[ImageSpec]) -> Option<ImageSpec> {
+    best_encode_format(source.clone(), supported).or_else(|| {
+        supported
+            .iter()
+            .find(|spec| spec.layout == source.layout)
+            .cloned()
+    })
 }
 
 /// Check whether a pixel format can be produced by selecting from available
@@ -122,6 +147,23 @@ pub fn is_format_available(target: SampleLayout, available: &[ImageSpec]) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_distinguishes_ranked_layout_exact_and_default() {
+        let rgb = ImageSpec::rgb8_srgb();
+        let p3 = rgb.clone().with_primaries(zenpixels::Primaries::DisplayP3);
+        let rgba = ImageSpec::rgba8_srgb();
+        let gray = ImageSpec::gray8_srgb();
+        let avail = [rgba.clone(), rgb.clone()];
+        let layout = negotiate_pixel_format_match(&[p3.clone(), rgba.clone()], &avail).unwrap();
+        assert_eq!((layout.spec, layout.kind), (&rgb, FormatMatch::Layout));
+        let avail = [rgba.clone(), rgb.clone(), p3.clone()];
+        let exact = negotiate_pixel_format_match(core::slice::from_ref(&p3), &avail).unwrap();
+        assert_eq!((exact.spec, exact.kind), (&p3, FormatMatch::Exact));
+        let default = negotiate_pixel_format_match(&[gray], &avail).unwrap();
+        assert_eq!((default.spec, default.kind), (&rgba, FormatMatch::Default));
+        assert!(best_encode_format(p3, &[rgb]).is_none());
+    }
 
     #[test]
     fn exact_match_wins() {
@@ -202,8 +244,9 @@ mod tests {
     #[test]
     fn best_encode_format_match() {
         let supported = &[codec_spec(SampleLayout::RGB8)]; // unknown transfer
+        assert_eq!(best_encode_format(ImageSpec::rgb8_srgb(), supported), None);
         assert_eq!(
-            best_encode_format(ImageSpec::rgb8_srgb(), supported),
+            best_encode_layout(&ImageSpec::rgb8_srgb(), supported),
             Some(codec_spec(SampleLayout::RGB8))
         );
     }

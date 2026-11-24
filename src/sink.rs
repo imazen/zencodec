@@ -30,10 +30,106 @@
 
 use alloc::boxed::Box;
 
-use zenpixels::{ImageSpec, PixelViewMut};
+use zenpixels::{ColorOrigin, HdrMetadata, ImageSpec, PixelView, PixelViewMut, SampleFacts};
 
 /// Boxed error type for sink failures.
 pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
+
+/// Evidence and provenance for the active samples of one decoded strip.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct RowMetadata {
+    /// Properties proven for the samples being delivered.
+    pub facts: SampleFacts,
+    /// Source color carriers, independent of the current image spec.
+    pub origin: Option<ColorOrigin>,
+    /// Descriptive HDR metadata.
+    pub hdr: HdrMetadata,
+}
+
+impl RowMetadata {
+    /// Snapshot evidence and provenance before borrowing a sink buffer.
+    pub fn from_view(view: &PixelView<'_>) -> Self {
+        Self {
+            facts: view.facts(),
+            origin: view
+                .origin()
+                .filter(|origin| **origin != ColorOrigin::assumed())
+                .cloned(),
+            hdr: view.hdr(),
+        }
+    }
+
+    /// Merge evidence for distinct strips of one image.
+    ///
+    /// Both strips must agree on provenance and HDR. Depth selects a common
+    /// grid containing both strips' grids and falls back to storage depth when
+    /// no shallower common grid exists.
+    pub fn merge(&mut self, other: &Self) -> Result<(), SinkError> {
+        if self.origin != other.origin || self.hdr != other.hdr {
+            return Err("strips disagree on provenance or HDR metadata".into());
+        }
+        self.facts.depth = self
+            .facts
+            .depth
+            .zip(other.facts.depth)
+            .and_then(|(a, b)| common_depth(a, b));
+        self.facts.float = self.facts.float.intersect(other.facts.float);
+        self.facts.all_opaque &= other.facts.all_opaque;
+        self.facts.all_grayscale &= other.facts.all_grayscale;
+        self.facts.binary_alpha &= other.facts.binary_alpha;
+        Ok(())
+    }
+
+    /// Attach the metadata to the unchanged samples copied into this view.
+    pub fn attach<'a>(&'a self, view: PixelView<'a>) -> PixelView<'a> {
+        let view = view.with_facts(self.facts).with_hdr(self.hdr);
+        match &self.origin {
+            Some(origin) => view.with_origin(origin),
+            None => view,
+        }
+    }
+
+    /// Attach the metadata after all writes to the unchanged samples.
+    pub fn attach_owned(self, mut buffer: zenpixels::PixelBuf) -> zenpixels::PixelBuf {
+        buffer.set_facts(self.facts);
+        buffer = buffer.with_hdr(self.hdr);
+        if let Some(origin) = self.origin {
+            buffer = buffer.with_origin(origin);
+        }
+        buffer
+    }
+}
+
+fn common_depth(
+    a: crate::sample::ExactDepth,
+    b: crate::sample::ExactDepth,
+) -> Option<crate::sample::ExactDepth> {
+    use crate::sample::{ExactDepth, full_range_grid_nests, narrow_range_grid_nests};
+    use zenpixels::SignalRange;
+
+    if a.storage() != b.storage() || a.range() != b.range() {
+        return None;
+    }
+    let storage = (a.storage().byte_size() * 8) as u8;
+    let common = |a: u8, b: u8, nests: fn(u8, u8) -> bool| {
+        (a.max(b)..storage)
+            .find(|&candidate| nests(a, candidate) && nests(b, candidate))
+            .unwrap_or(storage)
+    };
+    let color_grid = if a.range() == SignalRange::Narrow {
+        narrow_range_grid_nests
+    } else {
+        full_range_grid_nests
+    };
+    ExactDepth::new(
+        a.storage(),
+        a.range(),
+        common(a.color_bits(), b.color_bits(), color_grid),
+        common(a.alpha_bits(), b.alpha_bits(), full_range_grid_nests),
+    )
+    .ok()
+}
 
 /// Receives decoded rows during streaming decode.
 ///
@@ -133,6 +229,27 @@ pub trait DecodeRowSink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError>;
+
+    /// Lend rows whose incoming samples carry explicit evidence or provenance.
+    ///
+    /// The metadata applies to the samples after the decoder fills the loan.
+    /// Existing sinks can rely on its default routing to final or provisional
+    /// rows. Sinks forwarding or retaining completed samples can override it.
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: crate::decode::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        let view = if meta.is_final {
+            self.provide_next_buffer(meta.y, height, width, descriptor)?
+        } else {
+            self.provide_pass_buffer(meta, height, width, descriptor)?
+        };
+        Ok(view.with_hdr(metadata.hdr))
+    }
 
     /// Called once after the last strip has been fully written.
     ///

@@ -100,7 +100,6 @@ pub struct RouteRejection {
 }
 
 /// A checked operation failure. Native causes remain in the source chain.
-#[derive(Debug)]
 #[non_exhaustive]
 pub enum OperationError {
     /// Codec registration, configuration or execution failed.
@@ -141,6 +140,12 @@ pub enum OperationError {
         /// The decoder's actual output interpretation and layout.
         actual: Box<ImageSpec>,
     },
+}
+
+impl fmt::Debug for OperationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "OperationError({self})")
+    }
 }
 
 impl fmt::Display for OperationError {
@@ -684,5 +689,40 @@ impl EncodeRequest {
             .at_named("execute selected encoder")
         })?;
         Ok(Outcome { output, report })
+    }
+}
+
+#[cfg(test)]
+mod descriptor_diagnostics {
+    use super::*;
+    use zenpixels::{AlphaMode, ColorSpace, RenderingIntent, SampleLayout};
+
+    #[test]
+    fn descriptor_refusal_preserves_live_value_and_redacts_opaque_bytes() {
+        let marker: alloc::sync::Arc<[u8]> = alloc::vec![239u8; 231].into();
+        let request = ImageSpec::new(
+            SampleLayout::RGB8,
+            ColorSpace::Icc {
+                profile: marker.clone(),
+                channels: 3,
+                alpha: AlphaMode::None,
+                intent: RenderingIntent::RelativeColorimetric,
+            },
+        );
+        let failure = OperationError::OutputDescriptor {
+            requested: Box::new(request),
+            actual: Box::new(ImageSpec::rgb8_srgb()),
+        };
+        for diagnostic in [alloc::format!("{failure}"), alloc::format!("{failure:?}")] {
+            assert!(!diagnostic.contains("239, 239"));
+            assert!(diagnostic.len() < 600);
+        }
+        let OperationError::OutputDescriptor { requested, .. } = failure else {
+            unreachable!()
+        };
+        let ColorSpace::Icc { profile, .. } = &requested.color else {
+            unreachable!()
+        };
+        assert!(alloc::sync::Arc::ptr_eq(profile, &marker));
     }
 }

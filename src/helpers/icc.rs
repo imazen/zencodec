@@ -30,6 +30,7 @@ pub fn descriptor_for_decoded_pixels(
             .color
     });
     descriptor_for_decoded_pixels_v2(layout, source_color, corrected.as_ref())
+        .unwrap_or_else(|_| super::codec_spec(layout))
 }
 
 /// Describe decoded, full-range samples and their current color meaning.
@@ -46,10 +47,14 @@ pub fn descriptor_for_decoded_pixels_v2(
     layout: SampleLayout,
     source_color: &SourceColor,
     corrected_to: Option<&ColorSpace>,
-) -> ImageSpec {
+) -> Result<ImageSpec, whereat::At<zenpixels::ColorError>> {
     let base = super::codec_spec(layout);
+    let checked = |spec: ImageSpec| {
+        spec.validate()?;
+        Ok(spec)
+    };
     if let Some(corrected) = corrected_to {
-        return ImageSpec::new(layout, corrected.clone());
+        return checked(ImageSpec::new(layout, corrected.clone()));
     }
 
     if let Some(AuthoritativeColor::Icc(profile)) = source_color.authoritative() {
@@ -61,14 +66,14 @@ pub fn descriptor_for_decoded_pixels_v2(
                 inverted, alpha, ..
             } = base.color
         {
-            return ImageSpec::new(
+            return checked(ImageSpec::new(
                 layout,
                 ColorSpace::Cmyk {
                     inverted,
                     alpha,
                     icc: Some(profile.clone()),
                 },
-            );
+            ));
         }
         let channels = match icc_class {
             Some(IccColorSpace::Rgb) if order.is_rgb_family() => Some(3),
@@ -76,7 +81,7 @@ pub fn descriptor_for_decoded_pixels_v2(
             _ => None,
         };
         if let Some(channels) = channels {
-            return ImageSpec::new(
+            return checked(ImageSpec::new(
                 layout,
                 ColorSpace::Icc {
                     profile: profile.clone(),
@@ -84,8 +89,15 @@ pub fn descriptor_for_decoded_pixels_v2(
                     alpha: base.color.alpha(),
                     intent: RenderingIntent::RelativeColorimetric,
                 },
-            );
+            ));
         }
+        if icc_class.is_some() {
+            return Err(whereat::at!(zenpixels::ColorError::ColorLayoutMismatch));
+        }
+        return checked(
+            base.with_primaries(Primaries::Unknown)
+                .with_transfer(Transfer::Unknown),
+        );
     }
 
     let (primaries, transfer) = resolve_color(source_color, None);
@@ -93,7 +105,7 @@ pub fn descriptor_for_decoded_pixels_v2(
     if let Some(white) = source_color.diffuse_white {
         spec = spec.with_white(white);
     }
-    spec
+    checked(spec)
 }
 
 /// Metadata projection of a current or authoritative source color description.
@@ -312,7 +324,7 @@ mod tests {
             .with_cicp(Cicp::DISPLAY_P3)
             .with_icc_profile(fake_icc)
             .with_color_authority(crate::ColorAuthority::Cicp);
-        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None);
+        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None).unwrap();
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::DisplayP3);
     }
@@ -328,7 +340,7 @@ mod tests {
             .with_cicp(Cicp::DISPLAY_P3)
             .with_icc_profile(fake_icc)
             .with_color_authority(crate::ColorAuthority::Icc);
-        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None);
+        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None).unwrap();
         assert_eq!(describe_color(&desc.color).1, Transfer::Unknown);
         assert_eq!(describe_color(&desc.color).0, Primaries::Unknown);
     }
@@ -763,5 +775,66 @@ mod tests {
                 "non-full range for {sc:?} corrected={corrected:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod checked_class_tests {
+    use super::*;
+    use zenpixels::{AlphaMode, SignalRange};
+    use zenpixels_convert::icc_profiles::SynthesizedIcc;
+
+    #[test]
+    fn real_profiles_cannot_label_the_wrong_sample_model() {
+        let SynthesizedIcc::Profile(rgb) = SynthesizedIcc::for_cicp(Cicp::DISPLAY_P3) else {
+            panic!("RGB fixture profile unavailable");
+        };
+        let SynthesizedIcc::Profile(gray) = SynthesizedIcc::for_gray_cicp(Cicp::new(1, 8, 0, true))
+        else {
+            panic!("GRAY fixture profile unavailable");
+        };
+        for (profile, valid, invalid, channels) in [
+            (rgb, SampleLayout::RGBA8, SampleLayout::GRAYA8, 3),
+            (gray, SampleLayout::GRAYA8, SampleLayout::RGBA8, 1),
+        ] {
+            let source = SourceColor::default().with_icc_profile(profile.as_ref());
+            let correct = descriptor_for_decoded_pixels_v2(valid, &source, None).unwrap();
+            assert_eq!(correct.layout, valid);
+            let ColorSpace::Icc {
+                profile: actual,
+                channels: count,
+                alpha,
+                intent,
+            } = correct.color
+            else {
+                panic!("matching profile was discarded");
+            };
+            assert_eq!(actual.as_ref(), profile.as_ref());
+            assert_eq!(count, channels);
+            assert_eq!(alpha, AlphaMode::Straight);
+            assert_eq!(intent, RenderingIntent::RelativeColorimetric);
+            assert!(descriptor_for_decoded_pixels_v2(invalid, &source, None).is_err());
+        }
+        let wrong = ColorSpace::Gray {
+            transfer: Transfer::Pq,
+            range: SignalRange::Narrow,
+            alpha: AlphaMode::Straight,
+            white: None,
+        };
+        assert!(
+            descriptor_for_decoded_pixels_v2(
+                SampleLayout::RGBA8,
+                &SourceColor::default(),
+                Some(&wrong)
+            )
+            .is_err()
+        );
+        let correct = descriptor_for_decoded_pixels_v2(
+            SampleLayout::GRAYA8,
+            &SourceColor::default(),
+            Some(&wrong),
+        )
+        .unwrap();
+        assert_eq!(correct.color, wrong);
     }
 }

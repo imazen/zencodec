@@ -12,7 +12,7 @@ use crate::{Cicp, encode::OutputTiming, output_patch::OutputAccess};
 /// The descriptor describes the samples actually supplied. Descriptive job metadata
 /// must not override it. A codec must refuse contradictions it cannot resolve
 /// without changing the requested interpretation or encoding configuration.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 #[non_exhaustive]
 pub struct EncodeDeclaration {
     /// Full image width.
@@ -29,6 +29,9 @@ pub struct EncodeDeclaration {
     /// including undefined padding. `None` makes no lower-depth assertion.
     /// This is not a codec fidelity or whole-input preflight certificate.
     pub exact_depth: Option<ExactDepth>,
+    /// Optional native sample facts and source provenance. The current meaning
+    /// is in `descriptor`. Exact-depth declarations are stored separately.
+    pub pixel_metadata: Option<crate::decode::RowMetadata>,
 }
 
 impl fmt::Debug for EncodeDeclaration {
@@ -52,6 +55,7 @@ impl EncodeDeclaration {
             descriptor,
             access: OutputAccess::Forward,
             exact_depth: None,
+            pixel_metadata: None,
         }
     }
 
@@ -74,6 +78,19 @@ impl EncodeDeclaration {
     pub const fn with_exact_depth(mut self, exact: ExactDepth) -> Self {
         self.exact_depth = Some(exact);
         self
+    }
+
+    /// Retain source evidence and provenance through native planning and startup.
+    /// A depth claim also becomes the declaration's checked `exact_depth`.
+    pub fn with_pixel_metadata(mut self, mut metadata: crate::decode::RowMetadata) -> Self {
+        self.exact_depth = metadata.facts.depth.take().or(self.exact_depth);
+        self.pixel_metadata = Some(metadata);
+        self
+    }
+
+    /// Validate the layout, color model, alpha, range and any active ICC before startup.
+    pub fn validate_spec(&self) -> Result<(), whereat::At<zenpixels::ColorError>> {
+        self.descriptor.validate()
     }
 
     /// Validate the claim's storage, range and supported layout, without reading

@@ -191,6 +191,33 @@ pub struct MockDecodeJob {
     pub ext: MockDecodeExtensions,
 }
 
+impl MockDecodeJob {
+    fn still_geometry(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<([u32; 4], zencodec::Orientation), MockError> {
+        let [x, y, w, h] = self
+            .crop
+            .map_or([0, 0, width, height], |(x, y, w, h)| [x, y, w, h]);
+        if w == 0
+            || h == 0
+            || x.checked_add(w).is_none_or(|end| end > width)
+            || y.checked_add(h).is_none_or(|end| end > height)
+        {
+            return Err(MockError::InvalidData("crop outside mock image".into()));
+        }
+        let orientation = match self.orientation {
+            Some(
+                zencodec::OrientationHint::CorrectAndTransform(o)
+                | zencodec::OrientationHint::ExactTransform(o),
+            ) => o,
+            _ => zencodec::Orientation::Identity,
+        };
+        Ok(([x, y, w, h], orientation))
+    }
+}
+
 impl<'a> DecodeJob<'a> for MockDecodeJob {
     type Error = MockError;
     type Dec = MockDec<'a>;
@@ -251,7 +278,14 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
 
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, MockError> {
         let (w, h, _fc, bpp) = parse_mock_header(data)?;
-        Ok(OutputInfo::full_decode(w, h, descriptor_for_bpp(bpp)))
+        let (crop, orientation) = self.still_geometry(w, h)?;
+        let (w, h) = orientation.output_dimensions(crop[2], crop[3]);
+        let mut info = OutputInfo::full_decode(w, h, descriptor_for_bpp(bpp))
+            .with_orientation_applied(orientation);
+        if self.crop.is_some() {
+            info = info.with_crop_applied(crop);
+        }
+        Ok(info)
     }
 
     fn decoder(
@@ -264,7 +298,12 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
         if let Some(ref stop) = self.stop {
             stop.check()?;
         }
-        Ok(MockDec { data })
+        let (crop, orientation) = self.still_geometry(w, h)?;
+        Ok(MockDec {
+            data,
+            crop,
+            orientation,
+        })
     }
 
     fn push_decoder(
@@ -316,6 +355,8 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
 #[derive(Debug)]
 pub struct MockDec<'a> {
     data: Cow<'a, [u8]>,
+    crop: [u32; 4],
+    orientation: zencodec::Orientation,
 }
 
 impl<'a> zencodec::decode::Decode for MockDec<'a> {
@@ -330,8 +371,20 @@ impl<'a> zencodec::decode::Decode for MockDec<'a> {
             return Err(MockError::InvalidData("truncated frame data".into()));
         }
         let pixels = &self.data[data_start..data_start + frame_size];
-        let buf = PixelBuf::from_bytes(pixels.to_vec(), w, h, desc)
+        let [cx, cy, cw, ch] = self.crop;
+        let (dw, dh) = self.orientation.output_dimensions(cw, ch);
+        let mut buf = PixelBuf::new(dw, dh, desc)
             .map_err(|e| MockError::InvalidData(format!("buffer: {e}")))?;
+        let mut output = buf.as_view_mut();
+        let bpp = bpp as usize;
+        for y in 0..ch {
+            for x in 0..cw {
+                let (dx, dy) = self.orientation.forward_map(x, y, cw, ch);
+                let src = ((cy + y) as usize * w as usize + (cx + x) as usize) * bpp;
+                let dst = dx as usize * bpp;
+                output.row_mut(dy)[dst..dst + bpp].copy_from_slice(&pixels[src..src + bpp]);
+            }
+        }
         let info = ImageInfo::new(w, h, ImageFormat::Pnm);
         Ok(DecodeOutput::new(buf, info))
     }
@@ -385,6 +438,13 @@ pub struct MockAnimationFrameDec {
     frame_count: u32,
     bpp: u8,
     current_frame: u32,
+}
+
+impl MockAnimationFrameDec {
+    pub fn pixel_address(&self, index: usize) -> *const u8 {
+        let span = self.width as usize * self.height as usize * self.bpp as usize;
+        self.data[HEADER_SIZE + 4 + index * (4 + span)..].as_ptr()
+    }
 }
 
 impl AnimationFrameDecoder for MockAnimationFrameDec {
@@ -452,7 +512,27 @@ impl AnimationFrameDecoder for MockAnimationFrameDec {
         )
         .map_err(|e| MockError::InvalidData(format!("frame slice: {e}")))?;
 
-        let frame = AnimationFrame::new(ps, duration_ms, self.current_frame);
+        let frame = match duration_ms {
+            // Reserved fixture markers encode distinct rational source timings.
+            0xFFFF_FFF0 | 0xFFFF_FFF1 => {
+                use zencodec::{
+                    animation::FrameDuration,
+                    time::{TimeBase, Timestamp},
+                };
+                let (numerator, denominator, ticks) = if duration_ms == 0xFFFF_FFF0 {
+                    (1, 24, 17)
+                } else {
+                    (7, 120, 22)
+                };
+                AnimationFrame::with_duration(
+                    ps,
+                    FrameDuration::new(numerator, denominator).unwrap(),
+                    self.current_frame,
+                )
+                .with_pts(Some(Timestamp::new(ticks, TimeBase::new(1, 120).unwrap())))
+            }
+            _ => AnimationFrame::new(ps, duration_ms, self.current_frame),
+        };
         self.current_frame += 1;
         Ok(Some(frame))
     }

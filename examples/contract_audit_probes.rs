@@ -3,9 +3,7 @@
 use std::borrow::Cow;
 use zencodec::encode::EncodeCapabilities;
 use zencodec::metadata_rewrite::{Action, Entry, Plan};
-use zencodec::{
-    ColorEmitPolicy, IccDisposition, SourceColor, UnsupportedOperation, resolve_color_emit,
-};
+use zencodec::{ColorEmitPolicy, SourceColor, UnsupportedOperation, resolve_color_emit};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bytes = [1_u8];
@@ -18,10 +16,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let no_carriers = EncodeCapabilities::new();
     let source = SourceColor::default().with_cicp(zencodec::Cicp::DISPLAY_P3);
-    let plan = resolve_color_emit(&source, &no_carriers, ColorEmitPolicy::Balanced);
+    let plan = resolve_color_emit(
+        &source,
+        &zencodec::Cicp::DISPLAY_P3
+            .to_color_space(zenpixels::AlphaMode::None)
+            .unwrap(),
+        &no_carriers,
+        ColorEmitPolicy::Balanced,
+    );
     println!(
         "icc_required_without_target_icc={}",
-        matches!(plan.icc, IccDisposition::SynthesizeFrom(_)) && !no_carriers.icc()
+        plan.is_ok() && !no_carriers.icc()
     );
     println!(
         "animation_capability_reports_exact_timing={}",

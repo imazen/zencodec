@@ -26,7 +26,7 @@ fn all_integer_depth_and_shift_inputs_have_identical_contracts() {
                         let words = [0xaaaa, 0xffff, 0xdead, 0x5555, 0, 0xbeef];
                         let plane = AnyPlane::U16(PlaneRef::new(&words[..], 2, 2, 3).unwrap());
                         let native = NativePlane::new(plane, encoding).unwrap();
-                        let convert = CodePlane::new(native.plane(), native.encoding()).unwrap();
+                        let convert = CodePlane::from_u16(&words, 2, 2, 3, encoding).unwrap();
                         for y in 0..2 {
                             for x in 0..2 {
                                 let expected = ((u32::from(words[y * 3 + x]) >> shift)
@@ -57,7 +57,7 @@ fn floating_storage_refuses_and_u8_convenience_is_equivalent() {
     let bytes = [0, 255, 17, 128];
     let plane = AnyPlane::U8(PlaneRef::new(&bytes[..], 2, 2, 2).unwrap());
     let native = NativePlane::new(plane, encoding).unwrap();
-    let convert = CodePlane::new(native.plane(), native.encoding()).unwrap();
+    let convert = CodePlane::from_u8(&bytes, 2, 2, 2, encoding).unwrap();
     for y in 0..2 {
         for x in 0..2 {
             assert_eq!(native.code(x, y), Some(u16::from(bytes[y * 2 + x])));

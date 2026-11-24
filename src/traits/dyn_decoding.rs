@@ -94,6 +94,12 @@ pub trait DynAnimationFrameDecoder: Send {
     /// Animation loop count from the container.
     fn loop_count(&self) -> Option<u32>;
 
+    /// Borrow the next frame directly from the decoder's canvas.
+    fn render_next_frame(
+        &mut self,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<Option<crate::decode::AnimationFrame<'_>>, BoxedError>;
+
     /// Render the next frame as an owned copy.
     fn render_next_frame_owned(
         &mut self,
@@ -142,6 +148,15 @@ impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder
 
     fn loop_count(&self) -> Option<u32> {
         self.0.loop_count()
+    }
+
+    fn render_next_frame(
+        &mut self,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<Option<crate::decode::AnimationFrame<'_>>, BoxedError> {
+        self.0
+            .render_next_frame(pulse)
+            .map_err(|e| Box::new(e) as BoxedError)
     }
 
     fn render_next_frame_owned(

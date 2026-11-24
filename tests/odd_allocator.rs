@@ -2,6 +2,11 @@
 //! addresses for byte allocations, which is legal, and which glibc never does.
 
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
+
+thread_local! {
+    static FAIL_BYTES: Cell<usize> = const { Cell::new(0) };
+}
 use zencodec::AnimationFrame;
 use zenpixels::{ImageSpec, PixelBuf};
 
@@ -15,6 +20,20 @@ fn widened(layout: Layout) -> Layout {
 // undoes the same offset with the same layout. Others go straight to System.
 unsafe impl GlobalAlloc for OddBytes {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        if layout.size() != 0
+            && FAIL_BYTES
+                .try_with(|size| {
+                    if size.get() == layout.size() {
+                        size.set(0);
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(false)
+        {
+            return std::ptr::null_mut();
+        }
         if layout.align() == 1 {
             let base = unsafe { System.alloc(widened(layout)) };
             if base.is_null() {
@@ -51,7 +70,7 @@ fn to_owned_frame_copies_wide_formats_on_any_allocator() {
             }
         }
         let frame = AnimationFrame::new(source.as_view(), 10, 0);
-        let owned = frame.to_owned_frame();
+        let owned = frame.try_to_owned_frame().unwrap();
         let copy = owned.pixels();
         for y in 0..3 {
             assert_eq!(
@@ -61,4 +80,23 @@ fn to_owned_frame_copies_wide_formats_on_any_allocator() {
             );
         }
     }
+}
+
+#[test]
+fn frame_copy_returns_the_allocation_failure_and_leaves_the_borrow_valid() {
+    let samples = PixelBuf::new(137, 3, ImageSpec::rgb16_srgb()).unwrap();
+    let frame = AnimationFrame::new(samples.as_view(), 35, 4);
+    FAIL_BYTES.set(137 * 3 * 6);
+    let failure = frame.try_to_owned_frame().unwrap_err();
+    assert_eq!(FAIL_BYTES.get(), 0);
+    assert!(matches!(
+        failure.error(),
+        zenpixels::BufferError::AllocationFailed
+    ));
+    assert_eq!(frame.frame_index(), 4);
+    assert_eq!(frame.pixels().row(2), samples.as_view().row(2));
+    assert_eq!(
+        frame.try_to_owned_frame().unwrap().pixels().row(2),
+        frame.pixels().row(2)
+    );
 }

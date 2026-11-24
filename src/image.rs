@@ -358,12 +358,13 @@ impl<'a> CodePlane<'a> {
         plane: AnyPlane<'a>,
         encoding: SampleEncoding,
     ) -> Result<Self, crate::sample::CodePlaneError> {
-        crate::sample::CodePlane::new(plane, encoding)?;
-        Ok(Self {
+        let mapped = Self {
             plane,
             encoding,
             components: 1,
-        })
+        };
+        mapped.component(0)?;
+        Ok(mapped)
     }
 
     /// The native plane.
@@ -434,7 +435,29 @@ impl<'a> CodePlane<'a> {
         &self,
         index: usize,
     ) -> Result<crate::sample::CodePlane<'a>, crate::sample::CodePlaneError> {
-        crate::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
+        use crate::sample::{CodePlane, CodePlaneError};
+
+        match self.plane {
+            AnyPlane::U8(p) => CodePlane::component_from_u8(
+                p.into_strided_samples(),
+                p.width(),
+                p.height(),
+                p.stride(),
+                self.components,
+                index,
+                self.encoding,
+            ),
+            AnyPlane::U16(p) => CodePlane::component_from_u16(
+                p.into_strided_samples(),
+                p.width(),
+                p.height(),
+                p.stride(),
+                self.components,
+                index,
+                self.encoding,
+            ),
+            AnyPlane::F32(_) => Err(CodePlaneError::StorageMismatch),
+        }
     }
 
     /// Read a single-component plane at spatial `(x, y)`.

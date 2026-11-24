@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 
-use zencodec::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zenpixels::{
     ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelStorage, PixelView, PixelViewMut,
@@ -61,7 +61,11 @@ impl<E: core::error::Error + 'static> core::error::Error for EncoderSinkError<E>
 pub struct EncoderSink<E> {
     encoder: Option<E>,
     strip: Option<PixelStorage>,
-    pending: Option<(u32, u32, ImageSpec)>,
+    pending: Option<(u32, RowMetadata)>,
+    declaration: Option<(u32, u32, ImageSpec)>,
+    row_limit: core::num::NonZeroU32,
+    finished: bool,
+    failed: bool,
     rows_pushed: u64,
     timing: Option<OutputTiming>,
 }
@@ -76,9 +80,19 @@ where
             encoder: Some(encoder),
             strip: None,
             pending: None,
+            declaration: None,
+            row_limit: core::num::NonZeroU32::new(64).unwrap(),
+            finished: false,
+            failed: false,
             rows_pushed: 0,
             timing: None,
         }
+    }
+
+    /// Set the largest strip that the producer may request.
+    pub fn with_max_buffer_rows(mut self, limit: core::num::NonZeroU32) -> Self {
+        self.row_limit = limit;
+        self
     }
 
     /// What the encoder's [`begin`](Encoder::begin) reported: whether its
@@ -134,33 +148,62 @@ where
     }
 
     fn push_pending(&mut self) -> Result<(), SinkError> {
-        let Some((rows, width, desc)) = self.pending.take() else {
+        let Some((rows, metadata)) = self.pending.take() else {
             return Ok(());
         };
-        let stride = width as usize * desc.layout.bytes_per_pixel();
+        let (width, _, desc) = self
+            .declaration
+            .as_ref()
+            .expect("pending strip was declared");
+        let stride = *width as usize * desc.layout.bytes_per_pixel();
         let slice = PixelView::new(
             self.strip
                 .as_ref()
                 .expect("pending strip has storage")
                 .as_bytes(),
-            width,
+            *width,
             rows,
             stride,
-            desc,
+            desc.clone(),
         )?;
         let enc = self
             .encoder
             .as_mut()
             .ok_or_else(|| SinkError::from("EncoderSink: encoder already finished"))?;
-        enc.push_rows(slice).map_err(|e| Box::new(e) as SinkError)?;
+        if let Err(error) = enc.push_rows(metadata.attach(slice)) {
+            self.failed = true;
+            return Err(Box::new(error));
+        }
         self.rows_pushed += rows as u64;
         Ok(())
+    }
+
+    #[cfg(feature = "tokio")]
+    pub(crate) fn validate_completion(
+        &self,
+        info: &zencodec::decode::OutputInfo,
+    ) -> Result<(), SinkError> {
+        if self.finished
+            && !self.failed
+            && self
+                .declaration
+                .as_ref()
+                .is_some_and(|(width, height, spec)| {
+                    (*width, *height, spec) == (info.width, info.height, &info.native_format)
+                })
+        {
+            Ok(())
+        } else {
+            Err("EncoderSink: decoder completion disagrees with finished rows".into())
+        }
     }
 
     /// Push any pending strip and finish the encoder. Returns the bytes not
     /// already taken through [`consume_output`](Self::consume_output).
     pub fn finish(mut self) -> Result<EncodeOutput, EncoderSinkError<E::Error>> {
-        self.push_pending().map_err(EncoderSinkError::Sink)?;
+        if !self.finished {
+            DecodeRowSink::finish(&mut self).map_err(EncoderSinkError::Sink)?;
+        }
         let enc = self.encoder.take().expect("encoder present until finish");
         enc.finish().map_err(EncoderSinkError::Encoder)
     }
@@ -180,24 +223,66 @@ where
     E::Error: Send + Sync,
 {
     fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
-        let enc = self
-            .encoder
-            .as_mut()
-            .ok_or_else(|| SinkError::from("EncoderSink: encoder already finished"))?;
+        if self.declaration.is_some() || self.failed {
+            return Err("EncoderSink: begin called twice or after failure".into());
+        }
+        descriptor.validate()?;
+        let enc = self.encoder.as_mut().expect("encoder present until finish");
         let timing = enc
-            .begin(width, height, descriptor)
+            .begin(width, height, descriptor.clone())
             .map_err(|e| Box::new(e) as SinkError)?;
+        self.declaration = Some((width, height, descriptor));
         self.timing = Some(timing);
         Ok(())
     }
 
+    fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
+        self.row_limit
+    }
+
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
+        y: u32,
         height: u32,
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
+        self.provide_buffer_with_metadata(
+            BatchMeta::final_rows(y),
+            height,
+            width,
+            descriptor,
+            &RowMetadata::default(),
+        )
+    }
+
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        let Some((expected_width, total_rows, spec)) = &self.declaration else {
+            return Err("EncoderSink: rows before begin".into());
+        };
+        if self.finished || self.failed {
+            return Err("EncoderSink: rows after termination".into());
+        }
+        let next = self.rows_pushed + self.pending.as_ref().map_or(0, |(n, _)| u64::from(*n));
+        if !meta.is_final
+            || u64::from(meta.y) != next
+            || width != *expected_width
+            || descriptor != *spec
+            || height == 0
+            || height > self.row_limit.get()
+            || next + u64::from(height) > u64::from(*total_rows)
+        {
+            return Err(
+                "EncoderSink: strip disagrees with the declared raster order or spec".into(),
+            );
+        }
         self.push_pending()?;
         let stride = (width as usize)
             .checked_mul(descriptor.layout.bytes_per_pixel())
@@ -205,10 +290,12 @@ where
         let len = stride
             .checked_mul(height as usize)
             .ok_or("EncoderSink: strip too large")?;
-        let sample = descriptor.layout.sample;
-        if self.strip.as_ref().is_none_or(|storage| {
-            storage.byte_len() < len || storage.alloc_alignment() < sample.min_alignment()
-        }) {
+        let alignment = descriptor.layout.min_alignment();
+        if self
+            .strip
+            .as_ref()
+            .is_none_or(|storage| storage.byte_len() < len || storage.alloc_alignment() < alignment)
+        {
             self.strip = Some(
                 PixelBuf::new(width, height, descriptor.clone())?
                     .into_parts()
@@ -223,11 +310,117 @@ where
             stride,
             descriptor.clone(),
         )?;
-        self.pending = Some((height, width, descriptor));
-        Ok(view)
+        self.pending = Some((height, metadata.clone()));
+        Ok(view.with_hdr(metadata.hdr))
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
-        self.push_pending()
+        let Some((_, height, _)) = &self.declaration else {
+            return Err("EncoderSink: finish before begin".into());
+        };
+        if self.finished || self.failed {
+            return Err("EncoderSink: finish after termination".into());
+        }
+        let supplied = self.rows_pushed + self.pending.as_ref().map_or(0, |(n, _)| u64::from(*n));
+        if supplied != u64::from(*height) {
+            return Err("EncoderSink: finish before complete row coverage".into());
+        }
+        self.push_pending()?;
+        self.finished = true;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zencodec::{ImageFormat, UnsupportedOperation};
+    use zenpixels::Primaries;
+
+    struct Rows {
+        bytes: Vec<u8>,
+    }
+    impl Encoder for Rows {
+        type Error = UnsupportedOperation;
+        fn reject(error: UnsupportedOperation) -> Self::Error {
+            error
+        }
+        fn begin(
+            &mut self,
+            _width: u32,
+            _height: u32,
+            _spec: ImageSpec,
+        ) -> Result<OutputTiming, Self::Error> {
+            self.bytes.push(0xCC);
+            Ok(OutputTiming::streaming(0))
+        }
+        fn encode(self, _pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
+            unreachable!()
+        }
+        fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), Self::Error> {
+            if rows.row(0)[0] == 0xFF {
+                return Err(UnsupportedOperation::PixelFormat);
+            }
+            self.bytes.extend_from_slice(rows.row(0));
+            Ok(())
+        }
+        fn pending_output(&self) -> &[u8] {
+            &self.bytes
+        }
+        fn finish(self) -> Result<EncodeOutput, Self::Error> {
+            Ok(EncodeOutput::new(self.bytes, ImageFormat::Png))
+        }
+    }
+
+    #[test]
+    fn checked_strip_order_mismatch_and_terminal_calls_preserve_accepted_bytes() {
+        let spec = ImageSpec::rgb8_srgb();
+        let alternate = spec.clone().with_primaries(Primaries::DisplayP3);
+        let mut sink = EncoderSink::new(Rows { bytes: Vec::new() })
+            .with_max_buffer_rows(core::num::NonZeroU32::MIN);
+        assert!(sink.provide_next_buffer(0, 1, 1, spec.clone()).is_err());
+        DecodeRowSink::begin(&mut sink, 1, 2, spec.clone()).unwrap();
+        assert!(DecodeRowSink::begin(&mut sink, 1, 2, spec.clone()).is_err());
+        assert!(sink.provide_next_buffer(1, 1, 1, spec.clone()).is_err());
+        assert!(sink.provide_next_buffer(0, 2, 1, spec.clone()).is_err());
+        sink.provide_next_buffer(0, 1, 1, spec.clone())
+            .unwrap()
+            .row_mut(0)
+            .copy_from_slice(&[1, 2, 3]);
+        assert!(sink.provide_next_buffer(0, 1, 1, spec.clone()).is_err());
+        assert!(sink.provide_next_buffer(1, 1, 1, alternate).is_err());
+        assert!(DecodeRowSink::finish(&mut sink).is_err());
+        assert_eq!(sink.pending_output(), &[0xCC]);
+        sink.provide_next_buffer(1, 1, 1, spec.clone())
+            .unwrap()
+            .row_mut(0)
+            .copy_from_slice(&[4, 5, 6]);
+        assert_eq!(sink.rows_pushed(), 1);
+        DecodeRowSink::finish(&mut sink).unwrap();
+        assert!(DecodeRowSink::finish(&mut sink).is_err());
+        assert!(sink.provide_next_buffer(2, 1, 1, spec).is_err());
+        assert_eq!(sink.finish().unwrap().data(), &[0xCC, 1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn native_row_refusal_remains_primary_and_keeps_confirmed_prefix() {
+        let spec = ImageSpec::rgb8_srgb();
+        let mut sink = EncoderSink::new(Rows { bytes: Vec::new() });
+        sink.begin(1, 2, spec.clone()).unwrap();
+        sink.provide_next_buffer(0, 1, 1, spec.clone())
+            .unwrap()
+            .row_mut(0)
+            .copy_from_slice(&[1, 2, 3]);
+        sink.provide_next_buffer(1, 1, 1, spec)
+            .unwrap()
+            .row_mut(0)
+            .fill(0xFF);
+        let error = DecodeRowSink::finish(&mut sink).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<UnsupportedOperation>(error.as_ref()),
+            Some(&UnsupportedOperation::PixelFormat)
+        );
+        assert_eq!(sink.pending_output(), &[0xCC, 1, 2, 3]);
+        assert_eq!(sink.rows_pushed(), 1);
     }
 }

@@ -251,5 +251,8 @@ fn known_format_checks_inherited_policy_and_limits_without_reading_input() {
         Err(e) => e,
         Ok(_) => panic!("lost limits"),
     };
-    assert!(zencodec::find_cause::<zencodec::LimitExceeded>(&error).is_some());
+    assert_eq!(
+        zencodec::find_cause::<zencodec::LimitExceeded>(&error),
+        Some(&zencodec::LimitExceeded::Pixels { actual: 4, max: 3 })
+    );
 }

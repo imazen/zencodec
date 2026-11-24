@@ -440,6 +440,22 @@ impl DecodeRowSink for GuardedSink<'_> {
                 .provide_pass_buffer(meta, height, width, descriptor),
         )
     }
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: super::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: ImageSpec,
+        metadata: &crate::sink::RowMetadata,
+    ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
+        self.check(Some(width), Some((meta.y, height)), Some(&descriptor))?;
+        retain_sink_failure(
+            &mut self.sink_error,
+            self.inner
+                .provide_buffer_with_metadata(meta, height, width, descriptor, metadata),
+        )
+    }
+
     fn accepts_provisional(&self) -> bool {
         self.facts.is_some()
             && self.refused.is_none()

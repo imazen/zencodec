@@ -183,7 +183,9 @@ pub(crate) struct PendingRows {
     pub(crate) width: u32,
     pub(crate) rows: u32,
     pub(crate) stride: usize,
+    pub(crate) offset: usize,
     pub(crate) descriptor: ImageSpec,
+    pub(crate) metadata: zencodec::decode::RowMetadata,
 }
 
 /// State shared between the decoder and the coroutine it polls. Only one
@@ -364,7 +366,11 @@ impl CoroutineContext {
         let size = (width as usize)
             .checked_mul(descriptor.layout.bytes_per_pixel())
             .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
-        let Some((stride, len)) = size else {
+        let alignment = descriptor.layout.min_alignment();
+        let Some((stride, len)) = size.and_then(|(stride, len)| {
+            len.checked_add(alignment - 1)
+                .map(|allocated| (stride, allocated))
+        }) else {
             return WriteRows {
                 shared: &self.shared,
                 pending: None,
@@ -384,9 +390,11 @@ impl CoroutineContext {
                 error: Some(error),
             };
         }
+        let bytes = data.as_mut_slice();
+        let offset = bytes.as_ptr().align_offset(alignment);
         for r in 0..count {
-            let at = r as usize * stride;
-            data.as_mut_slice()[at..at + stride].copy_from_slice(&rows.row(r)[..stride]);
+            let at = offset + r as usize * stride;
+            bytes[at..at + stride].copy_from_slice(rows.row(r));
         }
         WriteRows {
             shared: &self.shared,
@@ -397,7 +405,9 @@ impl CoroutineContext {
                 width,
                 rows: count,
                 stride,
+                offset,
                 descriptor,
+                metadata: zencodec::decode::RowMetadata::from_view(rows),
             }),
         }
     }

@@ -70,6 +70,9 @@ pub trait RenderFrame {
 /// Makes a frame from packed pixels: the step between the animation API and
 /// a video encoder.
 pub trait CaptureFrame {
+    /// Admit the exact input spec before the muxer publishes any header.
+    fn validate_input(&self, spec: &ImageSpec, config: &CodecConfig) -> Result<(), BoxedError>;
+
     /// A frame holding `pixels` with `timing`, in the layout the encoder
     /// configured by `config` takes.
     ///
@@ -124,6 +127,18 @@ impl RenderFrame for Gray8 {
         {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
+        let geometry = FrameGeometry::full(canvas.width(), canvas.rows());
+        let color = interp.color;
+        let exact_color = match color.resolved {
+            Some(cicp) => cicp == zencodec::Cicp::SRGB,
+            None => color.bitstream.is_none() && color.container.is_none(),
+        };
+        if canvas.spec() != &ImageSpec::gray8_srgb() || interp.geometry != geometry || !exact_color
+        {
+            return Err(convert_error(
+                "Gray8 requires a full-size sRGB monochrome interpretation",
+            ));
+        }
         let mapped = frame.map()?;
         let plane = mapped
             .plane(0)
@@ -142,15 +157,21 @@ impl RenderFrame for Gray8 {
 }
 
 impl CaptureFrame for Gray8 {
+    fn validate_input(&self, spec: &ImageSpec, _config: &CodecConfig) -> Result<(), BoxedError> {
+        if spec == &ImageSpec::gray8_srgb() {
+            Ok(())
+        } else {
+            Err(Box::new(UnsupportedOperation::PixelFormat))
+        }
+    }
+
     fn capture(
         &mut self,
         pixels: &PixelView<'_>,
         config: &CodecConfig,
         timing: FrameTiming,
     ) -> Result<Frame, BoxedError> {
-        if pixels.spec() != &ImageSpec::gray8_srgb() {
-            return Err(Box::new(UnsupportedOperation::PixelFormat));
-        }
+        self.validate_input(pixels.spec(), config)?;
         let (w, h) = (pixels.width(), pixels.rows());
         if config
             .video
@@ -511,7 +532,7 @@ pub struct AnimationVideoEncoder<E, M, P> {
     mux: M,
     capture: P,
     next_pts: Timestamp,
-    begun: bool,
+    spec: Option<ImageSpec>,
     pushed: u32,
     declared: Option<u32>,
     lag_frames: u32,
@@ -534,7 +555,7 @@ impl<E: VideoEncoder, M: Muxer, P: CaptureFrame> AnimationVideoEncoder<E, M, P> 
             mux,
             capture,
             next_pts,
-            begun: false,
+            spec: None,
             pushed: 0,
             declared: None,
             lag_frames,
@@ -545,14 +566,21 @@ impl<E: VideoEncoder, M: Muxer, P: CaptureFrame> AnimationVideoEncoder<E, M, P> 
         &mut self,
         width: u32,
         height: u32,
+        descriptor: ImageSpec,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, EncErr<E, M>> {
-        if self.begun {
+        if self.spec.is_some() {
             return Err(AdaptError::Mux(SessionError::Protocol(
                 ProtocolViolation::BeginTwice,
             )));
         }
         let cfg = self.enc.output_config().ok_or(AdaptError::Shape)?;
+        descriptor
+            .validate()
+            .map_err(|e| AdaptError::Convert(Box::new(e)))?;
+        self.capture
+            .validate_input(&descriptor, cfg)
+            .map_err(AdaptError::Convert)?;
         let video = cfg.video.ok_or(AdaptError::Shape)?;
         if (video.coded_width, video.coded_height) != (width, height) {
             return Err(AdaptError::Shape);
@@ -564,7 +592,7 @@ impl<E: VideoEncoder, M: Muxer, P: CaptureFrame> AnimationVideoEncoder<E, M, P> 
             .mux
             .begin(&[track], MuxHint::forward_only())
             .map_err(AdaptError::Mux)?;
-        self.begun = true;
+        self.spec = Some(descriptor);
         self.declared = frame_count;
         Ok(match frame_count {
             Some(n) if self.lag_frames >= n => AnimationOutputTiming::AT_FINISH,
@@ -590,10 +618,10 @@ where
         &mut self,
         width: u32,
         height: u32,
-        _descriptor: ImageSpec,
+        descriptor: ImageSpec,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, Self::Error> {
-        self.begin_inner(width, height, frame_count)
+        self.begin_inner(width, height, descriptor, frame_count)
     }
 
     fn pending_output(&self) -> &[u8] {
@@ -632,8 +660,12 @@ where
             .next_pts
             .checked_add(duration)
             .map_err(AdaptError::Time)?;
-        if !self.begun {
-            self.begin_inner(pixels.width(), pixels.rows(), None)?;
+        if let Some(spec) = &self.spec {
+            if spec != pixels.spec() {
+                return Err(AdaptError::Unsupported(UnsupportedOperation::PixelFormat));
+            }
+        } else {
+            self.begin_inner(pixels.width(), pixels.rows(), pixels.spec().clone(), None)?;
         }
         let cfg = self.enc.output_config().ok_or(AdaptError::Shape)?.clone();
         let frame = self
@@ -656,7 +688,7 @@ where
     }
 
     fn finish(mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<EncodeOutput, Self::Error> {
-        if !self.begun {
+        if self.spec.is_none() {
             return Err(AdaptError::Mux(SessionError::Protocol(
                 ProtocolViolation::NoBegin,
             )));

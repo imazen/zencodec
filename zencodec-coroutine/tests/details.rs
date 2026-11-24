@@ -418,3 +418,63 @@ fn native_error_remains_primary_when_poll_also_signals_stop() {
         ));
     }
 }
+
+#[test]
+fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
+    use zenpixels::{AlphaMode, ColorSpace, RenderingIntent, SampleLayout};
+    let profile = |id| {
+        let mut bytes = [0u8; 132];
+        bytes[16..20].copy_from_slice(b"GRAY");
+        bytes[36..40].copy_from_slice(b"acsp");
+        bytes[82] = id;
+        ImageSpec::new(
+            SampleLayout::GRAY8,
+            ColorSpace::Icc {
+                profile: Arc::from(bytes),
+                channels: 1,
+                alpha: AlphaMode::None,
+                intent: RenderingIntent::RelativeColorimetric,
+            },
+        )
+    };
+    let first = profile(17);
+    let changed = profile(53);
+    first.validate().unwrap();
+    changed.validate().unwrap();
+    let mut decoder = CoroutineDecoder::controlled(
+        16,
+        zencodec::source::AccessPattern::Sequential,
+        move |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
+            ctx.set_output_descriptor(first.clone());
+            ctx.interpretation(InterpretationFacts::new(
+                1,
+                1,
+                Some(first),
+                InterpretationState::Final,
+            ))
+            .await?;
+            ctx.set_output_descriptor(changed.clone());
+            let pixels = PixelView::new(&[81], 1, 1, 1, changed.clone()).unwrap();
+            ctx.write_rows(BatchMeta::final_rows(0), &pixels).await?;
+            Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, changed))
+        },
+    );
+    let mut sink = Sink::default();
+    let ControlledProgress::Suspended { boundary, .. } = decoder
+        .step_controlled(Input::empty(), &mut sink, None)
+        .unwrap()
+    else {
+        panic!("expected boundary")
+    };
+    decoder
+        .resume(boundary.id(), BoundaryAction::AdoptInterpretation, None)
+        .unwrap();
+    assert!(matches!(
+        decoder.step_controlled(Input::empty(), &mut sink, None),
+        Err(StepError::Control(ControlError::FinalInterpretationChanged))
+    ));
+    assert_eq!(sink.bytes, [0]);
+    assert!(!sink.finished);
+    assert!(decoder.take_details().is_none());
+}

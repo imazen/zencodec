@@ -284,3 +284,405 @@ mod tests {
         );
     }
 }
+
+/// Run ranked decode preferences against independently supplied pixels.
+///
+/// The expected view includes the actual output spec and its alpha samples.
+pub fn check_decode_preferences<D: DecoderConfig + 'static>(
+    decoder: D,
+    bytes: &[u8],
+    preferred: &[ImageSpec],
+    expected: PixelView<'_>,
+) -> Conformance {
+    const CHECK: &str = "ranked decode preferences";
+    if preferred.is_empty() {
+        return Err(fail(CHECK, "supply a nonempty ordered preference list"));
+    }
+    let want = grab_ref(&expected);
+    let verify = |route, actual| {
+        if actual == want {
+            Ok(())
+        } else {
+            Err(fail(
+                CHECK,
+                format!("{route} selected different pixels or interpretation"),
+            ))
+        }
+    };
+    let typed = decoder
+        .clone()
+        .job()
+        .decoder(Cow::Borrowed(bytes), preferred)
+        .and_then(|decode| decode.decode())
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    verify("typed decode", grab(typed.pixels()))?;
+    let erased = decoder
+        .dyn_job()
+        .into_decoder(Cow::Borrowed(bytes), preferred)
+        .and_then(|decode| decode.decode())
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    verify("erased decode", grab(erased.pixels()))?;
+
+    for erased in [false, true] {
+        let mut sink = CollectSink::default();
+        let result = if erased {
+            decoder
+                .dyn_job()
+                .push_decode(Cow::Borrowed(bytes), &mut sink, preferred)
+                .map_err(|error| error.to_string())
+        } else {
+            decoder
+                .clone()
+                .job()
+                .push_decoder(Cow::Borrowed(bytes), &mut sink, preferred)
+                .map_err(|error| error.to_string())
+        };
+        let completion = result.map_err(|error| fail(CHECK, error))?;
+        sink.verify_completion(&completion)
+            .map_err(|error| fail(CHECK, error))?;
+        verify(
+            "push decode",
+            sink.into_pixels().map_err(|error| fail(CHECK, error))?,
+        )?;
+    }
+
+    if D::capabilities().streaming() {
+        let mut typed = decoder
+            .clone()
+            .job()
+            .streaming_decoder(Cow::Borrowed(bytes), preferred)
+            .map_err(|error| fail(CHECK, error.to_string()))?;
+        let mut erased = decoder
+            .dyn_job()
+            .into_streaming_decoder(Cow::Borrowed(bytes), preferred)
+            .map_err(|error| fail(CHECK, error.to_string()))?;
+        for erase in [false, true] {
+            let mut next = 0u32;
+            loop {
+                let batch = if erase {
+                    erased
+                        .next_batch()
+                        .map_err(|error| fail(CHECK, error.to_string()))?
+                } else {
+                    typed
+                        .next_batch()
+                        .map_err(|error| fail(CHECK, error.to_string()))?
+                };
+                let Some((y, rows)) = batch else { break };
+                if y != next || rows.rows() == 0 {
+                    return Err(fail(CHECK, "unexpected pull coordinates"));
+                }
+                let span = expected
+                    .sub_rows(y, rows.rows())
+                    .map_err(|error| fail(CHECK, error.to_string()))?;
+                if grab_ref(&rows) != grab_ref(&span) {
+                    return Err(fail(
+                        CHECK,
+                        format!("pull pixels or spec differ from reference at row {y}"),
+                    ));
+                }
+                next += rows.rows();
+            }
+            if next != expected.rows() {
+                return Err(fail(CHECK, "pull decode ended with incomplete rows"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Independently known display pixels and timing for one animation frame.
+pub struct DisplayFrameCase<'a> {
+    /// Exact active pixels, interpretation and provenance.
+    pub pixels: PixelView<'a>,
+    /// Source duration and optional PTS, with the zero-based display index.
+    pub timing: zencodec::decode::FrameCompletion,
+}
+
+/// Check typed and erased animation, including corrected display orientation,
+/// ranked native format selection, independent timing and exact sink effects.
+pub fn check_animation_delivery<D: DecoderConfig + 'static>(
+    decoder: D,
+    bytes: &[u8],
+    preferred: &[ImageSpec],
+    orientation: zencodec::OrientationHint,
+    expected_loop_count: Option<u32>,
+    cases: &[DisplayFrameCase<'_>],
+) -> Conformance {
+    use zencodec::decode::RowMetadata;
+    const CHECK: &str = "explicit animation delivery";
+    if cases.is_empty() {
+        return Err(fail(CHECK, "supply at least one displayed frame"));
+    }
+    let wrap = |error: String| fail(CHECK, error);
+    for mode in 0..6 {
+        let erase = mode >= 3;
+        let route = mode % 3;
+        let mut job = decoder.dyn_job();
+        job.set_orientation(orientation);
+        let mut erased = if erase {
+            Some(
+                job.into_animation_frame_decoder(Cow::Borrowed(bytes), preferred)
+                    .map_err(|error| wrap(error.to_string()))?,
+            )
+        } else {
+            None
+        };
+        let mut typed = if erase {
+            None
+        } else {
+            Some(
+                decoder
+                    .clone()
+                    .job()
+                    .with_orientation(orientation)
+                    .animation_frame_decoder(Cow::Borrowed(bytes), preferred)
+                    .map_err(|error| wrap(error.to_string()))?,
+            )
+        };
+        let (count, loops) = if let Some(decoder) = &erased {
+            (decoder.frame_count(), decoder.loop_count())
+        } else {
+            let decoder = typed.as_ref().unwrap();
+            (decoder.frame_count(), decoder.loop_count())
+        };
+        if count.is_some_and(|n| n as usize != cases.len()) || loops != expected_loop_count {
+            return Err(fail(
+                CHECK,
+                format!("route {mode} reported frame count {count:?}, loop count {loops:?}"),
+            ));
+        }
+        for index in 0..=cases.len() {
+            let expected = cases.get(index);
+            let mut sink = CollectSink::default();
+            let observed = match route {
+                0 => {
+                    let frame = if let Some(decoder) = &mut erased {
+                        decoder
+                            .render_next_frame(None)
+                            .map_err(|error| error.to_string())
+                    } else {
+                        typed
+                            .as_mut()
+                            .unwrap()
+                            .render_next_frame(None)
+                            .map_err(|error| error.to_string())
+                    }
+                    .map_err(wrap)?;
+                    frame.map(|frame| AnimationObservation {
+                        pixels: grab_ref(frame.pixels()),
+                        metadata: RowMetadata::from_view(frame.pixels()),
+                        timing: zencodec::decode::FrameCompletion {
+                            duration: frame.duration(),
+                            frame_index: frame.frame_index(),
+                            pts: frame.pts(),
+                        },
+                    })
+                }
+                1 => {
+                    let frame = if let Some(decoder) = &mut erased {
+                        decoder
+                            .render_next_frame_owned(None)
+                            .map_err(|error| error.to_string())
+                    } else {
+                        typed
+                            .as_mut()
+                            .unwrap()
+                            .render_next_frame_owned(None)
+                            .map_err(|error| error.to_string())
+                    }
+                    .map_err(wrap)?;
+                    frame.map(|frame| {
+                        let view = frame.pixels();
+                        AnimationObservation {
+                            pixels: grab_ref(&view),
+                            metadata: RowMetadata::from_view(&view),
+                            timing: zencodec::decode::FrameCompletion {
+                                duration: frame.duration(),
+                                frame_index: frame.frame_index(),
+                                pts: frame.pts(),
+                            },
+                        }
+                    })
+                }
+                _ => {
+                    let completion = if let Some(decoder) = &mut erased {
+                        decoder
+                            .render_next_frame_to_sink(None, &mut sink)
+                            .map_err(|error| error.to_string())
+                    } else {
+                        typed
+                            .as_mut()
+                            .unwrap()
+                            .render_next_frame_to_sink(None, &mut sink)
+                            .map_err(|error| error.to_string())
+                    }
+                    .map_err(wrap)?;
+                    match completion {
+                        Some(info) => {
+                            sink.verify_completion(&info).map_err(wrap)?;
+                            Some(AnimationObservation {
+                                timing: info.frame.ok_or_else(|| {
+                                    fail(CHECK, "missing frame completion timing")
+                                })?,
+                                pixels: sink.pixels().map_err(wrap)?,
+                                metadata: sink.metadata.unwrap_or_default(),
+                            })
+                        }
+                        None if sink.desc.is_none() => None,
+                        None => return Err(fail(CHECK, "end of animation had sink effects")),
+                    }
+                }
+            };
+            match (expected, observed) {
+                (None, None) => {}
+                (Some(want), Some(got))
+                    if got.timing == want.timing
+                        && got.pixels == grab_ref(&want.pixels)
+                        && got.metadata == RowMetadata::from_view(&want.pixels) => {}
+                _ => {
+                    return Err(fail(
+                        CHECK,
+                        format!(
+                            "route {mode} did not deliver frame or EOF at index {index} as specified"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Verify rejection of an exact unsupported spec before header publication.
+/// The encoder must remain usable with the accepted spec after the refusal.
+pub fn check_animation_begin_refusal<E>(
+    encoder: E,
+    accepted: PixelView<'_>,
+    rejected: PixelView<'_>,
+    expected: ExpectedError,
+) -> Conformance
+where
+    E: EncoderConfig + 'static,
+    <E::Job as EncodeJob>::Enc: Encoder + Send,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    const CHECK: &str = "animation begin admission";
+    let (width, height) = (accepted.width(), accepted.rows());
+    if (rejected.width(), rejected.rows()) != (width, height) || accepted.spec() == rejected.spec()
+    {
+        return Err(fail(
+            CHECK,
+            "supply two different specs with identical dimensions",
+        ));
+    }
+    let mut typed = encoder
+        .clone()
+        .job()
+        .animation_frame_encoder()
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    let mut erased = encoder
+        .dyn_job()
+        .into_animation_frame_encoder()
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    let reject = rejected.spec().clone();
+    let typed_failure = typed
+        .begin(width, height, reject.clone(), Some(1))
+        .err()
+        .filter(|error| expected.matches(error));
+    let erased_failure = erased
+        .begin(width, height, reject, Some(1))
+        .err()
+        .filter(|error| expected.matches(error.as_ref()));
+    if typed_failure.is_none()
+        || erased_failure.is_none()
+        || !typed.pending_output().is_empty()
+        || !erased.pending_output().is_empty()
+    {
+        return Err(fail(
+            CHECK,
+            "unsupported begin accepted, returned the wrong error or published bytes",
+        ));
+    }
+    typed
+        .begin(width, height, accepted.spec().clone(), Some(1))
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    erased
+        .begin(width, height, accepted.spec().clone(), Some(1))
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    let typed_len = typed.pending_output().len();
+    let erased_len = erased.pending_output().len();
+    if !typed
+        .push_frame(rejected.clone(), 50, None)
+        .is_err_and(|error| expected.matches(&error))
+        || !erased
+            .push_frame(rejected, 50, None)
+            .is_err_and(|error| expected.matches(error.as_ref()))
+        || typed.pending_output().len() != typed_len
+        || erased.pending_output().len() != erased_len
+    {
+        return Err(fail(
+            CHECK,
+            "an incompatible frame was accepted or changed published output",
+        ));
+    }
+    let typed = typed
+        .push_frame(accepted.clone(), 50, None)
+        .and_then(|()| typed.finish(None))
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    erased
+        .push_frame(accepted, 50, None)
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    let erased = erased
+        .finish(None)
+        .map_err(|error| fail(CHECK, error.to_string()))?;
+    if typed.data() != erased.data() {
+        return Err(fail(
+            CHECK,
+            "typed and erased bytes differ after refusal and reuse",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod prefix_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_header_and_required_payload_offsets_allow_an_independent_trailer() {
+        let mut bytes = b"ZCR1".to_vec();
+        for n in [1u32, 1, 1] {
+            bytes.extend_from_slice(&n.to_le_bytes());
+        }
+        bytes.extend_from_slice(&[3, 1, 0, 0, 0, 0, 0, 49, 78, 128]);
+        let raw = [49, 78, 128];
+        let expected = PixelView::new(&raw, 1, 1, 3, ImageSpec::rgb8_srgb()).unwrap();
+        bytes.extend_from_slice(&[0xE3; 128]);
+        let incomplete =
+            ExpectedError::Category(ErrorCategory::Image(zencodec::ImageError::Malformed));
+        check_decode_prefix_cases(
+            crate::MinimalDecoderConfig::new(),
+            &bytes,
+            &[
+                PrefixCase {
+                    end: 18,
+                    outcome: PrefixOutcome::Reject(incomplete),
+                },
+                PrefixCase {
+                    end: 25,
+                    outcome: PrefixOutcome::Reject(incomplete),
+                },
+                PrefixCase {
+                    end: 26,
+                    outcome: PrefixOutcome::Accept(expected.clone()),
+                },
+                PrefixCase {
+                    end: bytes.len(),
+                    outcome: PrefixOutcome::Accept(expected),
+                },
+            ],
+        )
+        .unwrap();
+    }
+}

@@ -949,7 +949,7 @@ fn animation_frame_to_owned_strips_padding() {
 
     let ps = PixelView::new(&data, w, h, stride, desc).unwrap();
     let frame = AnimationFrame::new(ps, 100, 0);
-    let owned = frame.to_owned_frame();
+    let owned = frame.try_to_owned_frame().unwrap();
 
     // Owned should have tight stride (no padding)
     let owned_ps = owned.pixels();
@@ -2261,4 +2261,233 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
             "dyn shim must not call legacy push_frame"
         );
     }
+}
+
+#[test]
+fn still_push_reports_the_actual_crop_and_transform() {
+    let spec = ImageSpec::rgb8_srgb();
+    let bytes = [1u8, 2, 3, 4, 5, 6]
+        .into_iter()
+        .flat_map(|id| [id, 0, 0])
+        .collect();
+    let raster = PixelBuf::from_bytes(bytes, 3, 2, spec.clone()).unwrap();
+    let encoded = encode_single_frame(&raster);
+    struct Sink {
+        data: [u8; 24],
+        geometry: Option<(u32, u32, ImageSpec)>,
+        done: bool,
+    }
+    impl zencodec::decode::DecodeRowSink for Sink {
+        fn begin(
+            &mut self,
+            w: u32,
+            h: u32,
+            spec: ImageSpec,
+        ) -> Result<(), zencodec::decode::SinkError> {
+            assert!(self.geometry.is_none());
+            self.geometry = Some((w, h, spec));
+            Ok(())
+        }
+        fn provide_next_buffer(
+            &mut self,
+            y: u32,
+            h: u32,
+            w: u32,
+            spec: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            assert_eq!(y, 0);
+            assert_eq!(self.geometry, Some((w, h, spec.clone())));
+            Ok(zenpixels::PixelViewMut::new(&mut self.data, w, h, 8, spec)?)
+        }
+        fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
+            self.done = true;
+            Ok(())
+        }
+    }
+    for (orientation, crop, size, expected) in [
+        (Orientation::Rotate90, None, (2, 3), vec![4, 1, 5, 2, 6, 3]),
+        (
+            Orientation::FlipH,
+            Some([1, 0, 2, 2]),
+            (2, 2),
+            vec![3, 2, 6, 5],
+        ),
+    ] {
+        for erased in [false, true] {
+            let mut sink = Sink {
+                data: [0xA7; 24],
+                geometry: None,
+                done: false,
+            };
+            let hint = OrientationHint::ExactTransform(orientation);
+            let completion = if erased {
+                let cfg: &dyn DynDecoderConfig = &MockDecoderConfig;
+                let mut job = cfg.dyn_job();
+                job.set_orientation(hint);
+                if let Some([x, y, w, h]) = crop {
+                    job.set_crop_hint(x, y, w, h);
+                }
+                job.push_decode(Cow::Borrowed(&encoded), &mut sink, &[])
+                    .unwrap()
+            } else {
+                let mut job = MockDecoderConfig.job().with_orientation(hint);
+                if let Some([x, y, w, h]) = crop {
+                    job = job.with_crop_hint(x, y, w, h);
+                }
+                job.push_decoder(Cow::Borrowed(&encoded), &mut sink, &[])
+                    .unwrap()
+            };
+            assert!(sink.done);
+            assert_eq!(sink.geometry, Some((size.0, size.1, spec.clone())));
+            assert_eq!((completion.width, completion.height), size);
+            assert_eq!(completion.native_format, spec);
+            assert_eq!(completion.orientation_applied, orientation);
+            assert_eq!(completion.crop_applied, crop);
+            for (i, expected_row) in expected.as_chunks::<2>().0.iter().enumerate() {
+                let row = &sink.data[i * 8..][..8];
+                assert_eq!(
+                    row,
+                    &[expected_row[0], 0, 0, expected_row[1], 0, 0, 0xA7, 0xA7]
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn rational_animation_completion_and_erased_borrow_preserve_source_frame() {
+    use zencodec::{
+        animation::FrameDuration,
+        decode::{DecodeRowSink, FrameCompletion, SinkError},
+        time::{TimeBase, Timestamp},
+    };
+    struct FrameSink {
+        bytes: [u8; 8],
+        calls: Vec<&'static str>,
+    }
+    impl DecodeRowSink for FrameSink {
+        fn begin(&mut self, w: u32, h: u32, spec: ImageSpec) -> Result<(), SinkError> {
+            assert_eq!((w, h, spec), (2, 1, ImageSpec::rgba8_srgb()));
+            self.calls.push("begin");
+            Ok(())
+        }
+        fn provide_next_buffer(
+            &mut self,
+            y: u32,
+            rows: u32,
+            width: u32,
+            spec: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, SinkError> {
+            assert_eq!((y, rows, width), (0, 1, 2));
+            self.calls.push("rows");
+            Ok(zenpixels::PixelViewMut::new(
+                &mut self.bytes,
+                width,
+                rows,
+                8,
+                spec,
+            )?)
+        }
+        fn finish(&mut self) -> Result<(), SinkError> {
+            self.calls.push("finish");
+            Ok(())
+        }
+    }
+    let spec = ImageSpec::rgba8_srgb();
+    let expected: [[u8; 8]; 2] = [[101, 12, 43, 0, 93, 255, 7, 17], [6, 5, 4, 3, 2, 1, 0, 255]];
+    let buffers =
+        expected.map(|bytes| PixelBuf::from_bytes(bytes.to_vec(), 2, 1, spec.clone()).unwrap());
+    let input =
+        encode_animation_from_slices(&[(&buffers[0], 0xFFFF_FFF0), (&buffers[1], 0xFFFF_FFF1)]);
+    let cfg: &dyn DynDecoderConfig = &MockDecoderConfig;
+    let mut typed = MockDecoderConfig
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(&input), &[])
+        .unwrap();
+    let mut erased = cfg
+        .dyn_job()
+        .into_animation_frame_decoder(Cow::Borrowed(&input), &[])
+        .unwrap();
+    let mut borrowed = cfg
+        .dyn_job()
+        .into_animation_frame_decoder(Cow::Borrowed(&input), &[])
+        .unwrap();
+    let mut owned = cfg
+        .dyn_job()
+        .into_animation_frame_decoder(Cow::Borrowed(&input), &[])
+        .unwrap();
+    let mut sink = FrameSink {
+        bytes: [0; 8],
+        calls: Vec::new(),
+    };
+    for (index, ((n, d, tick), bytes)) in [(1, 24, 17), (7, 120, 22)]
+        .into_iter()
+        .zip(expected)
+        .enumerate()
+    {
+        let facts = FrameCompletion {
+            duration: FrameDuration::new(n, d).unwrap(),
+            frame_index: index as u32,
+            pts: Some(Timestamp::new(tick, TimeBase::new(1, 120).unwrap())),
+        };
+        let native_pointer = borrowed
+            .as_any()
+            .downcast_ref::<mock_anim::MockAnimationFrameDec>()
+            .unwrap()
+            .pixel_address(index);
+        let frame = borrowed.render_next_frame(None).unwrap().unwrap();
+        assert_eq!(frame.pixels().row(0).as_ptr(), native_pointer);
+        assert_eq!(frame.pixels().row(0), bytes);
+        assert_eq!(
+            (frame.duration(), frame.frame_index(), frame.pts()),
+            (facts.duration, facts.frame_index, facts.pts)
+        );
+        let frame = owned.render_next_frame_owned(None).unwrap().unwrap();
+        assert_eq!(frame.pixels().row(0), bytes);
+        assert_eq!(
+            (frame.duration(), frame.frame_index(), frame.pts()),
+            (facts.duration, facts.frame_index, facts.pts)
+        );
+        for completion in [
+            typed
+                .render_next_frame_to_sink(None, &mut sink)
+                .unwrap()
+                .unwrap(),
+            erased
+                .render_next_frame_to_sink(None, &mut sink)
+                .unwrap()
+                .unwrap(),
+        ] {
+            assert_eq!(completion.frame, Some(facts));
+            assert_eq!(
+                (
+                    completion.width,
+                    completion.height,
+                    completion.native_format
+                ),
+                (2, 1, spec.clone())
+            );
+        }
+        assert_eq!(
+            sink.calls,
+            ["begin", "rows", "finish", "begin", "rows", "finish"]
+        );
+        assert_eq!(sink.bytes, bytes);
+        sink.calls.clear();
+    }
+    assert!(
+        typed
+            .render_next_frame_to_sink(None, &mut sink)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        erased
+            .render_next_frame_to_sink(None, &mut sink)
+            .unwrap()
+            .is_none()
+    );
+    assert!(borrowed.render_next_frame(None).unwrap().is_none());
+    assert!(owned.render_next_frame_owned(None).unwrap().is_none());
+    assert!(sink.calls.is_empty());
 }

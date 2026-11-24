@@ -176,6 +176,8 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         &mut self,
         declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        declaration.validate_spec()?;
+        declaration.validate_exact_depth()?;
         self.0
             .begin_declared(declaration)
             .map_err(|error| Box::new(error) as BoxedError)
@@ -638,6 +640,8 @@ where
         &self,
         declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, BoxedError> {
+        declaration.validate_spec()?;
+        declaration.validate_exact_depth()?;
         let Some(job) = self.0.as_ref() else {
             return Err("EncodeJobShim: job already consumed (double take)".into());
         };

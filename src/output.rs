@@ -367,7 +367,7 @@ pub struct DecodeOutput {
 
 // PixelBuf carries its active spec, HDR metadata, sample facts and source provenance.
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 512);
+const _: [(); 520] = [(); core::mem::size_of::<DecodeOutput>()];
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuf`].
@@ -565,7 +565,7 @@ impl core::fmt::Debug for DecodeOutput {
 /// The pixel data borrows the decoder's internal canvas buffer — calling
 /// `render_next_frame()` again invalidates this borrow.
 ///
-/// Use [`to_owned_frame()`](AnimationFrame::to_owned_frame) to copy the pixel data
+/// Use [`try_to_owned_frame()`](AnimationFrame::try_to_owned_frame) to copy the pixel data
 /// if you need to retain the frame across calls.
 #[non_exhaustive]
 pub struct AnimationFrame<'a> {
@@ -650,21 +650,18 @@ impl<'a> AnimationFrame<'a> {
     /// The frame's [`ImageSpec`] and HDR metadata ride
     /// along: the copy is a staging buffer, and staging buffers are where
     /// buffer-level color signaling silently dies (zencodec#25).
-    pub fn to_owned_frame(&self) -> OwnedAnimationFrame {
-        let ps = &self.pixels;
-
-        // A tightly-packed copy of the format's own sample type, with its color context.
-        let pixels = ps
-            .try_to_tight_buf()
-            .expect("to_owned_frame: allocation failed");
-
-        OwnedAnimationFrame {
-            pixels,
+    ///
+    /// Allocation and buffer validation failures are returned to the caller.
+    pub fn try_to_owned_frame(
+        &self,
+    ) -> Result<OwnedAnimationFrame, whereat::At<zenpixels::BufferError>> {
+        Ok(OwnedAnimationFrame {
+            pixels: self.pixels.try_to_tight_buf()?,
             duration: self.duration,
             frame_index: self.frame_index,
             pts: self.pts,
             extensions: Extensions::new(),
-        }
+        })
     }
 }
 
@@ -682,7 +679,7 @@ impl core::fmt::Debug for AnimationFrame<'_> {
 
 /// A composited full-canvas animation frame with owned pixel data.
 ///
-/// Produced by [`AnimationFrame::to_owned_frame()`] or
+/// Produced by [`AnimationFrame::try_to_owned_frame()`] or
 /// [`AnimationFrameDecoder::render_next_frame_owned()`](crate::decode::AnimationFrameDecoder::render_next_frame_owned).
 #[non_exhaustive]
 pub struct OwnedAnimationFrame {
@@ -892,11 +889,14 @@ mod tests {
             zenpixels::ColorSpace::DISPLAY_P3
         );
 
-        let owned = frame.to_owned_frame();
+        let owned = frame.try_to_owned_frame().unwrap();
         assert_eq!(owned.pixels().spec(), src.spec());
         let plain = make_rgb8_buffer(3, 2);
         let bare = AnimationFrame::new(plain.as_view(), 40, 1);
-        assert_eq!(bare.to_owned_frame().pixels().spec(), plain.spec());
+        assert_eq!(
+            bare.try_to_owned_frame().unwrap().pixels().spec(),
+            plain.spec()
+        );
     }
 
     #[test]
@@ -973,7 +973,7 @@ mod tests {
         let buf = make_rgb8_buffer(2, 2);
         let ps = buf.as_view();
         let frame = AnimationFrame::new(ps, 50, 3);
-        let owned = frame.to_owned_frame();
+        let owned = frame.try_to_owned_frame().unwrap();
         assert_eq!(
             owned.duration(),
             crate::animation::FrameDuration::from_millis(50)
@@ -1003,7 +1003,7 @@ mod tests {
         let frame = AnimationFrame::new(buf.as_view(), 40, 0);
         assert_eq!(frame.pts(), None);
         let frame = frame.with_pts(Some(pts));
-        let owned = frame.to_owned_frame();
+        let owned = frame.try_to_owned_frame().unwrap();
         assert_eq!(owned.pts(), Some(pts));
         assert_eq!(owned.as_animation_frame().pts(), Some(pts));
     }

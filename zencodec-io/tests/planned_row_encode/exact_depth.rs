@@ -15,6 +15,7 @@ fn claim() -> ExactDepth {
 struct ClaimJob {
     inner: Job,
     expected: Option<ExactDepth>,
+    interpretation: Option<(ImageSpec, zencodec::decode::RowMetadata)>,
 }
 impl EncodeJob for ClaimJob {
     type Error = io::Error;
@@ -31,12 +32,17 @@ impl EncodeJob for ClaimJob {
     }
     fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         assert_eq!(declaration.exact_depth, self.expected);
+        if let Some((spec, metadata)) = &self.interpretation {
+            assert_eq!(&declaration.descriptor, spec);
+            assert_eq!(declaration.pixel_metadata.as_ref(), Some(metadata));
+        }
         self.inner.plan_encode(declaration)
     }
     fn encoder(self) -> Result<Self::Enc, Self::Error> {
         Ok(ClaimEncoder {
             inner: self.inner.encoder()?,
             expected: self.expected,
+            interpretation: self.interpretation,
         })
     }
     fn animation_frame_encoder(self) -> Result<(), Self::Error> {
@@ -62,6 +68,7 @@ impl EncoderConfig for ClaimConfig {
 struct ClaimEncoder {
     inner: Enc,
     expected: Option<ExactDepth>,
+    interpretation: Option<(ImageSpec, zencodec::decode::RowMetadata)>,
 }
 impl Encoder for ClaimEncoder {
     type Error = io::Error;
@@ -76,6 +83,10 @@ impl Encoder for ClaimEncoder {
         declaration: &EncodeDeclaration,
     ) -> Result<EncodePlan, Self::Error> {
         assert_eq!(declaration.exact_depth, self.expected);
+        if let Some((spec, metadata)) = &self.interpretation {
+            assert_eq!(&declaration.descriptor, spec);
+            assert_eq!(declaration.pixel_metadata.as_ref(), Some(metadata));
+        }
         self.inner.begin_declared(declaration)
     }
     fn begin_output(
@@ -98,15 +109,17 @@ impl Encoder for ClaimEncoder {
         self.inner.consume_output(n);
     }
     fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Self::Error> {
-        let expected_bits = self
-            .expected
-            .filter(|claim| claim.range() == SignalRange::Full)
-            .map_or(0, ExactDepth::color_bits);
         assert_eq!(
-            pixels.facts().exact.effective_bits,
-            expected_bits,
-            "driver must preserve representable verified evidence"
+            pixels.facts().depth,
+            self.expected,
+            "driver must preserve all verified depth evidence"
         );
+        if let Some((spec, metadata)) = &self.interpretation {
+            let mut observed = zencodec::decode::RowMetadata::from_view(&pixels);
+            observed.facts.depth = None;
+            assert_eq!(pixels.spec(), spec);
+            assert_eq!(&observed, metadata);
+        }
         if let Some(exact) = self.expected {
             assert!(
                 exact.holds_for(&pixels).unwrap(),
@@ -211,6 +224,7 @@ fn job(s: &Setup) -> ClaimJob {
     ClaimJob {
         inner: s.job(),
         expected: s.description.lock().unwrap().exact_depth,
+        interpretation: None,
     }
 }
 struct Samples {
@@ -296,12 +310,12 @@ fn inconsistent_claims_refuse_before_native_start_source_reads_or_publication() 
         (
             codec_spec(zenpixels::SampleLayout::RGB8),
             claim(),
-            ExactDepthError::DescriptorMismatch,
+            ExactDepthError::SpecMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::RGB16).with_range(SignalRange::Narrow),
             claim(),
-            ExactDepthError::DescriptorMismatch,
+            ExactDepthError::SpecMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::CMYK8),
@@ -803,6 +817,88 @@ fn supported_claims_preserve_inherited_startup_refusals_without_fallback() {
                 usize::from(seam == 2)
             );
             assert_eq!(storage.reserved_bytes(), 0);
+        }
+    }
+}
+
+#[test]
+fn full_range_color_and_alpha_depth_reach_native_begin_and_rows_independently() {
+    use zenpixels::{ColorOrigin, PixelBuf, SampleFacts, SampleLayout};
+    let spec = codec_spec(SampleLayout::GRAYA16);
+    let exact = ExactDepth::new(SampleType::U16, SignalRange::Full, 5, 3).unwrap();
+    // round(65535/31) and round(65535/7) are independent authored code values.
+    let samples = [2114u16, 9362, 4228, 18724];
+    let mut pixels = PixelBuf::from_vec(samples.to_vec(), 2, 1, spec.clone()).unwrap();
+    let measured = ExactDepth::measure(&pixels.as_view()).unwrap();
+    assert_eq!((measured.color_bits(), measured.alpha_bits()), (5, 3));
+    let wrong = ExactDepth::new(SampleType::U16, SignalRange::Full, 5, 5).unwrap();
+    assert!(!wrong.holds_for(&pixels.as_view()).unwrap());
+    let mut facts = SampleFacts::NONE.with_depth(exact);
+    facts.all_grayscale = true;
+    pixels.set_facts(facts);
+    let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
+    let hdr = zenpixels::HdrMetadata {
+        cll: Some(zencodec::ContentLightLevel::new(997, 197)),
+        mastering: None,
+    };
+    let pixels = pixels.with_origin(origin).with_hdr(hdr);
+    for route in ROUTES {
+        let s = setup(spec.clone(), 1, Some(exact));
+        let raster = Raster::new(pixels.as_view());
+        let declaration = raster.description();
+        assert_eq!(declaration.exact_depth, Some(exact));
+        let mut job = job(&s);
+        job.interpretation = Some((declaration.descriptor, declaration.pixel_metadata.unwrap()));
+        run(
+            route,
+            job,
+            raster,
+            s.writer(),
+            PolicySet::new(),
+            options(StorageBudget::new(4096, 16)),
+        )
+        .unwrap();
+        let mut expected = vec![80];
+        expected.extend(samples.into_iter().flat_map(u16::to_ne_bytes));
+        expected.push(90);
+        assert_eq!(*s.bytes.lock().unwrap(), expected);
+    }
+}
+
+#[test]
+fn contradictory_layout_alpha_or_range_refuses_before_native_startup() {
+    use zenpixels::{AlphaMode, ColorSpace, SampleLayout, Transfer};
+    let gray = ColorSpace::Gray {
+        transfer: Transfer::Srgb,
+        range: SignalRange::Full,
+        alpha: AlphaMode::None,
+        white: None,
+    };
+    let narrow = ImageSpec::rgbaf32_linear().with_range(SignalRange::Narrow);
+    for spec in [
+        ImageSpec::new(SampleLayout::RGB8, gray),
+        ImageSpec::new(SampleLayout::RGBA8, ColorSpace::SRGB),
+        narrow,
+    ] {
+        for route in ROUTES {
+            let s = setup(spec.clone(), 2, None);
+            let error = run(
+                route,
+                job(&s),
+                samples(&s, None),
+                s.writer(),
+                PolicySet::new(),
+                options(StorageBudget::new(4096, 16)),
+            )
+            .unwrap_err();
+            assert!(zencodec::find_cause::<zenpixels::ColorError>(&error).is_some());
+            assert!(s.bytes.lock().unwrap().is_empty());
+            let events = s.events.lock().unwrap();
+            if matches!(route, Route::Legacy) {
+                assert_eq!(*events, ["construct"]);
+            } else {
+                assert!(events.is_empty());
+            }
         }
     }
 }

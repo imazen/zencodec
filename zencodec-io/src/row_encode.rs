@@ -37,6 +37,7 @@ use zencodec::output_patch::OutputAccess;
 use zencodec::sample::ExactDepth;
 use zencodec::{
     At,
+    decode::RowMetadata,
     encode::{
         DynEncodeJob, DynEncoder, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
         EncodePlanError, Encoder, InputRequirement,
@@ -52,7 +53,7 @@ use zenpixels::{ColorSpace, ImageSpec, PixelView, PixelViewMut};
 mod planned;
 
 /// Fixed sample declaration for this operation. Color conversion is not implicit.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Description {
     /// Width in samples.
     pub width: u32,
@@ -65,6 +66,8 @@ pub struct Description {
     /// full-storage CMYK claims. `None` does not restrict sample depth.
     /// It does not prove the encoder preserves samples or bound native memory.
     pub exact_depth: Option<ExactDepth>,
+    /// Optional evidence and provenance for the raster this source supplies.
+    pub pixel_metadata: Option<RowMetadata>,
 }
 impl Description {
     /// Construct a declaration; execution checks dimensions and size arithmetic.
@@ -74,6 +77,7 @@ impl Description {
             height,
             descriptor,
             exact_depth: None,
+            pixel_metadata: None,
         }
     }
     /// Declare the actual interpretation of the source samples.
@@ -88,6 +92,36 @@ impl Description {
     pub const fn with_exact_depth(mut self, exact: ExactDepth) -> Self {
         self.exact_depth = Some(exact);
         self
+    }
+    /// Carry proven properties and provenance for every active source row.
+    /// An exact-depth claim is separately verified against each row.
+    pub fn with_pixel_metadata(mut self, mut metadata: RowMetadata) -> Self {
+        self.exact_depth = metadata.facts.depth.take().or(self.exact_depth);
+        self.pixel_metadata = Some(metadata);
+        self
+    }
+
+    fn encode_declaration(&self, access: OutputAccess) -> EncodeDeclaration {
+        let mut declaration =
+            EncodeDeclaration::new(self.width, self.height, self.descriptor.clone())
+                .with_access(access);
+        if let Some(metadata) = self.pixel_metadata.clone() {
+            declaration = declaration.with_pixel_metadata(metadata);
+        }
+        if let Some(exact) = self.exact_depth {
+            declaration = declaration.with_exact_depth(exact);
+        }
+        declaration
+    }
+
+    fn attach_to_verified_rows<'a>(&'a self, view: PixelView<'a>) -> PixelView<'a> {
+        let view = if let Some(metadata) = &self.pixel_metadata {
+            metadata.attach(view)
+        } else {
+            view
+        };
+        let facts = view.facts().with_depth_opt(self.exact_depth);
+        view.with_facts(facts)
     }
 }
 /// A fixed-interpretation source, retained across policy and read on demand.
@@ -137,7 +171,7 @@ pub struct Raster<'a>(PixelView<'a>, Option<ExactDepth>);
 impl<'a> Raster<'a> {
     /// Retain the caller's raster borrow; source padding is not copied.
     pub fn new(pixels: PixelView<'a>) -> Self {
-        let depth = ExactDepth::from_view(&pixels);
+        let depth = pixels.facts().depth;
         Self(pixels, depth)
     }
 
@@ -150,8 +184,12 @@ impl<'a> Raster<'a> {
 impl Source for Raster<'_> {
     type Error = zencodec::CodecError;
     fn description(&self) -> Description {
+        let mut metadata = RowMetadata::from_view(&self.0);
+        metadata.facts.depth = self.1;
         let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.spec().clone());
-        desc.exact_depth = self.1;
+        if metadata != RowMetadata::default() {
+            desc = desc.with_pixel_metadata(metadata);
+        }
         desc
     }
     fn mechanism(&self) -> OutputSource {
@@ -819,12 +857,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             OutputAccess::Forward
         };
-        let mut declaration =
-            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor.clone())
-                .with_access(access);
-        if let Some(exact) = desc.exact_depth {
-            declaration = declaration.with_exact_depth(exact);
-        }
+        let declaration = desc.encode_declaration(access);
         // Includes the legacy path, whose plan() may start native headers.
         // This validates structure only; planning must not read source samples.
         declaration.validate_exact_depth()?;
@@ -933,7 +966,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             check(control)?;
             validate_source(&source, &desc, mechanism)?;
             boundary = Stage::Encode;
-            let mut pixels = PixelView::new(
+            let pixels = PixelView::new(
                 &buffer.as_slice()[..size],
                 desc.width,
                 count,
@@ -959,9 +992,8 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 boundary = Stage::Read;
                 validate_source(&source, &desc, mechanism)?;
                 boundary = Stage::Encode;
-                pixels = exact.attach_verified(pixels);
             }
-            encoder.push_rows(pixels)?;
+            encoder.push_rows(desc.attach_to_verified_rows(pixels))?;
             y += count;
         }
         drop(source);

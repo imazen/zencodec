@@ -33,12 +33,12 @@ fn declaration_uses_paired_descriptor_rules_without_reading_samples() {
         (
             codec_spec(zenpixels::SampleLayout::RGB8),
             full,
-            ExactDepthError::DescriptorMismatch,
+            ExactDepthError::SpecMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::RGB16).with_range(SignalRange::Narrow),
             full,
-            ExactDepthError::DescriptorMismatch,
+            ExactDepthError::SpecMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::CMYK8),
@@ -78,4 +78,77 @@ fn structural_validation_is_deliberately_not_a_content_certificate() {
         .row_mut(0)
         .copy_from_slice(&1u16.to_ne_bytes());
     assert_eq!(eight_in_sixteen().holds_for(&samples.as_view()), Ok(false));
+}
+
+#[test]
+fn independent_canonical_grids_classify_split_color_and_alpha() {
+    use zenpixels::{ImageSpec, PixelBuf, SampleLayout, SampleType, SignalRange};
+    let descriptor = |range| zencodec::helpers::codec_spec(SampleLayout::GRAYA16).with_range(range);
+    let quantize = |code: u64, bits: u8| -> u16 {
+        let steps = (1u64 << bits) - 1;
+        ((code * 65535 + steps / 2) / steps) as u16
+    };
+    for bits in 1..=16u8 {
+        let steps = (1u64 << bits) - 1;
+        let midpoint = steps.div_ceil(2);
+        let canonical = quantize(midpoint, bits);
+        let pixels = PixelBuf::from_vec(
+            vec![canonical, 9362u16],
+            1,
+            1,
+            descriptor(SignalRange::Full),
+        )
+        .unwrap();
+        let exact = ExactDepth::new(SampleType::U16, SignalRange::Full, bits, 3).unwrap();
+        assert!(exact.holds_for(&pixels.as_view()).unwrap(), "depth {bits}");
+        if bits < 15 {
+            let off_grid = PixelBuf::from_vec(
+                vec![canonical - 1, 9362u16],
+                1,
+                1,
+                descriptor(SignalRange::Full),
+            )
+            .unwrap();
+            assert!(
+                !exact.holds_for(&off_grid.as_view()).unwrap(),
+                "depth {bits}"
+            );
+        }
+    }
+    for bits in 8..=16u8 {
+        let narrow = 161u16 << (16 - bits);
+        let pixels =
+            PixelBuf::from_vec(vec![narrow, 9362u16], 1, 1, descriptor(SignalRange::Narrow))
+                .unwrap();
+        let exact = ExactDepth::new(SampleType::U16, SignalRange::Narrow, bits, 3).unwrap();
+        assert!(
+            exact.holds_for(&pixels.as_view()).unwrap(),
+            "narrow depth {bits}"
+        );
+        if bits < 16 {
+            let other = PixelBuf::from_vec(
+                vec![narrow - 1, 9362u16],
+                1,
+                1,
+                descriptor(SignalRange::Narrow),
+            )
+            .unwrap();
+            assert!(!exact.holds_for(&other.as_view()).unwrap());
+        }
+    }
+    for value in 0..=u8::MAX {
+        let spec = ImageSpec::gray8_srgb();
+        let pixel = PixelBuf::from_vec(vec![value], 1, 1, spec).unwrap();
+        for bits in 1..=8 {
+            let steps = (1u32 << bits) - 1;
+            let oracle =
+                (0..=steps).any(|index| ((index * 255 + steps / 2) / steps) as u8 == value);
+            let exact = ExactDepth::new(SampleType::U8, SignalRange::Full, bits, 8).unwrap();
+            assert_eq!(
+                exact.holds_for(&pixel.as_view()).unwrap(),
+                oracle,
+                "{value} at {bits}"
+            );
+        }
+    }
 }

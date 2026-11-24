@@ -237,3 +237,55 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
     assert!(Gray8::default().render(&frame, &mut canvas).is_err());
     assert_eq!(bytes, [99, 99]);
 }
+
+#[test]
+fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
+    use zencodec::frame::{ColorClaim, Crop};
+    use zencodec_media::adapt::{Gray8, RenderFrame};
+    use zenpixels::{Cicp, ImageSpec, PixelViewMut};
+    let encoding = code(SampleType::U8, 8, 0);
+    let samples = Arc::new(
+        OwnedPlanes::from_encoded_planes(vec![(
+            OwnedPlane::U8(Plane::new(vec![17, 223], 2, 1, 2).unwrap()),
+            encoding,
+        )])
+        .unwrap(),
+    );
+    let layout = PlanarLayout::new(
+        vec![PlaneSpec::new(PlaneRole::Luma, encoding)],
+        ChromaSubsampling::Mono,
+        ChromaSiting::Unknown,
+    )
+    .unwrap();
+    for (color, crop, success) in [
+        (Cicp::SRGB, false, true),
+        (Cicp::new(1, 13, 0, false), false, false),
+        (Cicp::BT2100_PQ, false, false),
+        (Cicp::SRGB, true, false),
+    ] {
+        let mut geometry = FrameGeometry::full(2, 1);
+        if crop {
+            geometry.crop = Crop {
+                x: 1,
+                y: 0,
+                width: 1,
+                height: 1,
+            };
+        }
+        let interp = FrameInterpretation::new(geometry, layout.clone())
+            .with_color(ColorClaim::new(Some(color), None, Some(color)));
+        let frame = Frame::new(
+            samples.clone(),
+            Arc::new(interp),
+            FrameTiming::default(),
+            Presentation::default(),
+        );
+        let mut bytes = [99; 2];
+        let mut canvas = PixelViewMut::new(&mut bytes, 2, 1, 2, ImageSpec::gray8_srgb()).unwrap();
+        assert_eq!(
+            Gray8::default().render(&frame, &mut canvas).is_ok(),
+            success
+        );
+        assert_eq!(bytes, if success { [17, 223] } else { [99, 99] });
+    }
+}

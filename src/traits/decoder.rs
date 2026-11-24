@@ -165,7 +165,8 @@ pub trait AnimationFrameDecoder: Sized {
     ///
     /// Default implementation calls [`render_next_frame()`](AnimationFrameDecoder::render_next_frame)
     /// and copies the pixel data. Codecs that produce owned data natively
-    /// may override for efficiency.
+    /// may override for efficiency. The default consumes the frame even if the
+    /// subsequent pixel copy fails.
     ///
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_owned(
@@ -173,7 +174,10 @@ pub trait AnimationFrameDecoder: Sized {
         pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, Self::Error> {
         match self.render_next_frame(pulse)? {
-            Some(frame) => Ok(Some(frame.to_owned_frame())),
+            Some(frame) => frame
+                .try_to_owned_frame()
+                .map(Some)
+                .map_err(|error| Self::wrap_sink_error(alloc::boxed::Box::new(error))),
             None => Ok(None),
         }
     }

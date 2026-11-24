@@ -188,3 +188,126 @@ fn cancellation_between_partial_deliveries_is_terminal() {
         ));
     }
 }
+
+#[test]
+fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
+    use zenpixels::{ColorOrigin, FloatFacts, HdrMetadata, PixelBuf, SampleFacts, SampleLayout};
+    #[repr(align(64))]
+    struct Aligned([u8; 64]);
+    struct Sink {
+        bytes: Aligned,
+        metas: Vec<(BatchMeta, RowMetadata)>,
+    }
+    impl DecodeRowSink for Sink {
+        fn max_buffer_rows(&self) -> NonZeroU32 {
+            NonZeroU32::MIN
+        }
+        fn accepts_provisional(&self) -> bool {
+            true
+        }
+        fn provide_next_buffer(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
+            Err("delivery lost explicit row metadata".into())
+        }
+        fn provide_buffer_with_metadata(
+            &mut self,
+            meta: BatchMeta,
+            height: u32,
+            width: u32,
+            desc: ImageSpec,
+            facts: &RowMetadata,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
+            self.bytes.0.fill(0xD6);
+            self.metas.push((meta, facts.clone()));
+            Ok(PixelViewMut::new(&mut self.bytes.0, width, height, 16, desc)?.with_hdr(facts.hdr))
+        }
+    }
+    for is_float in [false, true] {
+        let (mut buffer, expected) = if is_float {
+            let words = [0x7fc0_0017u32, 0x8000_0000, 0x0000_0001, 0x3f80_0000];
+            let spec = zencodec::helpers::codec_spec(SampleLayout::GRAYF32);
+            (
+                PixelBuf::from_vec(words.map(f32::from_bits).to_vec(), 2, 2, spec).unwrap(),
+                words
+                    .into_iter()
+                    .flat_map(u32::to_ne_bytes)
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            let words = [2114u16, 65535, 4228, 0];
+            (
+                PixelBuf::from_vec(words.to_vec(), 2, 2, ImageSpec::gray16_srgb()).unwrap(),
+                words
+                    .into_iter()
+                    .flat_map(u16::to_ne_bytes)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let facts = if is_float {
+            SampleFacts::NONE.with_float(FloatFacts::NO_INFINITE)
+        } else {
+            SampleFacts::NONE.with_depth(
+                zencodec::sample::ExactDepth::new(
+                    zenpixels::SampleType::U16,
+                    zenpixels::SignalRange::Full,
+                    5,
+                    16,
+                )
+                .unwrap(),
+            )
+        };
+        let hdr = HdrMetadata {
+            cll: Some(zencodec::ContentLightLevel::new(900, 200)),
+            ..HdrMetadata::default()
+        };
+        let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
+        buffer.set_facts(facts);
+        let buffer = buffer.with_hdr(hdr).with_origin(origin.clone());
+        let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Png));
+            ctx.set_output_descriptor(buffer.spec().clone());
+            ctx.write_rows(BatchMeta::new(0, false).with_pass(2), &buffer.as_view())
+                .await?;
+            ctx.write_rows(BatchMeta::final_rows(0), &buffer.as_view())
+                .await?;
+            Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, buffer.spec().clone()))
+        });
+        let mut sink = Sink {
+            bytes: Aligned([0; 64]),
+            metas: Vec::new(),
+        };
+        let row_bytes = expected.len() / 2;
+        for index in 0..4 {
+            let progress = decoder
+                .step(Input::new(0, &[]), &mut sink, Some(&NoPulse))
+                .unwrap();
+            let y = index % 2;
+            let Event::Rows { meta, rows: 1 } = progress.event else {
+                panic!("expected one row")
+            };
+            assert_eq!(meta.y, y as u32);
+            assert_eq!(meta.is_final, index >= 2);
+            assert_eq!(meta.pass, if index < 2 { 2 } else { 0 });
+            assert_eq!(
+                &sink.bytes.0[..row_bytes],
+                &expected[y * row_bytes..(y + 1) * row_bytes]
+            );
+            assert_eq!(&sink.bytes.0[row_bytes..16], &[0xD6; 16][row_bytes..]);
+            assert_eq!(sink.metas[index].1.facts, facts);
+            assert_eq!(sink.metas[index].1.origin.as_ref(), Some(&origin));
+            assert_eq!(sink.metas[index].1.hdr, hdr);
+        }
+        assert!(matches!(
+            decoder
+                .step(Input::new(0, &[]), &mut sink, Some(&NoPulse))
+                .unwrap()
+                .event,
+            Event::Done(_)
+        ));
+    }
+}

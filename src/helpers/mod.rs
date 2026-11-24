@@ -34,7 +34,9 @@ pub use icc::{
     IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
 pub use pixels::codec_spec;
-pub(crate) use pixels::{has_alpha, redacted_spec, signal_range};
+#[cfg(test)]
+pub(crate) use pixels::signal_range;
+pub(crate) use pixels::{has_alpha, redacted_spec};
 pub use whole_file::WholeFileIncremental;
 
 /// Copy already-decoded rows into the sink's admitted strip capacity.
@@ -53,16 +55,19 @@ pub fn copy_rows_to_sink(
         .checked_add(pixels.rows())
         .ok_or_else(|| SinkError::from("copied rows exceed the row coordinate range"))?;
     let max_rows = sink.max_buffer_rows().get();
+    let metadata = crate::sink::RowMetadata::from_view(pixels);
     let mut offset = 0;
     while offset < pixels.rows() {
         let rows = max_rows.min(pixels.rows() - offset);
         let mut part = meta;
         part.y += offset;
-        let mut dst = if part.is_final {
-            sink.provide_next_buffer(part.y, rows, pixels.width(), pixels.spec().clone())?
-        } else {
-            sink.provide_pass_buffer(part, rows, pixels.width(), pixels.spec().clone())?
-        };
+        let mut dst = sink.provide_buffer_with_metadata(
+            part,
+            rows,
+            pixels.width(),
+            pixels.spec().clone(),
+            &metadata,
+        )?;
         if dst.width() != pixels.width() || dst.rows() != rows || dst.spec() != pixels.spec() {
             return Err("sink returned a buffer with a different geometry or descriptor".into());
         }
@@ -99,6 +104,7 @@ pub fn copy_decode_to_sink<'a, J>(
 where
     J: DecodeJob<'a>,
 {
+    let mut completion = job.output_info(&data)?;
     let dec = job.decoder(data, preferred)?;
     let output = dec.decode()?;
     let ps = output.pixels();
@@ -113,8 +119,11 @@ where
 
     sink.finish().map_err(wrap_sink_error)?;
 
-    let info = output.info();
-    Ok(OutputInfo::full_decode(info.width, info.height, desc))
+    completion.width = w;
+    completion.height = h;
+    completion.has_alpha = crate::helpers::has_alpha(&desc);
+    completion.native_format = desc;
+    Ok(completion)
 }
 
 /// Implement `render_next_frame_to_sink` by rendering a frame and copying rows.
@@ -150,5 +159,11 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
         .map_err(D::wrap_sink_error)?;
     sink.finish().map_err(D::wrap_sink_error)?;
 
-    Ok(Some(OutputInfo::full_decode(w, h, desc)))
+    Ok(Some(OutputInfo::full_decode(w, h, desc).with_frame(
+        crate::decode::FrameCompletion {
+            duration: frame.duration(),
+            frame_index: frame.frame_index(),
+            pts: frame.pts(),
+        },
+    )))
 }

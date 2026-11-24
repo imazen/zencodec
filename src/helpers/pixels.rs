@@ -53,6 +53,7 @@ pub const fn codec_spec(layout: SampleLayout) -> ImageSpec {
     ImageSpec::new(layout, color)
 }
 
+#[cfg(test)]
 pub(crate) fn signal_range(spec: &ImageSpec) -> SignalRange {
     match spec.color {
         ColorSpace::Rgb { range, .. } | ColorSpace::Gray { range, .. } => range,
