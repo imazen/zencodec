@@ -27,6 +27,20 @@ Shared traits and types for zen* image codecs.
   the floor to the paired 0.2.17 and pins the unpublished verifier; release
   still requires published dependency contents that provide those APIs.
 
+## Known Bugs in the zenpixels 0.5 draft
+
+The generic `PixelBuf::from_vec` accepts inferred `Vec<i32>` on byte-shaped
+fixtures and reads native-endian word bytes as pixels. The migration uses
+`from_bytes` for existing byte buffers. Two unchanged byte assertions caught
+the difference. The exact 64-bit `DecodeOutput` layout assertion is now 512
+bytes, up from 368 at the base revision.
+
+The pinned converter can report an integer transfer conversion as lossless.
+Its depth scan also uses full-range byte replication for narrow U16 samples.
+The draft retains range-aware verification with independent color and alpha
+grids. The old empty-view preflight now validates the spec directly because
+0.5 refuses all zero-size views.
+
 ## Workspace Layout
 
 This repo is a Cargo workspace:

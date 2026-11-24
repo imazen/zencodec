@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+### QUEUED BREAKING CHANGES
+
+- Integrate zenpixels 0.5 packed carriers and algebraic image specs. Active
+  color is part of the spec, while source-file precedence remains in
+  `SourceColor`. Native plane and exact-grid contracts are available through
+  `zencodec::plane` and `zencodec::sample` during the integration draft.
+
 ### Added
 
 - Testkit `check_metadata_retained` compares required resolved metadata against
