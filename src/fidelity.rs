@@ -296,7 +296,7 @@ pub enum LossyTarget {
 //
 //   // Load-bearing struct (private fields + builders → additive): carries the
 //   // budget now, plus reserved room for *output-encode* directives the input
-//   // PixelDescriptor can't express (output bit depth — PNG/JXL can encode
+//   // ImageSpec can't express (output bit depth — PNG/JXL can encode
 //   // 16-bit input at a chosen depth; lossless representation — RCT, palette).
 //   struct LosslessModeParams { budget: LosslessBudget, /* output_depth, repr… */ }
 //

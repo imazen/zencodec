@@ -7,7 +7,7 @@ use core::any::Any;
 use crate::detect::SourceEncodingDetails;
 use crate::extensions::Extensions;
 use crate::{ImageFormat, ImageInfo, Metadata};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelBuf, PixelView};
 
 /// Output from an encode operation.
 ///
@@ -354,28 +354,27 @@ impl core::fmt::Debug for DecodeDetails {
 
 /// Output from a decode operation.
 ///
-/// Stores pixel data as a [`PixelBuffer`] with embedded format descriptor.
+/// Stores pixel data as a [`PixelBuf`] with embedded format descriptor.
 /// The descriptor carries the correct transfer function, color primaries,
 /// and signal range — no need to resolve from CICP separately.
 #[non_exhaustive]
 pub struct DecodeOutput {
-    pixels: PixelBuffer,
+    pixels: PixelBuf,
     info: ImageInfo,
     source_encoding: Option<Box<dyn SourceEncodingDetails>>,
     extensions: Extensions,
 }
 
-// (Carries ImageInfo, which gained the SourceColor diffuse_white anchor:
-// 352 → 360 on 64-bit.)
+// PixelBuf carries its active spec, HDR metadata, sample facts and source provenance.
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 368);
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 512);
 
 impl DecodeOutput {
-    /// Create a new decode output from a [`PixelBuffer`].
+    /// Create a new decode output from a [`PixelBuf`].
     ///
-    /// The PixelBuffer's descriptor should already have the correct transfer
+    /// The PixelBuf's descriptor should already have the correct transfer
     /// function and color primaries set by the decoder.
-    pub fn new(pixels: PixelBuffer, info: ImageInfo) -> Self {
+    pub fn new(pixels: PixelBuf, info: ImageInfo) -> Self {
         Self {
             pixels,
             info,
@@ -391,9 +390,9 @@ impl DecodeOutput {
     ///
     /// ```
     /// use zencodec::{ImageFormat, ImageInfo, decode::DecodeOutput};
-    /// use zenpixels::{PixelBuffer, PixelDescriptor};
+    /// use zenpixels::{PixelBuf, ImageSpec};
     /// let decoded = DecodeOutput::new(
-    ///     PixelBuffer::new(3, 2, PixelDescriptor::RGB8_SRGB),
+    ///     PixelBuf::new(3, 2, ImageSpec::rgb8_srgb()).unwrap(),
     ///     ImageInfo::new(3, 2, ImageFormat::Png),
     /// );
     /// let (pixels, details) = decoded.into_parts();
@@ -401,7 +400,7 @@ impl DecodeOutput {
     /// let decoded = DecodeOutput::from_parts(pixels, details);
     /// assert_eq!(decoded.width(), 3);
     /// ```
-    pub fn into_parts(self) -> (PixelBuffer, DecodeDetails) {
+    pub fn into_parts(self) -> (PixelBuf, DecodeDetails) {
         let Self {
             pixels,
             info,
@@ -423,7 +422,7 @@ impl DecodeOutput {
     /// Like [`Self::new`], this is a raw result constructor: the caller must keep
     /// geometry and interpretation consistent. It performs no conversion and
     /// does not update provenance after image processing.
-    pub fn from_parts(pixels: PixelBuffer, details: DecodeDetails) -> Self {
+    pub fn from_parts(pixels: PixelBuf, details: DecodeDetails) -> Self {
         let DecodeDetails {
             info,
             source_encoding,
@@ -499,13 +498,18 @@ impl DecodeOutput {
         &mut self.extensions
     }
 
-    /// Borrow the pixel data as a [`PixelSlice`].
-    pub fn pixels(&self) -> PixelSlice<'_> {
-        self.pixels.as_slice()
+    /// Borrow the pixel data as a [`PixelView`].
+    pub fn pixels(&self) -> PixelView<'_> {
+        self.pixels.as_view()
+    }
+
+    /// Borrow the pixel owner, including source provenance.
+    pub fn buffer(&self) -> &PixelBuf {
+        &self.pixels
     }
 
     /// Take the pixel buffer, consuming this output.
-    pub fn into_buffer(self) -> PixelBuffer {
+    pub fn into_buffer(self) -> PixelBuf {
         self.pixels
     }
 
@@ -526,12 +530,12 @@ impl DecodeOutput {
 
     /// Whether the image has an alpha channel.
     pub fn has_alpha(&self) -> bool {
-        self.pixels.has_alpha()
+        crate::helpers::has_alpha(self.pixels.spec())
     }
 
     /// Pixel format descriptor.
-    pub fn descriptor(&self) -> PixelDescriptor {
-        self.pixels.descriptor()
+    pub fn descriptor(&self) -> ImageSpec {
+        self.pixels.spec().clone()
     }
 
     /// Detected format.
@@ -565,7 +569,7 @@ impl core::fmt::Debug for DecodeOutput {
 /// if you need to retain the frame across calls.
 #[non_exhaustive]
 pub struct AnimationFrame<'a> {
-    pixels: PixelSlice<'a>,
+    pixels: PixelView<'a>,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
     pts: Option<crate::time::Timestamp>,
@@ -573,7 +577,7 @@ pub struct AnimationFrame<'a> {
 
 impl<'a> AnimationFrame<'a> {
     /// Create a full frame borrowing pixel data.
-    pub fn new(pixels: PixelSlice<'a>, duration_ms: u32, frame_index: u32) -> Self {
+    pub fn new(pixels: PixelView<'a>, duration_ms: u32, frame_index: u32) -> Self {
         Self {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
@@ -584,7 +588,7 @@ impl<'a> AnimationFrame<'a> {
 
     /// Create a full frame with its exact encoded source duration.
     pub fn with_duration(
-        pixels: PixelSlice<'a>,
+        pixels: PixelView<'a>,
         duration: crate::animation::FrameDuration,
         frame_index: u32,
     ) -> Self {
@@ -616,7 +620,7 @@ impl<'a> AnimationFrame<'a> {
     }
 
     /// Borrow the composited pixel data.
-    pub fn pixels(&self) -> &PixelSlice<'a> {
+    pub fn pixels(&self) -> &PixelView<'a> {
         &self.pixels
     }
 
@@ -643,7 +647,7 @@ impl<'a> AnimationFrame<'a> {
 
     /// Copy pixel data to produce an owned frame.
     ///
-    /// The frame's [`ColorContext`](zenpixels::ColorContext), if any, rides
+    /// The frame's [`ImageSpec`] and HDR metadata ride
     /// along: the copy is a staging buffer, and staging buffers are where
     /// buffer-level color signaling silently dies (zencodec#25).
     pub fn to_owned_frame(&self) -> OwnedAnimationFrame {
@@ -651,7 +655,7 @@ impl<'a> AnimationFrame<'a> {
 
         // A tightly-packed copy of the format's own sample type, with its color context.
         let pixels = ps
-            .try_to_tight_buffer()
+            .try_to_tight_buf()
             .expect("to_owned_frame: allocation failed");
 
         OwnedAnimationFrame {
@@ -682,7 +686,7 @@ impl core::fmt::Debug for AnimationFrame<'_> {
 /// [`AnimationFrameDecoder::render_next_frame_owned()`](crate::decode::AnimationFrameDecoder::render_next_frame_owned).
 #[non_exhaustive]
 pub struct OwnedAnimationFrame {
-    pixels: PixelBuffer,
+    pixels: PixelBuf,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
     pts: Option<crate::time::Timestamp>,
@@ -692,7 +696,7 @@ pub struct OwnedAnimationFrame {
 impl OwnedAnimationFrame {
     /// Create an owned frame with its exact encoded source duration.
     pub fn with_duration(
-        pixels: PixelBuffer,
+        pixels: PixelBuf,
         duration: crate::animation::FrameDuration,
         frame_index: u32,
     ) -> Self {
@@ -722,8 +726,8 @@ impl OwnedAnimationFrame {
         self.duration
     }
 
-    /// Create an owned frame from a [`PixelBuffer`].
-    pub fn new(pixels: PixelBuffer, duration_ms: u32, frame_index: u32) -> Self {
+    /// Create an owned frame from a [`PixelBuf`].
+    pub fn new(pixels: PixelBuf, duration_ms: u32, frame_index: u32) -> Self {
         Self {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
@@ -733,13 +737,13 @@ impl OwnedAnimationFrame {
         }
     }
 
-    /// Borrow the pixel data as a [`PixelSlice`].
-    pub fn pixels(&self) -> PixelSlice<'_> {
-        self.pixels.as_slice()
+    /// Borrow the pixel data as a [`PixelView`].
+    pub fn pixels(&self) -> PixelView<'_> {
+        self.pixels.as_view()
     }
 
     /// Take the pixel buffer, consuming this frame.
-    pub fn into_buffer(self) -> PixelBuffer {
+    pub fn into_buffer(self) -> PixelBuf {
         self.pixels
     }
 
@@ -759,7 +763,7 @@ impl OwnedAnimationFrame {
 
     /// Borrow as a [`AnimationFrame`].
     pub fn as_animation_frame(&self) -> AnimationFrame<'_> {
-        AnimationFrame::with_duration(self.pixels.as_slice(), self.duration, self.frame_index)
+        AnimationFrame::with_duration(self.pixels.as_view(), self.duration, self.frame_index)
             .with_pts(self.pts)
     }
 
@@ -812,7 +816,7 @@ impl core::fmt::Debug for OwnedAnimationFrame {
 mod tests {
     use super::*;
     use alloc::vec;
-    use zenpixels::PixelDescriptor;
+    use zenpixels::ImageSpec;
 
     #[test]
     fn decode_parts_move_and_drop_each_owner_once() {
@@ -858,16 +862,16 @@ mod tests {
         assert!(details.extensions.is_empty());
     }
 
-    fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuffer {
-        PixelBuffer::new(w, h, PixelDescriptor::RGB8_SRGB)
+    fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuf {
+        PixelBuf::new(w, h, ImageSpec::rgb8_srgb()).unwrap()
     }
 
-    fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuffer {
-        PixelBuffer::new(w, h, PixelDescriptor::RGBA8_SRGB)
+    fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
+        PixelBuf::new(w, h, ImageSpec::rgba8_srgb()).unwrap()
     }
 
-    fn make_gray8_buffer(w: u32, h: u32) -> PixelBuffer {
-        PixelBuffer::new(w, h, PixelDescriptor::GRAY8_SRGB)
+    fn make_gray8_buffer(w: u32, h: u32) -> PixelBuf {
+        PixelBuf::new(w, h, ImageSpec::gray8_srgb()).unwrap()
     }
 
     /// Regression for zencodec#25: `to_owned_frame` copies pixels into a fresh
@@ -876,24 +880,23 @@ mod tests {
     /// the borrowed path carried one.
     #[test]
     fn to_owned_frame_keeps_color_context() {
-        use alloc::sync::Arc;
-        let ctx = Arc::new(zenpixels::ColorContext::from_cicp(
-            zenpixels::Cicp::BT2100_PQ,
-        ));
-        let src = make_rgb8_buffer(3, 2).with_color_context(ctx.clone());
-        let frame = AnimationFrame::new(src.as_slice(), 40, 0);
-        assert_eq!(frame.pixels().color_context(), Some(&ctx));
+        let src = PixelBuf::new(
+            3,
+            2,
+            ImageSpec::rgb8_srgb().with_primaries(zenpixels::Primaries::DisplayP3),
+        )
+        .unwrap();
+        let frame = AnimationFrame::new(src.as_view(), 40, 0);
+        assert_eq!(
+            frame.pixels().spec().color,
+            zenpixels::ColorSpace::DISPLAY_P3
+        );
 
         let owned = frame.to_owned_frame();
-        assert_eq!(
-            owned.pixels().color_context().map(|c| &**c),
-            Some(&*ctx),
-            "the owned copy must carry the same ColorContext as the borrowed frame"
-        );
-        // A context-free frame stays context-free (no invented signaling).
+        assert_eq!(owned.pixels().spec(), src.spec());
         let plain = make_rgb8_buffer(3, 2);
-        let bare = AnimationFrame::new(plain.as_slice(), 40, 1);
-        assert!(bare.to_owned_frame().pixels().color_context().is_none());
+        let bare = AnimationFrame::new(plain.as_view(), 40, 1);
+        assert_eq!(bare.to_owned_frame().pixels().spec(), plain.spec());
     }
 
     #[test]
@@ -954,7 +957,7 @@ mod tests {
     #[test]
     fn animation_frame_borrowed() {
         let buf = make_rgba8_buffer(4, 4);
-        let ps = buf.as_slice();
+        let ps = buf.as_view();
         let frame = AnimationFrame::new(ps, 100, 0);
         assert_eq!(
             frame.duration(),
@@ -968,7 +971,7 @@ mod tests {
     #[test]
     fn animation_frame_to_owned() {
         let buf = make_rgb8_buffer(2, 2);
-        let ps = buf.as_slice();
+        let ps = buf.as_view();
         let frame = AnimationFrame::new(ps, 50, 3);
         let owned = frame.to_owned_frame();
         assert_eq!(
@@ -997,7 +1000,7 @@ mod tests {
         use crate::time::{TimeBase, Timestamp};
         let buf = make_rgb8_buffer(2, 2);
         let pts = Timestamp::new(-3, TimeBase::new(1001, 30000).unwrap());
-        let frame = AnimationFrame::new(buf.as_slice(), 40, 0);
+        let frame = AnimationFrame::new(buf.as_view(), 40, 0);
         assert_eq!(frame.pts(), None);
         let frame = frame.with_pts(Some(pts));
         let owned = frame.to_owned_frame();
@@ -1017,7 +1020,7 @@ mod tests {
     #[test]
     fn animation_frame_debug() {
         let buf = make_gray8_buffer(2, 2);
-        let ps = buf.as_slice();
+        let ps = buf.as_view();
         let frame = AnimationFrame::new(ps, 100, 3);
         let s = alloc::format!("{:?}", frame);
         assert!(s.contains("AnimationFrame"));

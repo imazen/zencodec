@@ -10,7 +10,7 @@ use zencodec::{
     how_far::StopOnly,
 };
 use zencodec_io::CollectSink;
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 struct Once {
     pending: Arc<AtomicBool>,
@@ -42,7 +42,7 @@ impl Native {
         }
         Ok(Progress::new(
             0,
-            Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::RGB8_SRGB)),
+            Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgb8_srgb())),
         ))
     }
 }
@@ -78,7 +78,7 @@ impl ControlledIncrementalDecode for Native {
         } else {
             Ok(ControlledProgress::Suspended {
                 consumed: 0,
-                boundary: self.boundary,
+                boundary: self.boundary.clone(),
             })
         }
     }
@@ -108,7 +108,7 @@ fn setup(
     let boundary = DecodeBoundary::new(InterpretationFacts::new(
         1,
         1,
-        Some(PixelDescriptor::RGB8_SRGB),
+        Some(ImageSpec::rgb8_srgb()),
         InterpretationState::Final,
     ))
     .unwrap();

@@ -24,7 +24,7 @@ use zencodec_media_testkit::{
     check_animation_over_video, check_demuxer_contract, check_demuxer_seek,
     check_muxer_output_honesty, check_video_decoder_contract, check_video_encoder_contract,
 };
-use zenpixels::{PixelBuffer, PixelDescriptor};
+use zenpixels::{ImageSpec, PixelBuf};
 
 const W: u32 = 5;
 const H: u32 = 3;
@@ -113,14 +113,14 @@ fn frames(n: u8) -> Vec<Frame> {
     let mut cap = Gray8::default();
     (0..n)
         .map(|i| {
-            let mut b = PixelBuffer::new(W, H, PixelDescriptor::GRAY8_SRGB);
+            let mut b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
             for y in 0..H {
-                for (x, px) in b.as_slice_mut().row_mut(y).iter_mut().enumerate() {
+                for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 31 + y as u8 * 5 + x as u8;
                 }
             }
             cap.capture(
-                &b.as_slice(),
+                &b.as_view(),
                 &config(),
                 FrameTiming::at(Timestamp::new(i64::from(i), tb())),
             )
@@ -182,11 +182,11 @@ fn the_toy_muxer_passes() {
 
 #[test]
 fn animation_over_the_toy_passes() {
-    let frames: Vec<PixelBuffer> = (0..6u8)
+    let frames: Vec<PixelBuf> = (0..6u8)
         .map(|i| {
-            let mut b = PixelBuffer::new(W, H, PixelDescriptor::GRAY8_SRGB);
+            let mut b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
             for y in 0..H {
-                for (x, px) in b.as_slice_mut().row_mut(y).iter_mut().enumerate() {
+                for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 40 + y as u8 * 4 + x as u8;
                 }
             }

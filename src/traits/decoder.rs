@@ -4,7 +4,7 @@ use crate::output::{AnimationFrame, OwnedAnimationFrame};
 use crate::sink::SinkError;
 use crate::{DecodeOutput, ImageInfo, OutputInfo};
 
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// Single-image decode. Returns owned pixels.
 ///
@@ -26,7 +26,7 @@ pub trait Decode: Sized {
     /// an output raster or perform pixel/coefficient reconstruction. This is not
     /// a whole-operation memory bound. Native errors retain their original type;
     /// retained cancellation controls apply. The default does no work.
-    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, Self::Error> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::ImageSpec>, Self::Error> {
         Ok(None)
     }
 
@@ -67,7 +67,7 @@ pub trait StreamingDecode {
     ///
     /// Format preferences were bound at construction. The format remains
     /// consistent across all batches.
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, Self::Error>;
 
     /// Image metadata, available after construction.
     fn info(&self) -> &ImageInfo;

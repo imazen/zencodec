@@ -8,12 +8,12 @@ use crate::At;
 use crate::frame::{
     Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, Presentation,
 };
+use crate::plane::AnyPlane;
+use crate::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
+use crate::sample::SampleEncoding;
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
-use zenpixels::plane::AnyPlane;
-use zenpixels::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
-use zenpixels::sample::SampleEncoding;
-use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
+use zenpixels::{AlphaMode, Orientation, PixelBuf, PixelView, SampleType};
 type Failure = At<OutputError>;
 
 mod placement;
@@ -196,7 +196,7 @@ pub struct Values {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 
@@ -208,7 +208,7 @@ pub struct ValueSlice<'a> {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 impl<'a> ValueSlice<'a> {
@@ -219,7 +219,7 @@ impl<'a> ValueSlice<'a> {
         width: u32,
         height: u32,
         stride: usize,
-        channel: ChannelType,
+        channel: SampleType,
     ) -> Result<Self, At<OutputError>> {
         let row = (width as usize)
             .checked_mul(channel.byte_size())
@@ -280,7 +280,7 @@ impl Values {
         width: u32,
         height: u32,
         stride: usize,
-        channel: ChannelType,
+        channel: SampleType,
     ) -> Result<Self, At<OutputError>> {
         ValueSlice::new(&bytes, width, height, stride, channel)?;
         Ok(Self {
@@ -325,7 +325,7 @@ fn check_auxiliary_grid(
 /// Borrowed samples tied to the mapping and their declared interpretation.
 pub enum Samples<'a> {
     /// Packed color with native stride and color metadata.
-    Pixels(PixelSlice<'a>),
+    Pixels(PixelView<'a>),
     /// Strided auxiliary scalar values.
     Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
@@ -339,7 +339,7 @@ pub enum Samples<'a> {
     },
 }
 /// A mapped native plane with the code encoding its words carry. Built on
-/// [`zenpixels::plane::AnyPlane`]; the storage type is checked against the
+/// [`crate::plane::AnyPlane`]; the storage type is checked against the
 /// encoding at construction.
 #[derive(Clone, Copy, Debug)]
 pub struct CodePlane<'a> {
@@ -357,8 +357,8 @@ impl<'a> CodePlane<'a> {
     pub fn new(
         plane: AnyPlane<'a>,
         encoding: SampleEncoding,
-    ) -> Result<Self, zenpixels::sample::CodePlaneError> {
-        zenpixels::sample::CodePlane::new(plane, encoding)?;
+    ) -> Result<Self, crate::sample::CodePlaneError> {
+        crate::sample::CodePlane::new(plane, encoding)?;
         Ok(Self {
             plane,
             encoding,
@@ -392,7 +392,6 @@ impl<'a> CodePlane<'a> {
             AnyPlane::U8(p) => p.stride(),
             AnyPlane::U16(p) => p.stride() * 2,
             AnyPlane::F32(p) => p.stride() * 4,
-            _ => 0,
         }
     }
 
@@ -434,8 +433,8 @@ impl<'a> CodePlane<'a> {
     pub fn component(
         &self,
         index: usize,
-    ) -> Result<zenpixels::sample::CodePlane<'a>, zenpixels::sample::CodePlaneError> {
-        zenpixels::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
+    ) -> Result<crate::sample::CodePlane<'a>, crate::sample::CodePlaneError> {
+        crate::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
     }
 
     /// Read a single-component plane at spatial `(x, y)`.
@@ -470,12 +469,12 @@ impl Samples<'_> {
         }
     }
     /// Storage sample type, not original precision or code depth.
-    pub fn channel_type(&self) -> ChannelType {
+    pub fn channel_type(&self) -> SampleType {
         match self {
-            Self::Pixels(p) => p.descriptor().channel_type(),
+            Self::Pixels(p) => p.spec().layout.sample,
             Self::Values(p) => p.channel,
             Self::Codes(p) => p.encoding().storage(),
-            Self::Float { .. } => ChannelType::F32,
+            Self::Float { .. } => SampleType::F32,
         }
     }
     /// Significant code bits for component words; absent for pixels/values.
@@ -534,7 +533,7 @@ pub trait MappedImage {
     fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
 }
 pub(crate) struct SampleFacts {
-    pub packed: Option<zenpixels::PixelDescriptor>,
+    pub packed: Option<zenpixels::ImageSpec>,
     pub planes: usize,
     pub auxiliaries: usize,
     pub applied_spot_colors: usize,
@@ -642,7 +641,7 @@ impl ImageOutput {
     /// auxiliary planes. Validate the selected region and compatible facts.
     /// Auxiliary planes retain their own dimensions; no resampling is implied.
     pub fn packed(
-        pixels: PixelBuffer,
+        pixels: PixelBuf,
         extras: Vec<(Auxiliary, Values)>,
         interpretation: ImageInterpretation,
     ) -> Result<Self, At<OutputError>> {
@@ -737,7 +736,7 @@ impl ImageOutput {
     /// and refuse this path. The borrowed pixels cannot outlive their mapping.
     pub fn with_pixels<T>(
         &self,
-        consume: impl FnOnce(PixelSlice<'_>) -> T,
+        consume: impl FnOnce(PixelView<'_>) -> T,
     ) -> Result<T, At<OutputError>> {
         let mapped = self.map()?;
         let plane = mapped
@@ -906,14 +905,14 @@ impl core::error::Error for OutputError {
 }
 
 struct Packed {
-    pixels: PixelBuffer,
+    pixels: PixelBuf,
     extras: Vec<(Meaning, Values)>,
 }
 struct PackedMap<'a>(&'a Packed);
 impl ImageStorage for Packed {
     fn facts(&self) -> SampleFacts {
         SampleFacts {
-            packed: Some(self.pixels.descriptor()),
+            packed: Some(self.pixels.spec().clone()),
             planes: 1 + self.extras.len(),
             auxiliaries: self.extras.len(),
             applied_spot_colors: self
@@ -946,7 +945,7 @@ impl MappedImage for PackedMap<'_> {
         if index == 0 {
             return Ok(Some(Plane {
                 meaning: &Meaning::Color,
-                samples: Samples::Pixels(self.0.pixels.as_slice()),
+                samples: Samples::Pixels(self.0.pixels.as_view()),
             }));
         }
         Ok(self
@@ -1059,7 +1058,7 @@ impl MappedImage for ComponentMap<'_> {
                 codes.components = spec.role().components();
                 codes
             }),
-            (zenpixels::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
+            (crate::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
                 Samples::Float { plane, encoding }
             }
             _ => return Err(fail(OutputError::Interpretation)),

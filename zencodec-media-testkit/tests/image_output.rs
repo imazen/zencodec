@@ -1,5 +1,8 @@
 //! Check the actual public output against mismatched native plane contracts.
 use std::sync::Arc;
+use zencodec::helpers::codec_spec;
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     At,
     frame::{
@@ -9,23 +12,21 @@ use zencodec::{
     image::{ImageOutput, OutputError, Row},
 };
 use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
-use zenpixels::ChannelType;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
+use zenpixels::SampleType;
 
 fn encoding(bits: u8) -> SampleEncoding {
-    SampleEncoding::new(ChannelType::U16, bits, 0).unwrap()
+    SampleEncoding::new(SampleType::U16, bits, 0).unwrap()
 }
 fn frame(picture: Arc<dyn Picture>, width: u32, bits: u8) -> ImageOutput {
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(width, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(encoding(bits)),
+                        zencodec::plane::PlaneEncoding::Code(encoding(bits)),
                     )
                 })
                 .collect(),
@@ -45,13 +46,8 @@ fn words() -> Arc<dyn Picture> {
     Arc::new(
         OwnedPlanes::new(
             vec![OwnedPlane::U16(
-                zenpixels::plane::Plane::new(
-                    vec![0, 512, 1023, 65535, 1, 511, 1022],
-                    3,
-                    2,
-                    (8) / 2,
-                )
-                .unwrap(),
+                zencodec::plane::Plane::new(vec![0, 512, 1023, 65535, 1, 511, 1022], 3, 2, (8) / 2)
+                    .unwrap(),
             )],
             encoding(10),
         )
@@ -65,10 +61,10 @@ fn requirement_refusal_keeps_its_cause_when_default_preferences_also_decline() {
         Decline, ImageConversionOffer, MetadataTransfer, PolicyRequirement, PolicySet,
         RequirementEvidence, resolve_image_conversion,
     };
-    use zenpixels::{Orientation, PixelDescriptor};
+    use zenpixels::{ImageSpec, Orientation};
     let image = frame(words(), 3, 10);
     let mut offer = ImageConversionOffer::new(
-        PixelDescriptor::RGB16_SRGB,
+        ImageSpec::rgb16_srgb(),
         image.interpretation().geometry,
         Orientation::Identity,
     );
@@ -77,7 +73,7 @@ fn requirement_refusal_keeps_its_cause_when_default_preferences_also_decline() {
     for (mut policy, legacy) in [(required, PolicySet::new()), (PolicySet::new(), required)] {
         let error = resolve_image_conversion(
             &image,
-            &[offer],
+            core::slice::from_ref(&offer),
             &mut policy,
             legacy,
             Some(&zencodec::NoPulse),
@@ -105,22 +101,22 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
         Decision, DecisionContext, ImageConversionOffer, PolicySet, Question, Selection,
         resolve_image, resolve_image_conversion,
     };
-    use zenpixels::{Orientation, PixelDescriptor};
+    use zenpixels::{ImageSpec, Orientation};
     let source = frame(words(), 3, 10);
     let mut assumed = ImageConversionOffer::new(
-        PixelDescriptor::RGB16_SRGB,
+        ImageSpec::rgb16_srgb(),
         source.interpretation().geometry,
         Orientation::Identity,
     );
     assumed.assumed_chroma_siting = Some(ChromaSiting::Center);
-    let mut declared = assumed;
+    let mut declared = assumed.clone();
     declared.assumed_chroma_siting = None;
-    let mut extended = declared;
+    let mut extended = declared.clone();
     // Policy-selection control only: this test does not execute/qualify F32 math.
-    extended.output = PixelDescriptor::RGBF32_LINEAR;
+    extended.output = ImageSpec::rgbf32_linear();
     extended.preserves_extended_range = true;
     extended.workspace_upper_bound = Some(4096);
-    let offers = [assumed, declared, extended];
+    let offers = [assumed.clone(), declared, extended.clone()];
     let mut use_preset = |_: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
         Ok(Decision::UsePreset)
     };
@@ -184,7 +180,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
 #[test]
 fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
     use zencodec::image::{ImageGeometry, ImageInterpretation, Placement, PlacementError, Rect};
-    use zenpixels::{Orientation, PixelBuffer, PixelDescriptor};
+    use zenpixels::{Orientation, PixelBuf};
 
     let geometry = ImageGeometry {
         canvas_width: 3,
@@ -197,8 +193,13 @@ fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
         },
     };
     let open = |placement| {
-        let pixels =
-            PixelBuffer::from_vec(vec![1, 2, 3, 4, 5, 6], 3, 2, PixelDescriptor::GRAY8).unwrap();
+        let pixels = PixelBuf::from_bytes(
+            vec![1, 2, 3, 4, 5, 6],
+            3,
+            2,
+            codec_spec(zenpixels::SampleLayout::GRAY8),
+        )
+        .unwrap();
         let mut interpretation = ImageInterpretation::packed(geometry, Orientation::Identity);
         interpretation.placement = Some(placement);
         ImageOutput::packed(pixels, vec![], interpretation)
@@ -280,11 +281,11 @@ fn native_codes_keep_active_rows_and_refuse_conflicting_claims() {
         assert_eq!(*actual_dimensions, (3, 2));
         assert_eq!(
             *expected_encoding,
-            zenpixels::plane::PlaneEncoding::Code(encoding(bits))
+            zencodec::plane::PlaneEncoding::Code(encoding(bits))
         );
         assert_eq!(
             *actual_encoding,
-            zenpixels::plane::PlaneEncoding::Code(encoding(10))
+            zencodec::plane::PlaneEncoding::Code(encoding(10))
         );
     }
 }
@@ -517,13 +518,13 @@ struct RgbOwner {
     stride: usize,
 }
 impl zencodec::image::PackedImageOwner for RgbOwner {
-    fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>> {
-        zenpixels::PixelSlice::new(
+    fn pixels(&self) -> Result<zenpixels::PixelView<'_>, At<OutputError>> {
+        zenpixels::PixelView::new(
             self.storage.as_slice(),
             self.width,
             self.height,
             self.stride,
-            zenpixels::PixelDescriptor::RGB8_SRGB,
+            zenpixels::ImageSpec::rgb8_srgb(),
         )
         .map_err(|e| At::wrap(OutputError::Mapping(MapError::Backend(Box::new(e)))))
     }
@@ -539,13 +540,13 @@ fn rgb_owner(pool: &zencodec::storage::StorageBudget, width: u32) -> RgbOwner {
 fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
     let mut interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(encoding(10)),
+                        zencodec::plane::PlaneEncoding::Code(encoding(10)),
                     )
                 })
                 .collect(),
@@ -577,7 +578,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
         operation::{Decision, ImageFacts, PolicySet, Question, resolve_image},
         storage::StorageBudget,
     };
-    use zenpixels::{Orientation, PixelDescriptor};
+    use zenpixels::{ImageSpec, Orientation};
     let pool = StorageBudget::new(48, 2);
     let frame = cropped_frame(words(), 2);
     let weak = Arc::downgrade(frame.picture());
@@ -606,7 +607,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
         facts.source_frame.unwrap().encoding.unwrap().code_bits(),
         10
     );
-    assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
+    assert_eq!(facts.packed, Some(ImageSpec::rgb8_srgb()));
     let clone = image.clone();
     let replacement = rgb_owner(&pool, 2);
     let image = image.replace_packed_color(replacement).unwrap();
@@ -636,7 +637,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
                 facts.source_frame.unwrap().encoding.unwrap().code_bits(),
                 10
             );
-            assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
+            assert_eq!(facts.packed, Some(ImageSpec::rgb8_srgb()));
             assert!(image.with_pixels(|p| p.width() == 2).unwrap());
             assert_eq!(facts.timing, Some(timing));
             calls.set(calls.get() + 1);
@@ -698,7 +699,7 @@ fn converted_frame_bad_geometry_and_owner_failure_release_unpublished_payloads()
     assert_eq!(pool.reserved_bytes(), 0);
     struct BadOwner;
     impl zencodec::image::PackedImageOwner for BadOwner {
-        fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>> {
+        fn pixels(&self) -> Result<zenpixels::PixelView<'_>, At<OutputError>> {
             Err(At::wrap(OutputError::Mapping(MapError::Backend(Box::new(
                 At::wrap(NativeError(91)),
             )))))

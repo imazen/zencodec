@@ -8,6 +8,7 @@
 mod mock_anim;
 
 use std::borrow::Cow;
+use zencodec::helpers::codec_spec;
 
 use mock_anim::{MockDecoderConfig, MockEncoderConfig};
 
@@ -24,13 +25,13 @@ use zencodec::{
     MetadataFields, MetadataPolicy, Orientation, OrientationHint, ResourceLimits, ThreadingPolicy,
     UnsupportedOperation,
 };
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelBuf, PixelView};
 
 // =========================================================================
 // Test data helpers
 // =========================================================================
 
-fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuffer {
+fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuf {
     let bpp = 3;
     let size = w as usize * h as usize * bpp;
     let mut data = vec![0u8; size];
@@ -43,10 +44,10 @@ fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuffer {
             data[idx + 2] = ((x + y) & 0xFF) as u8;
         }
     }
-    PixelBuffer::from_vec(data, w, h, PixelDescriptor::RGB8_SRGB).unwrap()
+    PixelBuf::from_bytes(data, w, h, ImageSpec::rgb8_srgb()).unwrap()
 }
 
-fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuffer {
+fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
     let bpp = 4;
     let size = w as usize * h as usize * bpp;
     let mut data = vec![0u8; size];
@@ -59,35 +60,35 @@ fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuffer {
             data[idx + 3] = 255;
         }
     }
-    PixelBuffer::from_vec(data, w, h, PixelDescriptor::RGBA8_SRGB).unwrap()
+    PixelBuf::from_bytes(data, w, h, ImageSpec::rgba8_srgb()).unwrap()
 }
 
 /// Encode a single frame via the mock codec, return raw mock bytes.
-fn encode_single_frame(buf: &PixelBuffer) -> Vec<u8> {
+fn encode_single_frame(buf: &PixelBuf) -> Vec<u8> {
     let config = MockEncoderConfig::new();
     let job = config.job();
     let encoder = job.encoder().unwrap();
-    encoder.encode(buf.as_slice()).unwrap().into_vec()
+    encoder.encode(buf.as_view()).unwrap().into_vec()
 }
 
 /// Encode multiple frames via the mock animation codec (borrowed buffers).
-fn encode_animation_from_slices(frames: &[(&PixelBuffer, u32)]) -> Vec<u8> {
+fn encode_animation_from_slices(frames: &[(&PixelBuf, u32)]) -> Vec<u8> {
     let config = MockEncoderConfig::new();
     let job = config.job();
     let mut enc = job.animation_frame_encoder().unwrap();
     for (buf, dur) in frames {
-        enc.push_frame(buf.as_slice(), *dur, None).unwrap();
+        enc.push_frame(buf.as_view(), *dur, None).unwrap();
     }
     enc.finish(None).unwrap().into_vec()
 }
 
 /// Encode multiple frames via the mock animation codec.
-fn encode_animation(frames: &[(PixelBuffer, u32)]) -> Vec<u8> {
+fn encode_animation(frames: &[(PixelBuf, u32)]) -> Vec<u8> {
     let config = MockEncoderConfig::new();
     let job = config.job();
     let mut enc = job.animation_frame_encoder().unwrap();
     for (buf, dur) in frames {
-        enc.push_frame(buf.as_slice(), *dur, None).unwrap();
+        enc.push_frame(buf.as_view(), *dur, None).unwrap();
     }
     enc.finish(None).unwrap().into_vec()
 }
@@ -146,7 +147,7 @@ fn encoder_push_rows_and_finish() {
     let mut enc = job.encoder().unwrap();
 
     let buf = make_rgb8_buffer(4, 8);
-    let ps = buf.as_slice();
+    let ps = buf.as_view();
 
     // Push 2 rows at a time
     for strip in 0..4u32 {
@@ -156,8 +157,7 @@ fn encoder_push_rows_and_finish() {
         for r in 0..2u32 {
             strip_data.extend_from_slice(ps.row(y + r));
         }
-        let strip_ps =
-            PixelSlice::new(&strip_data, 4, 2, 4 * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+        let strip_ps = PixelView::new(&strip_data, 4, 2, 4 * 3, ImageSpec::rgb8_srgb()).unwrap();
         enc.push_rows(strip_ps).unwrap();
     }
 
@@ -185,7 +185,7 @@ fn encoder_encode_from_pull_model() {
     let row_bytes = 4 * 3;
     let mut rows_pulled = 0u32;
 
-    let ps = buf.as_slice();
+    let ps = buf.as_view();
     let output = enc
         .encode_from(&mut |y, mut dst| {
             if y >= 8 {
@@ -247,7 +247,7 @@ fn encoder_encode_srgba8_with_alpha() {
 fn unit_animation_frame_encoder_rejects() {
     let mut enc = ();
     let buf = make_rgb8_buffer(2, 2);
-    let err = enc.push_frame(buf.as_slice(), 100, None).unwrap_err();
+    let err = enc.push_frame(buf.as_view(), 100, None).unwrap_err();
     assert_eq!(err, UnsupportedOperation::AnimationEncode);
 
     let err = ().finish(None).unwrap_err();
@@ -285,7 +285,7 @@ fn animation_encode_decode_roundtrip() {
     assert_eq!(f0.pixels().rows(), 4);
     // Verify pixel data matches
     for y in 0..4 {
-        assert_eq!(f0.pixels().row(y), frame1_check.as_slice().row(y));
+        assert_eq!(f0.pixels().row(y), frame1_check.as_view().row(y));
     }
 
     // Frame 1
@@ -343,7 +343,7 @@ fn animation_render_to_sink() {
             &mut self,
             _w: u32,
             _h: u32,
-            _desc: PixelDescriptor,
+            _desc: ImageSpec,
         ) -> Result<(), zencodec::decode::SinkError> {
             self.began = true;
             Ok(())
@@ -353,13 +353,13 @@ fn animation_render_to_sink() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-            let bpp = descriptor.bytes_per_pixel();
+            descriptor: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
             Ok(
-                zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                     .unwrap(),
             )
         }
@@ -407,7 +407,7 @@ fn streaming_decode_row_by_row() {
         assert_eq!(strip.rows(), 1);
         assert_eq!(strip.width(), 4);
         // Verify pixel data matches
-        assert_eq!(strip.row(0), buf.as_slice().row(y));
+        assert_eq!(strip.row(0), buf.as_view().row(y));
         rows_received += 1;
     }
     assert_eq!(rows_received, 4);
@@ -473,13 +473,13 @@ fn dyn_decode_push_decode() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-            let bpp = descriptor.bytes_per_pixel();
+            descriptor: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
             Ok(
-                zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                     .unwrap(),
             )
         }
@@ -567,7 +567,7 @@ fn dyn_encode_job_set_methods() {
     // Into encoder via dyn
     let enc = job.into_encoder().unwrap();
     let buf = make_rgb8_buffer(4, 4);
-    let output = enc.encode(buf.as_slice()).unwrap();
+    let output = enc.encode(buf.as_view()).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -581,8 +581,8 @@ fn dyn_encode_animation_frame_encoder() {
 
     let mut enc = job.into_animation_frame_encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    enc.push_frame(buf.as_slice(), 100, None).unwrap();
-    enc.push_frame(buf.as_slice(), 200, None).unwrap();
+    enc.push_frame(buf.as_view(), 100, None).unwrap();
+    enc.push_frame(buf.as_view(), 200, None).unwrap();
 
     let output = enc.finish(None).unwrap();
     assert!(!output.is_empty());
@@ -598,10 +598,10 @@ fn dyn_encode_push_rows_and_finish() {
     assert_eq!(enc.preferred_strip_height(), 4);
 
     let buf = make_rgb8_buffer(4, 4);
-    let ps = buf.as_slice();
+    let ps = buf.as_view();
     for y in 0..4u32 {
         let row_data = ps.row(y);
-        let row_ps = PixelSlice::new(row_data, 4, 1, 4 * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+        let row_ps = PixelView::new(row_data, 4, 1, 4 * 3, ImageSpec::rgb8_srgb()).unwrap();
         enc.push_rows(row_ps).unwrap();
     }
     let output = enc.finish().unwrap();
@@ -706,7 +706,7 @@ fn concrete_job_dyn_encoder() {
     let job = config.job();
     let enc = job.dyn_encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    let output = enc.encode(buf.as_slice()).unwrap();
+    let output = enc.encode(buf.as_view()).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -716,7 +716,7 @@ fn concrete_job_dyn_animation_frame_encoder() {
     let job = config.job();
     let mut enc = job.dyn_animation_frame_encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    enc.push_frame(buf.as_slice(), 100, None).unwrap();
+    enc.push_frame(buf.as_view(), 100, None).unwrap();
     let output = enc.finish(None).unwrap();
     assert!(!output.is_empty());
 }
@@ -743,7 +743,7 @@ fn encode_policy_on_job() {
     let job = config.job().with_policy(EncodePolicy::strip_all());
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    let output = enc.encode(buf.as_slice()).unwrap();
+    let output = enc.encode(buf.as_view()).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -774,7 +774,7 @@ fn metadata_roundtrip_via_encode_job() {
         .with_metadata_policy(meta, MetadataPolicy::PreserveExact);
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    let _output = enc.encode(buf.as_slice()).unwrap();
+    let _output = enc.encode(buf.as_view()).unwrap();
     // Mock doesn't embed metadata, but we verified the path compiles and runs
 }
 
@@ -791,14 +791,14 @@ fn deprecated_with_metadata_still_works() {
     let job = config.clone().job().with_metadata(meta.clone());
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
+    assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
 
     let dyn_config: &dyn DynEncoderConfig = &config;
     let mut job = dyn_config.dyn_job();
     job.set_canvas_size(2, 2);
     job.set_metadata(meta);
     let enc = job.into_encoder().unwrap();
-    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
+    assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
 }
 
 /// `with_metadata_policy` filters the record *before* the codec sees it: a
@@ -829,7 +829,7 @@ fn metadata_policy_filters_before_codec() {
         .with_metadata_policy(meta, MetadataPolicy::Web);
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
+    assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
 }
 
 #[test]
@@ -889,7 +889,7 @@ fn decode_output_into_buffer() {
     let output = DecodeOutput::new(buf, info);
 
     assert!(output.has_alpha());
-    assert_eq!(output.descriptor(), PixelDescriptor::RGBA8_SRGB);
+    assert_eq!(output.descriptor(), ImageSpec::rgba8_srgb());
     assert_eq!(output.format(), ImageFormat::Avif);
 
     let recovered = output.into_buffer();
@@ -933,7 +933,7 @@ fn animation_frame_to_owned_strips_padding() {
     // Create a buffer with padded stride (pixel-aligned, larger than needed)
     let w = 10u32;
     let h = 2u32;
-    let desc = PixelDescriptor::RGB8_SRGB;
+    let desc = ImageSpec::rgb8_srgb();
     let bpp = 3;
     let row_bytes = w as usize * bpp;
     let stride = 66; // padded (must be multiple of bpp=3): 22 pixels * 3 = 66
@@ -947,7 +947,7 @@ fn animation_frame_to_owned_strips_padding() {
         }
     }
 
-    let ps = PixelSlice::new(&data, w, h, stride, desc).unwrap();
+    let ps = PixelView::new(&data, w, h, stride, desc).unwrap();
     let frame = AnimationFrame::new(ps, 100, 0);
     let owned = frame.to_owned_frame();
 
@@ -1008,7 +1008,7 @@ fn limits_large_dimensions_overflow_safe() {
 #[test]
 fn limits_check_output_info() {
     let limits = ResourceLimits::none().with_max_width(50);
-    let info = OutputInfo::full_decode(100, 50, PixelDescriptor::RGB8_SRGB);
+    let info = OutputInfo::full_decode(100, 50, ImageSpec::rgb8_srgb());
     let err = limits.check_output_info(&info).unwrap_err();
     assert!(matches!(
         err,
@@ -1198,7 +1198,7 @@ fn animation_encode_respects_cancellation() {
     let mut enc = job.animation_frame_encoder().unwrap();
 
     let buf = make_rgb8_buffer(2, 2);
-    enc.push_frame(buf.as_slice(), 100, None).unwrap();
+    enc.push_frame(buf.as_view(), 100, None).unwrap();
 
     let stopper = Stopper::cancelled();
     let err = enc
@@ -1379,11 +1379,11 @@ fn negotiate_same_format_different_metadata() {
     use zencodec::decode::negotiate_pixel_format;
 
     // Caller wants sRGB, decoder has unknown-transfer — format match wins
-    let preferred = &[PixelDescriptor::RGBA8_SRGB];
-    let available = &[PixelDescriptor::RGBA8]; // unknown transfer
+    let preferred = &[ImageSpec::rgba8_srgb()];
+    let available = &[codec_spec(zenpixels::SampleLayout::RGBA8)]; // unknown transfer
     let picked = negotiate_pixel_format(preferred, available);
     // Returns the available entry (unknown transfer), not the preferred
-    assert_eq!(picked, Some(PixelDescriptor::RGBA8));
+    assert_eq!(picked, Some(codec_spec(zenpixels::SampleLayout::RGBA8)));
 }
 
 #[test]
@@ -1393,16 +1393,16 @@ fn negotiate_multiple_preferences_multiple_available() {
     // Caller prefers: RGBA8_SRGB, then GRAY8_SRGB
     // Available: GRAY8_SRGB, RGB8_SRGB
     // RGBA8 doesn't match anything, so GRAY8 matches second preference
-    let preferred = &[PixelDescriptor::RGBA8_SRGB, PixelDescriptor::GRAY8_SRGB];
-    let available = &[PixelDescriptor::GRAY8_SRGB, PixelDescriptor::RGB8_SRGB];
+    let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::gray8_srgb()];
+    let available = &[ImageSpec::gray8_srgb(), ImageSpec::rgb8_srgb()];
     let picked = negotiate_pixel_format(preferred, available);
-    assert_eq!(picked, Some(PixelDescriptor::GRAY8_SRGB));
+    assert_eq!(picked, Some(ImageSpec::gray8_srgb()));
 }
 
 #[test]
 fn best_encode_format_no_match_returns_none() {
     use zencodec::encode::best_encode_format;
-    let result = best_encode_format(PixelDescriptor::GRAY8_SRGB, &[PixelDescriptor::RGB8_SRGB]);
+    let result = best_encode_format(ImageSpec::gray8_srgb(), &[ImageSpec::rgb8_srgb()]);
     assert_eq!(result, None);
 }
 
@@ -1600,13 +1600,13 @@ fn rgba8_roundtrip() {
     let result = dec.decode().unwrap();
 
     assert!(result.has_alpha());
-    assert_eq!(result.descriptor(), PixelDescriptor::RGBA8_SRGB);
+    assert_eq!(result.descriptor(), ImageSpec::rgba8_srgb());
     assert_eq!(result.width(), 4);
     assert_eq!(result.height(), 4);
 
     // Verify pixel data roundtrips
     for y in 0..4 {
-        assert_eq!(result.pixels().row(y), buf.as_slice().row(y));
+        assert_eq!(result.pixels().row(y), buf.as_view().row(y));
     }
 }
 
@@ -1665,13 +1665,13 @@ fn dyn_animation_frame_decoder_render_to_sink() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-            let bpp = descriptor.bytes_per_pixel();
+            descriptor: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
             Ok(
-                zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                     .unwrap(),
             )
         }
@@ -1702,7 +1702,7 @@ fn codec_agnostic_roundtrip(enc_config: &dyn DynEncoderConfig, dec_config: &dyn 
     let buf = make_rgb8_buffer(4, 2);
     let job = enc_config.dyn_job();
     let encoder = job.into_encoder().unwrap();
-    let output = encoder.encode(buf.as_slice()).unwrap();
+    let output = encoder.encode(buf.as_view()).unwrap();
 
     // Decode
     let job = dec_config.dyn_job();
@@ -1729,10 +1729,10 @@ fn codec_agnostic_pipeline() {
 
 #[test]
 fn output_info_full_decode() {
-    let info = OutputInfo::full_decode(100, 200, PixelDescriptor::RGBA8_SRGB);
+    let info = OutputInfo::full_decode(100, 200, ImageSpec::rgba8_srgb());
     assert_eq!(info.width, 100);
     assert_eq!(info.height, 200);
-    assert_eq!(info.native_format, PixelDescriptor::RGBA8_SRGB);
+    assert_eq!(info.native_format, ImageSpec::rgba8_srgb());
 }
 
 // =========================================================================
@@ -1750,7 +1750,7 @@ fn push_decoder_sink_error_propagates() {
             &mut self,
             _w: u32,
             _h: u32,
-            _desc: PixelDescriptor,
+            _desc: ImageSpec,
         ) -> Result<(), zencodec::decode::SinkError> {
             Err("begin failed".into())
         }
@@ -1759,8 +1759,8 @@ fn push_decoder_sink_error_propagates() {
             _y: u32,
             _h: u32,
             _w: u32,
-            _d: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+            _d: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
             unreachable!()
         }
     }
@@ -1787,13 +1787,13 @@ fn push_decoder_sink_finish_error_propagates() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-            let bpp = descriptor.bytes_per_pixel();
+            descriptor: ImageSpec,
+        ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
             Ok(
-                zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                     .unwrap(),
             )
         }
@@ -1847,13 +1847,13 @@ fn config_reusable_multiple_jobs() {
     let data1 = {
         let job = enc_config.clone().job();
         let enc = job.encoder().unwrap();
-        enc.encode(buf1.as_slice()).unwrap().into_vec()
+        enc.encode(buf1.as_view()).unwrap().into_vec()
     };
 
     let data2 = {
         let job = enc_config.clone().job();
         let enc = job.encoder().unwrap();
-        enc.encode(buf2.as_slice()).unwrap().into_vec()
+        enc.encode(buf2.as_view()).unwrap().into_vec()
     };
 
     // Decode both with the same config
@@ -1976,7 +1976,7 @@ fn downcast_dyn_animation_frame_encoder_into_any() {
 
     // Use the concrete encoder: push a frame and finish
     let buf = make_rgb8_buffer(2, 2);
-    concrete.push_frame(buf.as_slice(), 100, None).unwrap();
+    concrete.push_frame(buf.as_view(), 100, None).unwrap();
     let output = concrete.finish(None).unwrap();
     assert!(!output.data().is_empty());
 }
@@ -2182,7 +2182,7 @@ fn encode_job_extensions_through_dyn_job() {
     // Still usable for encoding after extensions access
     let enc = job.into_encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
-    let output = enc.encode(buf.as_slice()).unwrap();
+    let output = enc.encode(buf.as_view()).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -2236,7 +2236,7 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
             .animation_frame_encoder()
             .unwrap();
         let err = enc
-            .push_frame_exact(buf.as_slice(), duration, None)
+            .push_frame_exact(buf.as_view(), duration, None)
             .unwrap_err();
         assert!(matches!(
             err,
@@ -2248,7 +2248,7 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
             .dyn_animation_frame_encoder()
             .unwrap();
         let err = enc
-            .push_frame_exact(buf.as_slice(), duration, None)
+            .push_frame_exact(buf.as_view(), duration, None)
             .unwrap_err();
         assert!(matches!(
             err.downcast_ref::<mock_anim::MockError>(),

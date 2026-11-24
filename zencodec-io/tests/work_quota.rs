@@ -18,10 +18,10 @@ use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_io::tokio_io::{BytesSource, Inline, Job, decode_async, transcode_async};
 use zencodec_io::{CollectSink, DriveOptions, WorkQuota};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 const ROWS: u32 = 37;
-const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
 #[derive(Debug)]
 struct Failed;
 impl core::fmt::Display for Failed {
@@ -77,7 +77,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {
@@ -164,14 +164,14 @@ impl Encoder for Raw {
     fn reject(_: zencodec::UnsupportedOperation) -> Failed {
         Failed
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Failed> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Failed> {
         Err(Failed)
     }
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Failed> {
+    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<OutputTiming, Failed> {
         self.bytes.extend_from_slice(b"RAW!");
         Ok(OutputTiming::streaming(0))
     }
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Failed> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), Failed> {
         for y in 0..rows.rows() {
             self.bytes.extend_from_slice(rows.row(y));
         }

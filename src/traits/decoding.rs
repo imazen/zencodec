@@ -7,7 +7,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 use super::BoxedError;
 use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
@@ -51,7 +51,7 @@ pub trait DecoderConfig: Clone + Send + Sync {
     ///
     /// Every descriptor is a guarantee: the decoder can produce this format
     /// without lossy conversion. Must not be empty.
-    fn supported_descriptors() -> &'static [PixelDescriptor];
+    fn supported_descriptors() -> &'static [ImageSpec];
 
     /// Decoder capabilities (metadata support, cancellation, etc.).
     ///
@@ -365,7 +365,7 @@ pub trait DecodeJob<'a>: Sized {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Self::Dec, Self::Error>;
 
     /// Decode directly into a caller-owned sink (push model).
@@ -384,7 +384,7 @@ pub trait DecodeJob<'a>: Sized {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, Self::Error>;
 
     /// Create a streaming decoder that yields scanline batches.
@@ -397,7 +397,7 @@ pub trait DecodeJob<'a>: Sized {
     fn streaming_decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Self::StreamDec, Self::Error>;
 
     /// Create a full-frame animation decoder.
@@ -411,7 +411,7 @@ pub trait DecodeJob<'a>: Sized {
     fn animation_frame_decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Self::AnimationFrameDec, Self::Error>;
 
     // --- Type-erased convenience methods ---
@@ -426,14 +426,14 @@ pub trait DecodeJob<'a>: Sized {
     /// ```rust,ignore
     /// let decode = config.job()
     ///     .with_crop_hint(0, 0, 800, 600)
-    ///     .dyn_decoder(data, &[PixelDescriptor::rgb8()])?;
+    ///     .dyn_decoder(data, &[ImageSpec::rgb8()])?;
     ///
     /// let output: DecodeOutput = decode.decode()?;
     /// ```
     fn dyn_decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError>
     where
         Self: 'a,
@@ -459,7 +459,7 @@ pub trait DecodeJob<'a>: Sized {
     fn dyn_animation_frame_decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError>
     where
         Self: 'a,
@@ -486,7 +486,7 @@ pub trait DecodeJob<'a>: Sized {
     fn dyn_streaming_decoder(
         self,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError>
     where
         Self: 'a,
@@ -540,7 +540,7 @@ pub trait DecodeJob<'a>: Sized {
     /// ```
     fn dyn_incremental_decoder(
         self,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
         Err(Box::new(
@@ -558,7 +558,7 @@ pub trait DecodeJob<'a>: Sized {
     /// before adoption by [`DecodeRequest`](crate::operation::DecodeRequest).
     fn dyn_controlled_decoder(
         self,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
         storage: crate::storage::StorageBudget,
     ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
         let _ = (preferred, storage);
@@ -583,7 +583,7 @@ pub trait DecodeJob<'a>: Sized {
         self,
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, BoxedError> {
         let _ = (source, sink, preferred);
         Err(Box::new(

@@ -1,14 +1,12 @@
 //! Canonical sample encoding crosses core mapping and conversion boundaries directly.
 use zencodec::frame::{AnyPlane, PlaneRef};
 use zencodec::image::CodePlane as NativePlane;
-use zenpixels::{
-    ChannelType,
-    sample::{CodePlane, SampleEncoding, SampleEncodingError},
-};
+use zencodec::sample::{CodePlane, SampleEncoding, SampleEncodingError};
+use zenpixels::SampleType;
 
 #[test]
 fn all_integer_depth_and_shift_inputs_have_identical_contracts() {
-    for (storage, width) in [(ChannelType::U8, 8u16), (ChannelType::U16, 16)] {
+    for (storage, width) in [(SampleType::U8, 8u16), (SampleType::U16, 16)] {
         for bits in 0..=u8::MAX {
             for shift in 0..=u8::MAX {
                 let result = SampleEncoding::new(storage, bits, shift);
@@ -24,7 +22,7 @@ fn all_integer_depth_and_shift_inputs_have_identical_contracts() {
                     assert_eq!(encoding.storage().byte_size(), usize::from(width / 8));
                     // Same checked value feeds native mapping and conversion without
                     // reconstructing a second crate's representation.
-                    if storage == ChannelType::U16 {
+                    if storage == SampleType::U16 {
                         let words = [0xaaaa, 0xffff, 0xdead, 0x5555, 0, 0xbeef];
                         let plane = AnyPlane::U16(PlaneRef::new(&words[..], 2, 2, 3).unwrap());
                         let native = NativePlane::new(plane, encoding).unwrap();
@@ -50,12 +48,12 @@ fn floating_storage_refuses_and_u8_convenience_is_equivalent() {
     for bits in 0..=u8::MAX {
         for shift in 0..=u8::MAX {
             assert_eq!(
-                SampleEncoding::new(ChannelType::F32, bits, shift),
+                SampleEncoding::new(SampleType::F32, bits, shift),
                 Err(SampleEncodingError::UnsupportedStorage)
             );
         }
     }
-    let encoding = SampleEncoding::new(ChannelType::U8, 8, 0).unwrap();
+    let encoding = SampleEncoding::new(SampleType::U8, 8, 0).unwrap();
     let bytes = [0, 255, 17, 128];
     let plane = AnyPlane::U8(PlaneRef::new(&bytes[..], 2, 2, 2).unwrap());
     let native = NativePlane::new(plane, encoding).unwrap();

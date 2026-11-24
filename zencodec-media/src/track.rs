@@ -114,14 +114,14 @@ impl VideoTrackInfo {
 /// Audio channels: a count, and the layout when the container gives one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ChannelLayout {
+pub struct ChannelOrder {
     /// Number of channels.
     pub count: u16,
     /// A channel mask (WAVE / ITU order) when the container gives one.
     pub mask: Option<u64>,
 }
 
-impl ChannelLayout {
+impl ChannelOrder {
     /// `count` channels with no declared layout.
     pub const fn new(count: u16) -> Self {
         Self { count, mask: None }
@@ -141,12 +141,12 @@ pub struct AudioTrackInfo {
     /// Samples per second per channel.
     pub sample_rate: u32,
     /// The channels.
-    pub channels: ChannelLayout,
+    pub channels: ChannelOrder,
 }
 
 impl AudioTrackInfo {
     /// A track at `sample_rate` with `channels`.
-    pub const fn new(sample_rate: u32, channels: ChannelLayout) -> Self {
+    pub const fn new(sample_rate: u32, channels: ChannelOrder) -> Self {
         Self {
             sample_rate,
             channels,

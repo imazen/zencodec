@@ -16,7 +16,7 @@ use zencodec_testkit::reference::{
 use zencodec_testkit::{
     TestImage, check_animation_streaming_output_honesty, check_streaming_output_honesty,
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 /// How a [`Liar`] misbehaves.
 const HOLD_ROWS: u8 = 0; // reports lag 0, exposes only the header until finish
@@ -28,7 +28,7 @@ const HUGE_LAG: u8 = 5; // reports streaming(1_000_000) and holds every row
 const STALL: u8 = 6; // reports lag 0, shows the first strip, then holds the rest
 const BAD_CONSUME: u8 = 7; // a partial consume_output drops one byte too many
 const BAD_TAKE: u8 = 8; // take_output drops the last pending byte
-const ZERO_REFUSE: u8 = 9; // begin refuses a zero size that encode accepts
+const ZERO_ACCEPT: u8 = 9; // row startup falsely accepts an unrepresentable image
 const STALE_BEGIN: u8 = 10; // a refused zero-size begin keeps its size; the real begin fails
 
 static STREAMING: EncodeCapabilities = EncodeCapabilities::new()
@@ -68,7 +68,7 @@ impl<const F: u8> EncoderConfig for Liar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         ReferenceEncoderConfig::supported_descriptors()
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -137,25 +137,20 @@ impl<const F: u8> Encoder for LiarEnc<F> {
     fn preferred_strip_height(&self) -> u32 {
         self.inner.preferred_strip_height()
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
-        // STALE_BEGIN refuses zero sizes in both paths, so it passes the
-        // zero-size agreement and reaches the refused-begin check.
-        if F == STALE_BEGIN && (pixels.width() == 0 || pixels.rows() == 0) {
-            return Err(RefError::Invalid("zero size".into()));
-        }
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, RefError> {
         self.inner.encode(pixels)
     }
     fn begin(
         &mut self,
         width: u32,
         height: u32,
-        desc: PixelDescriptor,
+        desc: ImageSpec,
     ) -> Result<OutputTiming, RefError> {
         if F == DECLINE {
             return Err(RefError::Unsupported(UnsupportedOperation::RowLevelEncode));
         }
-        if F == ZERO_REFUSE && (width == 0 || height == 0) {
-            return Err(RefError::Invalid("zero size".into()));
+        if F == ZERO_ACCEPT && (width == 0 || height == 0) {
+            return Ok(OutputTiming::streaming(0));
         }
         if F == STALE_BEGIN {
             if self.stale.is_some_and(|s| s != (width, height)) {
@@ -179,7 +174,7 @@ impl<const F: u8> Encoder for LiarEnc<F> {
             _ => real,
         })
     }
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), RefError> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), RefError> {
         let n = rows.rows();
         self.inner.push_rows(rows)?;
         self.rows += n;
@@ -236,7 +231,7 @@ fn img() -> TestImage {
 #[test]
 fn the_reference_encoder_streams_and_says_so() {
     let mut enc = ReferenceEncoderConfig::new().job().encoder().unwrap();
-    let timing = enc.begin(4, 4, PixelDescriptor::RGBA8_SRGB).unwrap();
+    let timing = enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
     assert_eq!(timing, OutputTiming::streaming(0));
     assert!(timing.streams());
     assert!(!enc.pending_output().is_empty(), "header at begin");
@@ -357,14 +352,18 @@ fn a_take_output_that_drops_a_byte_is_caught() {
 }
 
 #[test]
-fn a_begin_stricter_than_encode_about_zero_sizes_is_caught() {
+fn a_begin_that_accepts_zero_sizes_is_caught() {
     let e = check_streaming_output_honesty(
-        Liar::<ZERO_REFUSE>::default(),
+        Liar::<ZERO_ACCEPT>::default(),
         ReferenceDecoderConfig,
         &img(),
     )
     .unwrap_err();
-    assert!(e.to_string().contains("begin(0, 32) was refused"), "{e}");
+    assert!(
+        e.to_string()
+            .contains("begin(0, 32) accepted an empty image"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -414,7 +413,7 @@ impl<const F: u8> EncoderConfig for AnimLiar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         ReferenceEncoderConfig::supported_descriptors()
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -486,7 +485,7 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
         &mut self,
         width: u32,
         height: u32,
-        desc: PixelDescriptor,
+        desc: ImageSpec,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, RefError> {
         if F == A_STALE {
@@ -513,7 +512,7 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
     }
     fn push_frame(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration_ms: u32,
         stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), RefError> {
@@ -559,13 +558,11 @@ fn the_reference_animation_streams_only_with_a_frame_count() {
             .unwrap()
     };
     let mut a = job();
-    let t = a
-        .begin(12, 8, PixelDescriptor::RGBA8_SRGB, Some(3))
-        .unwrap();
+    let t = a.begin(12, 8, ImageSpec::rgba8_srgb(), Some(3)).unwrap();
     assert_eq!(t, AnimationOutputTiming::streaming(0));
     assert!(!a.pending_output().is_empty(), "header at begin");
     let mut a = job();
-    let t = a.begin(12, 8, PixelDescriptor::RGBA8_SRGB, None).unwrap();
+    let t = a.begin(12, 8, ImageSpec::rgba8_srgb(), None).unwrap();
     assert_eq!(t, AnimationOutputTiming::AT_FINISH);
     assert!(a.pending_output().is_empty());
     check_animation_streaming_output_honesty(

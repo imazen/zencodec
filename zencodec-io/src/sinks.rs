@@ -4,7 +4,9 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use zencodec::decode::{DecodeRowSink, SinkError};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{
+    ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelBufParts, PixelView, PixelViewMut,
+};
 
 /// A sink that collects every final row into one tightly packed image.
 ///
@@ -16,10 +18,9 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 /// that the codec actually wrote every byte; native correctness remains required.
 #[derive(Default)]
 pub struct CollectSink {
-    data: Option<PixelBuffer>,
+    data: Option<PixelBufParts>,
     width: u32,
     height: u32,
-    descriptor: Option<PixelDescriptor>,
     rows_written: u64,
     covered_rows: Vec<u64>,
     unique_rows: u32,
@@ -43,8 +44,8 @@ impl CollectSink {
     }
 
     /// Output descriptor, once `begin` has been called.
-    pub fn descriptor(&self) -> Option<PixelDescriptor> {
-        self.descriptor
+    pub fn descriptor(&self) -> Option<ImageSpec> {
+        self.data.as_ref().map(|parts| parts.spec.clone())
     }
 
     /// Rows written so far (a row written twice counts twice).
@@ -61,12 +62,20 @@ impl CollectSink {
     pub fn bytes(&self) -> &[u8] {
         self.data
             .as_ref()
-            .map_or(&[], |buffer| buffer.as_slice().as_strided_bytes())
+            .map_or(&[], |buffer| buffer.storage.as_bytes())
     }
 
     /// A zero-copy view of the collected image.
-    pub fn as_pixel_slice(&self) -> Option<PixelSlice<'_>> {
-        self.data.as_ref().map(PixelBuffer::as_slice)
+    pub fn as_pixel_slice(&self) -> Option<PixelView<'_>> {
+        let parts = self.data.as_ref()?;
+        PixelView::new(
+            parts.storage.as_bytes(),
+            parts.width,
+            parts.height,
+            parts.stride,
+            parts.spec.clone(),
+        )
+        .ok()
     }
 
     /// Take the finished image without copying its pixels or allocating.
@@ -75,22 +84,22 @@ impl CollectSink {
     /// after the driver returns success: a sink's finish is not proof that the
     /// decoder's later validation succeeded. This does not include metadata;
     /// retain the decoder's completion details separately.
-    pub fn into_buffer(self) -> Option<PixelBuffer> {
-        self.finished.then_some(self.data).flatten()
+    pub fn into_buffer(self) -> Option<PixelBuf> {
+        let parts = self.finished.then_some(self.data).flatten()?;
+        PixelBuf::from_parts(
+            parts.storage,
+            parts.offset,
+            parts.width,
+            parts.height,
+            parts.stride,
+            parts.spec,
+        )
+        .ok()
     }
 
-    /// Copy the collected image into an owned [`PixelBuffer`].
-    pub fn to_buffer(&self) -> Option<PixelBuffer> {
-        let src = self.as_pixel_slice()?;
-        let mut out = PixelBuffer::new(self.width, self.height, src.descriptor());
-        {
-            let mut dst = out.as_slice_mut();
-            for y in 0..self.height {
-                let n = src.row(y).len().min(dst.row_mut(y).len());
-                dst.row_mut(y)[..n].copy_from_slice(&src.row(y)[..n]);
-            }
-        }
-        Some(out)
+    /// Copy the collected image into an owned [`PixelBuf`].
+    pub fn to_buffer(&self) -> Option<PixelBuf> {
+        self.as_pixel_slice()?.try_to_tight_buf().ok()
     }
 }
 
@@ -99,7 +108,7 @@ impl core::fmt::Debug for CollectSink {
         f.debug_struct("CollectSink")
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("descriptor", &self.descriptor)
+            .field("layout", &self.data.as_ref().map(|parts| parts.spec.layout))
             .field("rows_written", &self.rows_written)
             .field("finished", &self.finished)
             .finish_non_exhaustive()
@@ -107,29 +116,23 @@ impl core::fmt::Debug for CollectSink {
 }
 
 impl DecodeRowSink for CollectSink {
-    fn begin(
-        &mut self,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<(), SinkError> {
-        if self.descriptor.is_some() {
+    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+        if self.data.is_some() {
             return Err("CollectSink: begin called twice".into());
         }
         // Leaves state unchanged on failure. Allocates the format's own sample type, so
         // the rows are aligned whatever the allocator returns for bytes, and the
         // decoded buffer can move to a typed owner without a copy.
-        let buffer = PixelBuffer::try_new(width, height, descriptor)?;
+        let buffer = PixelBuf::new(width, height, descriptor)?;
         let words = usize::try_from(u64::from(height).div_ceil(64))
             .map_err(|_| SinkError::from("CollectSink: coverage too large"))?;
         let mut coverage = Vec::new();
         coverage.try_reserve_exact(words)?;
         coverage.resize(words, 0);
         self.covered_rows = coverage;
-        self.data = Some(buffer);
+        self.data = Some(buffer.into_parts());
         self.width = width;
         self.height = height;
-        self.descriptor = Some(descriptor);
         Ok(())
     }
 
@@ -138,18 +141,18 @@ impl DecodeRowSink for CollectSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         if self.finished {
             return Err("CollectSink: rows after finish".into());
         }
-        let Some(desc) = self.descriptor else {
+        let Some(parts) = self.data.as_mut() else {
             return Err("CollectSink: rows before begin".into());
         };
-        if width != self.width || descriptor != desc {
+        if width != self.width || descriptor != parts.spec {
             return Err(format!(
-                "CollectSink: strip {width}x{height} {descriptor:?} does not match image {}x{} {desc:?}",
-                self.width, self.height
+                "CollectSink: strip {width}x{height} {:?} does not match image {}x{} {:?}",
+                descriptor.layout, self.width, self.height, parts.spec.layout
             )
             .into());
         }
@@ -162,6 +165,14 @@ impl DecodeRowSink for CollectSink {
                     self.height
                 ))
             })?;
+        let start = y as usize * parts.stride;
+        let rows = PixelViewMut::new(
+            &mut parts.storage.as_bytes_mut()[start..],
+            width,
+            height,
+            parts.stride,
+            descriptor,
+        )?;
         for row in y..y + height {
             let word = &mut self.covered_rows[(row / 64) as usize];
             let bit = 1u64 << (row % 64);
@@ -171,15 +182,11 @@ impl DecodeRowSink for CollectSink {
             }
         }
         self.rows_written += height as u64;
-        Ok(self
-            .data
-            .as_mut()
-            .expect("begin installed pixel storage")
-            .rows_mut(y, height))
+        Ok(rows)
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
-        if self.descriptor.is_none() {
+        if self.data.is_none() {
             return Err("CollectSink: finish before begin".into());
         }
         if self.unique_rows != self.height {
@@ -205,12 +212,12 @@ mod tests {
     #[test]
     fn completed_pixels_cannot_be_reopened_for_writing() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 1, PixelDescriptor::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+        sink.begin(1, 1, ImageSpec::gray8_srgb()).unwrap();
+        sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
                 .is_err()
         );
     }
@@ -218,22 +225,22 @@ mod tests {
     #[test]
     fn completion_requires_unique_coverage_and_closes_writes() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 65, PixelDescriptor::GRAY8_SRGB).unwrap();
+        sink.begin(1, 65, ImageSpec::gray8_srgb()).unwrap();
         for _ in 0..65 {
-            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
                 .unwrap();
         }
         assert_eq!(sink.rows_written(), 65);
         assert!(sink.finish().is_err());
         assert!(!sink.finished());
         // Out-of-order and overlapping delivery remain valid.
-        sink.provide_next_buffer(32, 33, 1, PixelDescriptor::GRAY8_SRGB)
+        sink.provide_next_buffer(32, 33, 1, ImageSpec::gray8_srgb())
             .unwrap();
-        sink.provide_next_buffer(1, 32, 1, PixelDescriptor::GRAY8_SRGB)
+        sink.provide_next_buffer(1, 32, 1, ImageSpec::gray8_srgb())
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, PixelDescriptor::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
                 .is_err()
         );
         assert!(sink.into_buffer().is_some());
@@ -242,23 +249,25 @@ mod tests {
     #[test]
     fn finished_storage_moves_without_copy_for_integer_and_float_rows() {
         for descriptor in [
-            PixelDescriptor::RGB8_SRGB,
-            PixelDescriptor::RGB16_SRGB,
-            PixelDescriptor::RGBAF32_LINEAR,
+            ImageSpec::rgb8_srgb(),
+            ImageSpec::rgb16_srgb(),
+            ImageSpec::rgbaf32_linear(),
         ] {
             let mut sink = CollectSink::new();
-            sink.begin(3, 2, descriptor).unwrap();
+            sink.begin(3, 2, descriptor.clone()).unwrap();
             let original = sink.bytes().as_ptr();
             for y in 0..2 {
-                let mut rows = sink.provide_next_buffer(y, 1, 3, descriptor).unwrap();
+                let mut rows = sink
+                    .provide_next_buffer(y, 1, 3, descriptor.clone())
+                    .unwrap();
                 rows.row_mut(0).fill(37 + y as u8);
             }
             sink.finish().unwrap();
             let buffer = sink.into_buffer().unwrap();
-            assert_eq!(buffer.as_slice().as_strided_bytes().as_ptr(), original);
-            assert_eq!(buffer.descriptor(), descriptor);
+            assert_eq!(buffer.as_view().as_strided_bytes().as_ptr(), original);
+            assert_eq!(buffer.spec().clone(), descriptor);
             for y in 0..2 {
-                assert!(buffer.as_slice().row(y).iter().all(|b| *b == 37 + y as u8));
+                assert!(buffer.as_view().row(y).iter().all(|b| *b == 37 + y as u8));
             }
         }
     }
@@ -267,8 +276,8 @@ mod tests {
     fn unfinished_collectors_do_not_yield_owned_completion() {
         assert!(CollectSink::new().into_buffer().is_none());
         let mut sink = CollectSink::new();
-        sink.begin(2, 1, PixelDescriptor::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 2, PixelDescriptor::GRAY8_SRGB)
+        sink.begin(2, 1, ImageSpec::gray8_srgb()).unwrap();
+        sink.provide_next_buffer(0, 1, 2, ImageSpec::gray8_srgb())
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[17, 23]);
@@ -281,16 +290,16 @@ mod tests {
         // On 64-bit this fits usize but exceeds Vec's isize capacity limit;
         // on 32-bit the multiplication itself must refuse. Neither allocates.
         assert!(
-            sink.begin(u32::MAX, u32::MAX, PixelDescriptor::GRAY8_SRGB)
+            sink.begin(u32::MAX, u32::MAX, ImageSpec::gray8_srgb())
                 .is_err()
         );
         assert_eq!(sink.descriptor(), None);
         assert_eq!((sink.width(), sink.height()), (0, 0));
         assert!(sink.bytes().is_empty());
         assert!(!sink.finished());
-        sink.begin(3, 2, PixelDescriptor::GRAY8_SRGB).unwrap();
+        sink.begin(3, 2, ImageSpec::gray8_srgb()).unwrap();
         for y in 0..2 {
-            sink.provide_next_buffer(y, 1, 3, PixelDescriptor::GRAY8_SRGB)
+            sink.provide_next_buffer(y, 1, 3, ImageSpec::gray8_srgb())
                 .unwrap()
                 .row_mut(0)
                 .copy_from_slice(&[1 + y as u8, 3, 5]);
@@ -305,7 +314,7 @@ mod tests {
     fn collect_sink_refuses_geometry_overflow() {
         let mut sink = CollectSink::new();
         assert!(
-            sink.begin(u32::MAX, u32::MAX, PixelDescriptor::RGBAF32_LINEAR)
+            sink.begin(u32::MAX, u32::MAX, ImageSpec::rgbaf32_linear())
                 .is_err()
         );
         assert!(sink.bytes().is_empty());

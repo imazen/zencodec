@@ -2,6 +2,8 @@
 //! Run with `cargo test -p zencodec-media-testkit --features zencodec-media/std --test policy_completion_review`.
 use core::convert::Infallible;
 use std::cell::Cell;
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     At,
     how_far::NoPulse,
@@ -20,8 +22,6 @@ use zencodec_media::{
     track::TrackInfo,
 };
 use zencodec_media_testkit::toy::ToyEncoder;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 // A header-only container. Refusing all packets makes exact timing vacuous;
 // unlike delegating to a legacy muxer, this claims no unimplemented timing path.
@@ -215,10 +215,10 @@ fn frame() -> zencodec::frame::Frame {
         Frame, FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole, Presentation,
     };
     use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
-    let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
+    let encoding = SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap();
     let pixels = OwnedPlanes::new(
         vec![OwnedPlane::U8(
-            zenpixels::plane::Plane::new(vec![42], 1, 1, 1).unwrap(),
+            zencodec::plane::Plane::new(vec![42], 1, 1, 1).unwrap(),
         )],
         encoding,
     )
@@ -227,13 +227,13 @@ fn frame() -> zencodec::frame::Frame {
         Arc::new(pixels),
         Arc::new(FrameInterpretation::new(
             FrameGeometry::full(1, 1),
-            zenpixels::plane::PlanarLayout::new(
+            zencodec::plane::PlanarLayout::new(
                 (vec![PlaneRole::Luma])
                     .into_iter()
                     .map(|role| {
-                        zenpixels::plane::PlaneSpec::new(
+                        zencodec::plane::PlaneSpec::new(
                             role,
-                            zenpixels::plane::PlaneEncoding::Code(encoding),
+                            zencodec::plane::PlaneEncoding::Code(encoding),
                         )
                     })
                     .collect(),

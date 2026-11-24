@@ -9,7 +9,7 @@ use zencodec::encode::AnimationFrameEncoder;
 use zencodec::how_far::NoPulse;
 use zencodec::time::{FrameDuration, Rounding, TimeBase, Timestamp};
 use zencodec_io::{DriveFailure, SliceCursor};
-use zenpixels::{PixelBuffer, PixelDescriptor};
+use zenpixels::{ImageSpec, PixelBuf};
 
 use zencodec_media::adapt::{AdaptError, AnimationVideoEncoder, Gray8, VideoAnimationDecoder};
 use zencodec_media::container::{
@@ -177,7 +177,7 @@ fn absent_container_and_decode_controls_match_explicit_noop_bytes_samples_and_ti
             assert_eq!(frame.timing().pts, Some(Timestamp::new(i as i64, tb())));
             let mapped = frame.map().unwrap();
             let plane = mapped.plane(0).unwrap();
-            let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+            let zencodec::plane::AnyPlane::U8(plane) = plane else {
                 panic!("unexpected sample type")
             };
             for y in 0..H as usize {
@@ -347,7 +347,7 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
     );
     assert_eq!(frames[0].timing().packet_ordinal, None);
     assert_eq!(
-        zenpixels::sample::CodePlane::new(
+        zencodec::sample::CodePlane::new(
             frames[2].map().unwrap().plane(0).unwrap(),
             frames[2]
                 .interpretation()
@@ -388,7 +388,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     };
     drop(dec);
     assert_eq!(
-        zenpixels::sample::CodePlane::new(
+        zencodec::sample::CodePlane::new(
             plane,
             first
                 .interpretation()
@@ -400,7 +400,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
         Some(9)
     );
     assert_eq!(
-        zenpixels::sample::CodePlane::new(
+        zencodec::sample::CodePlane::new(
             second.map().unwrap().plane(0).unwrap(),
             second
                 .interpretation()
@@ -775,11 +775,11 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
 
 #[test]
 fn animation_round_trips_through_the_video_model_with_exact_timing() {
-    let frames: Vec<PixelBuffer> = (0..5u8)
+    let frames: Vec<PixelBuf> = (0..5u8)
         .map(|i| {
-            let mut b = PixelBuffer::new(W, H, PixelDescriptor::GRAY8_SRGB);
+            let mut b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
             for y in 0..H {
-                for (x, px) in b.as_slice_mut().row_mut(y).iter_mut().enumerate() {
+                for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 40 + y as u8 * 4 + x as u8;
                 }
             }
@@ -796,14 +796,14 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
         let enc = ToyEncoder::new(W, H, tb(), 1, 3);
         let mut a =
             AnimationVideoEncoder::new(enc, ToyMuxer::new(false), Gray8::default(), 1).unwrap();
-        let timing = a.begin(W, H, PixelDescriptor::GRAY8_SRGB, Some(5)).unwrap();
+        let timing = a.begin(W, H, ImageSpec::gray8_srgb(), Some(5)).unwrap();
         let mut out = Vec::new();
         let mut pending_after_push = Vec::new();
         if drain {
             a.take_output(&mut out);
         }
         for (f, d) in frames.iter().zip(&durations) {
-            a.push_frame_exact(f.as_slice(), *d, None).unwrap();
+            a.push_frame_exact(f.as_view(), *d, None).unwrap();
             pending_after_push.push(out.len() + a.pending_output().len());
             if drain {
                 a.take_output(&mut out);
@@ -826,7 +826,7 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
     // A fractional duration on this clock is refused as AnimationTiming.
     let enc = ToyEncoder::new(W, H, tb(), 1, 3);
     let mut a = AnimationVideoEncoder::new(enc, ToyMuxer::new(false), Gray8::default(), 1).unwrap();
-    let err = a.push_frame(frames[0].as_slice(), 40, None).unwrap_err();
+    let err = a.push_frame(frames[0].as_view(), 40, None).unwrap_err();
     assert!(matches!(
         err,
         AdaptError::Unsupported(zencodec::UnsupportedOperation::AnimationTiming)
@@ -852,7 +852,7 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
     for (i, (d, idx, row)) in got.iter().enumerate() {
         assert_eq!(*d, durations[i], "frame {i} duration from adjacent pts");
         assert_eq!(*idx, i as u32);
-        assert_eq!(row, &frames[i].as_slice().row(1).to_vec());
+        assert_eq!(row, &frames[i].as_view().row(1).to_vec());
     }
     assert_eq!(anim.frames_decoded(), 5);
 }
@@ -861,9 +861,9 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
 fn declared_frame_count_is_binding() {
     let enc = ToyEncoder::new(W, H, tb(), 1, 3);
     let mut a = AnimationVideoEncoder::new(enc, ToyMuxer::new(false), Gray8::default(), 1).unwrap();
-    a.begin(W, H, PixelDescriptor::GRAY8_SRGB, Some(2)).unwrap();
-    let b = PixelBuffer::new(W, H, PixelDescriptor::GRAY8_SRGB);
-    a.push_frame_exact(b.as_slice(), FrameDuration::new(1001, 30000).unwrap(), None)
+    a.begin(W, H, ImageSpec::gray8_srgb(), Some(2)).unwrap();
+    let b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
+    a.push_frame_exact(b.as_view(), FrameDuration::new(1001, 30000).unwrap(), None)
         .unwrap();
     assert!(matches!(
         a.finish(None),

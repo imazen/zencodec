@@ -2,7 +2,9 @@
 use super::*;
 use crate::UnsupportedOperation;
 use crate::encode::{EncodeDeclaration, EncodePlan, OutputTiming};
-use zenpixels::{ChannelType, SignalRange, sample::ExactDepth};
+use crate::helpers::codec_spec;
+use crate::sample::ExactDepth;
+use zenpixels::{SampleType, SignalRange};
 
 struct Job(ExactDepth);
 impl EncodeJob for Job {
@@ -18,7 +20,7 @@ impl EncodeJob for Job {
     fn with_metadata(self, _: Metadata) -> Self {
         self
     }
-    fn plan_encode(&self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, BoxedError> {
+    fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         assert_eq!(declaration.exact_depth, Some(self.0));
         Ok(EncodePlan::rows(OutputTiming::AT_FINISH))
     }
@@ -35,12 +37,12 @@ impl Encoder for Declared {
     fn reject(error: Self::Error) -> Self::Error {
         error
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         panic!("no fallback")
     }
     fn begin_declared(
         &mut self,
-        declaration: &EncodeDeclaration<'_>,
+        declaration: &EncodeDeclaration,
     ) -> Result<EncodePlan, Self::Error> {
         assert_eq!(declaration.exact_depth, Some(self.0));
         Ok(EncodePlan::rows(OutputTiming::AT_FINISH))
@@ -49,8 +51,9 @@ impl Encoder for Declared {
 
 #[test]
 fn evidence_survives_plain_send_and_send_sync_erased_jobs_and_encoders() {
-    let exact = ExactDepth::new(ChannelType::U16, SignalRange::Full, 8, 16).unwrap();
-    let declaration = EncodeDeclaration::new(2, 3, PixelDescriptor::RGB16).with_exact_depth(exact);
+    let exact = ExactDepth::new(SampleType::U16, SignalRange::Full, 8, 16).unwrap();
+    let declaration = EncodeDeclaration::new(2, 3, codec_spec(zenpixels::SampleLayout::RGB16))
+        .with_exact_depth(exact);
     let jobs: [Box<dyn DynEncodeJob>; 3] = [
         Box::new(EncodeJobShim(Some(Job(exact)))),
         {

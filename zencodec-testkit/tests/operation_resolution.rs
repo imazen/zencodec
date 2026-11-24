@@ -5,15 +5,15 @@ use zencodec::{
     operation::{Decision, EncodeRequest, OperationError, Question},
 };
 use zencodec_testkit::ReferenceEncoderConfig;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
-fn pixels() -> PixelSlice<'static> {
-    PixelSlice::new(
+fn pixels() -> PixelView<'static> {
+    PixelView::new(
         &[1, 2, 3, 99, 98, 97, 4, 5, 6, 96, 95, 94],
         1,
         2,
         6,
-        PixelDescriptor::RGB8_SRGB,
+        ImageSpec::rgb8_srgb(),
     )
     .unwrap()
 }

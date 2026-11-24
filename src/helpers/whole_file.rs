@@ -4,7 +4,7 @@
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 use crate::traits::{
     BatchMeta, DecodeJob, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress,
@@ -35,7 +35,7 @@ const FIRST_PROBE: usize = 4096;
 /// data arrives should implement [`IncrementalDecode`] natively instead.
 ///
 /// ```rust,ignore
-/// fn dyn_incremental_decoder(self, preferred: &[PixelDescriptor])
+/// fn dyn_incremental_decoder(self, preferred: &[ImageSpec])
 ///     -> Result<Box<DynIncrementalDecoder>, BoxedError>
 /// {
 ///     Ok(zencodec::decode::erase_incremental(
@@ -49,7 +49,7 @@ const FIRST_PROBE: usize = 4096;
 /// token (if any) cancels inside the final decode.
 pub struct WholeFileIncremental<J> {
     job: Option<J>,
-    preferred: Vec<PixelDescriptor>,
+    preferred: Vec<ImageSpec>,
     info: Option<ImageInfo>,
     /// The header probe has succeeded or given up for want of more input.
     probed: bool,
@@ -65,7 +65,7 @@ where
 {
     /// Wrap `job`, decoding to the first descriptor in `preferred` the codec
     /// can produce (as [`push_decoder`](DecodeJob::push_decoder) does).
-    pub fn new(job: J, preferred: &[PixelDescriptor]) -> Self {
+    pub fn new(job: J, preferred: &[ImageSpec]) -> Self {
         Self {
             job: Some(job),
             preferred: preferred.to_vec(),
@@ -159,7 +159,7 @@ where
         self.info.as_ref()
     }
 
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.decoded.as_ref().map(|o| o.native_format)
+    fn output_descriptor(&self) -> Option<ImageSpec> {
+        self.decoded.as_ref().map(|o| o.native_format.clone())
     }
 }

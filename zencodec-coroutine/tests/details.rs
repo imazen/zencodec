@@ -6,8 +6,8 @@ use std::sync::{
 use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
-const DESC: PixelDescriptor = PixelDescriptor::GRAY8_SRGB;
+use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+const DESC: ImageSpec = ImageSpec::gray8_srgb();
 struct Owner(Arc<AtomicUsize>);
 impl Drop for Owner {
     fn drop(&mut self) {
@@ -33,9 +33,9 @@ impl DecodeRowSink for Sink {
         _: u32,
         rows: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        Ok(PixelSliceMut::new(
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        Ok(PixelViewMut::new(
             &mut self.bytes,
             width,
             rows,
@@ -64,7 +64,7 @@ fn producer(
             result.info.width = 2;
         }
         ctx.set_details(result);
-        let rows = PixelSlice::new(&[17], 1, 1, 1, DESC).unwrap();
+        let rows = PixelView::new(&[17], 1, 1, 1, DESC).unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
         Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
     })
@@ -248,7 +248,7 @@ fn terminal_details_cannot_change_adopted_interpretation() {
             let mut result = details(owned);
             result.info.width = 2;
             ctx.set_details(result);
-            let rows = PixelSlice::new(&[17], 1, 1, 1, DESC).unwrap();
+            let rows = PixelView::new(&[17], 1, 1, 1, DESC).unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
         },
@@ -300,11 +300,11 @@ fn sink_stop_prevents_completion_and_releases_details() {
             _: u32,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("completion-only producer has no row callback");
         }
-        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
             if self.at_begin {
                 self.signal.store(true, Ordering::SeqCst);
                 if self.fail {

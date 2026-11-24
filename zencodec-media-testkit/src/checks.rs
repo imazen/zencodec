@@ -12,6 +12,7 @@ use enough::{Stop, StopReason};
 use zencodec::decode::{AnimationFrameDecoder, Input};
 use zencodec::encode::AnimationFrameEncoder;
 use zencodec::how_far::NoPulse;
+use zencodec::plane::AnyPlane;
 use zencodec::source::{ReadAt, SourceError};
 use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 use zencodec_io::{DriveFailure, DriveOptions, ReadAtCursor, SliceCursor, Yield};
@@ -28,8 +29,7 @@ use zencodec_media::session::{
     VideoDecoder, VideoEncoder, erase_video_decoder,
 };
 use zencodec_media::track::{AudioTrackInfo, CodecId, TrackInfo, TrackKind, VideoTrackInfo};
-use zenpixels::PixelBuffer;
-use zenpixels::plane::AnyPlane;
+use zenpixels::PixelBuf;
 
 /// A broken rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -863,7 +863,7 @@ pub fn check_animation_over_video<E, M, D, C, P, R>(
     make_demuxer: impl FnOnce() -> D,
     make_decoder: impl FnOnce() -> C,
     render: R,
-    frames: &[PixelBuffer],
+    frames: &[PixelBuf],
     durations: &[FrameDuration],
 ) -> Conformance
 where
@@ -884,7 +884,7 @@ where
     let (w, h, desc) = (
         frames[0].width(),
         frames[0].height(),
-        frames[0].descriptor(),
+        frames[0].spec().clone(),
     );
     let count = frames.len() as u32;
     // The file, bytes available after each push, and the reported lag.
@@ -893,7 +893,7 @@ where
         let mut a = AnimationVideoEncoder::new(make_encoder(), make_muxer(), capture(), lag_frames)
             .map_err(|e| fail(CHECK, format!("new: {e:?}")))?;
         let timing = a
-            .begin(w, h, desc, Some(count))
+            .begin(w, h, desc.clone(), Some(count))
             .map_err(|e| fail(CHECK, format!("begin: {e:?}")))?;
         let mut out = Vec::new();
         let mut points = Vec::new();
@@ -901,7 +901,7 @@ where
             a.take_output(&mut out);
         }
         for (f, d) in frames.iter().zip(durations) {
-            a.push_frame_exact(f.as_slice(), *d, None)
+            a.push_frame_exact(f.as_view(), *d, None)
                 .map_err(|e| fail(CHECK, format!("push: {e:?}")))?;
             points.push(out.len() + a.pending_output().len());
             if drain {
@@ -965,7 +965,7 @@ where
             ));
         }
         for y in 0..h {
-            if f.pixels().row(y) != want.as_slice().row(y) {
+            if f.pixels().row(y) != want.as_view().row(y) {
                 return Err(fail(CHECK, format!("frame {index} row {y} differs")));
             }
         }
@@ -987,7 +987,7 @@ where
     a.begin(w, h, desc, Some(count + 1))
         .map_err(|e| fail(CHECK, format!("begin: {e:?}")))?;
     for (f, d) in frames.iter().zip(durations) {
-        a.push_frame_exact(f.as_slice(), *d, None)
+        a.push_frame_exact(f.as_view(), *d, None)
             .map_err(|e| fail(CHECK, format!("push: {e:?}")))?;
     }
     if a.finish(None).is_ok() {

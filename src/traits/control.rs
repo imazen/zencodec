@@ -10,7 +10,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 /// How much a decoder knows about the interpretation of its proposed pixels.
 /// This does not describe metadata inventory or certify absence of private data.
@@ -45,7 +45,7 @@ pub enum InterpretationUnavailable {
 }
 
 /// Facts exposed before affected decode output. Contains no metadata payloads.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct InterpretationFacts {
     /// Proposed image width.
@@ -53,7 +53,7 @@ pub struct InterpretationFacts {
     /// Proposed image height.
     pub height: u32,
     /// Proposed output layout and sample interpretation, when known.
-    pub descriptor: Option<PixelDescriptor>,
+    pub descriptor: Option<ImageSpec>,
     /// Whether this interpretation can still change.
     pub state: InterpretationState,
     /// Structured explanation when interpretation is unavailable. Older adapters
@@ -66,7 +66,7 @@ impl InterpretationFacts {
     pub const fn new(
         width: u32,
         height: u32,
-        descriptor: Option<PixelDescriptor>,
+        descriptor: Option<ImageSpec>,
         state: InterpretationState,
     ) -> Self {
         Self {
@@ -91,7 +91,7 @@ impl InterpretationFacts {
 pub struct BoundaryId(u64);
 
 /// A mandatory suspension before affected conversion or output effects.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecodeBoundary {
     id: BoundaryId,
     facts: InterpretationFacts,
@@ -117,12 +117,12 @@ impl DecodeBoundary {
         })
     }
     /// Identity required when resuming this exact suspension.
-    pub const fn id(self) -> BoundaryId {
+    pub const fn id(&self) -> BoundaryId {
         self.id
     }
     /// Qualified facts supplied by the decoder.
-    pub const fn facts(self) -> InterpretationFacts {
-        self.facts
+    pub const fn facts(&self) -> &InterpretationFacts {
+        &self.facts
     }
 }
 
@@ -139,7 +139,7 @@ pub enum BoundaryAction {
 impl BoundaryAction {
     /// Whether the facts permit this mechanism. This does not admit storage or
     /// authorize a conversion/encode route on behalf of an application.
-    pub const fn permits(self, facts: InterpretationFacts) -> bool {
+    pub const fn permits(self, facts: &InterpretationFacts) -> bool {
         match self {
             Self::ContinueReading => matches!(
                 facts.state,
@@ -363,16 +363,16 @@ impl<'a> GuardedSink<'a> {
         &mut self,
         width: Option<u32>,
         extent: Option<(u32, u32)>,
-        descriptor: Option<PixelDescriptor>,
+        descriptor: Option<&ImageSpec>,
     ) -> Result<(), crate::sink::SinkError> {
         if let Some(cause) = &self.sink_error {
             return Err(Box::new(RetainedSinkError(cause.clone())));
         }
-        let error = match self.facts {
+        let error = match &self.facts {
             None => Some(ControlError::OutputBeforeInterpretation),
             Some(facts)
                 if width.is_some_and(|w| w != facts.width)
-                    || descriptor.is_some_and(|d| facts.descriptor != Some(d))
+                    || descriptor.is_some_and(|d| facts.descriptor.as_ref() != Some(d))
                     || extent.is_some_and(|(y, rows)| {
                         y.checked_add(rows).is_none_or(|end| end > facts.height)
                     }) =>
@@ -397,10 +397,14 @@ impl DecodeRowSink for GuardedSink<'_> {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        descriptor: ImageSpec,
     ) -> Result<(), crate::sink::SinkError> {
-        self.check(Some(width), Some((0, height)), Some(descriptor))?;
-        if self.facts.is_some_and(|facts| facts.height != height) {
+        self.check(Some(width), Some((0, height)), Some(&descriptor))?;
+        if self
+            .facts
+            .as_ref()
+            .is_some_and(|facts| facts.height != height)
+        {
             self.refused = Some(ControlError::InconsistentFacts);
             return Err(Box::new(ControlError::InconsistentFacts));
         }
@@ -414,9 +418,9 @@ impl DecodeRowSink for GuardedSink<'_> {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
-        self.check(Some(width), Some((y, height)), Some(descriptor))?;
+        descriptor: ImageSpec,
+    ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
+        self.check(Some(width), Some((y, height)), Some(&descriptor))?;
         retain_sink_failure(
             &mut self.sink_error,
             self.inner.provide_next_buffer(y, height, width, descriptor),
@@ -427,9 +431,9 @@ impl DecodeRowSink for GuardedSink<'_> {
         meta: super::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
-        self.check(Some(width), Some((meta.y, height)), Some(descriptor))?;
+        descriptor: ImageSpec,
+    ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
+        self.check(Some(width), Some((meta.y, height)), Some(&descriptor))?;
         retain_sink_failure(
             &mut self.sink_error,
             self.inner
@@ -454,7 +458,7 @@ mod tests {
     use crate::ImageInfo;
     use crate::decode::{Event, InputRequest, OutputInfo, SinkError};
     use alloc::sync::Arc;
-    use zenpixels::PixelSliceMut;
+    use zenpixels::PixelViewMut;
 
     struct Hostile {
         calls: Arc<AtomicUsize>,
@@ -471,11 +475,11 @@ mod tests {
             _: Option<&dyn crate::Pulse>,
         ) -> Result<Progress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB)
+            sink.begin(1, 1, ImageSpec::rgba8_srgb())
                 .map_err(StepError::Sink)?;
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::RGBA8_SRGB)),
+                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgba8_srgb())),
             ))
         }
         fn requested(&self) -> &[InputRequest] {
@@ -500,17 +504,17 @@ mod tests {
                 self.early_output
             } {
                 1 => {
-                    let _ = sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB);
+                    let _ = sink.begin(1, 1, ImageSpec::rgba8_srgb());
                 }
                 2 => {
-                    let _ = sink.provide_next_buffer(0, 1, 1, PixelDescriptor::RGBA8_SRGB);
+                    let _ = sink.provide_next_buffer(0, 1, 1, ImageSpec::rgba8_srgb());
                 }
                 3 => {
                     let _ = sink.provide_pass_buffer(
                         super::super::BatchMeta::new(0, false),
                         1,
                         1,
-                        PixelDescriptor::RGBA8_SRGB,
+                        ImageSpec::rgba8_srgb(),
                     );
                 }
                 4 => {
@@ -522,13 +526,13 @@ mod tests {
                 let _ = sink.finish(); // A swallowed failure must block later effects too.
                 return Ok(Progress::new(
                     0,
-                    Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::RGBA8_SRGB)),
+                    Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgba8_srgb())),
                 )
                 .into());
             }
             Ok(ControlledProgress::Suspended {
                 consumed: 0,
-                boundary: self.boundary,
+                boundary: self.boundary.clone(),
             })
         }
         fn resume(
@@ -551,11 +555,11 @@ mod tests {
             _: super::super::BatchMeta,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("unexpected provisional rows")
         }
-        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
             panic!("unexpected sink effect")
         }
         fn provide_next_buffer(
@@ -563,8 +567,8 @@ mod tests {
             _: u32,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("unexpected rows")
         }
     }
@@ -573,7 +577,7 @@ mod tests {
         let boundary = DecodeBoundary::new(InterpretationFacts::new(
             1,
             1,
-            Some(PixelDescriptor::RGBA8_SRGB),
+            Some(ImageSpec::rgba8_srgb()),
             InterpretationState::Final,
         ))
         .unwrap();
@@ -581,7 +585,7 @@ mod tests {
             calls.clone(),
             Fused::new(Hostile {
                 calls,
-                boundary,
+                boundary: boundary.clone(),
                 early_output: 0,
                 late_output: 0,
             }),
@@ -671,7 +675,7 @@ mod tests {
         }
     }
     impl DecodeRowSink for RefusingSink {
-        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
             self.fail(1)
         }
         fn provide_next_buffer(
@@ -679,8 +683,8 @@ mod tests {
             _: u32,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             self.fail(2)
         }
         fn provide_pass_buffer(
@@ -688,8 +692,8 @@ mod tests {
             _: super::super::BatchMeta,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             self.fail(3)
         }
         fn finish(&mut self) -> Result<(), SinkError> {

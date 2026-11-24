@@ -3,13 +3,13 @@ use super::{
     DecisionContext, DecisionRecord, OperationPolicy, PolicyFailure, PolicySet, Question,
     Selection, policy,
 };
+use crate::plane::PlaneSpec;
+use crate::sample::SampleEncoding;
+use crate::sample::{ChromaSiting, ChromaSubsampling};
 use crate::{
     At,
     frame::{ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming},
 };
-use zenpixels::plane::PlaneSpec;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 /// Bounded facts about one native presentation, including every plane declaration.
 /// This record contains no sample payloads.

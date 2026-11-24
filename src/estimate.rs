@@ -28,7 +28,7 @@
 //! which there is no further speedup), and [`ResourceEstimate::at_cores`] folds
 //! it in.
 
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 /// The SIMD instruction tier a codec will dispatch to.
 ///
@@ -196,14 +196,14 @@ impl Default for ComputeEnvironment {
 pub struct ImageCharacteristics {
     width: u32,
     height: u32,
-    descriptor: PixelDescriptor,
+    descriptor: ImageSpec,
     frame_count: u32,
 }
 
 impl ImageCharacteristics {
     /// A still image of `width` × `height` with the given pixel format.
     #[must_use]
-    pub fn new(width: u32, height: u32, descriptor: PixelDescriptor) -> Self {
+    pub fn new(width: u32, height: u32, descriptor: ImageSpec) -> Self {
         Self {
             width,
             height,
@@ -233,7 +233,7 @@ impl ImageCharacteristics {
 
     /// The pixel format of the source/decoded buffer.
     #[must_use]
-    pub fn descriptor(&self) -> &PixelDescriptor {
+    pub fn descriptor(&self) -> &ImageSpec {
         &self.descriptor
     }
 
@@ -253,7 +253,7 @@ impl ImageCharacteristics {
     /// (`pixels * bytes_per_pixel`).
     #[must_use]
     pub fn input_bytes(&self) -> u64 {
-        self.pixels() * self.descriptor.bytes_per_pixel() as u64
+        self.pixels() * self.descriptor.layout.bytes_per_pixel() as u64
     }
 }
 
@@ -482,8 +482,8 @@ impl ResourceEstimate {
 mod tests {
     use super::*;
 
-    fn desc() -> PixelDescriptor {
-        PixelDescriptor::RGB8_SRGB
+    fn desc() -> ImageSpec {
+        ImageSpec::rgb8_srgb()
     }
 
     #[test]

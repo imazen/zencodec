@@ -1,5 +1,7 @@
 //! Admission follows real packet and picture owners across queue/epoch changes.
 use std::sync::Arc;
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec_io::storage::{StorageBudget, StorageError};
 use zencodec_media::{
     frame::{
@@ -8,8 +10,6 @@ use zencodec_media::{
     },
     packet::{Packet, PacketAddition, PacketPayload},
 };
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 #[test]
 fn deferred_admission_blocks_competitors_and_transfers_the_same_charge() {
@@ -78,7 +78,7 @@ enum Data {
 }
 
 fn frame(data: Data, encoding: SampleEncoding, epoch: u32) -> Frame {
-    use zenpixels::plane::Plane;
+    use zencodec::plane::Plane;
     let plane = match data {
         Data::AccountedU8(s) => OwnedPlane::AccountedU8(Plane::new(s, 3, 2, 4).unwrap()),
         Data::AccountedU16(s) => OwnedPlane::AccountedU16(Plane::new(s, 3, 2, 4).unwrap()),
@@ -86,13 +86,13 @@ fn frame(data: Data, encoding: SampleEncoding, epoch: u32) -> Frame {
     let picture = OwnedPlanes::new(vec![plane], encoding).unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(encoding),
+                        zencodec::plane::PlaneEncoding::Code(encoding),
                     )
                 })
                 .collect(),
@@ -145,7 +145,7 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
         .copy_from_slice(&[1, 2, 3, 99, 4, 5, 6, 98]);
     let old = frame(
         Data::AccountedU8(old.freeze()),
-        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+        SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap(),
         0,
     );
     let retained = old.clone();
@@ -154,7 +154,7 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
     drop(old); // decoder/queue released its handle
     let new = frame(
         Data::AccountedU8(budget.bytes(8).unwrap().freeze()),
-        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+        SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap(),
         1,
     );
     assert_eq!(budget.reserved_bytes(), 16);
@@ -163,8 +163,8 @@ fn retained_old_epoch_frames_remain_charged_after_queue_and_decoder_handles_drop
     assert_eq!(new.interpretation().config_epoch, 1);
     let mapped = retained.map().unwrap();
     let plane = mapped.plane(0).unwrap();
-    assert!(matches!(plane, zenpixels::plane::AnyPlane::U8(p) if p.row(0).unwrap() == [1, 2, 3]));
-    assert!(matches!(plane, zenpixels::plane::AnyPlane::U8(p) if p.row(1).unwrap() == [4, 5, 6]));
+    assert!(matches!(plane, zencodec::plane::AnyPlane::U8(p) if p.row(0).unwrap() == [1, 2, 3]));
+    assert!(matches!(plane, zencodec::plane::AnyPlane::U8(p) if p.row(1).unwrap() == [4, 5, 6]));
     drop(mapped);
     drop(retained);
     assert_eq!(
@@ -185,7 +185,7 @@ fn ten_bit_strided_planes_keep_native_words_and_their_full_charge() {
     words
         .as_mut_slice()
         .copy_from_slice(&[0, 512, 1023, 65535, 1, 511, 1022, 65534]);
-    let encoding = SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap();
+    let encoding = SampleEncoding::new(zenpixels::SampleType::U16, 10, 0).unwrap();
     let frame = frame(Data::AccountedU16(words.freeze()), encoding, 5);
     let clone = frame.clone();
     drop(frame);
@@ -193,10 +193,10 @@ fn ten_bit_strided_planes_keep_native_words_and_their_full_charge() {
     let mapped = clone.map().unwrap();
     let plane = mapped.plane(0).unwrap();
     assert!(
-        matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [0, 512, 1023])
+        matches!(plane, zencodec::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [0, 512, 1023])
     );
     assert!(
-        matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [1, 511, 1022])
+        matches!(plane, zencodec::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [1, 511, 1022])
     );
     assert_eq!(
         clone

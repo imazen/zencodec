@@ -12,22 +12,29 @@
 
 use alloc::borrow::Cow;
 
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 use crate::cost::OutputInfo;
 use crate::sink::SinkError;
 use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
+mod cicp;
 mod exif;
 mod icc;
+mod pixels;
 mod whole_file;
 
+pub use cicp::{
+    CicpDisplay, color_primaries_name, matrix_coefficients_name, transfer_characteristics_name,
+};
 pub use exif::{parse_exif_orientation, set_exif_color_space, set_exif_orientation};
 pub use icc::descriptor_for_decoded_pixels_v2;
 #[allow(deprecated)]
 pub use icc::{
     IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
+pub use pixels::codec_spec;
+pub(crate) use pixels::{has_alpha, redacted_spec, signal_range};
 pub use whole_file::WholeFileIncremental;
 
 /// Copy already-decoded rows into the sink's admitted strip capacity.
@@ -40,7 +47,7 @@ pub use whole_file::WholeFileIncremental;
 pub fn copy_rows_to_sink(
     sink: &mut dyn crate::DecodeRowSink,
     meta: crate::decode::BatchMeta,
-    pixels: &zenpixels::PixelSlice<'_>,
+    pixels: &zenpixels::PixelView<'_>,
 ) -> Result<(), SinkError> {
     meta.y
         .checked_add(pixels.rows())
@@ -52,14 +59,11 @@ pub fn copy_rows_to_sink(
         let mut part = meta;
         part.y += offset;
         let mut dst = if part.is_final {
-            sink.provide_next_buffer(part.y, rows, pixels.width(), pixels.descriptor())?
+            sink.provide_next_buffer(part.y, rows, pixels.width(), pixels.spec().clone())?
         } else {
-            sink.provide_pass_buffer(part, rows, pixels.width(), pixels.descriptor())?
+            sink.provide_pass_buffer(part, rows, pixels.width(), pixels.spec().clone())?
         };
-        if dst.width() != pixels.width()
-            || dst.rows() != rows
-            || dst.descriptor() != pixels.descriptor()
-        {
+        if dst.width() != pixels.width() || dst.rows() != rows || dst.spec() != pixels.spec() {
             return Err("sink returned a buffer with a different geometry or descriptor".into());
         }
         for row in 0..rows {
@@ -80,7 +84,7 @@ pub fn copy_rows_to_sink(
 ///     self,
 ///     data: Cow<'a, [u8]>,
 ///     sink: &mut dyn DecodeRowSink,
-///     preferred: &[PixelDescriptor],
+///     preferred: &[ImageSpec],
 /// ) -> Result<OutputInfo, Self::Error> {
 ///     zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, MyError::from_sink)
 /// }
@@ -89,7 +93,7 @@ pub fn copy_decode_to_sink<'a, J>(
     job: J,
     data: Cow<'a, [u8]>,
     sink: &mut dyn crate::DecodeRowSink,
-    preferred: &[PixelDescriptor],
+    preferred: &[ImageSpec],
     wrap_sink_error: fn(SinkError) -> J::Error,
 ) -> Result<OutputInfo, J::Error>
 where
@@ -98,11 +102,11 @@ where
     let dec = job.decoder(data, preferred)?;
     let output = dec.decode()?;
     let ps = output.pixels();
-    let desc = ps.descriptor();
+    let desc = ps.spec().clone();
     let w = ps.width();
     let h = ps.rows();
 
-    sink.begin(w, h, desc).map_err(wrap_sink_error)?;
+    sink.begin(w, h, desc.clone()).map_err(wrap_sink_error)?;
 
     copy_rows_to_sink(sink, crate::decode::BatchMeta::final_rows(0), &ps)
         .map_err(wrap_sink_error)?;
@@ -137,11 +141,11 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
         None => return Ok(None),
     };
     let ps = frame.pixels();
-    let desc = ps.descriptor();
+    let desc = ps.spec().clone();
     let w = ps.width();
     let h = ps.rows();
 
-    sink.begin(w, h, desc).map_err(D::wrap_sink_error)?;
+    sink.begin(w, h, desc.clone()).map_err(D::wrap_sink_error)?;
     copy_rows_to_sink(sink, crate::decode::BatchMeta::final_rows(0), ps)
         .map_err(D::wrap_sink_error)?;
     sink.finish().map_err(D::wrap_sink_error)?;

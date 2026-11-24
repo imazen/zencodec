@@ -1,7 +1,7 @@
 //! Encoder-driven row acquisition without owning the source or its I/O.
 
 use core::fmt;
-use zenpixels::PixelSliceMut;
+use zenpixels::PixelViewMut;
 
 /// A native encoder's temporary destination for one consecutive strip.
 ///
@@ -20,12 +20,12 @@ pub struct RowDemand<'a> {
     /// First absolute image row in this strip.
     pub first: u32,
     /// Native-owned strided storage with the declared sample interpretation.
-    pub rows: PixelSliceMut<'a>,
+    pub rows: PixelViewMut<'a>,
 }
 
 impl<'a> RowDemand<'a> {
     /// Ask for a strip; final-pass status and diagnostic label start unset.
-    pub fn new(pass: u32, first: u32, rows: PixelSliceMut<'a>) -> Self {
+    pub fn new(pass: u32, first: u32, rows: PixelViewMut<'a>) -> Self {
         Self {
             pass,
             final_pass: false,

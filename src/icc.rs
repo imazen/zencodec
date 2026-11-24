@@ -49,6 +49,9 @@ pub(crate) mod tests {
         let mut data = alloc::vec![0u8; 256];
         let size = data.len() as u32;
         data[0..4].copy_from_slice(&size.to_be_bytes());
+        data[8..12].copy_from_slice(&[4, 0x40, 0, 0]);
+        data[12..16].copy_from_slice(b"mntr");
+        data[16..20].copy_from_slice(b"RGB ");
         data[36..40].copy_from_slice(b"acsp");
         data[128..132].copy_from_slice(&1u32.to_be_bytes());
         data[132..136].copy_from_slice(b"cicp");

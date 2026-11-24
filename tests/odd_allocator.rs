@@ -3,7 +3,7 @@
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use zencodec::AnimationFrame;
-use zenpixels::{PixelBuffer, PixelDescriptor};
+use zenpixels::{ImageSpec, PixelBuf};
 
 struct OddBytes;
 
@@ -42,21 +42,21 @@ static ODD: OddBytes = OddBytes;
 /// a wide format on such an allocator panicked.
 #[test]
 fn to_owned_frame_copies_wide_formats_on_any_allocator() {
-    for descriptor in [PixelDescriptor::RGB16_SRGB, PixelDescriptor::RGBAF32_LINEAR] {
-        let mut source = PixelBuffer::new(4, 3, descriptor);
+    for descriptor in [ImageSpec::rgb16_srgb(), ImageSpec::rgbaf32_linear()] {
+        let mut source = PixelBuf::new(4, 3, descriptor.clone()).unwrap();
         {
-            let mut rows = source.as_slice_mut();
+            let mut rows = source.as_view_mut();
             for y in 0..3 {
                 rows.row_mut(y).fill(y as u8 + 1);
             }
         }
-        let frame = AnimationFrame::new(source.as_slice(), 10, 0);
+        let frame = AnimationFrame::new(source.as_view(), 10, 0);
         let owned = frame.to_owned_frame();
         let copy = owned.pixels();
         for y in 0..3 {
             assert_eq!(
                 copy.row(y),
-                source.as_slice().row(y),
+                source.as_view().row(y),
                 "{descriptor:?} row {y}"
             );
         }

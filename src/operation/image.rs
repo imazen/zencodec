@@ -8,12 +8,12 @@ use crate::{
     frame::{FrameTiming, Presentation},
     image::{ImageGeometry, ImageOutput, Placement},
 };
-use zenpixels::{Orientation, PixelDescriptor};
+use zenpixels::{ImageSpec, Orientation};
 
 /// Bounded diagnostic facts, without pixel bytes, names, profiles or source
 /// payloads. They describe the held output; they do not establish privacy or a
 /// native workspace bound. Full source details remain accessible in the question.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ImageFacts {
     /// Stored output extent within the selected canvas.
@@ -26,7 +26,7 @@ pub struct ImageFacts {
     /// Residual orientation, if the adapter establishes one.
     pub orientation: Option<Orientation>,
     /// Actual packed pixel descriptor, absent for native component codes.
-    pub packed: Option<PixelDescriptor>,
+    pub packed: Option<ImageSpec>,
     /// Declared emitted planes. Mapping checks the native storage separately.
     pub planes: usize,
     /// Number of retained auxiliary planes.
@@ -91,7 +91,7 @@ pub fn resolve_image<R: OperationPolicy + ?Sized>(
     let facts = ImageFacts::new(&image);
     let (_, record) = policy::choose(
         &[PublicationOffer::ReturnHeld],
-        DecisionContext::Image(facts),
+        DecisionContext::Image(facts.clone()),
         |choices| Question::Image {
             image: &image,
             facts: &facts,

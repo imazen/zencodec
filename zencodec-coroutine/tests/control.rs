@@ -16,9 +16,9 @@ use zencodec::storage::{StorageBudget, StorageError};
 use zencodec::{At, ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ImageSpec, PixelView, PixelViewMut};
 
-const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
 
 #[test]
 fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_unwind() {
@@ -63,7 +63,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
         };
         assert_eq!(budget.reserved_objects(), 3);
         if failure == 0 {
-            let stale = DecodeBoundary::new(boundary.facts()).unwrap();
+            let stale = DecodeBoundary::new(boundary.facts().clone()).unwrap();
             assert!(matches!(
                 stage.resume(
                     stale.id(),
@@ -226,7 +226,7 @@ fn storage_admission_precedes_initialization_and_row_publication() {
                 ctx.read_exact_at(0, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelSlice::new(&pixels, 2, 2, 12, RGBA).unwrap(),
+                    &PixelView::new(&pixels, 2, 2, 12, RGBA).unwrap(),
                 )
                 .await?;
                 Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
@@ -259,7 +259,7 @@ struct Sink {
     ended: usize,
 }
 impl DecodeRowSink for Sink {
-    fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+    fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), SinkError> {
         self.began += 1;
         self.pixels.begin(w, h, d)
     }
@@ -268,8 +268,8 @@ impl DecodeRowSink for Sink {
         y: u32,
         h: u32,
         w: u32,
-        d: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        d: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.rows += 1;
         self.pixels.provide_next_buffer(y, h, w, d)
     }
@@ -292,7 +292,7 @@ fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
         fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
             core::num::NonZeroU32::MIN
         }
-        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), SinkError> {
             self.0.begin(w, h, d)
         }
         fn provide_next_buffer(
@@ -300,8 +300,8 @@ fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
             y: u32,
             h: u32,
             w: u32,
-            d: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            d: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             assert_eq!(h, 1);
             self.0.provide_next_buffer(y, h, w, d)
         }
@@ -341,7 +341,7 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             if early {
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelSlice::new(&[0; 16], 2, 2, 8, RGBA).unwrap(),
+                    &PixelView::new(&[0; 16], 2, 2, 8, RGBA).unwrap(),
                 )
                 .await?;
             }
@@ -367,7 +367,7 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             ctx.read_exact_at(1, &mut rows).await?;
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelSlice::new(&rows, 2, 2, 12, RGBA).unwrap(),
+                &PixelView::new(&rows, 2, 2, 12, RGBA).unwrap(),
             )
             .await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
@@ -471,7 +471,7 @@ fn suspension_requires_its_exact_reply_and_does_not_consume_more_input() {
         (sink.began, sink.rows, work.load(Ordering::SeqCst)),
         (0, 0, 0)
     );
-    let other = DecodeBoundary::new(first.facts()).unwrap();
+    let other = DecodeBoundary::new(first.facts().clone()).unwrap();
     assert!(matches!(
         dec.resume(other.id(), BoundaryAction::ContinueReading, Some(&NoPulse)),
         Err(StepError::Control(ControlError::InvalidReply))

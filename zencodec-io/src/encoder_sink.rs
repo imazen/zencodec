@@ -7,7 +7,9 @@ use core::fmt;
 
 use zencodec::decode::{DecodeRowSink, SinkError};
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{
+    ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelStorage, PixelView, PixelViewMut,
+};
 
 /// Failure of [`EncoderSink::finish`].
 #[derive(Debug)]
@@ -58,8 +60,8 @@ impl<E: core::error::Error + 'static> core::error::Error for EncoderSinkError<E>
 /// they can be told apart from malformed input.
 pub struct EncoderSink<E> {
     encoder: Option<E>,
-    strip: Vec<u8>,
-    pending: Option<(u32, u32, PixelDescriptor)>,
+    strip: Option<PixelStorage>,
+    pending: Option<(u32, u32, ImageSpec)>,
     rows_pushed: u64,
     timing: Option<OutputTiming>,
 }
@@ -72,7 +74,7 @@ where
     pub fn new(encoder: E) -> Self {
         Self {
             encoder: Some(encoder),
-            strip: Vec::new(),
+            strip: None,
             pending: None,
             rows_pushed: 0,
             timing: None,
@@ -135,15 +137,17 @@ where
         let Some((rows, width, desc)) = self.pending.take() else {
             return Ok(());
         };
-        let stride = width as usize * desc.bytes_per_pixel();
-        let slice = PixelSlice::new(
-            &self.strip[..stride * rows as usize],
+        let stride = width as usize * desc.layout.bytes_per_pixel();
+        let slice = PixelView::new(
+            self.strip
+                .as_ref()
+                .expect("pending strip has storage")
+                .as_bytes(),
             width,
             rows,
             stride,
             desc,
-        )
-        .map_err(|e| SinkError::from(alloc::format!("EncoderSink: {e}")))?;
+        )?;
         let enc = self
             .encoder
             .as_mut()
@@ -175,12 +179,7 @@ impl<E: Encoder> DecodeRowSink for EncoderSink<E>
 where
     E::Error: Send + Sync,
 {
-    fn begin(
-        &mut self,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
         let enc = self
             .encoder
             .as_mut()
@@ -197,19 +196,35 @@ where
         _y: u32,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.push_pending()?;
-        let stride = width as usize * descriptor.bytes_per_pixel();
+        let stride = (width as usize)
+            .checked_mul(descriptor.layout.bytes_per_pixel())
+            .ok_or("EncoderSink: row too large")?;
         let len = stride
             .checked_mul(height as usize)
-            .ok_or_else(|| SinkError::from("EncoderSink: strip too large"))?;
-        if self.strip.len() < len {
-            self.strip.resize(len, 0);
+            .ok_or("EncoderSink: strip too large")?;
+        let sample = descriptor.layout.sample;
+        if self.strip.as_ref().is_none_or(|storage| {
+            storage.byte_len() < len || storage.alloc_alignment() < sample.min_alignment()
+        }) {
+            self.strip = Some(
+                PixelBuf::new(width, height, descriptor.clone())?
+                    .into_parts()
+                    .storage,
+            );
         }
+        let storage = self.strip.as_mut().expect("strip storage installed");
+        let view = PixelViewMut::new(
+            &mut storage.as_bytes_mut()[..len],
+            width,
+            height,
+            stride,
+            descriptor.clone(),
+        )?;
         self.pending = Some((height, width, descriptor));
-        PixelSliceMut::new(&mut self.strip[..len], width, height, stride, descriptor)
-            .map_err(|e| alloc::format!("EncoderSink: {e}").into())
+        Ok(view)
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {

@@ -11,7 +11,7 @@ use zencodec::operation::{
 };
 use zencodec::source::AccessPattern;
 use zencodec::{At, ImageInfo};
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 /// Native failure or traced application-policy failure during controlled decode.
 #[derive(Debug)]
@@ -189,6 +189,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         {
             ControlledProgress::Decode(progress) => progress,
             ControlledProgress::Suspended { consumed, boundary } => {
+                let id = boundary.id();
                 let (action, record) =
                     match resolve_boundary(boundary, &mut self.resolver, self.preset, pulse) {
                         Ok(answer) => answer,
@@ -199,7 +200,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
                     };
                 self.report.record(record);
                 decoder
-                    .resume(boundary.id(), action, pulse)
+                    .resume(id, action, pulse)
                     .map_err(|e| e.map_codec(PolicyDecodeError::Native))?;
                 // The decision is already handled. Let the outer driver observe
                 // current metadata and schedule its next turn before more work.
@@ -226,7 +227,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         }
         self.decoder.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         self.decoder.as_ref().and_then(|d| d.output_descriptor())
     }
     fn access_pattern(&self) -> AccessPattern {

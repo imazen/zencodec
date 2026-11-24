@@ -25,8 +25,8 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 
 use zencodec::decode::{
     AnimationFrame, AnimationFrameDecoder, DecodeRowSink, OutputInfo, SinkError,
@@ -35,7 +35,7 @@ use zencodec::encode::{AnimationFrameEncoder, AnimationOutputTiming, BoxedError,
 use zencodec::time::{FrameDuration, Timestamp, TimingError, duration_to_ticks};
 use zencodec::{ImageFormat, ImageInfo, ImageSequence, UnsupportedOperation};
 use zencodec_io::{DriveFailure, SliceCursor};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ImageSpec, PixelBuf, PixelView, PixelViewMut};
 
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
@@ -56,7 +56,7 @@ pub trait RenderFrame {
     /// # Errors
     ///
     /// When this renderer cannot produce a canvas for the track.
-    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<PixelDescriptor, BoxedError>;
+    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<ImageSpec, BoxedError>;
 
     /// Write `frame`'s pixels into `canvas`, which has the track's coded size
     /// and [`canvas_descriptor`](Self::canvas_descriptor).
@@ -64,7 +64,7 @@ pub trait RenderFrame {
     /// # Errors
     ///
     /// When the frame cannot be converted.
-    fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError>;
+    fn render(&mut self, frame: &Frame, canvas: &mut PixelViewMut<'_>) -> Result<(), BoxedError>;
 }
 
 /// Makes a frame from packed pixels: the step between the animation API and
@@ -78,7 +78,7 @@ pub trait CaptureFrame {
     /// When the pixels cannot be converted.
     fn capture(
         &mut self,
-        pixels: &PixelSlice<'_>,
+        pixels: &PixelView<'_>,
         config: &CodecConfig,
         timing: FrameTiming,
     ) -> Result<Frame, BoxedError>;
@@ -107,20 +107,20 @@ fn convert_error(msg: &'static str) -> BoxedError {
 }
 
 impl RenderFrame for Gray8 {
-    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<PixelDescriptor, BoxedError> {
+    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<ImageSpec, BoxedError> {
         if track.video_info().is_none() {
             return Err(convert_error("Gray8 renders video tracks only"));
         }
-        Ok(PixelDescriptor::GRAY8_SRGB)
+        Ok(ImageSpec::gray8_srgb())
     }
 
-    fn render(&mut self, frame: &Frame, canvas: &mut PixelSliceMut<'_>) -> Result<(), BoxedError> {
+    fn render(&mut self, frame: &Frame, canvas: &mut PixelViewMut<'_>) -> Result<(), BoxedError> {
         let interp = frame.interpretation();
         if interp.layout.planes().len() != 1
             || interp.layout.planes()[0].role() != PlaneRole::Luma
             || interp.layout.subsampling() != ChromaSubsampling::Mono
             || interp.uniform_code_encoding()
-                != Some(SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap())
+                != Some(SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap())
         {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
@@ -131,7 +131,7 @@ impl RenderFrame for Gray8 {
         if plane.width() != canvas.width() as usize || plane.height() != canvas.rows() as usize {
             return Err(convert_error("frame size differs from the canvas"));
         }
-        let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+        let zencodec::plane::AnyPlane::U8(plane) = plane else {
             return Err(convert_error("8-bit frame with 16-bit storage"));
         };
         for (y, row) in plane.rows().enumerate() {
@@ -144,11 +144,11 @@ impl RenderFrame for Gray8 {
 impl CaptureFrame for Gray8 {
     fn capture(
         &mut self,
-        pixels: &PixelSlice<'_>,
+        pixels: &PixelView<'_>,
         config: &CodecConfig,
         timing: FrameTiming,
     ) -> Result<Frame, BoxedError> {
-        if pixels.descriptor() != PixelDescriptor::GRAY8_SRGB {
+        if pixels.spec() != &ImageSpec::gray8_srgb() {
             return Err(Box::new(UnsupportedOperation::PixelFormat));
         }
         let (w, h) = (pixels.width(), pixels.rows());
@@ -163,14 +163,14 @@ impl CaptureFrame for Gray8 {
             _ => {
                 let i = Arc::new(FrameInterpretation::new(
                     FrameGeometry::full(w, h),
-                    zenpixels::plane::PlanarLayout::new(
+                    zencodec::plane::PlanarLayout::new(
                         (vec![PlaneRole::Luma])
                             .into_iter()
                             .map(|role| {
-                                zenpixels::plane::PlaneSpec::new(
+                                zencodec::plane::PlaneSpec::new(
                                     role,
-                                    zenpixels::plane::PlaneEncoding::Code(
-                                        SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0)
+                                    zencodec::plane::PlaneEncoding::Code(
+                                        SampleEncoding::new(zenpixels::SampleType::U8, 8, 0)
                                             .unwrap(),
                                     ),
                                 )
@@ -193,9 +193,9 @@ impl CaptureFrame for Gray8 {
         }
         let planes = OwnedPlanes::new(
             vec![OwnedPlane::U8(
-                zenpixels::plane::PlaneBuf::new(data, wu, hu, wu).map_err(Box::new)?,
+                zencodec::plane::PlaneBuf::new(data, wu, hu, wu).map_err(Box::new)?,
             )],
-            SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+            SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap(),
         )?;
         Ok(Frame::new(
             Arc::new(planes),
@@ -300,7 +300,7 @@ pub struct VideoAnimationDecoder<D, C, R> {
     pending: VecDeque<Frame>,
     eos: bool,
     final_duration: FrameDuration,
-    canvas: PixelBuffer,
+    canvas: Option<PixelBuf>,
     info: ImageInfo,
     index: u32,
     frames_decoded: u64,
@@ -329,7 +329,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
             pending: VecDeque::new(),
             eos: false,
             final_duration,
-            canvas: PixelBuffer::new(1, 1, PixelDescriptor::GRAY8_SRGB),
+            canvas: None,
             info: ImageInfo::new(1, 1, ImageFormat::Unknown),
             index: 0,
             frames_decoded: 0,
@@ -358,8 +358,10 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
             .render
             .canvas_descriptor(track)
             .map_err(AdaptError::Convert)?;
-        self.canvas = PixelBuffer::try_new(video.coded_width, video.coded_height, desc)
-            .map_err(|_| AdaptError::Shape)?;
+        self.canvas = Some(
+            PixelBuf::new(video.coded_width, video.coded_height, desc)
+                .map_err(|e| AdaptError::Convert(Box::new(e)))?,
+        );
         self.info = ImageInfo::new(video.coded_width, video.coded_height, ImageFormat::Unknown)
             .with_sequence(ImageSequence::Animation {
                 frame_count: track.declared_packets().and_then(|n| u32::try_from(n).ok()),
@@ -471,13 +473,20 @@ where
             None => self.final_duration,
         };
         self.render
-            .render(&frame, &mut self.canvas.as_slice_mut())
+            .render(
+                &frame,
+                &mut self.canvas.as_mut().ok_or(AdaptError::Shape)?.as_view_mut(),
+            )
             .map_err(AdaptError::Convert)?;
         let index = self.index;
         self.index += 1;
         Ok(Some(
-            AnimationFrame::with_duration(self.canvas.as_slice(), duration, index)
-                .with_pts(Some(pts)),
+            AnimationFrame::with_duration(
+                self.canvas.as_ref().ok_or(AdaptError::Shape)?.as_view(),
+                duration,
+                index,
+            )
+            .with_pts(Some(pts)),
         ))
     }
 
@@ -581,7 +590,7 @@ where
         &mut self,
         width: u32,
         height: u32,
-        _descriptor: PixelDescriptor,
+        _descriptor: ImageSpec,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, Self::Error> {
         self.begin_inner(width, height, frame_count)
@@ -601,7 +610,7 @@ where
 
     fn push_frame(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration_ms: u32,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
@@ -610,7 +619,7 @@ where
 
     fn push_frame_exact(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration: FrameDuration,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {

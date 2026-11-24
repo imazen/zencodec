@@ -13,14 +13,14 @@ use pnm::{PnmDecoderConfig, PnmEncoderConfig};
 use zencodec::decode::{Decode, DecodeJob, DecoderConfig, DynDecoderConfig};
 use zencodec::encode::{DynEncoderConfig, EncodeJob, Encoder, EncoderConfig};
 use zencodec::{ImageFormat, ResourceLimits, UnsupportedOperation};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelBufParts, PixelView};
 
 // =========================================================================
 // Test data helpers
 // =========================================================================
 
 /// Create a 4x2 RGB8 test image with known pixel values.
-fn test_rgb8_pixels() -> PixelBuffer {
+fn test_rgb8_pixels() -> PixelBuf {
     #[rustfmt::skip]
     let data: Vec<u8> = vec![
         // Row 0: red, green, blue, white
@@ -34,13 +34,13 @@ fn test_rgb8_pixels() -> PixelBuffer {
           0, 255, 255,
         255,   0, 255,
     ];
-    PixelBuffer::from_vec(data, 4, 2, PixelDescriptor::RGB8_SRGB).expect("valid test buffer")
+    PixelBuf::from_bytes(data, 4, 2, ImageSpec::rgb8_srgb()).expect("valid test buffer")
 }
 
 /// Create a 3x2 Gray8 test image.
-fn test_gray8_pixels() -> PixelBuffer {
+fn test_gray8_pixels() -> PixelBuf {
     let data: Vec<u8> = vec![0, 128, 255, 64, 192, 32];
-    PixelBuffer::from_vec(data, 3, 2, PixelDescriptor::GRAY8_SRGB).expect("valid test buffer")
+    PixelBuf::from_bytes(data, 3, 2, ImageSpec::gray8_srgb()).expect("valid test buffer")
 }
 
 // =========================================================================
@@ -55,7 +55,7 @@ fn concrete_encode_decode_rgb8_roundtrip() {
     let config = PnmEncoderConfig::new();
     let job = config.job();
     let encoder = job.encoder().expect("encoder creation");
-    let output = encoder.encode(pixels.as_slice()).expect("encode");
+    let output = encoder.encode(pixels.as_view()).expect("encode");
 
     assert_eq!(output.format(), ImageFormat::Pnm);
     assert!(!output.is_empty());
@@ -84,11 +84,11 @@ fn concrete_encode_decode_rgb8_roundtrip() {
     let decoded = decoder.decode().expect("decode");
 
     // Verify roundtrip
-    let orig = pixels.as_slice();
+    let orig = pixels.as_view();
     let result = decoded.pixels();
     assert_eq!(orig.width(), result.width());
     assert_eq!(orig.rows(), result.rows());
-    assert_eq!(orig.descriptor(), result.descriptor());
+    assert_eq!(orig.spec().clone(), result.spec().clone());
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -100,7 +100,7 @@ fn concrete_encode_decode_gray8_roundtrip() {
 
     let config = PnmEncoderConfig::new();
     let encoder = config.job().encoder().expect("encoder");
-    let output = encoder.encode(pixels.as_slice()).expect("encode");
+    let output = encoder.encode(pixels.as_view()).expect("encode");
 
     // Verify PGM header
     let encoded = output.data();
@@ -113,9 +113,9 @@ fn concrete_encode_decode_gray8_roundtrip() {
         .expect("decoder");
     let decoded = decoder.decode().expect("decode");
 
-    let orig = pixels.as_slice();
+    let orig = pixels.as_view();
     let result = decoded.pixels();
-    assert_eq!(orig.descriptor(), result.descriptor());
+    assert_eq!(orig.spec().clone(), result.spec().clone());
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -138,7 +138,7 @@ fn dyn_encode_decode_rgb8_roundtrip() {
 
     let enc_job = enc_config.dyn_job();
     let encoder = enc_job.into_encoder().expect("dyn encoder");
-    let output = encoder.encode(pixels.as_slice()).expect("dyn encode");
+    let output = encoder.encode(pixels.as_view()).expect("dyn encode");
 
     let encoded = output.into_vec();
 
@@ -163,10 +163,10 @@ fn dyn_encode_decode_rgb8_roundtrip() {
 
     let orig = test_rgb8_pixels();
     let result = decoded.pixels();
-    assert_eq!(orig.as_slice().width(), result.width());
-    assert_eq!(orig.as_slice().rows(), result.rows());
+    assert_eq!(orig.as_view().width(), result.width());
+    assert_eq!(orig.as_view().rows(), result.rows());
     for y in 0..result.rows() {
-        assert_eq!(orig.as_slice().row(y), result.row(y), "row {y} mismatch");
+        assert_eq!(orig.as_view().row(y), result.row(y), "row {y} mismatch");
     }
 }
 
@@ -180,7 +180,7 @@ fn dyn_encode_decode_gray8_roundtrip() {
         .dyn_job()
         .into_encoder()
         .expect("dyn encoder")
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .expect("dyn encode");
 
     let encoded = output.into_vec();
@@ -194,9 +194,9 @@ fn dyn_encode_decode_gray8_roundtrip() {
         .decode()
         .expect("dyn decode");
 
-    let orig = pixels.as_slice();
+    let orig = pixels.as_view();
     let result = decoded.pixels();
-    assert_eq!(orig.descriptor(), result.descriptor());
+    assert_eq!(orig.spec().clone(), result.spec().clone());
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -208,7 +208,7 @@ fn dyn_encode_decode_gray8_roundtrip() {
 
 fn encode_with_any_codec(
     config: &dyn DynEncoderConfig,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
 ) -> Result<Vec<u8>, zencodec::encode::BoxedError> {
     let job = config.dyn_job();
     let encoder = job.into_encoder()?;
@@ -218,7 +218,7 @@ fn encode_with_any_codec(
 fn decode_with_any_codec(
     config: &dyn DynDecoderConfig,
     data: &[u8],
-) -> Result<PixelBuffer, zencodec::decode::BoxedError> {
+) -> Result<PixelBuf, zencodec::decode::BoxedError> {
     let job = config.dyn_job();
     let decoder = job.into_decoder(Cow::Borrowed(data), &[])?;
     Ok(decoder.decode()?.into_buffer())
@@ -230,13 +230,13 @@ fn codec_agnostic_roundtrip() {
 
     let enc_config = PnmEncoderConfig::new();
     let encoded =
-        encode_with_any_codec(&enc_config, pixels.as_slice()).expect("codec-agnostic encode");
+        encode_with_any_codec(&enc_config, pixels.as_view()).expect("codec-agnostic encode");
 
     let dec_config = PnmDecoderConfig::new();
     let decoded = decode_with_any_codec(&dec_config, &encoded).expect("codec-agnostic decode");
 
-    let orig = pixels.as_slice();
-    let result = decoded.as_slice();
+    let orig = pixels.as_view();
+    let result = decoded.as_view();
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -254,8 +254,8 @@ fn encoder_config_static_methods() {
     );
 
     let descs = <PnmEncoderConfig as EncoderConfig>::supported_descriptors();
-    assert!(descs.contains(&PixelDescriptor::RGB8_SRGB));
-    assert!(descs.contains(&PixelDescriptor::GRAY8_SRGB));
+    assert!(descs.contains(&ImageSpec::rgb8_srgb()));
+    assert!(descs.contains(&ImageSpec::gray8_srgb()));
 
     let caps = <PnmEncoderConfig as EncoderConfig>::capabilities();
     assert!(caps.lossless());
@@ -269,8 +269,8 @@ fn decoder_config_static_methods() {
     );
 
     let descs = <PnmDecoderConfig as DecoderConfig>::supported_descriptors();
-    assert!(descs.contains(&PixelDescriptor::RGB8_SRGB));
-    assert!(descs.contains(&PixelDescriptor::GRAY8_SRGB));
+    assert!(descs.contains(&ImageSpec::rgb8_srgb()));
+    assert!(descs.contains(&ImageSpec::gray8_srgb()));
 
     let caps = <PnmDecoderConfig as DecoderConfig>::capabilities();
     assert!(caps.cheap_probe());
@@ -288,7 +288,7 @@ fn probe_and_output_info() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -302,7 +302,7 @@ fn probe_and_output_info() {
     let out_info = job.output_info(&encoded).unwrap();
     assert_eq!(out_info.width, 4);
     assert_eq!(out_info.height, 2);
-    assert_eq!(out_info.native_format, PixelDescriptor::RGB8_SRGB);
+    assert_eq!(out_info.native_format, ImageSpec::rgb8_srgb());
 }
 
 // =========================================================================
@@ -317,7 +317,7 @@ fn decode_respects_dimension_limits() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -365,7 +365,7 @@ fn unsupported_streaming_decode() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -383,7 +383,7 @@ fn unsupported_animation_decode() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -405,7 +405,7 @@ fn find_cause_limit_exceeded_through_dyn_decode() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -442,7 +442,7 @@ fn find_cause_unsupported_through_dyn_decode() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -496,7 +496,7 @@ fn concrete_error_preserves_at_wrapper() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
 
@@ -571,7 +571,7 @@ fn find_cause_returns_none_for_absent_type() {
 // =========================================================================
 
 use zencodec::decode::{DecodeRowSink, SinkError};
-use zenpixels::PixelSliceMut;
+use zenpixels::PixelViewMut;
 
 fn gcd(mut a: usize, mut b: usize) -> usize {
     while b != 0 {
@@ -603,20 +603,20 @@ fn sink_preallocated_buffer() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     // Pre-allocate a buffer for decode output
     let width = 4u32;
     let height = 2u32;
-    let desc = PixelDescriptor::RGB8_SRGB;
-    let bpp = desc.bytes_per_pixel();
+    let desc = ImageSpec::rgb8_srgb();
+    let bpp = desc.layout.bytes_per_pixel();
     let stride = width as usize * bpp;
     let mut buffer = vec![0u8; stride * height as usize];
 
     struct PreallocSink<'a> {
         buf: &'a mut [u8],
-        expected_desc: PixelDescriptor,
+        expected_desc: ImageSpec,
         expected_width: u32,
         total_height: u32,
         stride: usize,
@@ -628,8 +628,8 @@ fn sink_preallocated_buffer() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             // Validate format matches what we pre-allocated for
             if descriptor != self.expected_desc {
                 return Err(format!(
@@ -650,10 +650,10 @@ fn sink_preallocated_buffer() {
             }
 
             let start = y as usize * self.stride;
-            let bpp = descriptor.bytes_per_pixel();
+            let bpp = descriptor.layout.bytes_per_pixel();
             let row_bytes = width as usize * bpp;
             let end = start + (height as usize - 1) * self.stride + row_bytes;
-            Ok(PixelSliceMut::new(
+            Ok(PixelViewMut::new(
                 &mut self.buf[start..end],
                 width,
                 height,
@@ -681,10 +681,10 @@ fn sink_preallocated_buffer() {
 
     assert_eq!(info.width, 4);
     assert_eq!(info.height, 2);
-    assert_eq!(info.native_format, PixelDescriptor::RGB8_SRGB);
+    assert_eq!(info.native_format, ImageSpec::rgb8_srgb());
 
     // Verify pixel data matches original
-    let orig = pixels.as_slice();
+    let orig = pixels.as_view();
     for y in 0..height {
         let orig_row = orig.row(y);
         let start = y as usize * stride;
@@ -710,9 +710,9 @@ fn sink_format_mismatch_rejected_at_begin() {
             &mut self,
             _width: u32,
             _height: u32,
-            descriptor: PixelDescriptor,
+            descriptor: ImageSpec,
         ) -> Result<(), SinkError> {
-            if descriptor != PixelDescriptor::RGBA8_SRGB {
+            if descriptor != ImageSpec::rgba8_srgb() {
                 return Err(format!("sink requires RGBA8, got {:?}", descriptor).into());
             }
             Ok(())
@@ -723,14 +723,14 @@ fn sink_format_mismatch_rejected_at_begin() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
-            let bpp = descriptor.bytes_per_pixel();
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
             Ok(
-                PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                     .expect("valid slice"),
             )
         }
@@ -739,14 +739,14 @@ fn sink_format_mismatch_rejected_at_begin() {
     let mut sink = Rgba8OnlySink { buf: Vec::new() };
 
     // RGB8 → rejected at begin(), before any strips are pushed
-    let result = sink.begin(4, 2, PixelDescriptor::RGB8_SRGB);
+    let result = sink.begin(4, 2, ImageSpec::rgb8_srgb());
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("RGBA8"), "{err_msg}");
 
     // RGBA8 → accepted
     let mut sink2 = Rgba8OnlySink { buf: Vec::new() };
-    sink2.begin(4, 2, PixelDescriptor::RGBA8_SRGB).unwrap();
+    sink2.begin(4, 2, ImageSpec::rgba8_srgb()).unwrap();
 }
 
 /// Use case: row-processing pipeline sink.
@@ -763,7 +763,7 @@ fn sink_row_processing_pipeline() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     struct ProcessingSink {
@@ -796,18 +796,18 @@ fn sink_row_processing_pipeline() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             // Process the *previous* strip before handing out the next buffer
             self.process_pending();
 
             self.pending_strip = Some((y, height, width));
-            let bpp = descriptor.bytes_per_pixel();
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.strip_buf.resize(needed, 0);
             Ok(
-                PixelSliceMut::new(&mut self.strip_buf, width, height, stride, descriptor)
+                PixelViewMut::new(&mut self.strip_buf, width, height, stride, descriptor)
                     .expect("valid slice"),
             )
         }
@@ -840,6 +840,33 @@ fn sink_row_processing_pipeline() {
     assert_eq!(sink.row_sums[1], 510);
 }
 
+fn borrow_rows(
+    parts: &mut PixelBufParts,
+    y: u32,
+    height: u32,
+    spec: ImageSpec,
+) -> Result<PixelViewMut<'_>, SinkError> {
+    let offset = parts.offset + y as usize * parts.stride;
+    Ok(PixelViewMut::new(
+        &mut parts.storage.as_bytes_mut()[offset..],
+        parts.width,
+        height,
+        parts.stride,
+        spec,
+    )?)
+}
+
+fn pixels_from_parts(parts: &PixelBufParts) -> PixelView<'_> {
+    PixelView::new(
+        &parts.storage.as_bytes()[parts.offset..],
+        parts.width,
+        parts.height,
+        parts.stride,
+        parts.spec.clone(),
+    )
+    .unwrap()
+}
+
 /// Use case: completion-aware sink with begin/finish lifecycle.
 ///
 /// The sink allocates in begin() and finalizes in finish(). The codec
@@ -852,11 +879,11 @@ fn sink_completion_aware() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     struct AccumulatingSink {
-        output: Option<PixelBuffer>,
+        output: Option<PixelBufParts>,
         rows_received: u32,
         finished: bool,
     }
@@ -866,10 +893,10 @@ fn sink_completion_aware() {
             &mut self,
             width: u32,
             height: u32,
-            descriptor: PixelDescriptor,
+            descriptor: ImageSpec,
         ) -> Result<(), SinkError> {
             // Pre-allocate with known total dimensions from begin()
-            self.output = Some(PixelBuffer::new(width, height, descriptor));
+            self.output = Some(PixelBuf::new(width, height, descriptor)?.into_parts());
             Ok(())
         }
 
@@ -878,17 +905,17 @@ fn sink_completion_aware() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             let output = self.output.as_mut().ok_or("begin() not called")?;
-            if descriptor != output.descriptor() {
+            if descriptor != output.spec {
                 return Err("format mismatch".into());
             }
-            if width != output.width() {
+            if width != output.width {
                 return Err("width mismatch".into());
             }
             self.rows_received = y + height;
-            Ok(output.rows_mut(y, height))
+            borrow_rows(output, y, height, descriptor)
         }
 
         fn finish(&mut self) -> Result<(), SinkError> {
@@ -915,8 +942,8 @@ fn sink_completion_aware() {
 
     // Verify the accumulated output matches original
     let output = sink.output.expect("begin() should have allocated");
-    let orig = pixels.as_slice();
-    let result = output.as_slice();
+    let orig = pixels.as_view();
+    let result = pixels_from_parts(&output);
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -935,7 +962,7 @@ fn sink_simd_aligned_decode_into() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     struct AlignedDecodeIntoSink {
@@ -943,15 +970,15 @@ fn sink_simd_aligned_decode_into() {
         width: u32,
         height: u32,
         stride: usize,
-        desc: PixelDescriptor,
+        desc: ImageSpec,
     }
 
     impl AlignedDecodeIntoSink {
-        fn new(width: u32, height: u32, desc: PixelDescriptor) -> Self {
-            let bpp = desc.bytes_per_pixel();
+        fn new(width: u32, height: u32, desc: ImageSpec) -> Self {
+            let bpp = desc.layout.bytes_per_pixel();
             let row_bytes = width as usize * bpp;
             // Align to next multiple of 64 that is also a multiple of bpp
-            // (PixelSliceMut requires stride to be pixel-aligned)
+            // (PixelViewMut requires stride to be pixel-aligned)
             let align = lcm(64, bpp);
             let stride = row_bytes.div_ceil(align) * align;
             let total = if height > 0 {
@@ -975,8 +1002,8 @@ fn sink_simd_aligned_decode_into() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             if descriptor != self.desc || width != self.width {
                 return Err("format/width mismatch".into());
             }
@@ -984,12 +1011,12 @@ fn sink_simd_aligned_decode_into() {
                 return Err("out of bounds".into());
             }
 
-            let bpp = descriptor.bytes_per_pixel();
+            let bpp = descriptor.layout.bytes_per_pixel();
             let row_bytes = width as usize * bpp;
             let start = y as usize * self.stride;
             let end = start + (height as usize - 1) * self.stride + row_bytes;
 
-            Ok(PixelSliceMut::new(
+            Ok(PixelViewMut::new(
                 &mut self.buf[start..end],
                 width,
                 height,
@@ -1027,7 +1054,7 @@ fn sink_simd_aligned_decode_into() {
     assert_eq!(row_bytes, 12);
 
     // Verify pixel data matches, reading with stride
-    let orig = pixels.as_slice();
+    let orig = pixels.as_view();
     for y in 0..2u32 {
         let start = y as usize * sink.stride;
         let orig_row = orig.row(y);
@@ -1052,12 +1079,12 @@ fn sink_through_dyn_dispatch() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     struct CollectSink {
         buf: Vec<u8>,
-        desc: Option<PixelDescriptor>,
+        desc: Option<ImageSpec>,
         dimensions: Option<(u32, u32)>,
     }
 
@@ -1067,23 +1094,20 @@ fn sink_through_dyn_dispatch() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             // Record what the codec told us (first call)
             if self.desc.is_none() {
-                self.desc = Some(descriptor);
+                self.desc = Some(descriptor.clone());
             }
             // Track total dimensions
             self.dimensions = Some((width, y + height));
 
-            let bpp = descriptor.bytes_per_pixel();
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
-            Ok(
-                PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .expect("valid"),
-            )
+            Ok(PixelViewMut::new(&mut self.buf, width, height, stride, descriptor).expect("valid"))
         }
     }
 
@@ -1105,7 +1129,7 @@ fn sink_through_dyn_dispatch() {
         )
         .expect("push_decoder");
 
-    assert_eq!(sink.desc, Some(PixelDescriptor::RGB8_SRGB));
+    assert_eq!(sink.desc, Some(ImageSpec::rgb8_srgb()));
     assert_eq!(sink.dimensions, Some((4, 2)));
 }
 
@@ -1123,11 +1147,11 @@ fn sink_deferred_allocation() {
         .job()
         .encoder()
         .unwrap()
-        .encode(pixels.as_slice())
+        .encode(pixels.as_view())
         .unwrap();
 
     struct DeferredSink {
-        buf: Option<PixelBuffer>,
+        buf: Option<PixelBufParts>,
     }
 
     impl DecodeRowSink for DeferredSink {
@@ -1135,10 +1159,10 @@ fn sink_deferred_allocation() {
             &mut self,
             width: u32,
             height: u32,
-            descriptor: PixelDescriptor,
+            descriptor: ImageSpec,
         ) -> Result<(), SinkError> {
             // Allocate with known total dimensions — no guessing needed
-            self.buf = Some(PixelBuffer::new(width, height, descriptor));
+            self.buf = Some(PixelBuf::new(width, height, descriptor)?.into_parts());
             Ok(())
         }
 
@@ -1147,10 +1171,10 @@ fn sink_deferred_allocation() {
             y: u32,
             height: u32,
             _width: u32,
-            _descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             let buf = self.buf.as_mut().ok_or("begin() not called")?;
-            Ok(buf.rows_mut(y, height))
+            borrow_rows(buf, y, height, _descriptor)
         }
     }
 
@@ -1163,13 +1187,13 @@ fn sink_deferred_allocation() {
         .expect("push_decoder");
 
     let buf = sink.buf.expect("begin() should have allocated");
-    assert_eq!(buf.width(), 3);
-    assert_eq!(buf.height(), 2);
-    assert_eq!(buf.descriptor(), PixelDescriptor::GRAY8_SRGB);
+    assert_eq!(buf.width, 3);
+    assert_eq!(buf.height, 2);
+    assert_eq!(buf.spec, ImageSpec::gray8_srgb());
 
     // Verify data
-    let orig = pixels.as_slice();
-    let result = buf.as_slice();
+    let orig = pixels.as_view();
+    let result = pixels_from_parts(&buf);
     for y in 0..orig.rows() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
@@ -1186,8 +1210,8 @@ fn sink_multi_strip_simulation() {
     // Create a larger test image to exercise multi-strip
     let width = 8u32;
     let height = 24u32;
-    let desc = PixelDescriptor::RGB8_SRGB;
-    let bpp = desc.bytes_per_pixel();
+    let desc = ImageSpec::rgb8_srgb();
+    let bpp = desc.layout.bytes_per_pixel();
     let mut data = vec![0u8; width as usize * height as usize * bpp];
     // Fill with row-dependent pattern
     for y in 0..height {
@@ -1198,10 +1222,10 @@ fn sink_multi_strip_simulation() {
             data[idx + 2] = 128; // B = constant
         }
     }
-    let source = PixelBuffer::from_vec(data, width, height, desc).unwrap();
+    let source = PixelBuf::from_bytes(data, width, height, desc.clone()).unwrap();
 
     struct MultiStripSink {
-        output: PixelBuffer,
+        output: PixelBufParts,
         strips_received: Vec<(u32, u32)>, // (y, height) of each strip
     }
 
@@ -1211,27 +1235,31 @@ fn sink_multi_strip_simulation() {
             y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
-            if width != self.output.width() || descriptor != self.output.descriptor() {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
+            if width != self.output.width || descriptor != self.output.spec {
                 return Err("mismatch".into());
             }
             self.strips_received.push((y, height));
-            Ok(self.output.rows_mut(y, height))
+            borrow_rows(&mut self.output, y, height, descriptor)
         }
     }
 
     let mut sink = MultiStripSink {
-        output: PixelBuffer::new(width, height, desc),
+        output: PixelBuf::new(width, height, desc.clone())
+            .unwrap()
+            .into_parts(),
         strips_received: Vec::new(),
     };
 
     // Simulate a codec pushing 8-row strips (like JPEG MCU height)
     let strip_height = 8u32;
-    let src = source.as_slice();
+    let src = source.as_view();
     for strip_y in (0..height).step_by(strip_height as usize) {
         let h = strip_height.min(height - strip_y);
-        let mut dst = sink.provide_next_buffer(strip_y, h, width, desc).unwrap();
+        let mut dst = sink
+            .provide_next_buffer(strip_y, h, width, desc.clone())
+            .unwrap();
         for row in 0..h {
             dst.row_mut(row).copy_from_slice(src.row(strip_y + row));
         }
@@ -1243,7 +1271,7 @@ fn sink_multi_strip_simulation() {
     assert_eq!(sink.strips_received[2], (16, 8));
 
     // Verify all data
-    let result = sink.output.as_slice();
+    let result = pixels_from_parts(&sink.output);
     for y in 0..height {
         assert_eq!(src.row(y), result.row(y), "row {y} mismatch");
     }
@@ -1259,9 +1287,9 @@ fn sink_early_abort() {
     // Build a test image
     let width = 4u32;
     let height = 16u32;
-    let desc = PixelDescriptor::RGB8_SRGB;
+    let desc = ImageSpec::rgb8_srgb();
     let data = vec![128u8; width as usize * height as usize * 3];
-    let source = PixelBuffer::from_vec(data, width, height, desc).unwrap();
+    let source = PixelBuf::from_bytes(data, width, height, desc.clone()).unwrap();
 
     struct AbortAfterNSink {
         buf: Vec<u8>,
@@ -1275,20 +1303,17 @@ fn sink_early_abort() {
             _y: u32,
             height: u32,
             width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            descriptor: ImageSpec,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             self.strips_seen += 1;
             if self.strips_seen > self.strips_before_abort {
                 return Err("abort: seen enough".into());
             }
-            let bpp = descriptor.bytes_per_pixel();
+            let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
-            Ok(
-                PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .expect("valid"),
-            )
+            Ok(PixelViewMut::new(&mut self.buf, width, height, stride, descriptor).expect("valid"))
         }
     }
 
@@ -1300,11 +1325,11 @@ fn sink_early_abort() {
 
     // Simulate codec pushing strips — should abort on second provide_next_buffer()
     let strip_h = 8u32;
-    let src = source.as_slice();
+    let src = source.as_view();
     let mut aborted = false;
     for strip_y in (0..height).step_by(strip_h as usize) {
         let h = strip_h.min(height - strip_y);
-        match sink.provide_next_buffer(strip_y, h, width, desc) {
+        match sink.provide_next_buffer(strip_y, h, width, desc.clone()) {
             Ok(mut dst) => {
                 for row in 0..h {
                     dst.row_mut(row).copy_from_slice(src.row(strip_y + row));

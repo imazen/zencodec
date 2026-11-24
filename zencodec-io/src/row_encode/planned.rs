@@ -21,7 +21,7 @@ fn unknown_job_evidence() -> EncodeEvidence {
 
 enum Input<'a, S: Source> {
     Raster {
-        pixels: PixelSlice<'a>,
+        pixels: PixelView<'a>,
         source: &'a S,
     },
     Source(&'a mut S),
@@ -46,11 +46,13 @@ impl<S: Source> Input<'_, S> {
         if let Self::Raster { pixels, .. } = self
             && (pixels.width() != desc.width
                 || pixels.rows() != desc.height
-                || pixels.descriptor() != desc.descriptor
-                || pixels.color_context() != desc.color_context.as_ref()
-                || pixels
-                    .exact_depth()
-                    .is_some_and(|claim| Some(claim) != desc.exact_depth))
+                || pixels.spec() != &desc.descriptor
+                || ExactDepth::from_view(pixels).is_some_and(|claim| {
+                    desc.exact_depth.is_none_or(|declared| {
+                        !claim.color_exact_at(declared.color_bits())
+                            || !claim.alpha_exact_at(declared.alpha_bits())
+                    })
+                }))
         {
             return Err(Refusal::SourceChanged.into());
         }
@@ -59,7 +61,7 @@ impl<S: Source> Input<'_, S> {
     fn read(
         &mut self,
         first: u32,
-        mut rows: PixelSliceMut<'_>,
+        mut rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
         control: &dyn zencodec::Pulse,
     ) -> Result<(), Cause> {
@@ -180,7 +182,7 @@ impl<S: Source> Filler<'_, S> {
         let Input::Raster { pixels, .. } = &self.input else {
             return Err(Refusal::PullProtocol.into());
         };
-        let mut rows = pixels.sub_rows(first, count);
+        let mut rows = pixels.sub_rows(first, count)?;
         for row in 0..count {
             self.boundary = if self.desc.exact_depth.is_some() {
                 Stage::Encode
@@ -189,7 +191,7 @@ impl<S: Source> Filler<'_, S> {
             };
             check(self.control)?;
             if let Some(exact) = self.desc.exact_depth
-                && !exact.holds_for(&rows.sub_rows(row, 1))?
+                && !exact.holds_for(&rows.sub_rows(row, 1)?)?
             {
                 return Err(ExactDepthContradiction {
                     first_row: first + row,
@@ -199,7 +201,7 @@ impl<S: Source> Filler<'_, S> {
             }
         }
         if let Some(exact) = self.desc.exact_depth {
-            rows = rows.with_exact_depth(exact)?;
+            rows = exact.attach_verified(rows);
         }
         self.boundary = Stage::Read;
         check(self.control)?;
@@ -224,8 +226,7 @@ impl<S: Source> Filler<'_, S> {
         check(self.control)?;
         let count = rows.rows();
         if rows.width() != self.desc.width
-            || rows.descriptor() != self.desc.descriptor
-            || rows.color_context() != self.desc.color_context.as_ref()
+            || rows.spec() != &self.desc.descriptor
             || count == 0
             || first
                 .checked_add(count)
@@ -245,16 +246,13 @@ impl<S: Source> Filler<'_, S> {
         let external = pass == 0 || matches!(self.store, RawStore::None);
         if external {
             let stride = rows.stride();
-            let mut destination = PixelSliceMut::new(
+            let destination = PixelViewMut::new(
                 rows.as_strided_bytes_mut(),
                 self.desc.width,
                 count,
                 stride,
-                self.desc.descriptor,
+                self.desc.descriptor.clone(),
             )?;
-            if let Some(context) = &self.desc.color_context {
-                destination = destination.with_color_context(context.clone());
-            }
             self.input
                 .read(first, destination, self.pulse, self.control)?;
             check(self.control)?;
@@ -308,12 +306,12 @@ impl<S: Source> Filler<'_, S> {
                 RawStore::None => {}
             }
             if let Some(exact) = self.desc.exact_depth {
-                let pixels = PixelSlice::new(
+                let pixels = PixelView::new(
                     row,
                     self.desc.width,
                     1,
                     self.row_bytes,
-                    self.desc.descriptor,
+                    self.desc.descriptor.clone(),
                 )?;
                 if !exact.holds_for(&pixels)? {
                     return Err(ExactDepthContradiction {
@@ -520,8 +518,9 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         if desc.width == 0 || desc.height == 0 {
             return Err(Refusal::Empty.into());
         }
+        desc.descriptor.validate()?;
         let row_bytes = (desc.width as usize)
-            .checked_mul(desc.descriptor.bytes_per_pixel())
+            .checked_mul(desc.descriptor.layout.bytes_per_pixel())
             .ok_or(Refusal::Overflow)?;
         let raw_bytes = row_bytes
             .checked_mul(desc.height as usize)
@@ -532,10 +531,8 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             OutputAccess::Forward
         };
         let mut declaration =
-            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor).with_access(access);
-        if let Some(color) = &desc.color_context {
-            declaration = declaration.with_color(color);
-        }
+            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor.clone())
+                .with_access(access);
         if let Some(exact) = desc.exact_depth {
             declaration = declaration.with_exact_depth(exact);
         }
@@ -794,33 +791,27 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                     .checked_mul(count as usize)
                     .ok_or(Refusal::Overflow)?;
                 let buffer = row_buffer.as_mut().ok_or(Refusal::PullProtocol)?;
-                let mut rows = PixelSliceMut::new(
+                let rows = PixelViewMut::new(
                     &mut buffer.as_mut_slice()[..size],
                     desc.width,
                     count,
                     row_bytes,
-                    desc.descriptor,
+                    desc.descriptor.clone(),
                 )?;
-                if let Some(context) = &desc.color_context {
-                    rows = rows.with_color_context(context.clone());
-                }
                 let _ = filler.fill(RowDemand::new(0, first, rows).with_final_pass(true));
                 if let Some((stage, cause)) = filler.failure.take() {
                     out.boundary = stage;
                     return Err(cause);
                 }
-                let mut pixels = PixelSlice::new(
+                let mut pixels = PixelView::new(
                     &buffer.as_slice()[..size],
                     desc.width,
                     count,
                     row_bytes,
-                    desc.descriptor,
+                    desc.descriptor.clone(),
                 )?;
                 if let Some(exact) = desc.exact_depth {
-                    pixels = pixels.with_exact_depth(exact)?;
-                }
-                if let Some(context) = &desc.color_context {
-                    pixels = pixels.with_color_context(context.clone());
+                    pixels = exact.attach_verified(pixels);
                 }
                 encoder.push_rows(pixels)?;
             } else {

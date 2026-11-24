@@ -10,9 +10,9 @@ use zencodec::encode::{
     EncoderConfig, OutputTiming,
 };
 use zencodec_testkit::reference::ReferenceEncoderConfig;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
-const DESC: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const DESC: ImageSpec = ImageSpec::rgba8_srgb();
 
 fn pixels(w: u32, h: u32, seed: u8) -> Vec<u8> {
     (0..w as usize * h as usize * 4)
@@ -26,7 +26,7 @@ fn dyn_encoder_streams_what_the_typed_encoder_does() {
     let stride = w as usize * 4;
     let px = pixels(w, h, 3);
     let rows = |y: u32| {
-        PixelSlice::new(
+        PixelView::new(
             &px[y as usize * stride..][..strip as usize * stride],
             w,
             strip,
@@ -87,7 +87,7 @@ fn dyn_encoder_streams_what_the_typed_encoder_does() {
 fn dyn_animation_encoder_streams_what_the_typed_encoder_does() {
     let (w, h) = (12u32, 8u32);
     let frames: Vec<Vec<u8>> = (0..3).map(|i| pixels(w, h, i * 40)).collect();
-    let frame = |i: usize| PixelSlice::new(&frames[i], w, h, w as usize * 4, DESC).unwrap();
+    let frame = |i: usize| PixelView::new(&frames[i], w, h, w as usize * 4, DESC).unwrap();
     let mut typed = ReferenceEncoderConfig::new()
         .job()
         .with_loop_count(Some(0))

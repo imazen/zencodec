@@ -20,9 +20,9 @@ use zencodec::source::{AccessPattern, ReadAt};
 use zencodec::{ImageFormat, ImageInfo, UnsupportedOperation};
 use zencodec_io::tokio_io::{BytesSource, Inline, transcode_async};
 use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, FileReadAt, encode_to_writer};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
-const DESC: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const DESC: ImageSpec = ImageSpec::rgba8_srgb();
 const WIDTH: u32 = 256;
 const HEIGHT: u32 = 1024;
 
@@ -46,7 +46,7 @@ impl Encoder for OneShot {
     fn reject(op: UnsupportedOperation) -> Error {
         Error(op)
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         let mut out = Vec::new();
         for y in 0..pixels.rows() {
             out.extend_from_slice(pixels.row(y));
@@ -73,13 +73,13 @@ impl Encoder for Raw {
     fn reject(op: UnsupportedOperation) -> Error {
         Error(op)
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         OneShot.encode(pixels)
     }
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Error> {
+    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<OutputTiming, Error> {
         Ok(OutputTiming::streaming(0))
     }
-    fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Error> {
+    fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Error> {
         for y in 0..pixels.rows() {
             self.out.push(pixels.row(y));
         }
@@ -157,7 +157,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -307,7 +307,7 @@ fn file_error_provenance() {
 async fn main() {
     file_error_provenance();
     let data = [7u8; 4];
-    let px = PixelSlice::new(&data, 1, 1, 4, DESC).unwrap();
+    let px = PixelView::new(&data, 1, 1, 4, DESC).unwrap();
     assert_eq!(OneShot.encode(px.clone()).unwrap().data(), data);
     let mut out = Vec::new();
     println!(

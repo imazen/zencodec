@@ -88,7 +88,9 @@ mod output;
 mod output_buffer;
 /// Shared sans-I/O finish patches for image and container output.
 pub mod output_patch;
+pub mod plane;
 mod policy;
+pub mod sample;
 mod set;
 mod sink;
 pub mod source;
@@ -121,13 +123,13 @@ pub use info::{
     ResolutionUnit, SourceColor, Supplements,
 };
 mod resolution;
+pub use info::ColorAuthority;
 pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
 pub use resolution::ResolutionError;
 pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
-pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;

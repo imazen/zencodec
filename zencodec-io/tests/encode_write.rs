@@ -7,7 +7,7 @@ use std::io::{self, Write};
 use zencodec::encode::{EncodeOutput, Encoder, OutputBuffer, OutputTiming};
 use zencodec::{ImageFormat, UnsupportedOperation};
 use zencodec_io::{EncodeWriteError, encode_to_writer, write_pending};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 #[derive(Debug)]
 enum EncErr {
@@ -60,7 +60,7 @@ impl Encoder for Raw {
     fn preferred_strip_height(&self) -> u32 {
         1
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, EncErr> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, EncErr> {
         if self.begun {
             return Err(EncErr::Invalid);
         }
@@ -70,7 +70,7 @@ impl Encoder for Raw {
         }
         Ok(EncodeOutput::new(v, ImageFormat::Pnm))
     }
-    fn begin(&mut self, w: u32, h: u32, _d: PixelDescriptor) -> Result<OutputTiming, EncErr> {
+    fn begin(&mut self, w: u32, h: u32, _d: ImageSpec) -> Result<OutputTiming, EncErr> {
         if self.decline {
             return Err(EncErr::Unsupported(UnsupportedOperation::RowLevelEncode));
         }
@@ -78,7 +78,7 @@ impl Encoder for Raw {
         self.out.push(&header(w, h));
         Ok(OutputTiming::streaming(0))
     }
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), EncErr> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
         self.strips += 1;
         for y in 0..rows.rows() {
             self.out.push(rows.row(y));
@@ -106,8 +106,8 @@ fn image(w: u32, h: u32) -> Vec<u8> {
     (0..w * h * 4).map(|i| (i * 13 % 251) as u8).collect()
 }
 
-fn slice(data: &[u8], w: u32, h: u32) -> PixelSlice<'_> {
-    PixelSlice::new(data, w, h, w as usize * 4, PixelDescriptor::RGBA8_SRGB).unwrap()
+fn slice(data: &[u8], w: u32, h: u32) -> PixelView<'_> {
+    PixelView::new(data, w, h, w as usize * 4, ImageSpec::rgba8_srgb()).unwrap()
 }
 
 /// Records the size of each write.
@@ -168,7 +168,7 @@ impl Encoder for OneShot {
         EncErr::Unsupported(op)
     }
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, EncErr> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, EncErr> {
         Raw::new(false).encode(pixels)
     }
 }
@@ -177,14 +177,8 @@ impl Encoder for OneShot {
 fn inherited_begin_preserves_the_one_shot_writer_fallback() {
     let (width, height, stride) = (3, 19, 16);
     let data: Vec<u8> = (0..stride * height).map(|i| (i * 17 % 251) as u8).collect();
-    let pixels = PixelSlice::new(
-        &data,
-        width,
-        height as u32,
-        stride,
-        PixelDescriptor::RGBA8_SRGB,
-    )
-    .unwrap();
+    let pixels =
+        PixelView::new(&data, width, height as u32, stride, ImageSpec::rgba8_srgb()).unwrap();
     let expected = OneShot.encode(pixels.clone()).unwrap();
     let mut writer = Recorder::default();
     let report = encode_to_writer(OneShot, pixels, &mut writer).unwrap();
@@ -204,10 +198,10 @@ impl Encoder for CategorizedOneShot {
             zencodec::ErrorCategory::Request(zencodec::RequestError::Unsupported(op)),
         )
     }
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Self::Error> {
+    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<OutputTiming, Self::Error> {
         Err(Self::reject(self.0))
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         assert_eq!(self.0, UnsupportedOperation::RowLevelEncode);
         Ok(OneShot.encode(pixels).unwrap())
     }
@@ -268,7 +262,7 @@ fn a_write_error_surfaces_as_io() {
 #[test]
 fn write_pending_consumes_what_it_writes() {
     let mut enc = Raw::new(false);
-    enc.begin(4, 4, PixelDescriptor::RGBA8_SRGB).unwrap();
+    enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
     let mut out = Vec::new();
     assert_eq!(write_pending(&mut enc, &mut out).unwrap(), 4);
     assert!(enc.pending_output().is_empty());
@@ -279,7 +273,7 @@ fn write_pending_consumes_what_it_writes() {
 #[test]
 fn take_output_hands_over_the_allocation() {
     let mut enc = Raw::new(false);
-    enc.begin(4, 4, PixelDescriptor::RGBA8_SRGB).unwrap();
+    enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
     let ptr = enc.pending_output().as_ptr();
     let mut got = Vec::new();
     enc.take_output(&mut got);
@@ -293,14 +287,15 @@ fn take_output_hands_over_the_allocation() {
 async fn write_pending_async_matches_the_blocking_drain() {
     let px = image(5, 20);
     let mut enc = Raw::new(false);
-    enc.begin(5, 20, PixelDescriptor::RGBA8_SRGB).unwrap();
+    enc.begin(5, 20, ImageSpec::rgba8_srgb()).unwrap();
     let mut out: Vec<u8> = Vec::new();
     let mut n = zencodec_io::tokio_io::write_pending_async(&mut enc, &mut out)
         .await
         .unwrap();
     for y in (0..20).step_by(7) {
         let h = 7.min(20 - y);
-        enc.push_rows(slice(&px, 5, 20).sub_rows(y, h)).unwrap();
+        enc.push_rows(slice(&px, 5, 20).sub_rows(y, h).unwrap())
+            .unwrap();
         n += zencodec_io::tokio_io::write_pending_async(&mut enc, &mut out)
             .await
             .unwrap();

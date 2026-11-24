@@ -24,7 +24,7 @@ impl ExpectedError {
 /// Caller-specified expected result at a structural prefix boundary.
 pub enum PrefixOutcome<'a> {
     /// Complete/recoverable payload, with an independently specified pixel oracle.
-    Accept(PixelSlice<'a>),
+    Accept(PixelView<'a>),
     Reject(ExpectedError),
 }
 
@@ -92,9 +92,9 @@ pub fn check_decode_prefix_cases<D: DecoderConfig + 'static>(
 /// an expected native decode representation; this can differ from input for an
 /// explicitly lossy encode. Use distinct pixels to expose frame reordering.
 pub struct TimingCase<'a> {
-    pub pixels: PixelSlice<'a>,
+    pub pixels: PixelView<'a>,
     pub requested: FrameDuration,
-    pub expected: Result<(FrameDuration, PixelSlice<'a>), ExpectedError>,
+    pub expected: Result<(FrameDuration, PixelView<'a>), ExpectedError>,
 }
 
 /// Strict counterpart to `check_animation_timing`: requires typed errors and
@@ -135,7 +135,7 @@ where
         {
             return Err(fail(CHECK, "exact fixture expects rounding"));
         }
-        let pixels = case.pixels.sub_rows(0, case.pixels.rows());
+        let pixels = case.pixels.clone();
         let result = if exact {
             encoder
                 .push_frame_exact(pixels, case.requested, None)

@@ -9,7 +9,7 @@ use crate::output::{AnimationFrame, OwnedAnimationFrame};
 use crate::sink::SinkError;
 use crate::{ImageInfo, OutputInfo};
 
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 use super::decoder::{AnimationFrameDecoder, StreamingDecode};
 
@@ -42,7 +42,7 @@ pub struct Unsupported<E>(PhantomData<fn() -> E>);
 impl<E: core::error::Error + Send + Sync + 'static> StreamingDecode for Unsupported<E> {
     type Error = E;
 
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, E> {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, E> {
         unreachable!("Unsupported: streaming decode stub should never be constructed")
     }
 

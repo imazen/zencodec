@@ -9,7 +9,7 @@ use zencodec::{
     AnimationFrame, CodecErrorExt, ErrorCategory, ImageFormat, ImageInfo, RequestError,
     ResourceLimits, SharedPulse, UnsupportedOperation,
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 #[derive(Debug)]
 struct NativeError;
@@ -29,7 +29,7 @@ impl Decode for LegacyDecoder {
 }
 impl StreamingDecode for LegacyDecoder {
     type Error = NativeError;
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, NativeError> {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, NativeError> {
         Err(NativeError)
     }
     fn info(&self) -> &ImageInfo {
@@ -67,7 +67,7 @@ impl DecoderConfig for LegacyConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Png]
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         &[]
     }
     fn job<'a>(self) -> Self::Job<'a> {
@@ -92,32 +92,28 @@ impl<'a> DecodeJob<'a> for LegacyJob {
     fn output_info(&self, _: &[u8]) -> Result<OutputInfo, NativeError> {
         Err(NativeError)
     }
-    fn decoder(
-        self,
-        _: Cow<'a, [u8]>,
-        _: &[PixelDescriptor],
-    ) -> Result<LegacyDecoder, NativeError> {
+    fn decoder(self, _: Cow<'a, [u8]>, _: &[ImageSpec]) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }
     fn push_decoder(
         self,
         _: Cow<'a, [u8]>,
         _: &mut dyn DecodeRowSink,
-        _: &[PixelDescriptor],
+        _: &[ImageSpec],
     ) -> Result<OutputInfo, NativeError> {
         Err(NativeError)
     }
     fn streaming_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[PixelDescriptor],
+        _: &[ImageSpec],
     ) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }
     fn animation_frame_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[PixelDescriptor],
+        _: &[ImageSpec],
     ) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }

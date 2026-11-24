@@ -1,19 +1,18 @@
 //! Draft source-only controls for the paired zenpixels verifier. No native proof.
 use zencodec::encode::{EncodeDeclaration, EncodePlan, EncodePlanError, OutputTiming};
-use zenpixels::{
-    ChannelType, PixelDescriptor, SignalRange,
-    sample::{ExactDepth, ExactDepthError},
-};
+use zencodec::helpers::codec_spec;
+use zencodec::sample::{ExactDepth, ExactDepthError};
+use zenpixels::{SampleType, SignalRange};
 
 fn eight_in_sixteen() -> ExactDepth {
-    ExactDepth::new(ChannelType::U16, SignalRange::Full, 8, 16).unwrap()
+    ExactDepth::new(SampleType::U16, SignalRange::Full, 8, 16).unwrap()
 }
 
 #[test]
 fn declaration_defaults_builder_debug_and_equality_include_the_claim() {
-    let plain = EncodeDeclaration::new(2, 3, PixelDescriptor::RGB16);
+    let plain = EncodeDeclaration::new(2, 3, codec_spec(zenpixels::SampleLayout::RGB16));
     assert_eq!(plain.exact_depth, None);
-    let claimed = plain.with_exact_depth(eight_in_sixteen());
+    let claimed = plain.clone().with_exact_depth(eight_in_sixteen());
     assert_eq!(claimed.exact_depth, Some(eight_in_sixteen()));
     assert_ne!(plain, claimed);
     assert_eq!(claimed, plain.with_exact_depth(eight_in_sixteen()));
@@ -32,18 +31,18 @@ fn declaration_uses_paired_descriptor_rules_without_reading_samples() {
     let full = eight_in_sixteen();
     let cases = [
         (
-            PixelDescriptor::RGB8,
+            codec_spec(zenpixels::SampleLayout::RGB8),
             full,
             ExactDepthError::DescriptorMismatch,
         ),
         (
-            PixelDescriptor::RGB16.with_signal_range(SignalRange::Narrow),
+            codec_spec(zenpixels::SampleLayout::RGB16).with_range(SignalRange::Narrow),
             full,
             ExactDepthError::DescriptorMismatch,
         ),
         (
-            PixelDescriptor::CMYK8,
-            ExactDepth::new(ChannelType::U8, SignalRange::Full, 8, 8).unwrap(),
+            codec_spec(zenpixels::SampleLayout::CMYK8),
+            ExactDepth::new(SampleType::U8, SignalRange::Full, 8, 8).unwrap(),
             ExactDepthError::UnsupportedLayout,
         ),
     ];
@@ -57,21 +56,26 @@ fn declaration_uses_paired_descriptor_rules_without_reading_samples() {
     }
     // Unknown evidence is not a lower-depth/fidelity refusal.
     assert!(
-        plan.validate(&EncodeDeclaration::new(2, 3, PixelDescriptor::CMYK8))
-            .is_ok()
+        plan.validate(&EncodeDeclaration::new(
+            2,
+            3,
+            codec_spec(zenpixels::SampleLayout::CMYK8)
+        ))
+        .is_ok()
     );
 }
 
 #[test]
 fn structural_validation_is_deliberately_not_a_content_certificate() {
-    let declaration =
-        EncodeDeclaration::new(1, 1, PixelDescriptor::GRAY16).with_exact_depth(eight_in_sixteen());
+    let declaration = EncodeDeclaration::new(1, 1, codec_spec(zenpixels::SampleLayout::GRAY16))
+        .with_exact_depth(eight_in_sixteen());
     assert!(declaration.validate_exact_depth().is_ok());
     // A legal assertion can still be false for actual samples.
-    let mut samples = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::GRAY16);
+    let mut samples =
+        zenpixels::PixelBuf::new(1, 1, codec_spec(zenpixels::SampleLayout::GRAY16)).unwrap();
     samples
-        .as_slice_mut()
+        .as_view_mut()
         .row_mut(0)
         .copy_from_slice(&1u16.to_ne_bytes());
-    assert_eq!(eight_in_sixteen().holds_for(&samples.as_slice()), Ok(false));
+    assert_eq!(eight_in_sixteen().holds_for(&samples.as_view()), Ok(false));
 }

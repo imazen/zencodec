@@ -6,7 +6,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, UnsupportedOperation};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 use super::BoxedError;
 use super::dyn_encoding::{
@@ -45,7 +45,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// Every descriptor in this list is a guarantee: the corresponding
     /// per-format encode trait is implemented and will work without format
     /// conversion. Must not be empty.
-    fn supported_descriptors() -> &'static [PixelDescriptor];
+    fn supported_descriptors() -> &'static [ImageSpec];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).
     ///
@@ -289,7 +289,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     ///     .with_generic_quality(85.0)
     ///     .encode(pixels)?;
     /// ```
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>
     where
         Self: Sized,
         <Self::Job as EncodeJob>::Enc: Encoder<Error = Self::Error>,
@@ -658,7 +658,7 @@ pub trait EncodeJob: Sized {
     /// the box; never stringify them. Successful planning allocates no error box.
     fn plan_encode(
         &self,
-        _declaration: &crate::encode::EncodeDeclaration<'_>,
+        _declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, super::BoxedError> {
         Err(alloc::boxed::Box::new(
             crate::UnsupportedOperation::EncodePlanning,
@@ -677,7 +677,7 @@ pub trait EncodeJob: Sized {
     /// For streaming row-push or animation, take the encoder yourself with
     /// [`encoder()`](Self::encoder) /
     /// [`animation_frame_encoder()`](Self::animation_frame_encoder).
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>
     where
         Self::Enc: Encoder<Error = Self::Error>,
     {
@@ -717,7 +717,7 @@ pub trait EncodeJob: Sized {
 
     /// Create a type-erased one-shot encoder.
     ///
-    /// Returns a boxed [`DynEncoder`] that accepts any [`PixelSlice`](zenpixels::PixelSlice)
+    /// Returns a boxed [`DynEncoder`] that accepts any [`PixelView`](zenpixels::PixelView)
     /// (type-erased) and produces encoded output. All configuration —
     /// both universal ([`EncoderConfig::with_generic_quality`]) and
     /// codec-specific (methods on the concrete config type) — is

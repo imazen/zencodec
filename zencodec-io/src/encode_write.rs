@@ -6,7 +6,7 @@ use std::io::{self, Write};
 
 use zencodec::UnsupportedOperation;
 use zencodec::encode::{AnimationFrameEncoder, Encoder, OutputTiming};
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// Write every byte `enc` has pending to `w`, then consume it. Returns how
 /// many bytes were written.
@@ -44,6 +44,8 @@ pub fn write_pending_animation<A: AnimationFrameEncoder>(
 pub enum EncodeWriteError<E> {
     /// The encoder failed.
     Encoder(E),
+    /// The requested strip could not be borrowed.
+    Buffer(zenpixels::At<zenpixels::BufferError>),
     /// Writing the output failed.
     Io(io::Error),
 }
@@ -52,6 +54,7 @@ impl<E: fmt::Display> fmt::Display for EncodeWriteError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Encoder(e) => write!(f, "encoder: {e}"),
+            Self::Buffer(e) => write!(f, "pixel strip: {e}"),
             Self::Io(e) => write!(f, "write: {e}"),
         }
     }
@@ -61,6 +64,7 @@ impl<E: core::error::Error + 'static> core::error::Error for EncodeWriteError<E>
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Encoder(e) => Some(e),
+            Self::Buffer(e) => Some(e),
             Self::Io(e) => Some(e),
         }
     }
@@ -101,10 +105,10 @@ pub struct EncodeWriteReport {
 )]
 pub fn encode_to_writer<E: Encoder>(
     mut enc: E,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     w: &mut impl Write,
 ) -> Result<EncodeWriteReport, EncodeWriteError<E::Error>> {
-    let (width, height, desc) = (pixels.width(), pixels.rows(), pixels.descriptor());
+    let (width, height, desc) = (pixels.width(), pixels.rows(), pixels.spec().clone());
     let timing = match enc.begin(width, height, desc) {
         Ok(t) => t,
         Err(e) if is_row_level_refusal(&e) => {
@@ -124,7 +128,7 @@ pub fn encode_to_writer<E: Encoder>(
     let mut y = 0;
     while y < height {
         let h = strip.min(height - y);
-        let rows = pixels.sub_rows(y, h);
+        let rows = pixels.sub_rows(y, h).map_err(EncodeWriteError::Buffer)?;
         enc.push_rows(rows).map_err(EncodeWriteError::Encoder)?;
         bytes += write_pending(&mut enc, w).map_err(EncodeWriteError::Io)? as u64;
         y += h;

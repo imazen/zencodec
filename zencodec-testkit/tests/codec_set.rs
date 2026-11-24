@@ -21,19 +21,19 @@ use zencodec_testkit::reference::RefEncodeJob;
 use zencodec_testkit::{
     RefError, ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 // ===========================================================================
 // Helpers
 // ===========================================================================
 
-fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelSlice<'_> {
-    PixelSlice::new(
+fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelView<'_> {
+    PixelView::new(
         bytes,
         width,
         height,
         width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        ImageSpec::rgb8_srgb(),
     )
     .expect("valid pixel slice")
 }
@@ -276,8 +276,9 @@ impl EncoderConfig for Rgb8OnlyEncoder {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        SUPPORTED
     }
 
     fn job(self) -> Self::Job {
@@ -289,7 +290,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
 fn transcode_refuses_implicit_precision_loss() {
     let samples = [0u8; 24];
     let pixels =
-        PixelSlice::new(&samples, W, H, 12, PixelDescriptor::RGB16_SRGB).expect("16-bit pixels");
+        PixelView::new(&samples, W, H, 12, ImageSpec::rgb16_srgb()).expect("16-bit pixels");
     let source = ReferenceEncoderConfig::new()
         .encode(pixels)
         .expect("encode 16-bit source");
@@ -306,7 +307,7 @@ fn transcode_refuses_implicit_precision_loss() {
             ColorEmitPolicy::Verbatim,
         ),
         Err(CodecSetError::TranscodeRequiresExplicitHandling(
-            TranscodeBarrier::PixelDescriptor
+            TranscodeBarrier::ImageSpec
         ))
     ));
 }
@@ -538,7 +539,7 @@ fn one_shot_trait_methods_work_directly() {
 #[test]
 fn estimate_dispatches_to_the_registered_codec() {
     let set = reference_set();
-    let image = ImageCharacteristics::new(W, H, PixelDescriptor::RGB8_SRGB);
+    let image = ImageCharacteristics::new(W, H, ImageSpec::rgb8_srgb());
     let compute = ComputeEnvironment::conservative();
 
     // Registered format → forwards to the codec's estimator and succeeds
@@ -586,7 +587,7 @@ fn estimate_decode_of_probes_then_estimates() {
     let info = set.probe(encoded.data()).expect("probe");
     let descriptor = set
         .decoder_for(format)
-        .and_then(|d| d.supported_descriptors().first().copied())
+        .and_then(|d| d.supported_descriptors().first().cloned())
         .expect("native descriptor");
     let explicit = set
         .estimate_decode(

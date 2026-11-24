@@ -6,7 +6,7 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorModel};
+use zenpixels::{Cicp, IccColorSpace};
 
 use crate::capabilities::EncodeCapabilities;
 use crate::info::{AuthoritativeColor, SourceColor};
@@ -259,9 +259,9 @@ pub fn resolve_color_emit(
     // Grayscale / CMYK: CICP is RGB-centric and cannot describe these. Keep the
     // ICC (the only valid color description) and suppress CICP — emitting an RGB
     // CICP over gray/CMYK pixels would recolor them.
-    let model = src.icc_profile.as_deref().and_then(ColorModel::from_icc);
-    let is_gray = matches!(model, Some(ColorModel::Gray)) || src.channel_count == Some(1);
-    let is_cmyk = matches!(model, Some(ColorModel::Cmyk));
+    let model = src.icc_profile.as_deref().and_then(IccColorSpace::from_icc);
+    let is_gray = matches!(model, Some(IccColorSpace::Gray)) || src.channel_count == Some(1);
+    let is_cmyk = matches!(model, Some(IccColorSpace::Cmyk));
     if is_gray || is_cmyk {
         return ColorEmitPlan {
             cicp: None,
@@ -366,7 +366,7 @@ pub fn resolve_color_emit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::ColorAuthority;
+    use crate::ColorAuthority;
 
     // Capability fixtures matching the 2026 reliability findings.
     fn caps_jxl() -> EncodeCapabilities {

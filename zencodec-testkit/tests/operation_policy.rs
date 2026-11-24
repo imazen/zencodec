@@ -19,7 +19,7 @@ use zencodec_testkit::{
     ReferenceEncoderConfig, TestImage,
     reference::{RefEnc, RefEncodeJob, RefError},
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 #[derive(Default)]
 struct Counts {
@@ -42,8 +42,9 @@ impl EncoderConfig for Control {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        SUPPORTED
     }
     fn with_fidelity(mut self, target: Fidelity) -> Self {
         self.target = Some(if target == Fidelity::codec_quality(80.0) {
@@ -112,7 +113,7 @@ impl Encoder for Enc {
     fn reject(op: UnsupportedOperation) -> RefError {
         RefError::Unsupported(op)
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, RefError> {
         self.counts.executed.fetch_add(1, Ordering::SeqCst);
         self.counts.last_id.store(self.id, Ordering::SeqCst);
         self.counts.live_at_encode.store(
@@ -244,7 +245,7 @@ impl EncoderConfig for ThreadAffine {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         Control::supported_descriptors()
     }
     fn job(self) -> Self::Job {
@@ -313,8 +314,8 @@ fn request() -> EncodeRequest {
 }
 fn selected(report: &zencodec::operation::OperationReport) -> zencodec::operation::EncodeOffer {
     let record = report.decisions().last().unwrap();
-    match record.selected.unwrap() {
-        Selection::Encode(offer) => offer,
+    match record.selected.as_ref().unwrap() {
+        Selection::Encode(offer) => *offer,
         _ => panic!("unexpected domain"),
     }
 }
@@ -334,7 +335,7 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
                 };
                 assert_eq!(
                     (facts.width, facts.height, facts.descriptor),
-                    (3, 2, PixelDescriptor::RGB8_SRGB)
+                    (3, 2, ImageSpec::rgb8_srgb())
                 );
                 assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
                 assert_eq!(counts.made.load(Ordering::SeqCst), 2);

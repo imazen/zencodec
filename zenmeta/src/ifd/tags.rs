@@ -115,7 +115,7 @@ const TIFF_TAGS: &[(u16, &str)] = &[
     (293, "T6Options"),
     (296, "ResolutionUnit"),
     (297, "PageNumber"),
-    (301, "TransferFunction"),
+    (301, "Transfer"),
     (305, "Software"),
     (306, "DateTime"),
     (315, "Artist"),

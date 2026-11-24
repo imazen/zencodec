@@ -534,7 +534,7 @@ pub enum GainMapRender {
     /// or reports [`UnsupportedOperation`](crate::UnsupportedOperation) — never
     /// silently SDR-labeled-as-HDR.
     ///
-    /// **Envelope obligation.** The reconstructed [`PixelBuffer`](zenpixels::PixelBuffer)
+    /// **Envelope obligation.** The reconstructed [`PixelBuf`](zenpixels::PixelBuf)
     /// carries the HDR *signal* (its descriptor's transfer/primaries/range), but **not**
     /// the luminance *envelope*. A codec honoring this **must** populate the envelope on
     /// the output [`ImageInfo`](crate::ImageInfo)'s [`SourceColor`](crate::decode::SourceColor) —
@@ -664,14 +664,14 @@ impl GainMapSource {
 #[non_exhaustive]
 pub struct DecodedGainMap {
     /// Gain map image pixels.
-    pub pixels: zenpixels::PixelBuffer,
+    pub pixels: zenpixels::PixelBuf,
     /// ISO 21496-1 gain map metadata.
     pub metadata: GainMapInfo,
 }
 
 impl DecodedGainMap {
     /// Create a new decoded gain map.
-    pub fn new(pixels: zenpixels::PixelBuffer, metadata: GainMapInfo) -> Self {
+    pub fn new(pixels: zenpixels::PixelBuf, metadata: GainMapInfo) -> Self {
         Self { pixels, metadata }
     }
 
@@ -695,7 +695,7 @@ impl DecodedGainMap {
     /// [`metadata.channels`](GainMapInfo::channels), so a 1-vs-3-channel decision
     /// can never desync from the bytes actually present.
     pub fn channels(&self) -> u8 {
-        self.pixels.descriptor().channels() as u8
+        self.pixels.spec().layout.channels() as u8
     }
 }
 

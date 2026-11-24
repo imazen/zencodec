@@ -363,8 +363,8 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
             check(pulse, report)?;
             match resolve_image(image, resolver, preset, Some(pulse)) {
                 Ok(output) => {
-                    for &record in output.report().decisions() {
-                        report.record(record);
+                    for record in output.report().decisions() {
+                        report.record(record.clone());
                     }
                     Ok(output)
                 }

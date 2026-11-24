@@ -15,7 +15,7 @@ use zencodec::decode::{
     OutputInfo, Progress, SinkError, StepError,
 };
 use zencodec::source::AccessPattern;
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 use crate::context::{CoroutineContext, CoroutineError, Shared, SharedCell};
 
@@ -250,7 +250,7 @@ where
             let shared = self.shared.lock();
             (
                 shared.info.as_ref().map(|i| (i.width, i.height)),
-                shared.descriptor,
+                shared.descriptor.clone(),
             )
         };
         if let (Some((w, h)), Some(desc)) = (dims, desc) {
@@ -302,7 +302,7 @@ where
             self.state = State::Failed;
             return Err(StepError::Cancelled(reason));
         }
-        if let Some(boundary) = self.shared.lock().boundary {
+        if let Some(boundary) = self.shared.lock().boundary.clone() {
             return Ok(ControlledProgress::Suspended {
                 consumed: 0,
                 boundary,
@@ -334,7 +334,7 @@ where
                     self.state = State::Failed;
                     return Err(StepError::Control(error));
                 }
-                if let Some(boundary) = shared.boundary {
+                if let Some(boundary) = shared.boundary.clone() {
                     if shared.rows.is_some() {
                         self.state = State::Failed;
                         return Err(StepError::Control(ControlError::OutputBeforeInterpretation));
@@ -391,7 +391,7 @@ where
                     let inconsistent = {
                         let shared = self.shared.lock();
                         shared.controlled
-                            && (shared.descriptor != Some(rows.descriptor)
+                            && (shared.descriptor.as_ref() != Some(&rows.descriptor)
                                 || shared
                                     .info
                                     .as_ref()
@@ -505,8 +505,8 @@ where
         details
     }
 
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.shared.lock().descriptor
+    fn output_descriptor(&self) -> Option<ImageSpec> {
+        self.shared.lock().descriptor.clone()
     }
 
     fn access_pattern(&self) -> AccessPattern {
@@ -574,7 +574,7 @@ where
                 return Err(StepError::Control(ControlError::InconsistentFacts));
             }
             if action == BoundaryAction::AdoptInterpretation {
-                shared.adopted = Some(facts);
+                shared.adopted = Some(facts.clone());
             }
             shared.reply = Some((id, action));
             this.state = State::Running;
@@ -606,12 +606,12 @@ fn copy_rows(
     if !rows.meta.is_final && !accepts_provisional {
         return Err("decoder wrote provisional rows to a sink that does not accept them".into());
     }
-    let pixels = zenpixels::PixelSlice::new(
+    let pixels = zenpixels::PixelView::new(
         rows.data.as_slice(),
         rows.width,
         rows.rows,
         rows.stride,
-        rows.descriptor,
+        rows.descriptor.clone(),
     )?;
     rows.meta
         .y
@@ -623,13 +623,13 @@ fn copy_rows(
     let mut meta = rows.meta;
     meta.y += offset;
     let mut destination = if meta.is_final {
-        sink.provide_next_buffer(meta.y, count, rows.width, rows.descriptor)?
+        sink.provide_next_buffer(meta.y, count, rows.width, rows.descriptor.clone())?
     } else {
-        sink.provide_pass_buffer(meta, count, rows.width, rows.descriptor)?
+        sink.provide_pass_buffer(meta, count, rows.width, rows.descriptor.clone())?
     };
     if destination.width() != rows.width
         || destination.rows() != count
-        || destination.descriptor() != rows.descriptor
+        || destination.spec() != &rows.descriptor
     {
         return Err("sink returned a buffer with a different geometry or descriptor".into());
     }
@@ -694,10 +694,10 @@ where
                                 || old.source_color != details.info.source_color
                         }))
             }) || (shared.controlled
-                && shared.adopted.is_some_and(|facts| {
+                && shared.adopted.as_ref().is_some_and(|facts| {
                     facts.width != info.width
                         || facts.height != info.height
-                        || facts.descriptor != Some(info.native_format)
+                        || facts.descriptor.as_ref() != Some(&info.native_format)
                 }))
         };
         if inconsistent {

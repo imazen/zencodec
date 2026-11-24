@@ -13,7 +13,7 @@ use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 mod binding;
 mod collection;
@@ -137,9 +137,9 @@ pub enum OperationError {
     /// The decoder could not produce the required descriptor without conversion.
     OutputDescriptor {
         /// Required output interpretation and layout.
-        requested: PixelDescriptor,
+        requested: Box<ImageSpec>,
         /// The decoder's actual output interpretation and layout.
-        actual: PixelDescriptor,
+        actual: Box<ImageSpec>,
     },
 }
 
@@ -167,7 +167,9 @@ impl fmt::Display for OperationError {
             }
             Self::OutputDescriptor { requested, actual } => write!(
                 f,
-                "required output {requested:?}; decoder produced {actual:?}"
+                "required output {:?}; decoder produced {:?}",
+                crate::helpers::redacted_spec(requested),
+                crate::helpers::redacted_spec(actual)
             ),
         }
     }
@@ -191,8 +193,8 @@ impl core::error::Error for OperationError {
 enum Output {
     #[default]
     Native,
-    Prefer(Vec<PixelDescriptor>),
-    Require(PixelDescriptor),
+    Prefer(Vec<ImageSpec>),
+    Require(ImageSpec),
 }
 
 /// Reusable requirements for decoding one image into owned pixels.
@@ -239,14 +241,14 @@ impl DecodeRequest {
     /// For controlled execution,
     /// [`Self::start_controlled`] checks the final interpretation before sink
     /// effects; this is not a bound on native decoding workspace.
-    pub fn with_output(mut self, descriptor: PixelDescriptor) -> Self {
+    pub fn with_output(mut self, descriptor: ImageSpec) -> Self {
         self.output = Output::Require(descriptor);
         self
     }
 
     /// Prefer these descriptors in order, permitting the decoder's native
     /// fallback. Inspect the returned pixels for the selected descriptor.
-    pub fn preferring_output(mut self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self {
+    pub fn preferring_output(mut self, descriptors: impl Into<Vec<ImageSpec>>) -> Self {
         self.output = Output::Prefer(descriptors.into());
         self
     }
@@ -299,8 +301,8 @@ impl DecodeRequest {
             let decoder = job
                 .into_decoder(Cow::Borrowed(input), preferred)
                 .map_err(|e| OperationError::Codec(e.into()))?;
-            let required = match self.output {
-                Output::Require(descriptor) => Some(descriptor),
+            let required = match &self.output {
+                Output::Require(descriptor) => Some(descriptor.clone()),
                 _ => None,
             };
             decoding::decode_owned(decoder, required, codecs.operation_pulse())
@@ -627,7 +629,7 @@ impl EncodeRequest {
     pub fn encode(
         &self,
         codecs: &CodecSet,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
         let mut delegate = |_: Question<'_>| -> Result<Decision, At<core::convert::Infallible>> {
             Ok(Decision::UsePreset)
@@ -642,7 +644,7 @@ impl EncodeRequest {
     pub fn encode_with<R: OperationPolicy + ?Sized>(
         &self,
         codecs: &CodecSet,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         resolver: &mut R,
     ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
         let mut jobs = self.prepare(codecs)?;
@@ -654,7 +656,7 @@ impl EncodeRequest {
         let facts = EncodeFacts {
             width: pixels.width(),
             height: pixels.rows(),
-            descriptor: pixels.descriptor(),
+            descriptor: pixels.spec().clone(),
         };
         let (selected, record) = policy::choose_encode(
             facts,

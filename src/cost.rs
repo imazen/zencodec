@@ -3,7 +3,7 @@
 //! [`OutputInfo`] describes what a decode will produce given current hints.
 
 use crate::Orientation;
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 /// Predicted output from a decode operation.
 ///
@@ -35,7 +35,7 @@ pub struct OutputInfo {
     /// For `decode_into()`, use any format from
     /// [`supported_descriptors()`](crate::decode::DecoderConfig::supported_descriptors) —
     /// this field tells you what the codec would pick if you let it choose.
-    pub native_format: PixelDescriptor,
+    pub native_format: ImageSpec,
     /// Whether the output has an alpha channel.
     pub has_alpha: bool,
     /// Orientation the decoder will apply internally.
@@ -58,12 +58,12 @@ pub struct OutputInfo {
 
 impl OutputInfo {
     /// Create an `OutputInfo` for a simple full-frame decode (no hints applied).
-    pub fn full_decode(width: u32, height: u32, native_format: PixelDescriptor) -> Self {
+    pub fn full_decode(width: u32, height: u32, native_format: ImageSpec) -> Self {
         Self {
             width,
             height,
+            has_alpha: crate::helpers::has_alpha(&native_format),
             native_format,
-            has_alpha: native_format.has_alpha(),
             orientation_applied: Orientation::Identity,
             crop_applied: None,
         }
@@ -90,9 +90,9 @@ impl OutputInfo {
     /// Minimum buffer size in bytes for the native format (no padding).
     ///
     /// This is `width * height * bytes_per_pixel`. For aligned/strided
-    /// buffers, use [`PixelDescriptor::aligned_stride()`] instead.
+    /// buffers, use [`zenpixels::SampleLayout::aligned_stride()`] instead.
     pub fn buffer_size(&self) -> u64 {
-        self.width as u64 * self.height as u64 * self.native_format.bytes_per_pixel() as u64
+        self.width as u64 * self.height as u64 * self.native_format.layout.bytes_per_pixel() as u64
     }
 
     /// Pixel count (`width * height`).
@@ -104,11 +104,11 @@ impl OutputInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::PixelDescriptor;
+    use zenpixels::ImageSpec;
 
     #[test]
     fn output_info_full_decode() {
-        let info = OutputInfo::full_decode(10, 5, PixelDescriptor::RGBA8_SRGB);
+        let info = OutputInfo::full_decode(10, 5, ImageSpec::rgba8_srgb());
         assert_eq!(info.buffer_size(), 200); // 10*5*4
         assert_eq!(info.pixel_count(), 50); // 10*5
         assert!(info.has_alpha); // RGBA8 has alpha

@@ -32,7 +32,7 @@ use zencodec::{
     CodecError, ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, SharedPulse,
     Unsupported, UnsupportedOperation,
 };
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelBuf, PixelView};
 
 use crate::reference::{
     Header, RefError, build_info, descriptor_for_bpp, encode_single, frame_pixel_len,
@@ -75,8 +75,9 @@ impl EncoderConfig for MinimalEncoderConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        SUPPORTED
     }
     fn capabilities() -> &'static EncodeCapabilities {
         &ENCODE_CAPS
@@ -137,7 +138,7 @@ impl Encoder for MinEnc {
         RefError::Unsupported(op).into()
     }
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<CodecError>> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, At<CodecError>> {
         // Orientation only — no metadata channels.
         let meta = Metadata::none().with_orientation(self.orientation);
         Ok(EncodeOutput::new(
@@ -169,8 +170,9 @@ impl DecoderConfig for MinimalDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Pnm]
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        SUPPORTED
     }
     fn capabilities() -> &'static DecodeCapabilities {
         &DECODE_CAPS
@@ -214,7 +216,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<MinDec<'a>, At<CodecError>> {
         parse_header(&data)?;
         Ok(MinDec { data })
@@ -224,7 +226,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, At<CodecError>> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, wrap_sink)
     }
@@ -232,7 +234,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn streaming_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
         Err(RefError::Unsupported(UnsupportedOperation::RowLevelDecode).into())
     }
@@ -240,7 +242,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn animation_frame_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
         Err(RefError::Unsupported(UnsupportedOperation::AnimationDecode).into())
     }
@@ -264,7 +266,7 @@ impl Decode for MinDec<'_> {
             .data
             .get(start..start + len)
             .ok_or_else(|| RefError::Invalid("truncated pixels".into()))?;
-        let buf = PixelBuffer::from_vec(pixels.to_vec(), h.width, h.height, desc)
+        let buf = PixelBuf::from_bytes(pixels.to_vec(), h.width, h.height, desc)
             .map_err(|e| RefError::Invalid(format!("buffer: {e}")))?;
         Ok(DecodeOutput::new(buf, build_info(&h)))
     }

@@ -65,7 +65,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::Fidelity;
@@ -212,7 +212,7 @@ pub enum TranscodeBarrier {
     /// The source contains a gain map or another auxiliary image.
     AuxiliaryImage,
     /// The target cannot accept the decoder's native pixel descriptor.
-    PixelDescriptor,
+    ImageSpec,
 }
 
 impl fmt::Display for CodecSetError {
@@ -480,7 +480,7 @@ impl CodecSet {
     pub fn decode_preferring<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<DecodeOutput, CodecSetError> {
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         self.decode_as(format, data, preferred)
@@ -491,7 +491,7 @@ impl CodecSet {
         &'a self,
         format: ImageFormat,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<DecodeOutput, CodecSetError> {
         Ok(self
             .decode_job(format)?
@@ -505,7 +505,7 @@ impl CodecSet {
         &'a self,
         data: &'a [u8],
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, CodecSetError> {
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
@@ -520,7 +520,7 @@ impl CodecSet {
     pub fn animation_decoder<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, CodecSetError> {
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
@@ -538,7 +538,7 @@ impl CodecSet {
     pub fn streaming_decoder<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, CodecSetError> {
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
@@ -556,7 +556,7 @@ impl CodecSet {
     /// access pattern among the registered decoders.
     pub fn incremental_decoder(
         &self,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Box<crate::traits::DynIncrementalDecoder> {
         crate::traits::erase_incremental(CodecSetIncrementalDecoder::new(self.clone(), preferred))
     }
@@ -574,7 +574,7 @@ impl CodecSet {
         &self,
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, BoxedError> {
         // A short read (not `len()`) bounds the probe, so a stream-backed
         // source is not consumed to its end before decoding starts.
@@ -754,7 +754,7 @@ impl CodecSet {
     pub fn encode(
         &self,
         format: ImageFormat,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
         Ok(self.encode_job(format)?.encode(pixels)?)
     }
@@ -768,7 +768,7 @@ impl CodecSet {
         &self,
         format: ImageFormat,
         fidelity: Fidelity,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
         Ok(self.encode_job_with(format, fidelity)?.encode(pixels)?)
     }
@@ -851,7 +851,7 @@ impl CodecSet {
             .ok_or(CodecSetError::NoEncoder(target))?
             .supported_descriptors();
         // This is a still-image convenience. Reject known source content that
-        // cannot travel through a single PixelSlice before decoding samples.
+        // cannot travel through a single PixelView before decoding samples.
         let format = self
             .detect(input)
             .ok_or(CodecSetError::UnrecognizedFormat)?;
@@ -872,9 +872,9 @@ impl CodecSet {
             ));
         }
         let decoded = self.decode(input)?;
-        if !target_inputs.contains(&decoded.pixels().descriptor()) {
+        if !target_inputs.contains(decoded.pixels().spec()) {
             return Err(CodecSetError::TranscodeRequiresExplicitHandling(
-                TranscodeBarrier::PixelDescriptor,
+                TranscodeBarrier::ImageSpec,
             ));
         }
         let source_metadata = Metadata::from(decoded.info());
@@ -930,10 +930,10 @@ impl CodecSet {
     pub fn estimate_encode_of(
         &self,
         format: ImageFormat,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         compute: &ComputeEnvironment,
     ) -> Result<ResourceEstimate, CodecSetError> {
-        let image = ImageCharacteristics::new(pixels.width(), pixels.rows(), pixels.descriptor());
+        let image = ImageCharacteristics::new(pixels.width(), pixels.rows(), pixels.spec().clone());
         self.estimate_encode(format, &image, compute)
     }
 
@@ -991,11 +991,11 @@ impl CodecSet {
         let info = self.decode_job(format)?.probe(data)?;
         let descriptor = self
             .decoder_for(format)
-            .and_then(|d| d.supported_descriptors().first().copied())
+            .and_then(|d| d.supported_descriptors().first().cloned())
             .unwrap_or(if info.has_alpha {
-                PixelDescriptor::RGBA8_SRGB
+                ImageSpec::rgba8_srgb()
             } else {
-                PixelDescriptor::RGB8_SRGB
+                ImageSpec::rgb8_srgb()
             });
         let image = ImageCharacteristics::new(info.width, info.height, descriptor);
         self.estimate_decode(format, &image, compute)
@@ -1075,14 +1075,14 @@ impl fmt::Debug for CodecSet {
 /// codec's incremental decoder. It never copies input.
 pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
-    preferred: Vec<PixelDescriptor>,
+    preferred: Vec<ImageSpec>,
     inner: Option<Box<crate::traits::DynIncrementalDecoder>>,
     probe: [crate::traits::InputRequest; 1],
 }
 
 impl CodecSetIncrementalDecoder {
     /// Create a new incremental decoder tied to `set`.
-    pub fn new(set: CodecSet, preferred: &[PixelDescriptor]) -> Self {
+    pub fn new(set: CodecSet, preferred: &[ImageSpec]) -> Self {
         Self {
             set,
             preferred: preferred.to_vec(),
@@ -1141,7 +1141,7 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
 
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         self.inner.as_ref().and_then(|d| d.output_descriptor())
     }
 
@@ -1202,8 +1202,7 @@ mod tests {
     fn encode_without_encoder_is_no_encoder() {
         let set = CodecSet::new();
         let bytes = [0u8; 3];
-        let pixels =
-            PixelSlice::new(&bytes, 1, 1, 3, PixelDescriptor::RGB8_SRGB).expect("pixel slice");
+        let pixels = PixelView::new(&bytes, 1, 1, 3, ImageSpec::rgb8_srgb()).expect("pixel slice");
         match set.encode(ImageFormat::Png, pixels) {
             Err(CodecSetError::NoEncoder(ImageFormat::Png)) => {}
             other => panic!("expected NoEncoder(Png), got {other:?}"),

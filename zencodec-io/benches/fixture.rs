@@ -12,9 +12,9 @@ use zencodec::decode::{
 use zencodec::source::AccessPattern;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{BoxedCoroutineDecoder, CoroutineDecoder, CoroutineError};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
-pub const DESC: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+pub const DESC: ImageSpec = ImageSpec::rgba8_srgb();
 pub const HEADER: usize = 16;
 
 /// `"SYN1"`, width, height (u32 LE), 4 bytes pad, then raw RGBA8 rows.
@@ -180,7 +180,7 @@ impl IncrementalDecode for HandWritten {
     fn info(&self) -> Option<&ImageInfo> {
         self.info.as_ref()
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -209,7 +209,7 @@ pub fn coroutine_sequential(strip_rows: u32) -> Coro {
                 let rows = (h - y).min(strip_rows);
                 let n = rows as usize * row;
                 ctx.read_exact(&mut strip[..n]).await?;
-                let s = PixelSlice::new(&strip[..n], w, rows, row, DESC).unwrap();
+                let s = PixelView::new(&strip[..n], w, rows, row, DESC).unwrap();
                 ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
                 y += rows;
             }
@@ -238,7 +238,7 @@ pub fn coroutine_ranges(strip_rows: u32) -> Coro {
                 let n = rows as usize * row;
                 let at = HEADER as u64 + y as u64 * row as u64;
                 ctx.read_exact_at(at, &mut strip[..n]).await?;
-                let s = PixelSlice::new(&strip[..n], w, rows, row, DESC).unwrap();
+                let s = PixelView::new(&strip[..n], w, rows, row, DESC).unwrap();
                 ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
                 y += rows;
             }
@@ -265,7 +265,7 @@ pub fn coroutine_controlled(strip_rows: u32, input_cap: usize, admitted: bool) -
                 let rows = (h - y).min(strip_rows);
                 let n = rows as usize * row;
                 ctx.read_exact(&mut strip[..n]).await?;
-                ctx.write_rows(BatchMeta::final_rows(y), &PixelSlice::new(&strip[..n], w, rows, row, DESC).unwrap()).await?;
+                ctx.write_rows(BatchMeta::final_rows(y), &PixelView::new(&strip[..n], w, rows, row, DESC).unwrap()).await?;
                 y += rows;
             }
             Ok(OutputInfo::full_decode(w, h, DESC))

@@ -3,13 +3,13 @@
 //! retention additionally needs the checked metadata setter on a supporting codec.
 use zencodec::encode::{EncodeJob, EncodeOrientation, EncodeOutput, Encoder};
 use zencodec::{Metadata, MetadataPolicy};
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 // EXAMPLE: preserve_stored_orientation
 #[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 pub fn preserve_stored<J: EncodeJob>(
     job: J,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     metadata: Metadata,
 ) -> Result<EncodeOutput, Box<dyn core::error::Error + Send + Sync>>
 where

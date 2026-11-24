@@ -6,7 +6,7 @@ use crate::{
 };
 use alloc::boxed::Box;
 
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 pub(super) struct CheckedDecoder {
     request: DecodeRequest,
@@ -75,7 +75,7 @@ impl IncrementalDecode for CheckedDecoder {
     fn take_details(&mut self) -> Option<DecodeDetails> {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<ImageSpec> {
         self.inner.as_ref().and_then(|d| d.output_descriptor())
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -113,13 +113,13 @@ impl ControlledIncrementalDecode for CheckedDecoder {
             })?;
         if let ControlledProgress::Suspended { boundary, .. } = &progress
             && boundary.facts().state == InterpretationState::Final
-            && let Output::Require(requested) = self.request.output
-            && let Some(actual) = boundary.facts().descriptor
+            && let Output::Require(requested) = &self.request.output
+            && let Some(actual) = &boundary.facts().descriptor
             && actual != requested
         {
             return Err(StepError::Codec(OperationError::OutputDescriptor {
-                requested,
-                actual,
+                requested: Box::new(requested.clone()),
+                actual: Box::new(actual.clone()),
             }));
         }
         Ok(progress)
@@ -145,7 +145,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
 /// authoritative even when a native implementation supplies incorrect facts.
 pub(super) fn decode_owned(
     mut decoder: Box<dyn DynDecoder + '_>,
-    required: Option<PixelDescriptor>,
+    required: Option<ImageSpec>,
     pulse: &dyn crate::Pulse,
 ) -> Result<crate::DecodeOutput, OperationError> {
     pulse.check().map_err(OperationError::Stopped)?;
@@ -159,19 +159,25 @@ pub(super) fn decode_owned(
         None
     };
     pulse.check().map_err(OperationError::Stopped)?;
-    if let (Some(requested), Some(actual)) = (required, prepared)
-        && actual != requested
+    if let (Some(requested), Some(actual)) = (required.as_ref(), prepared)
+        && &actual != requested
     {
-        return Err(OperationError::OutputDescriptor { requested, actual });
+        return Err(OperationError::OutputDescriptor {
+            requested: Box::new(requested.clone()),
+            actual: Box::new(actual),
+        });
     }
     let output = decoder
         .decode()
         .map_err(|e| OperationError::Codec(e.into()))?;
     pulse.check().map_err(OperationError::Stopped)?;
     if let Some(requested) = required {
-        let actual = output.pixels().descriptor();
+        let actual = output.pixels().spec().clone();
         if actual != requested {
-            return Err(OperationError::OutputDescriptor { requested, actual });
+            return Err(OperationError::OutputDescriptor {
+                requested: Box::new(requested),
+                actual: Box::new(actual),
+            });
         }
     }
     Ok(output)
@@ -184,10 +190,10 @@ mod admission_tests {
     use alloc::{rc::Rc, sync::Arc, vec};
     use core::cell::Cell;
     use core::sync::atomic::{AtomicBool, Ordering};
-    use zenpixels::PixelBuffer;
+    use zenpixels::PixelBuf;
 
     struct Native {
-        prepared: Option<PixelDescriptor>,
+        prepared: Option<ImageSpec>,
         fail: bool,
         cancel: Option<Arc<AtomicBool>>,
         preparations: Rc<Cell<usize>>,
@@ -200,7 +206,7 @@ mod admission_tests {
         }
     }
     impl DynDecoder for Native {
-        fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, BoxedError> {
+        fn prepare_output(&mut self) -> Result<Option<ImageSpec>, BoxedError> {
             self.preparations.set(self.preparations.get() + 1);
             if let Some(cancel) = &self.cancel {
                 cancel.store(true, Ordering::SeqCst);
@@ -208,28 +214,28 @@ mod admission_tests {
             if self.fail {
                 return Err(Box::new(core::fmt::Error));
             }
-            Ok(self.prepared)
+            Ok(self.prepared.clone())
         }
         fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
             self.executions.set(self.executions.get() + 1);
             Ok(DecodeOutput::new(
-                PixelBuffer::from_vec(vec![1, 2, 3], 1, 1, PixelDescriptor::RGB8_SRGB).unwrap(),
+                PixelBuf::from_bytes(vec![1, 2, 3], 1, 1, ImageSpec::rgb8_srgb()).unwrap(),
                 ImageInfo::new(1, 1, ImageFormat::Jpeg),
             ))
         }
     }
     #[test]
     fn preparation_is_optional_but_actual_output_is_always_checked() {
-        let rgb = PixelDescriptor::RGB8_SRGB;
-        let rgba = PixelDescriptor::RGBA8_SRGB;
+        let rgb = ImageSpec::rgb8_srgb();
+        let rgba = ImageSpec::rgba8_srgb();
         for (required, prepared, fail, prepares, executes, succeeds) in [
-            (None, Some(rgba), true, 0, 1, true),
-            (Some(rgb), Some(rgb), false, 1, 1, true),
-            (Some(rgba), Some(rgb), false, 1, 0, false),
-            (Some(rgba), Some(rgba), false, 1, 1, false),
-            (Some(rgba), None, false, 1, 1, false),
-            (Some(rgb), None, false, 1, 1, true),
-            (Some(rgb), None, true, 1, 0, false),
+            (None, Some(rgba.clone()), true, 0, 1, true),
+            (Some(rgb.clone()), Some(rgb.clone()), false, 1, 1, true),
+            (Some(rgba.clone()), Some(rgb.clone()), false, 1, 0, false),
+            (Some(rgba.clone()), Some(rgba.clone()), false, 1, 1, false),
+            (Some(rgba.clone()), None, false, 1, 1, false),
+            (Some(rgb.clone()), None, false, 1, 1, true),
+            (Some(rgb.clone()), None, true, 1, 0, false),
         ] {
             let preparations = Rc::new(Cell::new(0));
             let executions = Rc::new(Cell::new(0));
@@ -242,7 +248,7 @@ mod admission_tests {
                 executions: executions.clone(),
                 drops: drops.clone(),
             };
-            let result = decode_owned(Box::new(native), required, &NoPulse);
+            let result = decode_owned(Box::new(native), required.clone(), &NoPulse);
             assert_eq!(result.is_ok(), succeeds);
             assert_eq!(preparations.get(), prepares);
             assert_eq!(executions.get(), executes);
@@ -275,8 +281,8 @@ mod admission_tests {
             for cancelled in [false, true] {
                 for prepared in [
                     None,
-                    Some(PixelDescriptor::RGB8_SRGB),
-                    Some(PixelDescriptor::RGBA8_SRGB),
+                    Some(ImageSpec::rgb8_srgb()),
+                    Some(ImageSpec::rgba8_srgb()),
                 ] {
                     for fail in [false, true] {
                         let flag = Arc::new(AtomicBool::new(cancelled));
@@ -284,7 +290,7 @@ mod admission_tests {
                         let executions = Rc::new(Cell::new(0));
                         let drops = Rc::new(Cell::new(0));
                         let native = Native {
-                            prepared,
+                            prepared: prepared.clone(),
                             fail,
                             cancel: Some(flag.clone()),
                             preparations: preparations.clone(),
@@ -292,11 +298,8 @@ mod admission_tests {
                             drops: drops.clone(),
                         };
                         let pulse = crate::how_far::StopOnly::new(Cancel(flag, reason));
-                        let result = decode_owned(
-                            Box::new(native),
-                            Some(PixelDescriptor::RGB8_SRGB),
-                            &pulse,
-                        );
+                        let result =
+                            decode_owned(Box::new(native), Some(ImageSpec::rgb8_srgb()), &pulse);
                         if fail && !cancelled {
                             // Native failure remains primary even when it also raises a stop.
                             assert!(

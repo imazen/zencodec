@@ -55,7 +55,7 @@ use zencodec::decode::{
 use zencodec::encode::Encoder;
 use zencodec::how_far::NoPulse;
 use zencodec::source::{DynReadAt, SourceError};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
+use zenpixels::{ImageSpec, PixelBuf, PixelViewMut};
 
 use crate::admission::{self, InputError};
 use crate::drive::{DriveOptions, Progressor};
@@ -1217,21 +1217,21 @@ pub enum StripEvent {
         /// Output height.
         height: u32,
         /// Output pixel format.
-        descriptor: PixelDescriptor,
+        descriptor: ImageSpec,
     },
     /// One finished strip.
     Strip {
         /// Row position, pass and finality.
         meta: BatchMeta,
         /// The rows.
-        pixels: PixelBuffer,
+        pixels: PixelBuf,
     },
     /// The decoder finished.
     Finish,
 }
 
 /// A sink that streams finished strips to the async side over a bounded
-/// channel. Each strip is an owned [`PixelBuffer`]; `provide_*` hands the
+/// channel. Each strip is an owned [`PixelBuf`]; `provide_*` hands the
 /// decoder a fresh strip and ships the previous one, blocking the decode
 /// thread while the channel is full, so a slow consumer throttles the
 /// decoder instead of the decoder filling memory.
@@ -1242,7 +1242,7 @@ pub enum StripEvent {
 /// to block.
 pub struct ChannelRowSink {
     tx: mpsc::Sender<StripEvent>,
-    current: Option<(BatchMeta, PixelBuffer)>,
+    current: Option<(BatchMeta, PixelBuf)>,
     provisional: bool,
     pulse: Option<SharedPulse>,
 }
@@ -1314,23 +1314,18 @@ impl ChannelRowSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.ship()?;
         let (_, pixels) = self
             .current
-            .insert((meta, PixelBuffer::new(width, height, descriptor)));
-        Ok(pixels.as_slice_mut())
+            .insert((meta, PixelBuf::new(width, height, descriptor)?));
+        Ok(pixels.as_view_mut())
     }
 }
 
 impl DecodeRowSink for ChannelRowSink {
-    fn begin(
-        &mut self,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
         self.send(StripEvent::Begin {
             width,
             height,
@@ -1343,8 +1338,8 @@ impl DecodeRowSink for ChannelRowSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(BatchMeta::final_rows(y), height, width, descriptor)
     }
 
@@ -1357,8 +1352,8 @@ impl DecodeRowSink for ChannelRowSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(meta, height, width, descriptor)
     }
 

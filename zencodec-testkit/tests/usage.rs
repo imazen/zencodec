@@ -14,7 +14,7 @@ use zencodec::encode::Fidelity;
 use zencodec::estimate::ComputeEnvironment;
 use zencodec::{CodecSet, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy};
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 // The reference codec stands in for a real one. Its encoder emits a "ZCR1" wire
 // format; `ReferenceZcrDecoderConfig` registers the decoder under a format whose
@@ -25,9 +25,9 @@ const W: u32 = 2;
 const H: u32 = 2;
 const RGB: [u8; 12] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
-/// View tightly-packed RGB8 bytes as a [`PixelSlice`].
-fn rgb8(bytes: &[u8]) -> PixelSlice<'_> {
-    PixelSlice::new(bytes, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap()
+/// View tightly-packed RGB8 bytes as a [`PixelView`].
+fn rgb8(bytes: &[u8]) -> PixelView<'_> {
+    PixelView::new(bytes, W, H, W as usize * 3, ImageSpec::rgb8_srgb()).unwrap()
 }
 
 /// One codec set, built once. Real code registers real codecs here.
@@ -133,9 +133,9 @@ fn decode_requesting_a_pixel_format() {
     // When you truly need a format the decoder can't make, convert the output
     // (see `convert_a_decoded_image_to_another_format`).
     let image = codecs
-        .decode_preferring(file.data(), &[PixelDescriptor::RGBA8_SRGB])
+        .decode_preferring(file.data(), &[ImageSpec::rgba8_srgb()])
         .unwrap();
-    let _got = image.pixels().descriptor();
+    let _got = image.pixels().spec().clone();
     assert_eq!((image.width(), image.height()), (W, H));
 }
 
@@ -188,7 +188,8 @@ fn estimate_before_decoding() {
 
 #[test]
 fn encode_from_a_foreign_pixel_format() {
-    use zenpixels_convert::PixelSliceConvertExt;
+    use zenpixels::{ColorOrigin, PeakSource};
+    use zenpixels_convert::{ConvertPolicy, Negotiate, OutputPlan, OutputProfile};
 
     let codecs = codecs();
 
@@ -204,15 +205,22 @@ fn encode_from_a_foreign_pixel_format() {
         .unwrap()
         .supported_descriptors();
 
-    // `adapt_for_encode` picks the best supported target and converts into it
-    // (it would borrow, zero-copy, if BGRA8 were already supported).
-    let source = PixelSlice::new(&bgra, W, H, W as usize * 4, PixelDescriptor::BGRA8_SRGB).unwrap();
-    // Preserve the former helper's explicit permissive/discard policy.
-    let options = zenpixels::ConvertOptions::permissive()
-        .with_alpha_policy(zenpixels::AlphaPolicy::DiscardUnchecked);
-    let adapted = source.adapt_for_encode(supported, &options).unwrap();
+    let source = PixelView::new(&bgra, W, H, W as usize * 4, ImageSpec::bgra8_srgb()).unwrap();
+    let policy = ConvertPolicy::permissive();
+    let target = Negotiate::select(source.spec(), supported, &policy).unwrap();
+    let plan = OutputPlan::build(
+        source.spec().clone(),
+        target.spec,
+        policy,
+        PeakSource::Measured,
+        OutputProfile::Strip,
+    )
+    .unwrap();
+    let adapted = plan.execute_view(source, &ColorOrigin::assumed()).unwrap();
 
-    let file = codecs.encode(ImageFormat::Pnm, adapted.as_slice()).unwrap();
+    let file = codecs
+        .encode(ImageFormat::Pnm, adapted.pixels.as_view())
+        .unwrap();
 
     // Round-trips: decode back and red sits where RGB expects it.
     let image = codecs.decode(file.data()).unwrap();
@@ -221,7 +229,8 @@ fn encode_from_a_foreign_pixel_format() {
 
 #[test]
 fn convert_a_decoded_image_to_another_format() {
-    use zenpixels_convert::PixelBufferConvertExt;
+    use zenpixels::PeakSource;
+    use zenpixels_convert::{ConvertPolicy, ImagePlan};
 
     let codecs = codecs();
     let file = codecs.encode(ImageFormat::Pnm, rgb8(&RGB)).unwrap();
@@ -229,9 +238,14 @@ fn convert_a_decoded_image_to_another_format() {
     // Decode gives the codec's native format; convert the owned buffer to
     // whatever a downstream consumer wants (here BGRA8, e.g. for a GPU upload).
     let image = codecs.decode(file.data()).unwrap();
-    let bgra = image
-        .into_buffer()
-        .convert_to(PixelDescriptor::BGRA8_SRGB)
-        .unwrap();
-    assert_eq!(bgra.as_slice().descriptor(), PixelDescriptor::BGRA8_SRGB);
+    let target = ImageSpec::bgra8_srgb();
+    let conversion = ImagePlan::build(
+        image.buffer().spec().clone(),
+        target.clone(),
+        ConvertPolicy::lossless(),
+        PeakSource::Measured,
+    )
+    .unwrap();
+    let bgra = conversion.execute(image.buffer()).unwrap();
+    assert_eq!(bgra.spec(), &target);
 }

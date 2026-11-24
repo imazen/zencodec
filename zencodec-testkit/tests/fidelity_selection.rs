@@ -2,7 +2,7 @@ use zencodec::encode::{
     DynEncoderConfig, EncoderConfig, Fidelity, FidelitySelectionError, FidelityTargetError,
 };
 use zencodec_testkit::{ReferenceEncoderConfig as Reference, TestImage};
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 #[derive(Clone)]
 struct Selective {
@@ -15,7 +15,7 @@ impl EncoderConfig for Selective {
     fn format() -> zencodec::ImageFormat {
         <Reference as EncoderConfig>::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         <Reference as EncoderConfig>::supported_descriptors()
     }
     fn with_fidelity(mut self, requested: Fidelity) -> Self {

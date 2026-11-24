@@ -67,7 +67,7 @@ impl zencodec::decode::IncrementalDecode for BadPreCancel {
             match self.mode {
                 0 => return Ok(zencodec::decode::Progress::need(0)),
                 1 => {
-                    sink.begin(1, 1, zenpixels::PixelDescriptor::RGBA8_SRGB)
+                    sink.begin(1, 1, zenpixels::ImageSpec::rgba8_srgb())
                         .unwrap();
                 }
                 _ => {
@@ -94,7 +94,7 @@ impl zencodec::decode::IncrementalDecode for BadPreCancel {
     fn info(&self) -> Option<&zencodec::ImageInfo> {
         self.inner.info()
     }
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
+    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
         self.inner.output_descriptor()
     }
 }

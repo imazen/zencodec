@@ -8,7 +8,7 @@ use zencodec::{
     storage::StorageBudget,
 };
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 struct CountedDecoder(Arc<AtomicUsize>);
 impl Clone for CountedDecoder {
@@ -23,7 +23,7 @@ impl DecoderConfig for CountedDecoder {
     fn formats() -> &'static [ImageFormat] {
         ReferenceZcrDecoderConfig::formats()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         ReferenceZcrDecoderConfig::supported_descriptors()
     }
     fn job<'a>(self) -> Self::Job<'a> {
@@ -43,7 +43,7 @@ impl EncoderConfig for CountedEncoder {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
+    fn supported_descriptors() -> &'static [ImageSpec] {
         ReferenceEncoderConfig::supported_descriptors()
     }
     fn job(self) -> Self::Job {

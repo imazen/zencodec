@@ -1,6 +1,6 @@
 use zencodec::animation::{FrameDuration, TimingError};
 use zencodec::{AnimationFrame, OwnedAnimationFrame};
-use zenpixels::{PixelBuffer, PixelDescriptor};
+use zenpixels::{ImageSpec, PixelBuf};
 
 #[test]
 fn rational_source_durations_are_canonical_and_never_clamped() {
@@ -46,14 +46,14 @@ fn destination_clocks_are_exact_or_fail_without_wrapping() {
 #[allow(deprecated)] // This test keeps the published legacy getter's conversion contract.
 fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
     let pixels =
-        PixelBuffer::from_vec(vec![1, 2, 3, 4, 5, 6], 2, 1, PixelDescriptor::RGB8_SRGB).unwrap();
+        PixelBuf::from_bytes(vec![1, 2, 3, 4, 5, 6], 2, 1, ImageSpec::rgb8_srgb()).unwrap();
     for (duration, legacy) in [
         (FrameDuration::new(1001, 30000).unwrap(), 33),
         (FrameDuration::new(1, 65535).unwrap(), 0),
         (FrameDuration::new(0, 100).unwrap(), 0),
         (FrameDuration::new(u64::MAX, 1).unwrap(), u32::MAX),
     ] {
-        let borrowed = AnimationFrame::with_duration(pixels.as_slice(), duration, 7);
+        let borrowed = AnimationFrame::with_duration(pixels.as_view(), duration, 7);
         let owned = borrowed.to_owned_frame();
         assert_eq!(owned.duration(), duration);
         assert_eq!(owned.duration_ms(), legacy);

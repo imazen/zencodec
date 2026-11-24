@@ -1,6 +1,6 @@
 //! Keep a caller-defined immutable packed owner through shared image publication.
 use super::*;
-use zenpixels::{ColorContext, PixelDescriptor};
+use zenpixels::{HdrMetadata, ImageSpec};
 
 /// An immutable owner of scalar auxiliary planes independent of packed color.
 ///
@@ -26,7 +26,7 @@ pub trait AuxiliaryImageOwner: Send + Sync {
 /// [`crate::frame::Picture`] instead.
 pub trait PackedImageOwner: Send + Sync {
     /// Borrow the packed color pixels and their actual color context.
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>>;
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>>;
 
     /// Borrow the scalar values for the supplied auxiliary index. Indices start
     /// at zero and correspond to the roles passed to `from_packed_owner`.
@@ -52,7 +52,7 @@ struct ValueLayout {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 impl From<ValueSlice<'_>> for ValueLayout {
@@ -72,8 +72,8 @@ struct Held<P> {
     width: u32,
     height: u32,
     stride: usize,
-    descriptor: PixelDescriptor,
-    color: Option<Arc<ColorContext>>,
+    descriptor: ImageSpec,
+    hdr: HdrMetadata,
     extras: Arc<Vec<(Meaning, ValueLayout)>>,
 }
 
@@ -159,9 +159,9 @@ impl ImageOutput {
         if (width, height) != (g.region.width, g.region.height) {
             return Err(fail(OutputError::Geometry));
         }
-        let descriptor = pixels.descriptor();
+        let descriptor = pixels.spec().clone();
         let stride = pixels.stride();
-        let color = pixels.color_context().cloned();
+        let hdr = pixels.hdr();
         let mut extras = Vec::new();
         extras.try_reserve_exact(auxiliaries.len()).map_err(|e| {
             fail(OutputError::Mapping(crate::frame::MapError::Backend(
@@ -182,7 +182,7 @@ impl ImageOutput {
                 height,
                 stride,
                 descriptor,
-                color,
+                hdr,
                 extras: Arc::new(extras),
             }),
             interpretation: Arc::new(interpretation),
@@ -214,7 +214,7 @@ impl<P: PackedImageOwner> Held<P> {
 
 struct HeldMap<'a, P> {
     held: &'a Held<P>,
-    pixels: PixelSlice<'a>,
+    pixels: PixelView<'a>,
 }
 impl<P: PackedImageOwner> ImageStorage for Held<P> {
     fn auxiliary_source(&self) -> Result<Option<AuxiliarySource>, Failure> {
@@ -232,7 +232,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
     }
     fn facts(&self) -> SampleFacts {
         SampleFacts {
-            packed: Some(self.descriptor),
+            packed: Some(self.descriptor.clone()),
             planes: 1 + self.extras.len(),
             auxiliaries: self.extras.len(),
             applied_spot_colors: self
@@ -260,12 +260,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
         {
             return Err(fail(OutputError::Geometry));
         }
-        let same_color = match (pixels.color_context(), self.color.as_ref()) {
-            (None, None) => true,
-            (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,
-            _ => false,
-        };
-        if pixels.descriptor() != self.descriptor || !same_color {
+        if pixels.spec() != &self.descriptor || pixels.hdr() != self.hdr {
             return Err(fail(OutputError::Interpretation));
         }
         for index in 0..self.extras.len() {
@@ -389,19 +384,29 @@ mod tests {
     }
     impl core::error::Error for Backend {}
     impl PackedImageOwner for ChangingOwner {
-        fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+        fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
             let mode = self.mode.load(Ordering::SeqCst);
             if mode == 6 {
                 return Err(fail(OutputError::Mapping(crate::frame::MapError::Backend(
                     Box::new(At::wrap(Backend("private backend payload"))),
                 ))));
             }
-            let descriptor = if mode == 2 {
-                PixelDescriptor::RGB8_SRGB.with_transfer(zenpixels::TransferFunction::Linear)
+            let descriptor = if mode == 3 {
+                ImageSpec::new(
+                    zenpixels::SampleLayout::RGB8,
+                    zenpixels::ColorSpace::Icc {
+                        profile: Arc::from([1, 2, 3]),
+                        channels: 3,
+                        alpha: AlphaMode::None,
+                        intent: zenpixels::RenderingIntent::RelativeColorimetric,
+                    },
+                )
+            } else if mode == 2 {
+                ImageSpec::rgb8_srgb().with_transfer(zenpixels::Transfer::Linear)
             } else {
-                PixelDescriptor::RGB8_SRGB
+                ImageSpec::rgb8_srgb()
             };
-            let mut pixels = PixelSlice::new(
+            let pixels = PixelView::new(
                 &self.pixels,
                 if mode == 1 { 1 } else { 2 },
                 2,
@@ -409,9 +414,6 @@ mod tests {
                 descriptor,
             )
             .unwrap();
-            if mode == 3 {
-                pixels = pixels.with_color_context(Arc::new(ColorContext::from_icc(vec![1, 2, 3])));
-            }
             Ok(pixels)
         }
         fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
@@ -427,7 +429,7 @@ mod tests {
                 },
                 2,
                 12,
-                ChannelType::F32,
+                SampleType::F32,
             )
             .map(Some)
         }
@@ -508,10 +510,10 @@ mod tests {
             (2, 2, 12, 19),
         ] {
             assert!(
-                ValueSlice::new(&[0; 24][..len], width, height, stride, ChannelType::F32).is_err()
+                ValueSlice::new(&[0; 24][..len], width, height, stride, SampleType::F32).is_err()
             );
         }
-        let values = ValueSlice::new(&[0; 20], 2, 2, 12, ChannelType::F32).unwrap();
+        let values = ValueSlice::new(&[0; 20], 2, 2, 12, SampleType::F32).unwrap();
         assert_eq!(values.as_strided_bytes().len(), 20);
     }
 }

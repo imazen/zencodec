@@ -3,9 +3,9 @@ use std::{future::Future, num::NonZeroU32, task::Poll};
 use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo, NoPulse};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ImageSpec, PixelView, PixelViewMut};
 
-const DESC: PixelDescriptor = PixelDescriptor::RGB8_SRGB;
+const DESC: ImageSpec = ImageSpec::rgb8_srgb();
 const HEIGHT: u32 = 129;
 
 struct OneSlot {
@@ -30,8 +30,8 @@ impl OneSlot {
         meta: BatchMeta,
         rows: u32,
         width: u32,
-        desc: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        desc: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         if self.pending {
             return Err("the consumer has not drained its only slot".into());
         }
@@ -39,7 +39,7 @@ impl OneSlot {
         self.pending = true;
         self.meta = Some(meta);
         self.rows = rows;
-        Ok(PixelSliceMut::new(&mut self.bytes, width, rows, 12, desc)?)
+        Ok(PixelViewMut::new(&mut self.bytes, width, rows, 12, desc)?)
     }
 }
 impl DecodeRowSink for OneSlot {
@@ -54,8 +54,8 @@ impl DecodeRowSink for OneSlot {
         y: u32,
         rows: u32,
         width: u32,
-        desc: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        desc: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.loan(BatchMeta::final_rows(y), rows, width, desc)
     }
     fn provide_pass_buffer(
@@ -63,8 +63,8 @@ impl DecodeRowSink for OneSlot {
         meta: BatchMeta,
         rows: u32,
         width: u32,
-        desc: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        desc: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         self.loan(meta, rows, width, desc)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
@@ -88,7 +88,7 @@ fn decoder(
             for y in 0..HEIGHT as usize {
                 bytes[y * 9..y * 9 + 6].fill(y as u8);
             }
-            let pixels = PixelSlice::new(&bytes, 2, HEIGHT, 9, DESC).unwrap();
+            let pixels = PixelView::new(&bytes, 2, HEIGHT, 9, DESC).unwrap();
             let meta = if provisional {
                 BatchMeta::new(0, false).with_pass(7)
             } else {

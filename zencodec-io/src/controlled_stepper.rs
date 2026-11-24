@@ -5,7 +5,7 @@ use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlledIncrementalDecode, ControlledProgress, DecodeBoundary,
     DecodeRowSink, Event, Fused, IncrementalDecode, Input, InputRequest, StepError,
 };
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 use crate::{ByteStepper, Step, Stepped};
 
@@ -62,7 +62,7 @@ impl<'a, D: ControlledIncrementalDecode, S: DecodeRowSink> ControlledStepper<'a,
     }
 
     /// Proposed output layout and interpretation, if known.
-    pub fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    pub fn output_descriptor(&self) -> Option<ImageSpec> {
         self.decoder
             .as_ref()
             .and_then(IncrementalDecode::output_descriptor)

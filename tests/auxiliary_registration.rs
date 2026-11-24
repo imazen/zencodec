@@ -10,7 +10,7 @@ use zencodec::{
         SourcePrecision, ValueSlice, Values,
     },
 };
-use zenpixels::{ChannelType, Orientation, PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, Orientation, PixelBuf, PixelView, SampleType};
 
 struct Extra {
     bytes: [u8; 6],
@@ -22,7 +22,7 @@ impl AuxiliaryImageOwner for Extra {
         if index != 0 {
             return Ok(None);
         }
-        ValueSlice::new(&self.bytes, self.width, 2, 3, ChannelType::U8).map(|v| {
+        ValueSlice::new(&self.bytes, self.width, 2, 3, SampleType::U8).map(|v| {
             Some(v.with_grid(if self.aligned.load(Ordering::SeqCst) {
                 AuxiliaryGrid::ColorSamples
             } else {
@@ -36,8 +36,8 @@ struct Owner {
     separate: bool,
 }
 impl PackedImageOwner for Owner {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
-        Ok(PixelSlice::new(&[3; 18], 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap())
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
+        Ok(PixelView::new(&[3; 18], 2, 2, 9, ImageSpec::rgb8_srgb()).unwrap())
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
         self.extra.auxiliary(index)
@@ -104,10 +104,10 @@ fn matching_dimensions_and_source_reduction_never_infer_registration() {
         let image = ImageOutput::from_packed_owner(owner, vec![role()], interpretation()).unwrap();
         assert_eq!(grid(&image), AuxiliaryGrid::Unknown);
         let values =
-            Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, ChannelType::U8).unwrap();
+            Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8).unwrap();
         assert_eq!(values.grid(), AuxiliaryGrid::Unknown);
         assert_eq!(values.as_slice().grid(), AuxiliaryGrid::Unknown);
-        let pixels = PixelBuffer::from_vec(vec![3; 12], 2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, ImageSpec::rgb8_srgb()).unwrap();
         let image = ImageOutput::packed(pixels, vec![(role(), values)], interpretation()).unwrap();
         assert_eq!(grid(&image), AuxiliaryGrid::Unknown);
     }
@@ -119,10 +119,10 @@ fn known_registration_checks_shape_for_owned_and_native_planes_without_copying()
         let (owner, _) = owner(width, true, false);
         let address = owner.extra.bytes.as_ptr();
         let native = ImageOutput::from_packed_owner(owner, vec![role()], interpretation());
-        let values = Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, ChannelType::U8)
+        let values = Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8)
             .unwrap()
             .with_grid(AuxiliaryGrid::ColorSamples);
-        let pixels = PixelBuffer::from_vec(vec![3; 12], 2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, ImageSpec::rgb8_srgb()).unwrap();
         let owned = ImageOutput::packed(pixels, vec![(role(), values)], interpretation());
         if width == 1 {
             for result in [native, owned] {

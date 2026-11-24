@@ -15,7 +15,7 @@ use zencodec::decode::{
 };
 use zencodec::source::SourceError;
 use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelView};
 
 use crate::input::InputStore;
 
@@ -183,7 +183,7 @@ pub(crate) struct PendingRows {
     pub(crate) width: u32,
     pub(crate) rows: u32,
     pub(crate) stride: usize,
-    pub(crate) descriptor: PixelDescriptor,
+    pub(crate) descriptor: ImageSpec,
 }
 
 /// State shared between the decoder and the coroutine it polls. Only one
@@ -209,7 +209,7 @@ pub(crate) struct Shared {
     pub(crate) details: Option<zencodec::decode::DecodeDetails>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
     pub(crate) info_generation: u64,
-    pub(crate) descriptor: Option<PixelDescriptor>,
+    pub(crate) descriptor: Option<ImageSpec>,
     pub(crate) accepts_provisional: bool,
     pub(crate) cancelled: Option<StopReason>,
 }
@@ -342,7 +342,7 @@ impl CoroutineContext {
     pub fn write_rows<'a>(
         &'a mut self,
         meta: BatchMeta,
-        rows: &PixelSlice<'_>,
+        rows: &PixelView<'_>,
     ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
         let refusal = {
             let shared = self.shared.lock();
@@ -360,9 +360,9 @@ impl CoroutineContext {
         }
         let width = rows.width();
         let count = rows.rows();
-        let descriptor = rows.descriptor();
+        let descriptor = rows.spec().clone();
         let size = (width as usize)
-            .checked_mul(descriptor.bytes_per_pixel())
+            .checked_mul(descriptor.layout.bytes_per_pixel())
             .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
         let Some((stride, len)) = size else {
             return WriteRows {
@@ -459,9 +459,9 @@ impl CoroutineContext {
     }
 
     /// Set the negotiated output descriptor.
-    pub fn set_output_descriptor(&mut self, descriptor: PixelDescriptor) {
+    pub fn set_output_descriptor(&mut self, descriptor: ImageSpec) {
         let mut shared = self.shared.lock();
-        if shared.adopted.is_some() && shared.descriptor != Some(descriptor) {
+        if shared.adopted.is_some() && shared.descriptor.as_ref() != Some(&descriptor) {
             shared.control_failure = Some(ControlError::FinalInterpretationChanged);
         }
         shared.descriptor = Some(descriptor);
@@ -525,8 +525,8 @@ impl Future for Interpret<'_> {
             if shared.boundary.is_some() || shared.reply.is_some() {
                 return Poll::Ready(Err(ControlError::InvalidReply.into()));
             }
-            if let Some(adopted) = shared.adopted {
-                return Poll::Ready(if adopted == facts {
+            if let Some(adopted) = &shared.adopted {
+                return Poll::Ready(if adopted == &facts {
                     Ok(BoundaryAction::AdoptInterpretation)
                 } else {
                     Err(ControlError::FinalInterpretationChanged.into())

@@ -3,6 +3,8 @@ use std::sync::{
     Arc,
     atomic::{AtomicU8, Ordering},
 };
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     At,
     frame::MapError,
@@ -16,9 +18,7 @@ use zencodec::{
     },
     storage::{SharedStorage, StorageBudget},
 };
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
-use zenpixels::{ChannelType, ColorContext, Orientation, PixelDescriptor, PixelSlice};
+use zenpixels::{ColorSpace, ImageSpec, Orientation, PixelView, SampleType};
 
 #[derive(Debug)]
 struct NativeMapFailure;
@@ -35,21 +35,29 @@ struct Owner {
     mode: Arc<AtomicU8>,
 }
 impl PackedImageOwner for Owner {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         let mode = self.mode.load(Ordering::SeqCst);
-        let pixels = PixelSlice::new(
+        let pixels = PixelView::new(
             self.pixels.as_slice(),
             if mode == 1 { 1 } else { 2 },
             2,
             9,
-            PixelDescriptor::RGB8_SRGB,
+            if mode == 3 {
+                ImageSpec::new(
+                    zenpixels::SampleLayout::RGB8,
+                    ColorSpace::Icc {
+                        profile: Arc::from([1, 2, 3]),
+                        channels: 3,
+                        alpha: zenpixels::AlphaMode::None,
+                        intent: zenpixels::RenderingIntent::RelativeColorimetric,
+                    },
+                )
+            } else {
+                ImageSpec::rgb8_srgb()
+            },
         )
         .unwrap();
-        Ok(if mode == 3 {
-            pixels.with_color_context(Arc::new(ColorContext::from_icc(vec![1, 2, 3])))
-        } else {
-            pixels
-        })
+        Ok(pixels)
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
         if self.mode.load(Ordering::SeqCst) == 2 {
@@ -58,7 +66,7 @@ impl PackedImageOwner for Owner {
             )))));
         }
         match (&self.auxiliary, index) {
-            (Some(data), 0) => ValueSlice::new(data.as_slice(), 2, 2, 3, ChannelType::U8).map(Some),
+            (Some(data), 0) => ValueSlice::new(data.as_slice(), 2, 2, 3, SampleType::U8).map(Some),
             _ => Ok(None),
         }
     }
@@ -127,16 +135,16 @@ impl AuxiliaryImageOwner for SeparateAuxiliary {
         }
         match self.mode.load(Ordering::SeqCst) {
             1 => Ok(None),
-            2 => ValueSlice::new(self.values.as_slice(), 1, 2, 3, ChannelType::U8).map(Some),
+            2 => ValueSlice::new(self.values.as_slice(), 1, 2, 3, SampleType::U8).map(Some),
             3 => Err(At::wrap(OutputError::Mapping(MapError::Backend(Box::new(
                 At::wrap(NativeMapFailure).at_named("separate auxiliary mapping"),
             ))))),
-            _ => ValueSlice::new(self.values.as_slice(), 2, 2, 3, ChannelType::U8).map(Some),
+            _ => ValueSlice::new(self.values.as_slice(), 2, 2, 3, SampleType::U8).map(Some),
         }
     }
 }
 impl PackedImageOwner for Separable {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         self.packed.pixels()
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
@@ -388,14 +396,14 @@ fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     }
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(2, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(
-                            SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+                        zencodec::plane::PlaneEncoding::Code(
+                            SampleEncoding::new(SampleType::U8, 8, 0).unwrap(),
                         ),
                     )
                 })

@@ -35,7 +35,7 @@ impl EncodeJob for Job {
     fn extensions(&self) -> Option<&dyn Any> {
         Some(self.owned.as_ref())
     }
-    fn plan_encode(&self, _: &EncodeDeclaration<'_>) -> Result<EncodePlan, BoxedError> {
+    fn plan_encode(&self, _: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         self.owned.plans.fetch_add(1, Ordering::SeqCst);
         Ok(EncodePlan::rows(OutputTiming::AT_FINISH))
     }
@@ -53,7 +53,7 @@ impl Encoder for Started {
     fn reject(error: Self::Error) -> Self::Error {
         error
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         assert_eq!(self.0.plans.load(Ordering::SeqCst), 1);
         Err(UnsupportedOperation::RowLevelEncode)
     }
@@ -77,7 +77,7 @@ fn job() -> (Job, Arc<AtomicUsize>, Arc<AtomicUsize>) {
 fn configured_job_erasure_keeps_prepared_owner_without_startup_or_clone() {
     let (job, drops, starts) = job();
     let address = job.owned.as_ref() as *const Owned;
-    job.plan_encode(&EncodeDeclaration::new(1, 1, PixelDescriptor::RGB8_SRGB))
+    job.plan_encode(&EncodeDeclaration::new(1, 1, ImageSpec::rgb8_srgb()))
         .unwrap();
     let erased: Box<dyn DynEncodeJob + Send> = job.into_dyn_job();
     let retained = erased

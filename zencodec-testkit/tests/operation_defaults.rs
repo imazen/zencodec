@@ -10,7 +10,7 @@ use zencodec_testkit::{
     ReferenceEncoderConfig,
     reference::{RefEnc, RefEncodeJob, RefError},
 };
-use zenpixels::PixelDescriptor;
+use zenpixels::ImageSpec;
 
 #[derive(Clone)]
 struct Recorder(Arc<Mutex<Vec<EncodePolicy>>>);
@@ -24,8 +24,9 @@ impl EncoderConfig for Recorder {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        SUPPORTED
     }
     fn with_fidelity(self, _: Fidelity) -> Self {
         self

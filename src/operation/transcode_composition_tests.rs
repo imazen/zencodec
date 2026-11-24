@@ -15,7 +15,7 @@ fn boundary(state: InterpretationState) -> DecodeBoundary {
     DecodeBoundary::new(InterpretationFacts::new(
         1,
         1,
-        Some(PixelDescriptor::RGB8_SRGB),
+        Some(ImageSpec::rgb8_srgb()),
         state,
     ))
     .unwrap()
@@ -28,7 +28,7 @@ fn offer() -> TranscodeOffer {
             preference_index: 0,
             resolution: None,
         },
-        PixelDescriptor::RGB8_SRGB,
+        ImageSpec::rgb8_srgb(),
         MetadataTransfer::DiscardDescriptive,
     );
     o.retains_opaque_profile = Some(false);
@@ -48,7 +48,7 @@ fn requirements() -> PolicySet {
 #[test]
 fn combined_evidence_is_filtered_before_callback_and_builtin_selection() {
     let good = offer();
-    let mut offers = [good; 6];
+    let mut offers: [_; 6] = core::array::from_fn(|_| good.clone());
     offers[0].metadata = MetadataTransfer::PreserveReported;
     offers[1].output_schedule = None;
     offers[2].output_schedule.as_mut().unwrap().schedule = OutputSchedule::Live;
@@ -126,7 +126,7 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
     .unwrap();
     let final_boundary = boundary(InterpretationState::Final);
     resolve_transcode(
-        final_boundary,
+        final_boundary.clone(),
         &[offer()],
         &mut policy,
         PolicySet::new(),
@@ -137,7 +137,7 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
     // private sink installed. A separate native-sink question remains unproven.
     assert!(
         resolve_boundary(
-            final_boundary,
+            final_boundary.clone(),
             &mut policy,
             PolicySet::new(),
             Some(&NoPulse)
@@ -147,7 +147,7 @@ fn complete_route_does_not_authorize_bare_decode_or_unqualified_workspace() {
     let mut workspace = requirements().with_workspace_limit(u64::MAX);
     assert!(
         resolve_transcode(
-            final_boundary,
+            final_boundary.clone(),
             &[offer()],
             &mut workspace,
             PolicySet::new(),
@@ -167,7 +167,7 @@ fn finish_first_without_wait_evidence_stays_unknown() {
     assert!(
         resolve_transcode(
             boundary(InterpretationState::Final),
-            &[o],
+            &[o.clone()],
             &mut requirements(),
             PolicySet::new(),
             Some(&NoPulse)
@@ -179,7 +179,7 @@ fn finish_first_without_wait_evidence_stays_unknown() {
         .require_output_schedule(OutputSchedule::FinishFirst);
     resolve_transcode(
         boundary(InterpretationState::Final),
-        &[o],
+        &[o.clone()],
         &mut policy,
         PolicySet::new(),
         Some(&NoPulse),
@@ -215,7 +215,7 @@ fn missing_or_contradictory_publication_evidence_names_both_requirements() {
         );
         let error = resolve_transcode(
             boundary(InterpretationState::Final),
-            &[candidate],
+            &[candidate.clone()],
             &mut policy,
             PolicySet::new(),
             Some(&NoPulse),

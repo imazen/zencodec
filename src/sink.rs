@@ -21,7 +21,7 @@
 //!    and pixel format. The sink can pre-allocate and validate.
 //! 2. [`provide_next_buffer()`](DecodeRowSink::provide_next_buffer) — called
 //!    once per strip, in top-to-bottom order (`y` increases monotonically).
-//!    The codec writes into the returned [`PixelSliceMut`] via `row_mut()`.
+//!    The codec writes into the returned [`PixelViewMut`] via `row_mut()`.
 //! 3. [`finish()`](DecodeRowSink::finish) — called once after the last strip
 //!    has been fully written. The sink can flush or finalize.
 //!
@@ -30,7 +30,7 @@
 
 use alloc::boxed::Box;
 
-use zenpixels::{PixelDescriptor, PixelSliceMut};
+use zenpixels::{ImageSpec, PixelViewMut};
 
 /// Boxed error type for sink failures.
 pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
@@ -40,12 +40,12 @@ pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
 /// The codec calls [`begin`](DecodeRowSink::begin) once, then
 /// [`provide_next_buffer`](DecodeRowSink::provide_next_buffer) for each strip
 /// of rows. The codec writes decoded pixels directly into the returned
-/// [`PixelSliceMut`], then requests the next strip. After the last strip
+/// [`PixelViewMut`], then requests the next strip. After the last strip
 /// is written, the codec calls [`finish`](DecodeRowSink::finish).
 ///
 /// The sink controls the stride — it can return tightly-packed buffers
 /// (stride = width × bpp) or SIMD-aligned buffers (stride padded to 64 bytes).
-/// The codec respects whatever stride the `PixelSliceMut` carries.
+/// The codec respects whatever stride the `PixelViewMut` carries.
 ///
 /// # Failure
 ///
@@ -61,19 +61,19 @@ pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
 ///
 /// ```
 /// use zencodec::decode::DecodeRowSink;
-/// use zenpixels::{PixelSliceMut, PixelDescriptor};
+/// use zenpixels::{PixelViewMut, ImageSpec};
 ///
 /// struct CollectSink {
 ///     buf: Vec<u8>,
 /// }
 ///
 /// impl DecodeRowSink for CollectSink {
-///     fn provide_next_buffer(&mut self, _y: u32, height: u32, width: u32, descriptor: PixelDescriptor) -> Result<PixelSliceMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
-///         let bpp = descriptor.bytes_per_pixel();
+///     fn provide_next_buffer(&mut self, _y: u32, height: u32, width: u32, descriptor: ImageSpec) -> Result<PixelViewMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
+///         let bpp = descriptor.layout.bytes_per_pixel();
 ///         let stride = width as usize * bpp;
 ///         let needed = height as usize * stride;
 ///         self.buf.resize(needed, 0);
-///         Ok(PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+///         Ok(PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
 ///             .expect("buffer sized correctly"))
 ///     }
 /// }
@@ -92,7 +92,7 @@ pub trait DecodeRowSink {
         &mut self,
         _width: u32,
         _height: u32,
-        _descriptor: PixelDescriptor,
+        _descriptor: ImageSpec,
     ) -> Result<(), SinkError> {
         Ok(())
     }
@@ -115,7 +115,7 @@ pub trait DecodeRowSink {
     ///
     /// The codec passes the strip `width` (pixels), `height` (rows in this
     /// strip), and `descriptor` (pixel format). The sink returns a
-    /// [`PixelSliceMut`] with its chosen stride.
+    /// [`PixelViewMut`] with its chosen stride.
     /// Its width, row count and descriptor must match the request. Respect
     /// [`max_buffer_rows`](Self::max_buffer_rows) when dividing native batches.
     ///
@@ -131,8 +131,8 @@ pub trait DecodeRowSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError>;
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError>;
 
     /// Called once after the last strip has been fully written.
     ///
@@ -173,8 +173,8 @@ pub trait DecodeRowSink {
         meta: crate::traits::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        descriptor: ImageSpec,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
         let _ = (meta, height, width, descriptor);
         Err("this sink does not accept provisional rows".into())
     }
@@ -202,7 +202,7 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                _descriptor: PixelDescriptor,
+                _descriptor: ImageSpec,
             ) -> Result<(), SinkError> {
                 assert!(!self.began, "begin called twice");
                 self.began = true;
@@ -214,16 +214,16 @@ mod tests {
                 y: u32,
                 height: u32,
                 width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
                 assert!(self.began, "provide_next_buffer before begin");
                 self.strips.push((y, height));
-                let bpp = descriptor.bytes_per_pixel();
+                let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(
-                    PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                    PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                         .expect("valid buffer"),
                 )
             }
@@ -244,15 +244,15 @@ mod tests {
         };
 
         let width = 10u32;
-        let desc = PixelDescriptor::RGB8_SRGB;
-        let bpp = desc.bytes_per_pixel();
+        let desc = ImageSpec::rgb8_srgb();
+        let bpp = desc.layout.bytes_per_pixel();
 
-        sink.begin(width, 24, desc).unwrap();
+        sink.begin(width, 24, desc.clone()).unwrap();
 
         for strip in 0..3u32 {
             let y = strip * 8;
             let h = 8;
-            let mut ps = sink.provide_next_buffer(y, h, width, desc).unwrap();
+            let mut ps = sink.provide_next_buffer(y, h, width, desc.clone()).unwrap();
             assert_eq!(ps.stride(), 30);
             for row in 0..h {
                 let row_data = ps.row_mut(row);
@@ -283,23 +283,23 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                let bpp = descriptor.bytes_per_pixel();
+                descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(
-                    PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                    PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                         .expect("valid buffer"),
                 )
             }
         }
 
         fn use_sink(sink: &mut dyn DecodeRowSink) {
-            sink.begin(10, 8, PixelDescriptor::RGB8_SRGB).unwrap();
+            sink.begin(10, 8, ImageSpec::rgb8_srgb()).unwrap();
             let ps = sink
-                .provide_next_buffer(0, 8, 10, PixelDescriptor::RGB8_SRGB)
+                .provide_next_buffer(0, 8, 10, ImageSpec::rgb8_srgb())
                 .unwrap();
             assert_eq!(ps.stride(), 30);
             assert_eq!(ps.width(), 10);
@@ -324,15 +324,15 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
                 self.call_count += 1;
-                let bpp = descriptor.bytes_per_pixel();
+                let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(
-                    PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                    PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                         .expect("valid buffer"),
                 )
             }
@@ -343,17 +343,17 @@ mod tests {
             call_count: 0,
         };
 
-        let desc = PixelDescriptor::GRAY8_SRGB;
+        let desc = ImageSpec::gray8_srgb();
 
         // Multiple sequential borrows — each one ends before the next starts
         {
-            let mut ps = sink.provide_next_buffer(0, 4, 10, desc).unwrap();
+            let mut ps = sink.provide_next_buffer(0, 4, 10, desc.clone()).unwrap();
             for row in 0..4 {
                 ps.row_mut(row).fill(1);
             }
         }
         {
-            let mut ps = sink.provide_next_buffer(4, 4, 10, desc).unwrap();
+            let mut ps = sink.provide_next_buffer(4, 4, 10, desc.clone()).unwrap();
             for row in 0..4 {
                 ps.row_mut(row).fill(2);
             }
@@ -382,9 +382,9 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                let bpp = descriptor.bytes_per_pixel();
+                descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                let bpp = descriptor.layout.bytes_per_pixel();
                 let row_bytes = width as usize * bpp;
                 // Round stride up to next multiple of 64
                 let stride = (row_bytes + 63) & !63;
@@ -395,7 +395,7 @@ mod tests {
                 };
                 self.buf.resize(needed, 0);
                 Ok(
-                    PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                    PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                         .expect("valid buffer"),
                 )
             }
@@ -405,12 +405,12 @@ mod tests {
 
         // RGBA8: width=10, bpp=4 → row_bytes=40, stride=64
         let ps = sink
-            .provide_next_buffer(0, 4, 10, PixelDescriptor::RGBA8_SRGB)
+            .provide_next_buffer(0, 4, 10, ImageSpec::rgba8_srgb())
             .unwrap();
         assert_eq!(ps.stride(), 64);
         assert_eq!(ps.width(), 10);
         assert_eq!(ps.rows(), 4);
-        assert_eq!(ps.descriptor(), PixelDescriptor::RGBA8_SRGB);
+        assert_eq!(ps.spec().clone(), ImageSpec::rgba8_srgb());
     }
 
     /// Verify sink error propagation from provide_next_buffer.
@@ -423,14 +423,14 @@ mod tests {
                 _y: u32,
                 _height: u32,
                 _width: u32,
-                _descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                _descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
                 Err("sink cancelled".into())
             }
         }
 
         let mut sink = FailSink;
-        let result = sink.provide_next_buffer(0, 8, 10, PixelDescriptor::RGB8_SRGB);
+        let result = sink.provide_next_buffer(0, 8, 10, ImageSpec::rgb8_srgb());
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "sink cancelled");
     }
@@ -446,9 +446,9 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                descriptor: PixelDescriptor,
+                descriptor: ImageSpec,
             ) -> Result<(), SinkError> {
-                if descriptor != PixelDescriptor::RGBA8_SRGB {
+                if descriptor != ImageSpec::rgba8_srgb() {
                     return Err(format!("sink requires RGBA8, got {descriptor:?}").into());
                 }
                 Ok(())
@@ -459,14 +459,14 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                let bpp = descriptor.bytes_per_pixel();
+                descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(
-                    PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+                    PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
                         .expect("valid buffer"),
                 )
             }
@@ -475,13 +475,13 @@ mod tests {
         let mut sink = Rgba8OnlySink { buf: Vec::new() };
 
         // RGB8 → rejected at begin()
-        let result = sink.begin(10, 8, PixelDescriptor::RGB8_SRGB);
+        let result = sink.begin(10, 8, ImageSpec::rgb8_srgb());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("RGBA8"));
 
         // RGBA8 → accepted
         let mut sink2 = Rgba8OnlySink { buf: Vec::new() };
-        sink2.begin(10, 8, PixelDescriptor::RGBA8_SRGB).unwrap();
+        sink2.begin(10, 8, ImageSpec::rgba8_srgb()).unwrap();
     }
 
     /// Verify finish() is called and can report errors.
@@ -494,8 +494,8 @@ mod tests {
                 _y: u32,
                 _height: u32,
                 _width: u32,
-                _descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                _descriptor: ImageSpec,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
                 unreachable!("not called in this test")
             }
 

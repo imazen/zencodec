@@ -2,29 +2,25 @@
 
 use alloc::sync::Arc;
 use core::fmt;
-use zenpixels::{
-    ColorContext, PixelDescriptor, PixelSlice,
-    sample::{ExactDepth, ExactDepthError},
-};
+use zenpixels::{ColorSpace, ImageSpec};
 
+use crate::sample::{ExactDepth, ExactDepthError};
 use crate::{Cicp, encode::OutputTiming, output_patch::OutputAccess};
 
 /// Input interpretation and destination access, declared before native startup.
 ///
-/// `color` describes the samples actually supplied. Descriptive job metadata
+/// The descriptor describes the samples actually supplied. Descriptive job metadata
 /// must not override it. A codec must refuse contradictions it cannot resolve
 /// without changing the requested interpretation or encoding configuration.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct EncodeDeclaration<'a> {
+pub struct EncodeDeclaration {
     /// Full image width.
     pub width: u32,
     /// Full image height.
     pub height: u32,
     /// Descriptor of the samples supplied to the encoder.
-    pub descriptor: PixelDescriptor,
-    /// Authoritative current color context, when supplied.
-    pub color: Option<&'a ColorContext>,
+    pub descriptor: ImageSpec,
     /// Actual destination access; it does not authorize a quality change.
     pub access: OutputAccess,
     /// Optional assertion about the current canonical sample grids.
@@ -35,35 +31,33 @@ pub struct EncodeDeclaration<'a> {
     pub exact_depth: Option<ExactDepth>,
 }
 
-impl fmt::Debug for EncodeDeclaration<'_> {
+impl fmt::Debug for EncodeDeclaration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EncodeDeclaration")
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("descriptor", &self.descriptor)
-            .field("has_color_context", &self.color.is_some())
+            .field("layout", &self.descriptor.layout)
             .field("access", &self.access)
             .field("exact_depth", &self.exact_depth)
             .finish()
     }
 }
 
-impl<'a> EncodeDeclaration<'a> {
+impl EncodeDeclaration {
     /// Declare a forward destination and descriptor-only interpretation.
-    pub const fn new(width: u32, height: u32, descriptor: PixelDescriptor) -> Self {
+    pub const fn new(width: u32, height: u32, descriptor: ImageSpec) -> Self {
         Self {
             width,
             height,
             descriptor,
-            color: None,
             access: OutputAccess::Forward,
             exact_depth: None,
         }
     }
 
     /// Bind the current pixel interpretation before any output header is made.
-    pub const fn with_color(mut self, color: &'a ColorContext) -> Self {
-        self.color = Some(color);
+    pub fn with_color(mut self, color: ColorSpace) -> Self {
+        self.descriptor.color = color;
         self
     }
 
@@ -86,11 +80,7 @@ impl<'a> EncodeDeclaration<'a> {
     /// source samples. Success does not establish that actual samples comply.
     pub fn validate_exact_depth(&self) -> Result<(), ExactDepthError> {
         if let Some(exact) = self.exact_depth {
-            // The paired verifier owns descriptor/layout rules. An empty view
-            // checks them without allocating a raster or adding a source pass.
-            let empty = PixelSlice::new(&[], 0, 0, 0, self.descriptor)
-                .map_err(|_| ExactDepthError::DescriptorMismatch)?;
-            exact.holds_for(&empty)?;
+            exact.validate_spec(&self.descriptor)?;
         }
         Ok(())
     }
@@ -308,7 +298,7 @@ impl EncodePlan {
 
     /// Check geometry, output lag and patch access before native startup.
     /// Codec-specific validation remains the planning implementation's duty.
-    pub fn validate(&self, declaration: &EncodeDeclaration<'_>) -> Result<(), EncodePlanError> {
+    pub fn validate(&self, declaration: &EncodeDeclaration) -> Result<(), EncodePlanError> {
         if let Some(orientation) = self.orientation {
             orientation.validate()?;
         }
@@ -389,9 +379,13 @@ mod tests {
 
     #[test]
     fn default_diagnostics_do_not_dump_opaque_profiles() {
-        let context = ColorContext::from_icc(alloc::vec![88; 2048]);
-        let declaration =
-            EncodeDeclaration::new(3, 4, PixelDescriptor::RGB8_SRGB).with_color(&context);
+        let context = ColorSpace::Icc {
+            profile: Arc::from([88; 2048]),
+            channels: 3,
+            alpha: zenpixels::AlphaMode::None,
+            intent: zenpixels::RenderingIntent::RelativeColorimetric,
+        };
+        let declaration = EncodeDeclaration::new(3, 4, ImageSpec::rgb8_srgb()).with_color(context);
         let carriers = ColorCarriers::new(Some(Arc::from([88; 2048])), None);
         let rendered = alloc::format!("{declaration:?} {carriers:?}");
         assert!(rendered.len() < 1024);
@@ -413,7 +407,7 @@ mod tests {
 
     #[test]
     fn declaration_refuses_impossible_lag_and_patch_access() {
-        let declaration = EncodeDeclaration::new(7, 9, PixelDescriptor::RGB8_SRGB);
+        let declaration = EncodeDeclaration::new(7, 9, ImageSpec::rgb8_srgb());
         let plan = EncodePlan::rows(OutputTiming::streaming(9));
         assert_eq!(plan.validate(&declaration), Err(EncodePlanError::OutputLag));
         let plan = EncodePlan::rows(OutputTiming::AT_FINISH.with_patches());
@@ -422,7 +416,7 @@ mod tests {
             Err(EncodePlanError::DestinationAccess)
         );
         assert!(
-            plan.validate(&declaration.with_access(OutputAccess::SeekBack))
+            plan.validate(&declaration.clone().with_access(OutputAccess::SeekBack))
                 .is_ok()
         );
         let mut raster = EncodePlan::whole_raster();
@@ -513,7 +507,7 @@ mod orientation_tests {
 
     #[test]
     fn spatial_evidence_is_unknown_by_default_and_stable_through_startup() {
-        let declaration = EncodeDeclaration::new(3, 2, PixelDescriptor::RGB8_SRGB);
+        let declaration = EncodeDeclaration::new(3, 2, ImageSpec::rgb8_srgb());
         let empty = EncodePlan::whole_raster();
         assert_eq!(empty.orientation, None);
         for input in ALL {

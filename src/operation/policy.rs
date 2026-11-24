@@ -8,6 +8,7 @@ use super::{
 };
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::frame::{FrameInterpretation, FrameTiming};
+use crate::sample::ChromaSiting;
 use crate::{At, ImageFormat, encode::Fidelity};
 use alloc::boxed::Box;
 use core::{
@@ -17,8 +18,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use enough::StopReason;
-use zenpixels::PixelDescriptor;
-use zenpixels::sample::ChromaSiting;
+use zenpixels::ImageSpec;
 
 /// A token for one offer at one decision. Tokens cannot authorize a different
 /// operation or a later question, even if its alternatives look identical.
@@ -134,7 +134,7 @@ pub struct EncodeOffer {
 /// The qualified effect chosen at a policy boundary. Input facts remain in
 /// `DecisionContext`, including on refusal. No input bytes, paths, metadata
 /// payloads or application error text are copied into either diagnostic.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum Selection {
     /// Joint input replay and output schedule for the retained configured job.
@@ -162,7 +162,7 @@ pub enum Selection {
 
 /// The facts that prompted a question, retained even when no route was selected.
 /// This is diagnostic context, not authority to resume or execute anything.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
     /// Bounded declaration and plan facts, without ICC payloads or input owners.
@@ -195,7 +195,7 @@ pub struct BoundaryOffer {
 }
 
 /// Facts about the actual pixels awaiting encoding.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct EncodeFacts {
     /// Image width.
@@ -203,20 +203,20 @@ pub struct EncodeFacts {
     /// Image height.
     pub height: u32,
     /// Current sample interpretation and layout; no implicit conversion is offered.
-    pub descriptor: PixelDescriptor,
+    pub descriptor: ImageSpec,
 }
 
 /// One situational decision. Each variant carries only its own typed offers.
 ///
 /// Domains are added with their executing adapters. Selecting an alternative
 /// never authorizes the adapter to change its prepared effects afterward.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
     /// Jointly admit input replay and output for one immutable configured job.
     EncodeRoute {
         /// Actual retained declaration, including current color and access.
-        declaration: &'a crate::encode::EncodeDeclaration<'a>,
+        declaration: &'a crate::encode::EncodeDeclaration,
         /// Borrowed effective plan; its owned ICC payload is never copied into reports.
         plan: &'a crate::encode::EncodePlan,
         /// Bounded job and plan summary for diagnostics.
@@ -559,7 +559,7 @@ impl PolicySet {
                         self.unmet(Question::EncodeRoute {
                             declaration,
                             plan,
-                            facts,
+                            facts: facts.clone(),
                             choices: Choices {
                                 ticket: choices.ticket,
                                 entries: choices.entries,
@@ -764,7 +764,7 @@ pub enum DecisionCode {
 
 /// Numeric/enum diagnostic record, deliberately excluding payloads, paths,
 /// profile names and callback error text. Native errors remain in `source()`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct DecisionRecord {
     /// Globally unique question identity (zero only if identity allocation failed).
@@ -851,7 +851,7 @@ enum Cause {
 impl PolicyFailure {
     /// The numeric decision record that explains where this failure occurred.
     pub fn record(&self) -> DecisionRecord {
-        self.0.record
+        self.0.record.clone()
     }
     /// Cancellation reason, when the policy boundary was stopped.
     pub fn stop_reason(&self) -> Option<StopReason> {
@@ -923,8 +923,11 @@ pub(super) fn choose_encode<R: OperationPolicy + ?Sized>(
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     choose(
         offers,
-        DecisionContext::Encode(facts),
-        |choices| Question::Encode { facts, choices },
+        DecisionContext::Encode(facts.clone()),
+        |choices| Question::Encode {
+            facts: facts.clone(),
+            choices,
+        },
         Selection::Encode,
         resolver,
         preset,
@@ -957,8 +960,11 @@ pub fn resolve_boundary<R: OperationPolicy + ?Sized>(
     };
     let (index, record) = choose(
         offers,
-        DecisionContext::Boundary(facts),
-        |choices| Question::Boundary { facts, choices },
+        DecisionContext::Boundary(facts.clone()),
+        |choices| Question::Boundary {
+            facts: facts.clone(),
+            choices,
+        },
         |offer| Selection::Boundary(offer.action),
         resolver,
         preset,
@@ -967,7 +973,41 @@ pub fn resolve_boundary<R: OperationPolicy + ?Sized>(
     Ok((offers[index].action, record))
 }
 
-pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
+fn redact_context(mut context: DecisionContext) -> DecisionContext {
+    use crate::helpers::redacted_spec;
+
+    match &mut context {
+        DecisionContext::EncodeRoute(facts) => {
+            facts.pixels.descriptor = redacted_spec(&facts.pixels.descriptor);
+        }
+        DecisionContext::Encode(facts) => {
+            facts.descriptor = redacted_spec(&facts.descriptor);
+        }
+        DecisionContext::Boundary(facts) | DecisionContext::Transcode(facts) => {
+            facts.descriptor = facts.descriptor.as_ref().map(redacted_spec);
+        }
+        DecisionContext::Image(facts) | DecisionContext::ImageConversion(facts) => {
+            facts.packed = facts.packed.as_ref().map(redacted_spec);
+        }
+        _ => {}
+    }
+    context
+}
+
+fn redact_selection(mut selection: Selection) -> Selection {
+    match &mut selection {
+        Selection::Transcode(offer) => {
+            offer.output = crate::helpers::redacted_spec(&offer.output);
+        }
+        Selection::ImageConversion(offer) => {
+            offer.output = crate::helpers::redacted_spec(&offer.output);
+        }
+        _ => {}
+    }
+    selection
+}
+
+pub(super) fn choose<'a, T: Clone, R: OperationPolicy + ?Sized>(
     offers: &'a [T],
     context: DecisionContext,
     question: impl Fn(Choices<'a, T>) -> Question<'a>,
@@ -979,7 +1019,7 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     let bound = resolver.requirements();
     let mut record = DecisionRecord {
         question: 0,
-        context,
+        context: redact_context(context),
         offered: offers.len().min(255) as u8,
         admitted: 0,
         unmet_requirements: UnmetRequirements::default(),
@@ -990,8 +1030,10 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     if offers.len() > MAX_OFFERS {
         return Err(At::wrap(PolicyFailure::new(record, Cause::Framework)).at());
     }
-    record.question = ticket(&NEXT_QUESTION)
-        .ok_or_else(|| At::wrap(PolicyFailure::new(record, Cause::Framework)).at())?;
+    let Some(id) = ticket(&NEXT_QUESTION) else {
+        return Err(At::wrap(PolicyFailure::new(record, Cause::Framework)).at());
+    };
+    record.question = id;
     if let Err(reason) = pulse.check() {
         record.code = DecisionCode::Stopped;
         return Err(At::wrap(PolicyFailure::new(record, Cause::Stopped(reason))).at());
@@ -1014,7 +1056,7 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     }
     // Joint encode routes also enforce structural compatibility with an empty
     // policy. Preserve the existing behavior for all other question domains.
-    let has_requirements = matches!(context, DecisionContext::EncodeRoute(_))
+    let has_requirements = matches!(&record.context, DecisionContext::EncodeRoute(_))
         || preset.has_requirements()
         || bound.is_some_and(PolicySet::has_requirements);
     let mut admitted = if has_requirements { 0 } else { all };
@@ -1070,11 +1112,16 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     let question = question(choices);
     // The resolver acquires no resource-budget locks. Prepared jobs remain
     // owned by the caller of this function while application code runs.
-    let mut decision = resolver.decide(question).map_err(|error| {
-        record.code = DecisionCode::CallbackFailed;
-        At::wrap(PolicyFailure::new(record, Cause::Callback(Box::new(error))))
-            .at_named("application policy callback")
-    })?;
+    let mut decision = match resolver.decide(question.clone()) {
+        Ok(decision) => decision,
+        Err(error) => {
+            record.code = DecisionCode::CallbackFailed;
+            return Err(
+                At::wrap(PolicyFailure::new(record, Cause::Callback(Box::new(error))))
+                    .at_named("application policy callback"),
+            );
+        }
+    };
     if let Err(reason) = pulse.check() {
         record.code = DecisionCode::Stopped;
         return Err(At::wrap(PolicyFailure::new(record, Cause::Stopped(reason))).at());
@@ -1089,7 +1136,7 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     match decision {
         Decision::Choose(id) => match choices.selected(id) {
             Some(index) => {
-                record.selected = Some(selection(offers[index]));
+                record.selected = Some(redact_selection(selection(offers[index].clone())));
                 record.code = DecisionCode::Selected;
                 Ok((index, record))
             }
@@ -1118,7 +1165,7 @@ mod tests {
         .unwrap();
         let mut called = false;
         let error = resolve_boundary(
-            unavailable,
+            unavailable.clone(),
             &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
                 let Question::Boundary { choices, .. } = question else {
                     panic!("wrong domain")
@@ -1137,22 +1184,22 @@ mod tests {
         let DecisionContext::Boundary(facts) = error.error().record().context else {
             panic!("refusal lost its domain");
         };
-        assert_eq!(facts, unavailable.facts());
+        assert_eq!(&facts, unavailable.facts());
         assert_eq!(
             facts.unavailable,
             Some(crate::decode::InterpretationUnavailable::ForbiddenColorMetadata)
         );
         let mut misleading = facts;
         misleading.state = InterpretationState::Final;
-        misleading.descriptor = Some(PixelDescriptor::RGB8_SRGB);
-        assert!(!BoundaryAction::AdoptInterpretation.permits(misleading));
+        misleading.descriptor = Some(ImageSpec::rgb8_srgb());
+        assert!(!BoundaryAction::AdoptInterpretation.permits(&misleading));
 
         let mut token = None;
         choose_encode(
             EncodeFacts {
                 width: 2,
                 height: 3,
-                descriptor: PixelDescriptor::RGB8_SRGB,
+                descriptor: ImageSpec::rgb8_srgb(),
             },
             &[EncodeOffer {
                 format: ImageFormat::Jpeg,
@@ -1174,7 +1221,7 @@ mod tests {
         let final_facts = DecodeBoundary::new(InterpretationFacts::new(
             2,
             3,
-            Some(PixelDescriptor::RGB8_SRGB),
+            Some(ImageSpec::rgb8_srgb()),
             InterpretationState::Final,
         ))
         .unwrap();
@@ -1206,7 +1253,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: 2,
                     height: 3,
-                    descriptor: PixelDescriptor::RGB8_SRGB,
+                    descriptor: ImageSpec::rgb8_srgb(),
                 }),
                 offered: 1,
                 admitted: 1,
@@ -1241,7 +1288,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: question as u32,
                     height: 3,
-                    descriptor: PixelDescriptor::RGB8_SRGB,
+                    descriptor: ImageSpec::rgb8_srgb(),
                 }),
                 offered: 1,
                 admitted: 1,
@@ -1250,11 +1297,11 @@ mod tests {
                 used_preset: question % 2 == 0,
                 code: DecisionCode::Declined,
             };
-            expected.push_back(record);
+            expected.push_back(record.clone());
             if expected.len() > 16 {
                 expected.pop_front();
             }
-            report.record(record);
+            report.record(record.clone());
             // Debug includes every retained field and must keep chronological order.
             assert_eq!(
                 alloc::format!("{:?}", report.decisions().collect::<Vec<_>>()),
@@ -1284,7 +1331,7 @@ mod tests {
             previous_questions = actual;
         }
         report.dropped = u64::MAX;
-        report.record(*expected.back().unwrap());
+        report.record(expected.back().unwrap().clone());
         assert_eq!(report.dropped_decisions(), u64::MAX);
         assert_eq!(report.decisions().count(), 16);
     }

@@ -5,8 +5,8 @@
 //! stays here because accounted allocations use `zencodec-io`.
 
 use alloc::{boxed::Box, vec::Vec};
-use zenpixels::plane::{AnyPlane, Plane, PlaneBuf, PlaneEncoding};
-use zenpixels::sample::SampleEncoding;
+use zencodec::plane::{AnyPlane, Plane, PlaneBuf, PlaneEncoding};
+use zencodec::sample::SampleEncoding;
 
 pub use zencodec::frame::{
     ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
@@ -14,7 +14,7 @@ pub use zencodec::frame::{
 };
 
 /// One owned plane in its native words. Plane geometry (width, height,
-/// stride in samples) comes from [`zenpixels::plane::Plane`].
+/// stride in samples) comes from [`zencodec::plane::Plane`].
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum OwnedPlane {

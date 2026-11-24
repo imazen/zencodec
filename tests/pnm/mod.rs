@@ -17,7 +17,7 @@ use zencodec::{
 use enough::{Stop, StopReason};
 use whereat::{At, ErrorAtExt};
 use zencodec::decode::{DecodeOutput, OutputInfo};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ImageSpec, PixelBuf, PixelView};
 
 // =========================================================================
 // Error
@@ -82,8 +82,9 @@ impl EncoderConfig for PnmEncoderConfig {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::GRAY8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
+        SUPPORTED
     }
 
     fn capabilities() -> &'static EncodeCapabilities {
@@ -138,15 +139,15 @@ impl Encoder for PnmEnc {
         PnmError::from(op).start_at()
     }
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<PnmError>> {
-        let desc = pixels.descriptor();
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, At<PnmError>> {
+        let desc = pixels.spec().clone();
         let w = pixels.width();
         let h = pixels.rows();
 
-        let is_rgb = desc.layout() == zenpixels::ChannelLayout::Rgb
-            && desc.channel_type() == zenpixels::ChannelType::U8;
-        let is_gray = desc.layout() == zenpixels::ChannelLayout::Gray
-            && desc.channel_type() == zenpixels::ChannelType::U8;
+        let is_rgb = desc.layout.order == zenpixels::ChannelOrder::Rgb
+            && desc.layout.sample == zenpixels::SampleType::U8;
+        let is_gray = desc.layout.order == zenpixels::ChannelOrder::Gray
+            && desc.layout.sample == zenpixels::SampleType::U8;
 
         if !is_rgb && !is_gray {
             return Err(PnmError::InvalidData(format!(
@@ -217,8 +218,9 @@ impl DecoderConfig for PnmDecoderConfig {
         &[ImageFormat::Pnm]
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::GRAY8_SRGB]
+    fn supported_descriptors() -> &'static [ImageSpec] {
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
+        SUPPORTED
     }
 
     fn capabilities() -> &'static DecodeCapabilities {
@@ -258,9 +260,9 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, At<PnmError>> {
         let (w, h, is_gray) = parse_pnm_header(data).map_err(|e| e.start_at())?;
         let desc = if is_gray {
-            PixelDescriptor::GRAY8_SRGB
+            ImageSpec::gray8_srgb()
         } else {
-            PixelDescriptor::RGB8_SRGB
+            ImageSpec::rgb8_srgb()
         };
         Ok(OutputInfo::full_decode(w, h, desc))
     }
@@ -268,7 +270,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<PnmDec<'a>, At<PnmError>> {
         let (w, h, _) = parse_pnm_header(&data).map_err(|e| e.start_at())?;
         self.limits
@@ -281,7 +283,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn zencodec::decode::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[ImageSpec],
     ) -> Result<OutputInfo, At<PnmError>> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, |e| {
             PnmError::InvalidData(e.to_string()).start_at()
@@ -291,7 +293,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn streaming_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
         Err(PnmError::from(UnsupportedOperation::RowLevelDecode).start_at())
     }
@@ -299,7 +301,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn animation_frame_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[ImageSpec],
     ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
         Err(PnmError::from(UnsupportedOperation::AnimationDecode).start_at())
     }
@@ -318,8 +320,8 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = PixelDescriptor::GRAY8_SRGB;
-            let buf = PixelBuffer::from_vec(pixel_data[..expected].to_vec(), w, h, desc)
+            let desc = ImageSpec::gray8_srgb();
+            let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
             Ok(DecodeOutput::new(buf, info))
@@ -328,8 +330,8 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = PixelDescriptor::RGB8_SRGB;
-            let buf = PixelBuffer::from_vec(pixel_data[..expected].to_vec(), w, h, desc)
+            let desc = ImageSpec::rgb8_srgb();
+            let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
             Ok(DecodeOutput::new(buf, info))

@@ -5,7 +5,7 @@
 //! sessions and accounted software allocations stay outside this crate.
 
 pub use crate::frame_storage::{Frame, MapError, MappedPlanes, Picture, PlaneError, Presentation};
-use zenpixels::{
+use crate::{
     plane::{PlanarLayout, PlaneEncoding},
     sample::SampleEncoding,
 };
@@ -13,7 +13,7 @@ use zenpixels::{
 use crate::time::Timestamp;
 use zenpixels::Cicp;
 
-pub use zenpixels::plane::{AnyPlane, PlaneRef, PlaneRole};
+pub use crate::plane::{AnyPlane, PlaneRef, PlaneRole};
 
 /// A rectangle in coded coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

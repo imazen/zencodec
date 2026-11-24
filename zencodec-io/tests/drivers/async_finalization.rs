@@ -30,21 +30,21 @@ impl zencodec::encode::Encoder for FinalizationProbe {
     fn reject(_: zencodec::UnsupportedOperation) -> EncErr {
         EncErr
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
+    fn encode(self, _: PixelView<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
         Err(EncErr)
     }
     fn begin(
         &mut self,
         _: u32,
         h: u32,
-        _: PixelDescriptor,
+        _: ImageSpec,
     ) -> Result<zencodec::encode::OutputTiming, EncErr> {
         self.remaining = h;
         Ok(zencodec::encode::OutputTiming::streaming(
             h.saturating_sub(1),
         ))
     }
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), EncErr> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
         self.remaining -= rows.rows();
         if self.remaining == 0 {
             self.pending.extend_from_slice(b"prefix");

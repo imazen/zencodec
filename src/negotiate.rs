@@ -1,10 +1,12 @@
 //! Pixel format negotiation.
 //!
-//! Provides the shared matching logic for the `preferred: &[PixelDescriptor]`
+//! Provides the shared matching logic for the `preferred: &[ImageSpec]`
 //! protocol used by [`DecodeJob::decoder`](crate::DecodeJob::decoder) and
 //! related methods.
 
-use zenpixels::{PixelDescriptor, PixelFormat};
+#[cfg(test)]
+use crate::helpers::codec_spec;
+use zenpixels::{ImageSpec, SampleLayout};
 
 /// Select the best output pixel format from available options.
 ///
@@ -25,9 +27,9 @@ use zenpixels::{PixelDescriptor, PixelFormat};
 /// entry, so the descriptor accurately describes what the decoder produces).
 ///
 /// If no preferred descriptor matches any available format, returns
-/// `Some(available[0])` — the decoder's default for this image.
+/// `Some(available[0].clone())` — the decoder's default for this image.
 ///
-/// If `preferred` is empty, returns `Some(available[0])` immediately.
+/// If `preferred` is empty, returns `Some(available[0].clone())` immediately.
 ///
 /// Returns `None` if `available` is empty.
 ///
@@ -35,21 +37,21 @@ use zenpixels::{PixelDescriptor, PixelFormat};
 ///
 /// ```
 /// use zencodec::decode::negotiate_pixel_format;
-/// use zenpixels::PixelDescriptor;
+/// use zenpixels::ImageSpec;
 ///
 /// // Caller wants RGBA8, falling back to RGB8
-/// let preferred = &[PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB8_SRGB];
+/// let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
 ///
 /// // This image is a JPEG — decoder can only produce RGB8
-/// let available = &[PixelDescriptor::RGB8_SRGB];
+/// let available = &[ImageSpec::rgb8_srgb()];
 ///
 /// let picked = negotiate_pixel_format(preferred, available).unwrap();
-/// assert_eq!(picked, PixelDescriptor::RGB8_SRGB);
+/// assert_eq!(picked, ImageSpec::rgb8_srgb());
 /// ```
 pub fn negotiate_pixel_format(
-    preferred: &[PixelDescriptor],
-    available: &[PixelDescriptor],
-) -> Option<PixelDescriptor> {
+    preferred: &[ImageSpec],
+    available: &[ImageSpec],
+) -> Option<ImageSpec> {
     if available.is_empty() {
         return None;
     }
@@ -58,18 +60,18 @@ pub fn negotiate_pixel_format(
         // Tier 1: exact match
         for avail in available {
             if *avail == *pref {
-                return Some(*avail);
+                return Some(avail.clone());
             }
         }
         // Tier 2: same physical pixel format, different color metadata
         for avail in available {
-            if avail.pixel_format() == pref.pixel_format() {
-                return Some(*avail);
+            if avail.layout == pref.layout {
+                return Some(avail.clone());
             }
         }
     }
 
-    Some(available[0])
+    Some(available[0].clone())
 }
 
 /// Select the best encode format for given pixel data.
@@ -84,27 +86,24 @@ pub fn negotiate_pixel_format(
 ///
 /// ```
 /// use zencodec::encode::best_encode_format;
-/// use zenpixels::PixelDescriptor;
+/// use zenpixels::ImageSpec;
 ///
-/// let source = PixelDescriptor::RGB8_SRGB;
-/// let supported = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB];
+/// let source = ImageSpec::rgb8_srgb();
+/// let supported = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
 ///
-/// assert_eq!(best_encode_format(source, supported), Some(PixelDescriptor::RGB8_SRGB));
+/// assert_eq!(best_encode_format(source, supported), Some(ImageSpec::rgb8_srgb()));
 /// ```
-pub fn best_encode_format(
-    source: PixelDescriptor,
-    supported: &[PixelDescriptor],
-) -> Option<PixelDescriptor> {
+pub fn best_encode_format(source: ImageSpec, supported: &[ImageSpec]) -> Option<ImageSpec> {
     // Exact match first
     for s in supported {
         if *s == source {
-            return Some(*s);
+            return Some(s.clone());
         }
     }
     // Same physical format, different metadata
     for s in supported {
-        if s.pixel_format() == source.pixel_format() {
-            return Some(*s);
+        if s.layout == source.layout {
+            return Some(s.clone());
         }
     }
     None
@@ -116,8 +115,8 @@ pub fn best_encode_format(
 /// This is a looser check than [`negotiate_pixel_format`] — it returns `true`
 /// if the bytes could be reinterpreted as the target format (same channel type
 /// and channel count), regardless of color metadata differences.
-pub fn is_format_available(target: PixelFormat, available: &[PixelDescriptor]) -> bool {
-    available.iter().any(|a| a.pixel_format() == target)
+pub fn is_format_available(target: SampleLayout, available: &[ImageSpec]) -> bool {
+    available.iter().any(|a| a.layout == target)
 }
 
 #[cfg(test)]
@@ -126,115 +125,109 @@ mod tests {
 
     #[test]
     fn exact_match_wins() {
-        let preferred = &[PixelDescriptor::RGBA8_SRGB];
-        let available = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB];
+        let preferred = &[ImageSpec::rgba8_srgb()];
+        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(PixelDescriptor::RGBA8_SRGB)
+            Some(ImageSpec::rgba8_srgb())
         );
     }
 
     #[test]
     fn format_match_ignores_transfer() {
         // Caller asks for sRGB, decoder produces unknown-transfer RGB8
-        let preferred = &[PixelDescriptor::RGB8_SRGB];
-        let available = &[PixelDescriptor::RGB8]; // Unknown transfer
+        let preferred = &[ImageSpec::rgb8_srgb()];
+        let available = &[codec_spec(SampleLayout::RGB8)]; // Unknown transfer
         let picked = negotiate_pixel_format(preferred, available).unwrap();
-        assert_eq!(picked.pixel_format(), PixelDescriptor::RGB8.pixel_format());
-        assert_eq!(picked, PixelDescriptor::RGB8); // returns the available entry
+        assert_eq!(picked.layout, codec_spec(SampleLayout::RGB8).layout);
+        assert_eq!(picked, codec_spec(SampleLayout::RGB8)); // returns the available entry
     }
 
     #[test]
     fn preference_order_respected() {
         // Caller prefers RGBA8, but only RGB8 is available — skips to second preference
-        let preferred = &[PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB8_SRGB];
-        let available = &[PixelDescriptor::RGB8_SRGB];
+        let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
+        let available = &[ImageSpec::rgb8_srgb()];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(PixelDescriptor::RGB8_SRGB)
+            Some(ImageSpec::rgb8_srgb())
         );
     }
 
     #[test]
     fn fallback_to_first_available() {
         // No preference matches — get the decoder's default
-        let preferred = &[PixelDescriptor::GRAY8_SRGB];
-        let available = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB];
+        let preferred = &[ImageSpec::gray8_srgb()];
+        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(PixelDescriptor::RGB8_SRGB)
+            Some(ImageSpec::rgb8_srgb())
         );
     }
 
     #[test]
     fn empty_preferred_uses_default() {
-        let available = &[PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB8_SRGB];
+        let available = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
         assert_eq!(
             negotiate_pixel_format(&[], available),
-            Some(PixelDescriptor::RGBA8_SRGB)
+            Some(ImageSpec::rgba8_srgb())
         );
     }
 
     #[test]
     fn first_preference_wins_over_later() {
         // Both preferences are available — first one wins
-        let preferred = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB];
-        let available = &[PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB8_SRGB];
+        let preferred = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        let available = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(PixelDescriptor::RGB8_SRGB)
+            Some(ImageSpec::rgb8_srgb())
         );
     }
 
     #[test]
     fn empty_available_returns_none() {
-        assert_eq!(
-            negotiate_pixel_format(&[PixelDescriptor::RGB8_SRGB], &[]),
-            None
-        );
+        assert_eq!(negotiate_pixel_format(&[ImageSpec::rgb8_srgb()], &[]), None);
     }
 
     #[test]
     fn best_encode_exact() {
-        let supported = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB];
+        let supported = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
         assert_eq!(
-            best_encode_format(PixelDescriptor::RGBA8_SRGB, supported),
-            Some(PixelDescriptor::RGBA8_SRGB)
+            best_encode_format(ImageSpec::rgba8_srgb(), supported),
+            Some(ImageSpec::rgba8_srgb())
         );
     }
 
     #[test]
     fn best_encode_format_match() {
-        let supported = &[PixelDescriptor::RGB8]; // unknown transfer
+        let supported = &[codec_spec(SampleLayout::RGB8)]; // unknown transfer
         assert_eq!(
-            best_encode_format(PixelDescriptor::RGB8_SRGB, supported),
-            Some(PixelDescriptor::RGB8)
+            best_encode_format(ImageSpec::rgb8_srgb(), supported),
+            Some(codec_spec(SampleLayout::RGB8))
         );
     }
 
     #[test]
     fn best_encode_no_match() {
-        let supported = &[PixelDescriptor::RGBA8_SRGB];
-        assert_eq!(
-            best_encode_format(PixelDescriptor::GRAY8_SRGB, supported),
-            None
-        );
+        let supported = &[ImageSpec::rgba8_srgb()];
+        assert_eq!(best_encode_format(ImageSpec::gray8_srgb(), supported), None);
     }
 
     #[test]
     fn is_format_available_found() {
-        let available = &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::GRAY8_SRGB];
+        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
         assert!(is_format_available(
-            PixelDescriptor::RGB8_SRGB.pixel_format(),
+            ImageSpec::rgb8_srgb().layout,
             available
         ));
     }
 
     #[test]
     fn is_format_available_not_found() {
-        let available = &[PixelDescriptor::RGB8_SRGB];
+        let available = &[ImageSpec::rgb8_srgb()];
         assert!(!is_format_available(
-            PixelDescriptor::RGBA8_SRGB.pixel_format(),
+            ImageSpec::rgba8_srgb().layout,
             available
         ));
     }

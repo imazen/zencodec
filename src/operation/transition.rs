@@ -3,12 +3,12 @@ use super::{
     DecisionContext, DecisionRecord, FrameFacts, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
+use crate::sample::ChromaSiting;
 use crate::{
     At,
     encode::Fidelity,
     frame::{FrameInterpretation, FrameTiming},
 };
-use zenpixels::sample::ChromaSiting;
 
 /// Output continuity supplied by a prepared adapter route. This does not grant
 /// permission to change an already published representation or container.
