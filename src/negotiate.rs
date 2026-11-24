@@ -20,7 +20,7 @@ use zenpixels::{ImageSpec, SampleLayout};
 /// For each preferred descriptor in priority order:
 /// 1. **Exact match** — all fields identical (format, transfer, alpha,
 ///    primaries, signal range)
-/// 2. **Format match** — same [`PixelFormat`] (channel type + layout),
+/// 2. **Format match** — same [`SampleLayout`] (channel type + layout),
 ///    ignoring transfer function, alpha mode, primaries, and signal range
 ///
 /// Returns the first match found (the *available* entry, not the *preferred*
@@ -76,7 +76,7 @@ pub fn negotiate_pixel_format(
 
 /// Select the best encode format for given pixel data.
 ///
-/// Returns the first `supported` descriptor whose [`PixelFormat`] matches
+/// Returns the first `supported` descriptor whose [`SampleLayout`] matches
 /// `source`, or `None` if no supported format is layout-compatible.
 ///
 /// Encoders can use this to check whether they can accept the caller's
