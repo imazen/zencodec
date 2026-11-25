@@ -18,7 +18,7 @@ use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
 use zenpixels::{ImageSpec, PixelView, PixelViewMut};
 
-const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
+const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
 
 #[test]
 fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_unwind() {
@@ -226,7 +226,14 @@ fn storage_admission_precedes_initialization_and_row_publication() {
                 ctx.read_exact_at(0, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new(&pixels, 2, 2, 12, RGBA).unwrap(),
+                    &PixelView::new_with_spec_cow(
+                        &pixels,
+                        2,
+                        2,
+                        12,
+                        zenpixels::SpecCow::from_owned(RGBA),
+                    )
+                    .unwrap(),
                 )
                 .await?;
                 Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
@@ -341,7 +348,14 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             if early {
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new(&[0; 16], 2, 2, 8, RGBA).unwrap(),
+                    &PixelView::new_with_spec_cow(
+                        &[0; 16],
+                        2,
+                        2,
+                        8,
+                        zenpixels::SpecCow::from_owned(RGBA),
+                    )
+                    .unwrap(),
                 )
                 .await?;
             }
@@ -367,7 +381,14 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             ctx.read_exact_at(1, &mut rows).await?;
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelView::new(&rows, 2, 2, 12, RGBA).unwrap(),
+                &PixelView::new_with_spec_cow(
+                    &rows,
+                    2,
+                    2,
+                    12,
+                    zenpixels::SpecCow::from_owned(RGBA),
+                )
+                .unwrap(),
             )
             .await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))

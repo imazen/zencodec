@@ -993,9 +993,9 @@ impl CodecSet {
             .decoder_for(format)
             .and_then(|d| d.supported_descriptors().first().cloned())
             .unwrap_or(if info.has_alpha {
-                ImageSpec::rgba8_srgb()
+                ImageSpec::RGBA8_SRGB
             } else {
-                ImageSpec::rgb8_srgb()
+                ImageSpec::RGB8_SRGB
             });
         let image = ImageCharacteristics::new(info.width, info.height, descriptor);
         self.estimate_decode(format, &image, compute)
@@ -1202,7 +1202,8 @@ mod tests {
     fn encode_without_encoder_is_no_encoder() {
         let set = CodecSet::new();
         let bytes = [0u8; 3];
-        let pixels = PixelView::new(&bytes, 1, 1, 3, ImageSpec::rgb8_srgb()).expect("pixel slice");
+        let pixels =
+            PixelView::new(&bytes, 1, 1, 3, &zenpixels::specs::RGB8_SRGB).expect("pixel slice");
         match set.encode(ImageFormat::Png, pixels) {
             Err(CodecSetError::NoEncoder(ImageFormat::Png)) => {}
             other => panic!("expected NoEncoder(Png), got {other:?}"),

@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"
+source = "git+https://github.com/imazen/zenpixels?rev=9686936bfa49df370a1e71666b252b9f48f744b4#9686936bfa49df370a1e71666b252b9f48f744b4"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -222,4 +222,4 @@ source = "git+https://github.com/imazen/linear-srgb?rev=ae83f19426737635fee3dd16
 [[patch.unused]]
 name = "zenpixels-convert"
 version = "0.5.0"
-source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"
+source = "git+https://github.com/imazen/zenpixels?rev=9686936bfa49df370a1e71666b252b9f48f744b4#9686936bfa49df370a1e71666b252b9f48f744b4"

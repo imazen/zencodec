@@ -291,7 +291,7 @@ pub fn resolve_color_emit(
             alpha: *alpha,
             white: None,
         }
-        .try_cicp()
+        .project_cicp()
         .ok(),
         ColorSpace::Gray {
             transfer, range, ..
@@ -538,9 +538,10 @@ mod tests {
     #[test]
     fn reconstructed_gain_map_linear_color_emits_avif_cicp() {
         use zenpixels::{AlphaMode, DiffuseWhite, ImageSpec, PixelBuf, SampleLayout};
-        use zenpixels_convert::{DualLayerHdrView, GainMapApplyConfig, apply_gain_map_with};
+        use zenpixels_convert::DualLayerHdrView;
+        use zenpixels_convert::gainmap::{GainMapApplyConfig, apply_gain_map_with};
 
-        let base = PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+        let base = PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
         let gain = PixelBuf::new(
             1,
             1,

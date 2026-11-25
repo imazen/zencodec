@@ -164,7 +164,7 @@ where
             *width,
             rows,
             stride,
-            desc.clone(),
+            desc,
         )?;
         let enc = self
             .encoder
@@ -302,15 +302,19 @@ where
                     .storage,
             );
         }
+        self.pending = Some((height, metadata.clone()));
+        let (_, _, declared_spec) = self
+            .declaration
+            .as_ref()
+            .expect("declaration verified above");
         let storage = self.strip.as_mut().expect("strip storage installed");
         let view = PixelViewMut::new(
             &mut storage.as_bytes_mut()[..len],
             width,
             height,
             stride,
-            descriptor.clone(),
+            declared_spec,
         )?;
-        self.pending = Some((height, metadata.clone()));
         Ok(view.with_hdr(metadata.hdr))
     }
 
@@ -374,7 +378,7 @@ mod tests {
 
     #[test]
     fn checked_strip_order_mismatch_and_terminal_calls_preserve_accepted_bytes() {
-        let spec = ImageSpec::rgb8_srgb();
+        let spec = ImageSpec::RGB8_SRGB;
         let alternate = spec.clone().with_primaries(Primaries::DisplayP3);
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() })
             .with_max_buffer_rows(core::num::NonZeroU32::MIN);
@@ -404,7 +408,7 @@ mod tests {
 
     #[test]
     fn native_row_refusal_remains_primary_and_keeps_confirmed_prefix() {
-        let spec = ImageSpec::rgb8_srgb();
+        let spec = ImageSpec::RGB8_SRGB;
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() });
         sink.begin(1, 2, spec.clone()).unwrap();
         sink.provide_next_buffer(0, 1, 1, spec.clone())

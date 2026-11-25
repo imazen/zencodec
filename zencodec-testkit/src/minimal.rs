@@ -76,7 +76,7 @@ impl EncoderConfig for MinimalEncoderConfig {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         SUPPORTED
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -171,7 +171,7 @@ impl DecoderConfig for MinimalDecoderConfig {
         &[ImageFormat::Pnm]
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         SUPPORTED
     }
     fn capabilities() -> &'static DecodeCapabilities {

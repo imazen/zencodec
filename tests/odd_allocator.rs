@@ -61,7 +61,7 @@ static ODD: OddBytes = OddBytes;
 /// a wide format on such an allocator panicked.
 #[test]
 fn to_owned_frame_copies_wide_formats_on_any_allocator() {
-    for descriptor in [ImageSpec::rgb16_srgb(), ImageSpec::rgbaf32_linear()] {
+    for descriptor in [ImageSpec::RGB16_SRGB, ImageSpec::RGBAF32_LINEAR] {
         let mut source = PixelBuf::new(4, 3, descriptor.clone()).unwrap();
         {
             let mut rows = source.as_view_mut();
@@ -84,7 +84,7 @@ fn to_owned_frame_copies_wide_formats_on_any_allocator() {
 
 #[test]
 fn frame_copy_returns_the_allocation_failure_and_leaves_the_borrow_valid() {
-    let samples = PixelBuf::new(137, 3, ImageSpec::rgb16_srgb()).unwrap();
+    let samples = PixelBuf::new(137, 3, ImageSpec::RGB16_SRGB).unwrap();
     let frame = AnimationFrame::new(samples.as_view(), 35, 4);
     FAIL_BYTES.set(137 * 3 * 6);
     let failure = frame.try_to_owned_frame().unwrap_err();

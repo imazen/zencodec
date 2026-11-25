@@ -64,7 +64,7 @@ fn requirement_refusal_keeps_its_cause_when_default_preferences_also_decline() {
     use zenpixels::{ImageSpec, Orientation};
     let image = frame(words(), 3, 10);
     let mut offer = ImageConversionOffer::new(
-        ImageSpec::rgb16_srgb(),
+        ImageSpec::RGB16_SRGB,
         image.interpretation().geometry,
         Orientation::Identity,
     );
@@ -104,7 +104,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
     use zenpixels::{ImageSpec, Orientation};
     let source = frame(words(), 3, 10);
     let mut assumed = ImageConversionOffer::new(
-        ImageSpec::rgb16_srgb(),
+        ImageSpec::RGB16_SRGB,
         source.interpretation().geometry,
         Orientation::Identity,
     );
@@ -113,7 +113,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
     declared.assumed_chroma_siting = None;
     let mut extended = declared.clone();
     // Policy-selection control only: this test does not execute/qualify F32 math.
-    extended.output = ImageSpec::rgbf32_linear();
+    extended.output = ImageSpec::RGBF32_LINEAR;
     extended.preserves_extended_range = true;
     extended.workspace_upper_bound = Some(4096);
     let offers = [assumed.clone(), declared, extended.clone()];
@@ -524,7 +524,7 @@ impl zencodec::image::PackedImageOwner for RgbOwner {
             self.width,
             self.height,
             self.stride,
-            zenpixels::ImageSpec::rgb8_srgb(),
+            &zenpixels::specs::RGB8_SRGB,
         )
         .map_err(|e| At::wrap(OutputError::Mapping(MapError::Backend(Box::new(e)))))
     }
@@ -607,7 +607,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
         facts.source_frame.unwrap().encoding.unwrap().code_bits(),
         10
     );
-    assert_eq!(facts.packed, Some(ImageSpec::rgb8_srgb()));
+    assert_eq!(facts.packed, Some(ImageSpec::RGB8_SRGB));
     let clone = image.clone();
     let replacement = rgb_owner(&pool, 2);
     let image = image.replace_packed_color(replacement).unwrap();
@@ -637,7 +637,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
                 facts.source_frame.unwrap().encoding.unwrap().code_bits(),
                 10
             );
-            assert_eq!(facts.packed, Some(ImageSpec::rgb8_srgb()));
+            assert_eq!(facts.packed, Some(ImageSpec::RGB8_SRGB));
             assert!(image.with_pixels(|p| p.width() == 2).unwrap());
             assert_eq!(facts.timing, Some(timing));
             calls.set(calls.get() + 1);

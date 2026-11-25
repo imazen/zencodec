@@ -184,24 +184,24 @@ impl TestImage {
     /// An RGBA8 image whose channels vary with position, so any row/column
     /// transposition shows up as a pixel diff.
     pub fn rgba8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, ImageSpec::rgba8_srgb(), 4, 0)
+        Self::gradient(width, height, ImageSpec::RGBA8_SRGB, 4, 0)
     }
 
     /// An RGB8 image with the same gradient pattern.
     pub fn rgb8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, ImageSpec::rgb8_srgb(), 3, 0)
+        Self::gradient(width, height, ImageSpec::RGB8_SRGB, 3, 0)
     }
 
     /// An RGBA8 gradient offset by `seed`, so distinct same-size frames (for
     /// animation tests) differ in content and a frame-ordering bug is visible.
     pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, ImageSpec::rgba8_srgb(), 4, seed)
+        Self::gradient(width, height, ImageSpec::RGBA8_SRGB, 4, seed)
     }
 
     /// An opaque RGB8 gradient offset by `seed`: distinct frames for codecs
     /// whose animations carry no partial transparency (GIF).
     pub fn rgb8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, ImageSpec::rgb8_srgb(), 3, seed)
+        Self::gradient(width, height, ImageSpec::RGB8_SRGB, 3, seed)
     }
 
     /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
@@ -265,7 +265,7 @@ impl TestImage {
             self.width,
             self.height,
             self.row_bytes(),
-            self.desc.clone(),
+            &self.desc,
         )
         .expect("test image dimensions are valid")
     }
@@ -273,8 +273,7 @@ impl TestImage {
     fn strip(&self, y: u32, h: u32) -> PixelView<'_> {
         let rb = self.row_bytes();
         let bytes = &self.data.as_bytes()[y as usize * rb..(y as usize + h as usize) * rb];
-        PixelView::new(bytes, self.width, h, rb, self.desc.clone())
-            .expect("strip dimensions are valid")
+        PixelView::new(bytes, self.width, h, rb, &self.desc).expect("strip dimensions are valid")
     }
 
     fn pixels(&self) -> Pixels {
@@ -388,7 +387,7 @@ impl DecodeRowSink for CollectSink {
         let len = stride
             .checked_mul(height as usize)
             .ok_or("conformance raster overflows")?;
-        let mut buf = AlignedSamples::try_zeroed_bytes(len)?;
+        let mut buf = AlignedSamples::zeroed_bytes(len)?;
         buf.as_bytes_mut().fill(0xA7);
         self.width = width;
         self.rows = height;
@@ -416,6 +415,7 @@ impl DecodeRowSink for CollectSink {
                 "decoder strip disagrees with declared lifecycle, coordinates or spec".into(),
             );
         }
+        let desc = self.desc.as_ref().ok_or("rows requested before begin")?;
         let buf = self.buf.as_mut().ok_or("rows requested before begin")?;
         self.next += height;
         let off = y as usize * self.stride;
@@ -425,7 +425,7 @@ impl DecodeRowSink for CollectSink {
             width,
             height,
             self.stride,
-            descriptor,
+            desc,
         )?)
     }
 
@@ -474,14 +474,8 @@ impl CollectSink {
         {
             return Err("decoder overwrote row padding".into());
         }
-        let view = PixelView::new(
-            buf.as_bytes(),
-            self.width,
-            self.rows,
-            self.stride,
-            desc.clone(),
-        )
-        .map_err(|e| e.to_string())?;
+        let view = PixelView::new(buf.as_bytes(), self.width, self.rows, self.stride, desc)
+            .map_err(|e| e.to_string())?;
         Ok(grab(view))
     }
 
@@ -929,7 +923,7 @@ where
     let mut refusal_checked = false;
     for (w, h) in [(0, img.height), (img.width, 0)] {
         let stride = w as usize * desc.layout.bytes_per_pixel();
-        if PixelView::new(&[], w, h, stride, desc.clone()).is_ok() {
+        if PixelView::new(&[], w, h, stride, &desc).is_ok() {
             return Err(fail(CHECK, format!("{w}x{h} empty view was accepted")));
         }
         let mut e = encoder().map_err(|e| fail(CHECK, e))?;
@@ -1002,7 +996,7 @@ where
         let Ok(mut e) = enc.clone().job().encoder() else {
             break;
         };
-        let Ok(timing) = e.begin(40, height, ImageSpec::rgba8_srgb()) else {
+        let Ok(timing) = e.begin(40, height, ImageSpec::RGBA8_SRGB) else {
             break;
         };
         let Some(lag) = timing.lag_rows() else {
@@ -1583,7 +1577,7 @@ where
             .with_loop_count(Some(0))
             .animation_frame_encoder()
             .ok()
-            .and_then(|mut a| a.begin(24, 16, ImageSpec::rgba8_srgb(), Some(count)).ok())
+            .and_then(|mut a| a.begin(24, 16, ImageSpec::RGBA8_SRGB, Some(count)).ok())
             .and_then(|t| t.lag_frames());
         match lag {
             Some(lag) if count <= lag + 1 => count = (lag + 4).min(200),
@@ -1996,13 +1990,13 @@ where
         (
             "PQ",
             Cicp::BT2100_PQ,
-            ImageSpec::rgb16_bt2100_pq(),
+            ImageSpec::RGB16_BT2100_PQ,
             Transfer::Pq,
         ),
         (
             "HLG",
             Cicp::BT2100_HLG,
-            ImageSpec::rgb16_bt2100_hlg_scene(),
+            ImageSpec::RGB16_BT2100_HLG_SCENE,
             Transfer::Hlg(zenpixels::HlgMode::Scene),
         ),
     ];
@@ -5014,11 +5008,11 @@ mod tests {
     #[test]
     fn reference_hdr_decode_is_labelled_pq() {
         let (e, d) = ref_codecs();
-        let img = TestImage::rgb16_gradient(6, 5, ImageSpec::rgb16_bt2100_pq());
+        let img = TestImage::rgb16_gradient(6, 5, ImageSpec::RGB16_BT2100_PQ);
         let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ);
         let bytes = enc_oneshot(&e, &img, meta, MetadataPolicy::PreserveExact).unwrap();
         let out = dec_output(&d, &bytes).unwrap();
-        assert_eq!(out.pixels().spec().clone(), ImageSpec::rgb16_bt2100_pq());
+        assert_eq!(out.pixels().spec().clone(), ImageSpec::RGB16_BT2100_PQ);
         assert_eq!(grab(out.pixels()), img.pixels());
     }
 
@@ -5099,24 +5093,23 @@ mod tests {
             )
         };
 
-        assert!(validate_buffer_context(&ImageSpec::rgb8_srgb()).is_ok());
-        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::rgb8_srgb(), 3)).is_ok());
-        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::rgba8_srgb(), 3)).is_ok());
-        assert!(validate_buffer_context(&icc(gray.clone(), ImageSpec::gray8_srgb(), 1)).is_ok());
+        assert!(validate_buffer_context(&ImageSpec::RGB8_SRGB).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::RGB8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::RGBA8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(gray.clone(), ImageSpec::GRAY8_SRGB, 1)).is_ok());
         assert!(
-            validate_buffer_context(&ImageSpec::gray8_srgb().with_transfer(Transfer::Pq)).is_ok()
+            validate_buffer_context(&ImageSpec::GRAY8_SRGB.with_transfer(Transfer::Pq)).is_ok()
         );
 
-        let e = validate_buffer_context(&icc(gray, ImageSpec::rgb8_srgb(), 3)).unwrap_err();
+        let e = validate_buffer_context(&icc(gray, ImageSpec::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("device class Gray"), "{e}");
-        let e = validate_buffer_context(&icc(rgb, ImageSpec::gray8_srgb(), 1)).unwrap_err();
+        let e = validate_buffer_context(&icc(rgb, ImageSpec::GRAY8_SRGB, 1)).unwrap_err();
         assert!(e.contains("device class Rgb"), "{e}");
-        let e = validate_buffer_context(&icc(junk, ImageSpec::rgb8_srgb(), 3)).unwrap_err();
+        let e = validate_buffer_context(&icc(junk, ImageSpec::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("unreadable"), "{e}");
-        let e =
-            validate_buffer_context(&icc(Arc::from([]), ImageSpec::rgb8_srgb(), 3)).unwrap_err();
+        let e = validate_buffer_context(&icc(Arc::from([]), ImageSpec::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("unreadable"), "{e}");
-        assert_eq!(ImageSpec::rgb8_srgb().layout, SampleLayout::RGB8);
+        assert_eq!(ImageSpec::RGB8_SRGB.layout, SampleLayout::RGB8);
     }
 
     /// The reference's worked-example gate: a class-matching ICC rides as-is

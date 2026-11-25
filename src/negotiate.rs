@@ -40,13 +40,13 @@ use zenpixels::{ImageSpec, SampleLayout};
 /// use zenpixels::ImageSpec;
 ///
 /// // Caller wants RGBA8, falling back to RGB8
-/// let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
+/// let preferred = &[ImageSpec::RGBA8_SRGB, ImageSpec::RGB8_SRGB];
 ///
 /// // This image is a JPEG — decoder can only produce RGB8
-/// let available = &[ImageSpec::rgb8_srgb()];
+/// let available = &[ImageSpec::RGB8_SRGB];
 ///
 /// let picked = negotiate_pixel_format(preferred, available).unwrap();
-/// assert_eq!(picked, ImageSpec::rgb8_srgb());
+/// assert_eq!(picked, ImageSpec::RGB8_SRGB);
 /// ```
 pub fn negotiate_pixel_format(
     preferred: &[ImageSpec],
@@ -115,10 +115,10 @@ pub fn negotiate_pixel_format_match<'a>(
 /// use zencodec::encode::best_encode_format;
 /// use zenpixels::ImageSpec;
 ///
-/// let source = ImageSpec::rgb8_srgb();
-/// let supported = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+/// let source = ImageSpec::RGB8_SRGB;
+/// let supported = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
 ///
-/// assert_eq!(best_encode_format(source, supported), Some(ImageSpec::rgb8_srgb()));
+/// assert_eq!(best_encode_format(source, supported), Some(ImageSpec::RGB8_SRGB));
 /// ```
 pub fn best_encode_format(source: ImageSpec, supported: &[ImageSpec]) -> Option<ImageSpec> {
     supported.iter().find(|spec| **spec == source).cloned()
@@ -150,10 +150,10 @@ mod tests {
 
     #[test]
     fn selection_distinguishes_ranked_layout_exact_and_default() {
-        let rgb = ImageSpec::rgb8_srgb();
+        let rgb = ImageSpec::RGB8_SRGB;
         let p3 = rgb.clone().with_primaries(zenpixels::Primaries::DisplayP3);
-        let rgba = ImageSpec::rgba8_srgb();
-        let gray = ImageSpec::gray8_srgb();
+        let rgba = ImageSpec::RGBA8_SRGB;
+        let gray = ImageSpec::GRAY8_SRGB;
         let avail = [rgba.clone(), rgb.clone()];
         let layout = negotiate_pixel_format_match(&[p3.clone(), rgba.clone()], &avail).unwrap();
         assert_eq!((layout.spec, layout.kind), (&rgb, FormatMatch::Layout));
@@ -167,18 +167,18 @@ mod tests {
 
     #[test]
     fn exact_match_wins() {
-        let preferred = &[ImageSpec::rgba8_srgb()];
-        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        let preferred = &[ImageSpec::RGBA8_SRGB];
+        let available = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(ImageSpec::rgba8_srgb())
+            Some(ImageSpec::RGBA8_SRGB)
         );
     }
 
     #[test]
     fn format_match_ignores_transfer() {
         // Caller asks for sRGB, decoder produces unknown-transfer RGB8
-        let preferred = &[ImageSpec::rgb8_srgb()];
+        let preferred = &[ImageSpec::RGB8_SRGB];
         let available = &[codec_spec(SampleLayout::RGB8)]; // Unknown transfer
         let picked = negotiate_pixel_format(preferred, available).unwrap();
         assert_eq!(picked.layout, codec_spec(SampleLayout::RGB8).layout);
@@ -188,89 +188,86 @@ mod tests {
     #[test]
     fn preference_order_respected() {
         // Caller prefers RGBA8, but only RGB8 is available — skips to second preference
-        let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
-        let available = &[ImageSpec::rgb8_srgb()];
+        let preferred = &[ImageSpec::RGBA8_SRGB, ImageSpec::RGB8_SRGB];
+        let available = &[ImageSpec::RGB8_SRGB];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(ImageSpec::rgb8_srgb())
+            Some(ImageSpec::RGB8_SRGB)
         );
     }
 
     #[test]
     fn fallback_to_first_available() {
         // No preference matches — get the decoder's default
-        let preferred = &[ImageSpec::gray8_srgb()];
-        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        let preferred = &[ImageSpec::GRAY8_SRGB];
+        let available = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(ImageSpec::rgb8_srgb())
+            Some(ImageSpec::RGB8_SRGB)
         );
     }
 
     #[test]
     fn empty_preferred_uses_default() {
-        let available = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
+        let available = &[ImageSpec::RGBA8_SRGB, ImageSpec::RGB8_SRGB];
         assert_eq!(
             negotiate_pixel_format(&[], available),
-            Some(ImageSpec::rgba8_srgb())
+            Some(ImageSpec::RGBA8_SRGB)
         );
     }
 
     #[test]
     fn first_preference_wins_over_later() {
         // Both preferences are available — first one wins
-        let preferred = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
-        let available = &[ImageSpec::rgba8_srgb(), ImageSpec::rgb8_srgb()];
+        let preferred = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
+        let available = &[ImageSpec::RGBA8_SRGB, ImageSpec::RGB8_SRGB];
         assert_eq!(
             negotiate_pixel_format(preferred, available),
-            Some(ImageSpec::rgb8_srgb())
+            Some(ImageSpec::RGB8_SRGB)
         );
     }
 
     #[test]
     fn empty_available_returns_none() {
-        assert_eq!(negotiate_pixel_format(&[ImageSpec::rgb8_srgb()], &[]), None);
+        assert_eq!(negotiate_pixel_format(&[ImageSpec::RGB8_SRGB], &[]), None);
     }
 
     #[test]
     fn best_encode_exact() {
-        let supported = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        let supported = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         assert_eq!(
-            best_encode_format(ImageSpec::rgba8_srgb(), supported),
-            Some(ImageSpec::rgba8_srgb())
+            best_encode_format(ImageSpec::RGBA8_SRGB, supported),
+            Some(ImageSpec::RGBA8_SRGB)
         );
     }
 
     #[test]
     fn best_encode_format_match() {
         let supported = &[codec_spec(SampleLayout::RGB8)]; // unknown transfer
-        assert_eq!(best_encode_format(ImageSpec::rgb8_srgb(), supported), None);
+        assert_eq!(best_encode_format(ImageSpec::RGB8_SRGB, supported), None);
         assert_eq!(
-            best_encode_layout(&ImageSpec::rgb8_srgb(), supported),
+            best_encode_layout(&ImageSpec::RGB8_SRGB, supported),
             Some(codec_spec(SampleLayout::RGB8))
         );
     }
 
     #[test]
     fn best_encode_no_match() {
-        let supported = &[ImageSpec::rgba8_srgb()];
-        assert_eq!(best_encode_format(ImageSpec::gray8_srgb(), supported), None);
+        let supported = &[ImageSpec::RGBA8_SRGB];
+        assert_eq!(best_encode_format(ImageSpec::GRAY8_SRGB, supported), None);
     }
 
     #[test]
     fn is_format_available_found() {
-        let available = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
-        assert!(is_format_available(
-            ImageSpec::rgb8_srgb().layout,
-            available
-        ));
+        let available = &[ImageSpec::RGB8_SRGB, ImageSpec::GRAY8_SRGB];
+        assert!(is_format_available(ImageSpec::RGB8_SRGB.layout, available));
     }
 
     #[test]
     fn is_format_available_not_found() {
-        let available = &[ImageSpec::rgb8_srgb()];
+        let available = &[ImageSpec::RGB8_SRGB];
         assert!(!is_format_available(
-            ImageSpec::rgba8_srgb().layout,
+            ImageSpec::RGBA8_SRGB.layout,
             available
         ));
     }

@@ -22,8 +22,8 @@ bytemuck = { version = "1.25.2", default-features = false }
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
 garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
 
 [lints.rust]
 unsafe_code = "forbid"

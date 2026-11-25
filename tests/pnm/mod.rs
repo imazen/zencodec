@@ -83,7 +83,7 @@ impl EncoderConfig for PnmEncoderConfig {
     }
 
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::GRAY8_SRGB];
         SUPPORTED
     }
 
@@ -219,7 +219,7 @@ impl DecoderConfig for PnmDecoderConfig {
     }
 
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::gray8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::GRAY8_SRGB];
         SUPPORTED
     }
 
@@ -260,9 +260,9 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, At<PnmError>> {
         let (w, h, is_gray) = parse_pnm_header(data).map_err(|e| e.start_at())?;
         let desc = if is_gray {
-            ImageSpec::gray8_srgb()
+            ImageSpec::GRAY8_SRGB
         } else {
-            ImageSpec::rgb8_srgb()
+            ImageSpec::RGB8_SRGB
         };
         Ok(OutputInfo::full_decode(w, h, desc))
     }
@@ -320,7 +320,7 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = ImageSpec::gray8_srgb();
+            let desc = ImageSpec::GRAY8_SRGB;
             let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
@@ -330,7 +330,7 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = ImageSpec::rgb8_srgb();
+            let desc = ImageSpec::RGB8_SRGB;
             let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);

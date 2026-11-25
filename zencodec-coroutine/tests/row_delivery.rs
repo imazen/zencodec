@@ -5,7 +5,7 @@ use zencodec::{ImageFormat, ImageInfo, NoPulse};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zenpixels::{ImageSpec, PixelView, PixelViewMut};
 
-const DESC: ImageSpec = ImageSpec::rgb8_srgb();
+const DESC: ImageSpec = ImageSpec::RGB8_SRGB;
 const HEIGHT: u32 = 129;
 
 struct OneSlot {
@@ -39,7 +39,13 @@ impl OneSlot {
         self.pending = true;
         self.meta = Some(meta);
         self.rows = rows;
-        Ok(PixelViewMut::new(&mut self.bytes, width, rows, 12, desc)?)
+        Ok(PixelViewMut::new_with_spec_cow(
+            &mut self.bytes,
+            width,
+            rows,
+            12,
+            zenpixels::SpecCow::from_owned(desc),
+        )?)
     }
 }
 impl DecodeRowSink for OneSlot {
@@ -88,7 +94,14 @@ fn decoder(
             for y in 0..HEIGHT as usize {
                 bytes[y * 9..y * 9 + 6].fill(y as u8);
             }
-            let pixels = PixelView::new(&bytes, 2, HEIGHT, 9, DESC).unwrap();
+            let pixels = PixelView::new_with_spec_cow(
+                &bytes,
+                2,
+                HEIGHT,
+                9,
+                zenpixels::SpecCow::from_owned(DESC),
+            )
+            .unwrap();
             let meta = if provisional {
                 BatchMeta::new(0, false).with_pass(7)
             } else {
@@ -224,7 +237,14 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         ) -> Result<PixelViewMut<'_>, SinkError> {
             self.bytes.0.fill(0xD6);
             self.metas.push((meta, facts.clone()));
-            Ok(PixelViewMut::new(&mut self.bytes.0, width, height, 16, desc)?.with_hdr(facts.hdr))
+            Ok(PixelViewMut::new_with_spec_cow(
+                &mut self.bytes.0,
+                width,
+                height,
+                16,
+                zenpixels::SpecCow::from_owned(desc),
+            )?
+            .with_hdr(facts.hdr))
         }
     }
     for is_float in [false, true] {
@@ -232,7 +252,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             let words = [0x7fc0_0017u32, 0x8000_0000, 0x0000_0001, 0x3f80_0000];
             let spec = zencodec::helpers::codec_spec(SampleLayout::GRAYF32);
             (
-                PixelBuf::from_vec(words.map(f32::from_bits).to_vec(), 2, 2, spec).unwrap(),
+                PixelBuf::from_typed(words.map(f32::from_bits).to_vec(), 2, 2, spec).unwrap(),
                 words
                     .into_iter()
                     .flat_map(u32::to_ne_bytes)
@@ -241,7 +261,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         } else {
             let words = [2114u16, 65535, 4228, 0];
             (
-                PixelBuf::from_vec(words.to_vec(), 2, 2, ImageSpec::gray16_srgb()).unwrap(),
+                PixelBuf::from_typed(words.to_vec(), 2, 2, ImageSpec::GRAY16_SRGB).unwrap(),
                 words
                     .into_iter()
                     .flat_map(u16::to_ne_bytes)
@@ -266,7 +286,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             ..HdrMetadata::default()
         };
         let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
-        buffer.set_facts(facts);
+        buffer.assume_facts(facts);
         let buffer = buffer.with_hdr(hdr).with_origin(origin.clone());
         let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Png));

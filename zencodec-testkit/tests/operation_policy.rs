@@ -43,7 +43,7 @@ impl EncoderConfig for Control {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
         SUPPORTED
     }
     fn with_fidelity(mut self, target: Fidelity) -> Self {
@@ -335,7 +335,7 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
                 };
                 assert_eq!(
                     (facts.width, facts.height, facts.descriptor),
-                    (3, 2, ImageSpec::rgb8_srgb())
+                    (3, 2, ImageSpec::RGB8_SRGB)
                 );
                 assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
                 assert_eq!(counts.made.load(Ordering::SeqCst), 2);

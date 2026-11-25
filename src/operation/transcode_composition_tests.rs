@@ -15,7 +15,7 @@ fn boundary(state: InterpretationState) -> DecodeBoundary {
     DecodeBoundary::new(InterpretationFacts::new(
         1,
         1,
-        Some(ImageSpec::rgb8_srgb()),
+        Some(ImageSpec::RGB8_SRGB),
         state,
     ))
     .unwrap()
@@ -28,7 +28,7 @@ fn offer() -> TranscodeOffer {
             preference_index: 0,
             resolution: None,
         },
-        ImageSpec::rgb8_srgb(),
+        ImageSpec::RGB8_SRGB,
         MetadataTransfer::DiscardDescriptive,
     );
     o.retains_opaque_profile = Some(false);

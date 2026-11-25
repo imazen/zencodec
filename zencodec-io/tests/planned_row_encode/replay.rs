@@ -85,7 +85,7 @@ impl EncoderConfig for PullConfig {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
         SUPPORTED
     }
     fn job(self) -> Self::Job {
@@ -154,12 +154,12 @@ impl Encoder for PullEncoder {
             1
         };
         for _ in 0..repeats {
-            let rows = PixelViewMut::new(
+            let rows = PixelViewMut::new_with_spec_cow(
                 &mut bytes,
                 desc.width,
                 count,
                 stride,
-                desc.descriptor.clone(),
+                zenpixels::SpecCow::from_owned(desc.descriptor.clone()),
             )
             .unwrap();
             let first = if self.job.behavior == Behavior::SkipRow {
@@ -419,7 +419,7 @@ fn retained_padded_borrow_replays_actual_samples_in_typed_and_erased_drivers() {
     for erased in [false, true] {
         let s = Setup::new();
         let bytes = [1, 2, 3, 4, 5, 6, 0xee, 0xee, 0xee, 11, 12, 13, 14, 15, 16];
-        let pixels = PixelView::new(&bytes, 2, 2, 9, ImageSpec::rgb8_srgb()).unwrap();
+        let pixels = PixelView::new(&bytes, 2, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap();
         let done = run(
             erased,
             PullJob::new(&s, 2, Some(2)),

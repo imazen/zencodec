@@ -5,7 +5,7 @@ use zencodec::{
     operation::{Decision, EncodeRequest, OperationError, Question},
 };
 use zencodec_testkit::ReferenceEncoderConfig;
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::PixelView;
 
 fn pixels() -> PixelView<'static> {
     PixelView::new(
@@ -13,7 +13,7 @@ fn pixels() -> PixelView<'static> {
         1,
         2,
         6,
-        ImageSpec::rgb8_srgb(),
+        &zenpixels::specs::RGB8_SRGB,
     )
     .unwrap()
 }

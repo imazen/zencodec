@@ -248,7 +248,7 @@ impl<S: Source> Filler<'_, S> {
                 self.desc.width,
                 count,
                 stride,
-                self.desc.descriptor.clone(),
+                &self.desc.descriptor,
             )?;
             self.input
                 .read(first, destination, self.pulse, self.control)?;
@@ -308,7 +308,7 @@ impl<S: Source> Filler<'_, S> {
                     self.desc.width,
                     1,
                     self.row_bytes,
-                    self.desc.descriptor.clone(),
+                    &self.desc.descriptor,
                 )?;
                 if !exact.holds_for(&pixels)? {
                     return Err(ExactDepthContradiction {
@@ -788,7 +788,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                     desc.width,
                     count,
                     row_bytes,
-                    desc.descriptor.clone(),
+                    &desc.descriptor,
                 )?;
                 let _ = filler.fill(RowDemand::new(0, first, rows).with_final_pass(true));
                 if let Some((stage, cause)) = filler.failure.take() {
@@ -800,7 +800,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                     desc.width,
                     count,
                     row_bytes,
-                    desc.descriptor.clone(),
+                    &desc.descriptor,
                 )?;
                 encoder.push_rows(desc.attach_to_verified_rows(pixels))?;
             } else {

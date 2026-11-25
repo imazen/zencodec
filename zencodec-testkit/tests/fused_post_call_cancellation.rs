@@ -42,7 +42,7 @@ impl Native {
         }
         Ok(Progress::new(
             0,
-            Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgb8_srgb())),
+            Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGB8_SRGB)),
         ))
     }
 }
@@ -108,7 +108,7 @@ fn setup(
     let boundary = DecodeBoundary::new(InterpretationFacts::new(
         1,
         1,
-        Some(ImageSpec::rgb8_srgb()),
+        Some(ImageSpec::RGB8_SRGB),
         InterpretationState::Final,
     ))
     .unwrap();

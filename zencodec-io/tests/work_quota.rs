@@ -21,7 +21,7 @@ use zencodec_io::{CollectSink, DriveOptions, WorkQuota};
 use zenpixels::{ImageSpec, PixelView};
 
 const ROWS: u32 = 37;
-const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
+const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
 #[derive(Debug)]
 struct Failed;
 impl core::fmt::Display for Failed {

@@ -37,7 +37,7 @@ struct Owner {
 impl PackedImageOwner for Owner {
     fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         let mode = self.mode.load(Ordering::SeqCst);
-        let pixels = PixelView::new(
+        let pixels = PixelView::new_with_spec_cow(
             self.pixels.as_slice(),
             if mode == 1 { 1 } else { 2 },
             2,
@@ -49,7 +49,7 @@ impl PackedImageOwner for Owner {
                 else {
                     panic!("expected a real RGB profile");
                 };
-                ImageSpec::new(
+                zenpixels::SpecCow::from_owned(ImageSpec::new(
                     zenpixels::SampleLayout::RGB8,
                     ColorSpace::Icc {
                         profile: Arc::from(profile.as_ref()),
@@ -57,9 +57,9 @@ impl PackedImageOwner for Owner {
                         alpha: zenpixels::AlphaMode::None,
                         intent: zenpixels::RenderingIntent::RelativeColorimetric,
                     },
-                )
+                ))
             } else {
-                ImageSpec::rgb8_srgb()
+                zenpixels::SpecCow::Borrowed(&zenpixels::specs::RGB8_SRGB)
             },
         )
         .unwrap();

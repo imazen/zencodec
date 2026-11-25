@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn output_info_full_decode() {
-        let info = OutputInfo::full_decode(10, 5, ImageSpec::rgba8_srgb());
+        let info = OutputInfo::full_decode(10, 5, ImageSpec::RGBA8_SRGB);
         assert_eq!(info.buffer_size(), 200); // 10*5*4
         assert_eq!(info.pixel_count(), 50); // 10*5
         assert!(info.has_alpha); // RGBA8 has alpha

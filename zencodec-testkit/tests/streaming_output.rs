@@ -231,7 +231,7 @@ fn img() -> TestImage {
 #[test]
 fn the_reference_encoder_streams_and_says_so() {
     let mut enc = ReferenceEncoderConfig::new().job().encoder().unwrap();
-    let timing = enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
+    let timing = enc.begin(4, 4, ImageSpec::RGBA8_SRGB).unwrap();
     assert_eq!(timing, OutputTiming::streaming(0));
     assert!(timing.streams());
     assert!(!enc.pending_output().is_empty(), "header at begin");
@@ -558,11 +558,11 @@ fn the_reference_animation_streams_only_with_a_frame_count() {
             .unwrap()
     };
     let mut a = job();
-    let t = a.begin(12, 8, ImageSpec::rgba8_srgb(), Some(3)).unwrap();
+    let t = a.begin(12, 8, ImageSpec::RGBA8_SRGB, Some(3)).unwrap();
     assert_eq!(t, AnimationOutputTiming::streaming(0));
     assert!(!a.pending_output().is_empty(), "header at begin");
     let mut a = job();
-    let t = a.begin(12, 8, ImageSpec::rgba8_srgb(), None).unwrap();
+    let t = a.begin(12, 8, ImageSpec::RGBA8_SRGB, None).unwrap();
     assert_eq!(t, AnimationOutputTiming::AT_FINISH);
     assert!(a.pending_output().is_empty());
     check_animation_streaming_output_honesty(

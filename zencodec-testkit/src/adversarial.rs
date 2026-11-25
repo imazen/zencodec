@@ -657,7 +657,7 @@ mod prefix_tests {
         }
         bytes.extend_from_slice(&[3, 1, 0, 0, 0, 0, 0, 49, 78, 128]);
         let raw = [49, 78, 128];
-        let expected = PixelView::new(&raw, 1, 1, 3, ImageSpec::rgb8_srgb()).unwrap();
+        let expected = PixelView::new(&raw, 1, 1, 3, &zenpixels::specs::RGB8_SRGB).unwrap();
         bytes.extend_from_slice(&[0xE3; 128]);
         let incomplete =
             ExpectedError::Category(ErrorCategory::Image(zencodec::ImageError::Malformed));

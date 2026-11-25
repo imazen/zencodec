@@ -121,7 +121,7 @@ impl Description {
             view
         };
         let facts = view.facts().with_depth_opt(self.exact_depth);
-        view.with_facts(facts)
+        view.with_assumed_facts(facts)
     }
 }
 /// A fixed-interpretation source, retained across policy and read on demand.
@@ -960,7 +960,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 desc.width,
                 count,
                 stride,
-                desc.descriptor.clone(),
+                &desc.descriptor,
             )?;
             source.read_rows(y, destination, pulse)?;
             check(control)?;
@@ -971,7 +971,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 desc.width,
                 count,
                 stride,
-                desc.descriptor.clone(),
+                &desc.descriptor,
             )?;
             if let Some(exact) = desc.exact_depth {
                 // Check untagged rows written through the mutable source view.
@@ -1075,18 +1075,18 @@ mod tests {
     #[test]
     fn raster_honors_both_strides_and_refuses_context_mismatch_before_copy() {
         let input = [1, 2, 3, 99, 98, 97, 4, 5, 6];
-        let spec = ImageSpec::rgb8_srgb().with_primaries(zenpixels::Primaries::DisplayP3);
-        let pixels = PixelView::new(&input, 1, 2, 6, spec.clone()).unwrap();
+        let spec = ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3);
+        let pixels = PixelView::new(&input, 1, 2, 6, &spec).unwrap();
         let mut source = Raster::new(pixels);
         let mut output = [77; 12];
-        let view = PixelViewMut::new(&mut output, 1, 2, 9, ImageSpec::rgb8_srgb()).unwrap();
+        let view = PixelViewMut::new(&mut output, 1, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap();
         assert!(
             source
                 .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
                 .is_err()
         );
         assert_eq!(output, [77; 12]);
-        let view = PixelViewMut::new(&mut output, 1, 2, 9, spec).unwrap();
+        let view = PixelViewMut::new(&mut output, 1, 2, 9, &spec).unwrap();
         source
             .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
             .unwrap();
@@ -1168,7 +1168,7 @@ mod patch_tests {
         }
     }
     fn source() -> Raster<'static> {
-        Raster::new(PixelView::new(&[7, 8, 9], 1, 1, 3, ImageSpec::rgb8_srgb()).unwrap())
+        Raster::new(PixelView::new(&[7, 8, 9], 1, 1, 3, &zenpixels::specs::RGB8_SRGB).unwrap())
     }
     fn options() -> Options {
         Options::new(StorageBudget::new(1024, 16), 1024)

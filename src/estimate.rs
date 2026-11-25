@@ -483,7 +483,7 @@ mod tests {
     use super::*;
 
     fn desc() -> ImageSpec {
-        ImageSpec::rgb8_srgb()
+        ImageSpec::RGB8_SRGB
     }
 
     #[test]

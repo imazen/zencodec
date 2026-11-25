@@ -1191,7 +1191,7 @@ mod tests {
         );
         let mut misleading = facts;
         misleading.state = InterpretationState::Final;
-        misleading.descriptor = Some(ImageSpec::rgb8_srgb());
+        misleading.descriptor = Some(ImageSpec::RGB8_SRGB);
         assert!(!BoundaryAction::AdoptInterpretation.permits(&misleading));
 
         let mut token = None;
@@ -1199,7 +1199,7 @@ mod tests {
             EncodeFacts {
                 width: 2,
                 height: 3,
-                descriptor: ImageSpec::rgb8_srgb(),
+                descriptor: ImageSpec::RGB8_SRGB,
             },
             &[EncodeOffer {
                 format: ImageFormat::Jpeg,
@@ -1221,7 +1221,7 @@ mod tests {
         let final_facts = DecodeBoundary::new(InterpretationFacts::new(
             2,
             3,
-            Some(ImageSpec::rgb8_srgb()),
+            Some(ImageSpec::RGB8_SRGB),
             InterpretationState::Final,
         ))
         .unwrap();
@@ -1253,7 +1253,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: 2,
                     height: 3,
-                    descriptor: ImageSpec::rgb8_srgb(),
+                    descriptor: ImageSpec::RGB8_SRGB,
                 }),
                 offered: 1,
                 admitted: 1,
@@ -1288,7 +1288,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: question as u32,
                     height: 3,
-                    descriptor: ImageSpec::rgb8_srgb(),
+                    descriptor: ImageSpec::RGB8_SRGB,
                 }),
                 offered: 1,
                 admitted: 1,

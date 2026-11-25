@@ -107,7 +107,7 @@ fn image(w: u32, h: u32) -> Vec<u8> {
 }
 
 fn slice(data: &[u8], w: u32, h: u32) -> PixelView<'_> {
-    PixelView::new(data, w, h, w as usize * 4, ImageSpec::rgba8_srgb()).unwrap()
+    PixelView::new(data, w, h, w as usize * 4, &zenpixels::specs::RGBA8_SRGB).unwrap()
 }
 
 /// Records the size of each write.
@@ -177,8 +177,14 @@ impl Encoder for OneShot {
 fn inherited_begin_preserves_the_one_shot_writer_fallback() {
     let (width, height, stride) = (3, 19, 16);
     let data: Vec<u8> = (0..stride * height).map(|i| (i * 17 % 251) as u8).collect();
-    let pixels =
-        PixelView::new(&data, width, height as u32, stride, ImageSpec::rgba8_srgb()).unwrap();
+    let pixels = PixelView::new(
+        &data,
+        width,
+        height as u32,
+        stride,
+        &zenpixels::specs::RGBA8_SRGB,
+    )
+    .unwrap();
     let expected = OneShot.encode(pixels.clone()).unwrap();
     let mut writer = Recorder::default();
     let report = encode_to_writer(OneShot, pixels, &mut writer).unwrap();
@@ -262,7 +268,7 @@ fn a_write_error_surfaces_as_io() {
 #[test]
 fn write_pending_consumes_what_it_writes() {
     let mut enc = Raw::new(false);
-    enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
+    enc.begin(4, 4, ImageSpec::RGBA8_SRGB).unwrap();
     let mut out = Vec::new();
     assert_eq!(write_pending(&mut enc, &mut out).unwrap(), 4);
     assert!(enc.pending_output().is_empty());
@@ -273,7 +279,7 @@ fn write_pending_consumes_what_it_writes() {
 #[test]
 fn take_output_hands_over_the_allocation() {
     let mut enc = Raw::new(false);
-    enc.begin(4, 4, ImageSpec::rgba8_srgb()).unwrap();
+    enc.begin(4, 4, ImageSpec::RGBA8_SRGB).unwrap();
     let ptr = enc.pending_output().as_ptr();
     let mut got = Vec::new();
     enc.take_output(&mut got);
@@ -287,7 +293,7 @@ fn take_output_hands_over_the_allocation() {
 async fn write_pending_async_matches_the_blocking_drain() {
     let px = image(5, 20);
     let mut enc = Raw::new(false);
-    enc.begin(5, 20, ImageSpec::rgba8_srgb()).unwrap();
+    enc.begin(5, 20, ImageSpec::RGBA8_SRGB).unwrap();
     let mut out: Vec<u8> = Vec::new();
     let mut n = zencodec_io::tokio_io::write_pending_async(&mut enc, &mut out)
         .await

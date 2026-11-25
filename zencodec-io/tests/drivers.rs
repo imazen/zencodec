@@ -25,7 +25,7 @@ use zenpixels::{ImageSpec, PixelView, PixelViewMut};
 
 const W: u32 = 4;
 const H: u32 = 4;
-const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
+const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
 
 fn minitile() -> Vec<u8> {
     let mut f = vec![0u8; 128];
@@ -82,18 +82,31 @@ fn minitile_decoder() -> Dec {
         let stride = w as usize * 4;
         ctx.write_rows(
             BatchMeta::final_rows(0),
-            &PixelView::new(&tile0, w, 2, stride, RGBA).unwrap(),
+            &PixelView::new_with_spec_cow(
+                &tile0,
+                w,
+                2,
+                stride,
+                zenpixels::SpecCow::from_owned(RGBA),
+            )
+            .unwrap(),
         )
         .await?;
         ctx.write_rows(
             BatchMeta::final_rows(2),
-            &PixelView::new(&tile1, w, 2, stride, RGBA).unwrap(),
+            &PixelView::new_with_spec_cow(
+                &tile1,
+                w,
+                2,
+                stride,
+                zenpixels::SpecCow::from_owned(RGBA),
+            )
+            .unwrap(),
         )
         .await?;
         Ok(OutputInfo::full_decode(w, h, RGBA))
     })
 }
-
 /// "SEQ1" + N rows of 2 RGBA pixels, each row 8 bytes, written one row at a time.
 fn sequential_file(rows: u32) -> Vec<u8> {
     let mut f = b"SEQ1".to_vec();
@@ -116,7 +129,9 @@ fn sequential_decoder() -> Dec {
         for y in 0..rows {
             let mut row = [0u8; 8];
             ctx.read_exact(&mut row).await?;
-            let s = PixelView::new(&row, 2, 1, 8, RGBA).unwrap();
+            let s =
+                PixelView::new_with_spec_cow(&row, 2, 1, 8, zenpixels::SpecCow::from_owned(RGBA))
+                    .unwrap();
             ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
         }
         Ok(OutputInfo::full_decode(2, rows, RGBA))
@@ -920,7 +935,14 @@ fn no_per_call_control_during_resume_keeps_a_retained_stop_terminal() {
             .await?;
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelView::new(&[9; 8], 2, 1, 8, RGBA).unwrap(),
+                &PixelView::new_with_spec_cow(
+                    &[9; 8],
+                    2,
+                    1,
+                    8,
+                    zenpixels::SpecCow::from_owned(RGBA),
+                )
+                .unwrap(),
             )
             .await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 1, RGBA))

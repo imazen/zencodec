@@ -92,7 +92,7 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
         let steps = (1u64 << bits) - 1;
         let midpoint = steps.div_ceil(2);
         let canonical = quantize(midpoint, bits);
-        let pixels = PixelBuf::from_vec(
+        let pixels = PixelBuf::from_typed(
             vec![canonical, 9362u16],
             1,
             1,
@@ -102,7 +102,7 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
         let exact = ExactDepth::new(SampleType::U16, SignalRange::Full, bits, 3).unwrap();
         assert!(exact.holds_for(&pixels.as_view()).unwrap(), "depth {bits}");
         if bits < 15 {
-            let off_grid = PixelBuf::from_vec(
+            let off_grid = PixelBuf::from_typed(
                 vec![canonical - 1, 9362u16],
                 1,
                 1,
@@ -118,7 +118,7 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
     for bits in 8..=16u8 {
         let narrow = 161u16 << (16 - bits);
         let pixels =
-            PixelBuf::from_vec(vec![narrow, 9362u16], 1, 1, descriptor(SignalRange::Narrow))
+            PixelBuf::from_typed(vec![narrow, 9362u16], 1, 1, descriptor(SignalRange::Narrow))
                 .unwrap();
         let exact = ExactDepth::new(SampleType::U16, SignalRange::Narrow, bits, 3).unwrap();
         assert!(
@@ -126,7 +126,7 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
             "narrow depth {bits}"
         );
         if bits < 16 {
-            let other = PixelBuf::from_vec(
+            let other = PixelBuf::from_typed(
                 vec![narrow - 1, 9362u16],
                 1,
                 1,
@@ -137,8 +137,8 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
         }
     }
     for value in 0..=u8::MAX {
-        let spec = ImageSpec::gray8_srgb();
-        let pixel = PixelBuf::from_vec(vec![value], 1, 1, spec).unwrap();
+        let spec = ImageSpec::GRAY8_SRGB;
+        let pixel = PixelBuf::from_typed(vec![value], 1, 1, spec).unwrap();
         for bits in 1..=8 {
             let steps = (1u32 << bits) - 1;
             let oracle =

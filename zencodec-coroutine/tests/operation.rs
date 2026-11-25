@@ -20,7 +20,7 @@ use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
 use zenpixels::{ImageSpec, PixelView};
 
-const RGBA: ImageSpec = ImageSpec::rgba8_srgb();
+const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
 static FORMAT: ImageFormatDefinition = ImageFormatDefinition::new(
     "controlled-fixture",
     None,
@@ -138,7 +138,14 @@ impl<'a> DecodeJob<'a> for Config {
                 ctx.read_exact_at(4, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new(&pixels, 2, 2, 8, RGBA).unwrap(),
+                    &PixelView::new_with_spec_cow(
+                        &pixels,
+                        2,
+                        2,
+                        8,
+                        zenpixels::SpecCow::from_owned(RGBA),
+                    )
+                    .unwrap(),
                 )
                 .await?;
                 Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
@@ -208,7 +215,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
 fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(ImageSpec::rgb8_srgb());
+    let request = DecodeRequest::new().with_output(ImageSpec::RGB8_SRGB);
     let mut resolver = |_q: Question<'_>| -> Result<Decision, At<Infallible>> {
         panic!("an unmet requirement is not a policy choice")
     };
@@ -224,7 +231,7 @@ fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     ));
     assert!(sink.as_pixel_slice().is_none());
     assert_eq!(work.load(Ordering::SeqCst), 0);
-    let preferred = DecodeRequest::new().preferring_output(vec![ImageSpec::rgb8_srgb()]);
+    let preferred = DecodeRequest::new().preferring_output(vec![ImageSpec::RGB8_SRGB]);
     let mut decoder = PolicyDecoder::new(
         preferred.start_controlled(&codecs, budget()).unwrap(),
         PolicySet::new(),

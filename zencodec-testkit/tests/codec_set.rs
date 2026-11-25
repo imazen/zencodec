@@ -33,7 +33,7 @@ fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelView<'_> {
         width,
         height,
         width as usize * 3,
-        ImageSpec::rgb8_srgb(),
+        &zenpixels::specs::RGB8_SRGB,
     )
     .expect("valid pixel slice")
 }
@@ -277,7 +277,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
     }
 
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
         SUPPORTED
     }
 
@@ -290,7 +290,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
 fn transcode_refuses_implicit_precision_loss() {
     let samples = [0u8; 24];
     let pixels =
-        PixelView::new(&samples, W, H, 12, ImageSpec::rgb16_srgb()).expect("16-bit pixels");
+        PixelView::new(&samples, W, H, 12, &zenpixels::specs::RGB16_SRGB).expect("16-bit pixels");
     let source = ReferenceEncoderConfig::new()
         .encode(pixels)
         .expect("encode 16-bit source");
@@ -539,7 +539,7 @@ fn one_shot_trait_methods_work_directly() {
 #[test]
 fn estimate_dispatches_to_the_registered_codec() {
     let set = reference_set();
-    let image = ImageCharacteristics::new(W, H, ImageSpec::rgb8_srgb());
+    let image = ImageCharacteristics::new(W, H, ImageSpec::RGB8_SRGB);
     let compute = ComputeEnvironment::conservative();
 
     // Registered format → forwards to the codec's estimator and succeeds

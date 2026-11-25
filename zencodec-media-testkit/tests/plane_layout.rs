@@ -210,7 +210,7 @@ fn policy_facts_distinguish_mixed_depth_and_plane_order() {
 #[test]
 fn gray_renderer_refuses_alpha_only_before_writing() {
     use zencodec_media::adapt::{Gray8, RenderFrame};
-    use zenpixels::{ImageSpec, PixelViewMut};
+    use zenpixels::PixelViewMut;
     let encoding = code(SampleType::U8, 8, 0);
     let frame = Frame::new(
         Arc::new(
@@ -233,7 +233,7 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
         Presentation::default(),
     );
     let mut bytes = [99u8; 2];
-    let mut canvas = PixelViewMut::new(&mut bytes, 2, 1, 2, ImageSpec::gray8_srgb()).unwrap();
+    let mut canvas = PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::specs::GRAY8_SRGB).unwrap();
     assert!(Gray8::default().render(&frame, &mut canvas).is_err());
     assert_eq!(bytes, [99, 99]);
 }
@@ -242,7 +242,7 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
 fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
     use zencodec::frame::{ColorClaim, Crop};
     use zencodec_media::adapt::{Gray8, RenderFrame};
-    use zenpixels::{Cicp, ImageSpec, PixelViewMut};
+    use zenpixels::{Cicp, PixelViewMut};
     let encoding = code(SampleType::U8, 8, 0);
     let samples = Arc::new(
         OwnedPlanes::from_encoded_planes(vec![(
@@ -281,7 +281,8 @@ fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
             Presentation::default(),
         );
         let mut bytes = [99; 2];
-        let mut canvas = PixelViewMut::new(&mut bytes, 2, 1, 2, ImageSpec::gray8_srgb()).unwrap();
+        let mut canvas =
+            PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::specs::GRAY8_SRGB).unwrap();
         assert_eq!(
             Gray8::default().render(&frame, &mut canvas).is_ok(),
             success

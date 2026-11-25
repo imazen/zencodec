@@ -123,7 +123,7 @@ mod tests {
         DecodeBoundary::new(InterpretationFacts::new(
             97,
             65,
-            Some(ImageSpec::rgb8_srgb()),
+            Some(ImageSpec::RGB8_SRGB),
             state,
         ))
         .unwrap()
@@ -136,7 +136,7 @@ mod tests {
                 preference_index: 0,
                 resolution: None,
             },
-            ImageSpec::rgb8_srgb(),
+            ImageSpec::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
         );
         offer.retains_opaque_profile = Some(false);

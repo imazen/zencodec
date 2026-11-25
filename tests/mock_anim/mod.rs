@@ -130,8 +130,8 @@ fn parse_mock_header(data: &[u8]) -> Result<(u32, u32, u32, u8), MockError> {
 
 fn descriptor_for_bpp(bpp: u8) -> ImageSpec {
     match bpp {
-        3 => ImageSpec::rgb8_srgb(),
-        4 => ImageSpec::rgba8_srgb(),
+        3 => ImageSpec::RGB8_SRGB,
+        4 => ImageSpec::RGBA8_SRGB,
         _ => unreachable!(),
     }
 }
@@ -160,7 +160,7 @@ impl DecoderConfig for MockDecoderConfig {
     }
 
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         SUPPORTED
     }
 
@@ -415,8 +415,14 @@ impl<'a> StreamingDecode for MockStreamDec<'a> {
         }
         let desc = descriptor_for_bpp(self.bpp);
         let row_data = &self.data[offset..offset + row_bytes];
-        let ps = PixelView::new(row_data, self.width, 1, row_bytes, desc)
-            .map_err(|e| MockError::InvalidData(format!("slice: {e}")))?;
+        let ps = PixelView::new_with_spec_cow(
+            row_data,
+            self.width,
+            1,
+            row_bytes,
+            zenpixels::SpecCow::from_owned(desc),
+        )
+        .map_err(|e| MockError::InvalidData(format!("slice: {e}")))?;
         let y = self.current_row;
         self.current_row += 1;
         Ok(Some((y, ps)))
@@ -503,12 +509,12 @@ impl AnimationFrameDecoder for MockAnimationFrameDec {
         let desc = descriptor_for_bpp(self.bpp);
         let row_bytes = self.width as usize * self.bpp as usize;
 
-        let ps = PixelView::new(
+        let ps = PixelView::new_with_spec_cow(
             &self.data[pixel_start..pixel_end],
             self.width,
             self.height,
             row_bytes,
-            desc,
+            zenpixels::SpecCow::from_owned(desc),
         )
         .map_err(|e| MockError::InvalidData(format!("frame slice: {e}")))?;
 
@@ -608,7 +614,7 @@ impl EncoderConfig for MockEncoderConfig {
     }
 
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb(), ImageSpec::rgba8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
         SUPPORTED
     }
 
@@ -799,16 +805,21 @@ impl Encoder for MockEnc {
         let mut y = 0u32;
         let mut total_h = 0u32;
         let w = 4u32; // fixed for simplicity
-        let desc = ImageSpec::rgb8_srgb();
+        let desc = ImageSpec::RGB8_SRGB;
         let bpp = desc.layout.bytes_per_pixel();
         let row_bytes = w as usize * bpp;
 
         loop {
             let mut strip_buf = vec![0u8; strip_height as usize * row_bytes];
             let rows_written = {
-                let ps =
-                    PixelViewMut::new(&mut strip_buf, w, strip_height, row_bytes, desc.clone())
-                        .map_err(|e| MockError::InvalidData(format!("pull buf: {e}")))?;
+                let ps = PixelViewMut::new_with_spec_cow(
+                    &mut strip_buf,
+                    w,
+                    strip_height,
+                    row_bytes,
+                    zenpixels::SpecCow::from_owned(desc.clone()),
+                )
+                .map_err(|e| MockError::InvalidData(format!("pull buf: {e}")))?;
                 source(y, ps)
             };
             if rows_written == 0 {
@@ -818,7 +829,6 @@ impl Encoder for MockEnc {
             total_h += rows_written as u32;
             y += rows_written as u32;
         }
-
         if total_h == 0 {
             return Err(MockError::InvalidData("no rows from source".into()));
         }

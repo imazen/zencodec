@@ -975,7 +975,7 @@ mod begin_dispatch_tests {
                 error.downcast_ref::<UnsupportedOperation>(),
                 Some(&UnsupportedOperation::PullEncode)
             );
-            let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+            let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
             assert!(erased.encode(pixels.as_view()).is_ok());
         }
     }
@@ -983,23 +983,23 @@ mod begin_dispatch_tests {
     #[test]
     fn direct_dyn_declared_start_refuses_without_losing_one_shot() {
         let mut encoder: Box<dyn DynEncoder> = Box::new(OneShot);
-        let declaration = crate::encode::EncodeDeclaration::new(1, 1, ImageSpec::rgb8_srgb());
+        let declaration = crate::encode::EncodeDeclaration::new(1, 1, ImageSpec::RGB8_SRGB);
         let error = encoder.begin_declared(&declaration).unwrap_err();
         assert_eq!(
             error.downcast_ref::<UnsupportedOperation>(),
             Some(&UnsupportedOperation::EncodePlanning)
         );
         assert!(encoder.pending_output().is_empty());
-        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
         assert!(encoder.encode(pixels.as_view()).is_ok());
     }
 
     #[test]
     fn default_begin_refuses_rows_for_typed_shim_and_direct_dyn_encoders() {
-        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
         let mut typed = OneShot;
         assert_eq!(
-            Encoder::begin(&mut typed, 1, 1, ImageSpec::rgb8_srgb()),
+            Encoder::begin(&mut typed, 1, 1, ImageSpec::RGB8_SRGB),
             Err(UnsupportedOperation::RowLevelEncode)
         );
         assert!(Encoder::encode(typed, pixels.as_view()).is_ok());
@@ -1008,7 +1008,7 @@ mod begin_dispatch_tests {
             [Box::new(EncoderShim(OneShot)), Box::new(OneShot)];
         for mut encoder in encoders {
             let error = encoder
-                .begin(1, 1, ImageSpec::rgb8_srgb())
+                .begin(1, 1, ImageSpec::RGB8_SRGB)
                 .expect_err("one-shot default must refuse before accepting any rows");
             assert_eq!(
                 error.downcast_ref::<UnsupportedOperation>(),
@@ -1088,7 +1088,7 @@ mod timing_dispatch_tests {
 
     #[test]
     fn shim_preserves_actual_timing_errors_and_accepted_frame_sequence() {
-        let buffer = zenpixels::PixelBuf::new(1, 1, ImageSpec::rgb8_srgb()).unwrap();
+        let buffer = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
         let mut generic = Timed::new();
         let mut erased: Box<dyn DynAnimationFrameEncoder> =
             Box::new(AnimationFrameEncoderShim(Timed::new()));
@@ -1172,12 +1172,12 @@ mod negotiated_output_tests {
         let mut encoder: Box<dyn DynEncoder> = Box::new(EncoderShim(Patching(false)));
         assert!(
             encoder
-                .begin_output(1, 1, ImageSpec::rgb8_srgb(), OutputAccess::Forward)
+                .begin_output(1, 1, ImageSpec::RGB8_SRGB, OutputAccess::Forward)
                 .is_err()
         );
         assert!(
             encoder
-                .begin_output(1, 1, ImageSpec::rgb8_srgb(), OutputAccess::SeekBack)
+                .begin_output(1, 1, ImageSpec::RGB8_SRGB, OutputAccess::SeekBack)
                 .unwrap()
                 .patches_at_finish()
         );
@@ -1216,7 +1216,7 @@ mod pull_dispatch_tests {
                 return Ok(PullProgress::Done);
             }
             let view =
-                PixelViewMut::new(&mut self.pixels, 2, 2, 9, ImageSpec::rgb8_srgb()).unwrap();
+                PixelViewMut::new(&mut self.pixels, 2, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap();
             rows.fill(
                 RowDemand::new(2, 3, view)
                     .with_final_pass(true)
@@ -1397,7 +1397,7 @@ mod declared_encode_tests {
     fn erased_preflight_retains_job_color_access_and_native_error() {
         let starts = Arc::new(AtomicUsize::new(0));
         let job: Box<dyn DynEncodeJob> = Box::new(EncodeJobShim(Some(Job(starts.clone()))));
-        let declaration = EncodeDeclaration::new(16, 32, ImageSpec::rgb8_srgb())
+        let declaration = EncodeDeclaration::new(16, 32, ImageSpec::RGB8_SRGB)
             .with_access(crate::output_patch::OutputAccess::SeekBack);
         let error = job.plan_encode(&declaration).unwrap_err();
         assert_eq!(
@@ -1458,7 +1458,7 @@ mod declared_encode_tests {
 
     #[test]
     fn defaults_refuse_without_legacy_startup_even_without_color() {
-        let declaration = EncodeDeclaration::new(1, 1, ImageSpec::rgb8_srgb());
+        let declaration = EncodeDeclaration::new(1, 1, ImageSpec::RGB8_SRGB);
         let error = LegacyJob.plan_encode(&declaration).unwrap_err();
         assert_eq!(
             error.downcast_ref::<UnsupportedOperation>(),

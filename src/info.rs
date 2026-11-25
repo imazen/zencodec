@@ -577,9 +577,9 @@ pub struct ImageInfo {
 }
 
 // ImageInfo contains Arc, Vec, trait objects — heavily pointer-dependent.
-// (SourceColor gained the diffuse_white Option<f32> anchor: 248 → 256 on 64-bit.)
+// (Option<DiffuseWhite> uses NonZeroU32 niche so SourceColor fits back into 248 bytes on 64-bit.)
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ImageInfo>() == 256);
+const _: () = assert!(core::mem::size_of::<ImageInfo>() == 248);
 
 impl ImageInfo {
     /// Create a new `ImageInfo` with the given dimensions and format.

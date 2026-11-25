@@ -402,7 +402,7 @@ mod tests {
             alpha: zenpixels::AlphaMode::None,
             intent: zenpixels::RenderingIntent::RelativeColorimetric,
         };
-        let declaration = EncodeDeclaration::new(3, 4, ImageSpec::rgb8_srgb()).with_color(context);
+        let declaration = EncodeDeclaration::new(3, 4, ImageSpec::RGB8_SRGB).with_color(context);
         let carriers = ColorCarriers::new(Some(Arc::from([88; 2048])), None);
         let rendered = alloc::format!("{declaration:?} {carriers:?}");
         assert!(rendered.len() < 1024);
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn declaration_refuses_impossible_lag_and_patch_access() {
-        let declaration = EncodeDeclaration::new(7, 9, ImageSpec::rgb8_srgb());
+        let declaration = EncodeDeclaration::new(7, 9, ImageSpec::RGB8_SRGB);
         let plan = EncodePlan::rows(OutputTiming::streaming(9));
         assert_eq!(plan.validate(&declaration), Err(EncodePlanError::OutputLag));
         let plan = EncodePlan::rows(OutputTiming::AT_FINISH.with_patches());
@@ -524,7 +524,7 @@ mod orientation_tests {
 
     #[test]
     fn spatial_evidence_is_unknown_by_default_and_stable_through_startup() {
-        let declaration = EncodeDeclaration::new(3, 2, ImageSpec::rgb8_srgb());
+        let declaration = EncodeDeclaration::new(3, 2, ImageSpec::RGB8_SRGB);
         let empty = EncodePlan::whole_raster();
         assert_eq!(empty.orientation, None);
         for input in ALL {

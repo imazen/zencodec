@@ -172,10 +172,10 @@ const MAGIC: &[u8; 4] = b"ZCR1";
 
 pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<ImageSpec, RefError> {
     match bpp {
-        3 => Ok(ImageSpec::rgb8_srgb()),
-        4 => Ok(ImageSpec::rgba8_srgb()),
-        6 => Ok(ImageSpec::rgb16_srgb()),
-        8 => Ok(ImageSpec::rgba16_srgb()),
+        3 => Ok(ImageSpec::RGB8_SRGB),
+        4 => Ok(ImageSpec::RGBA8_SRGB),
+        6 => Ok(ImageSpec::RGB16_SRGB),
+        8 => Ok(ImageSpec::RGBA16_SRGB),
         b => Err(RefError::Invalid(format!("unsupported bpp {b}"))),
     }
 }
@@ -843,12 +843,12 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
 /// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
 /// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
 static DESCRIPTORS: [ImageSpec; 6] = [
-    ImageSpec::rgb8_srgb(),
-    ImageSpec::rgba8_srgb(),
-    ImageSpec::rgb16_srgb(),
-    ImageSpec::rgba16_srgb(),
-    ImageSpec::rgb16_bt2100_pq(),
-    ImageSpec::rgb16_bt2100_hlg_scene(),
+    ImageSpec::RGB8_SRGB,
+    ImageSpec::RGBA8_SRGB,
+    ImageSpec::RGB16_SRGB,
+    ImageSpec::RGBA16_SRGB,
+    ImageSpec::RGB16_BT2100_PQ,
+    ImageSpec::RGB16_BT2100_HLG_SCENE,
 ];
 
 // ===========================================================================
@@ -1759,7 +1759,7 @@ impl StreamingDecode for RefStreamDec<'_> {
             .data
             .get(off..off + span)
             .ok_or_else(|| RefError::Invalid("truncated strip".into()))?;
-        let ps = PixelView::new(bytes, self.width, strip, row_bytes, self.desc.clone())
+        let ps = PixelView::new(bytes, self.width, strip, row_bytes, &self.desc)
             .map_err(|e| RefError::Invalid(format!("slice: {e}")))?;
 
         let y = self.next_row;
@@ -1966,7 +1966,7 @@ impl AnimationFrameDecoder for RefAnimDec {
             .data
             .get(start..start + span)
             .ok_or_else(|| RefError::Invalid("truncated frame".into()))?;
-        let ps = PixelView::new(bytes, self.width, self.height, row_bytes, self.desc.clone())
+        let ps = PixelView::new(bytes, self.width, self.height, row_bytes, &self.desc)
             .map_err(|e| RefError::Invalid(format!("frame slice: {e}")))?;
 
         let index = self.next_frame;

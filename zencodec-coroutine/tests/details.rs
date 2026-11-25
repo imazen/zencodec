@@ -7,7 +7,7 @@ use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zenpixels::{ImageSpec, PixelView, PixelViewMut};
-const DESC: ImageSpec = ImageSpec::gray8_srgb();
+const DESC: ImageSpec = ImageSpec::GRAY8_SRGB;
 struct Owner(Arc<AtomicUsize>);
 impl Drop for Owner {
     fn drop(&mut self) {
@@ -35,12 +35,12 @@ impl DecodeRowSink for Sink {
         width: u32,
         descriptor: ImageSpec,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        Ok(PixelViewMut::new(
+        Ok(PixelViewMut::new_with_spec_cow(
             &mut self.bytes,
             width,
             rows,
             1,
-            descriptor,
+            zenpixels::SpecCow::from_owned(descriptor),
         )?)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
@@ -64,7 +64,9 @@ fn producer(
             result.info.width = 2;
         }
         ctx.set_details(result);
-        let rows = PixelView::new(&[17], 1, 1, 1, DESC).unwrap();
+        let rows =
+            PixelView::new_with_spec_cow(&[17], 1, 1, 1, zenpixels::SpecCow::from_owned(DESC))
+                .unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
         Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
     })
@@ -248,7 +250,9 @@ fn terminal_details_cannot_change_adopted_interpretation() {
             let mut result = details(owned);
             result.info.width = 2;
             ctx.set_details(result);
-            let rows = PixelView::new(&[17], 1, 1, 1, DESC).unwrap();
+            let rows =
+                PixelView::new_with_spec_cow(&[17], 1, 1, 1, zenpixels::SpecCow::from_owned(DESC))
+                    .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
         },
@@ -424,7 +428,10 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
     use zenpixels::{AlphaMode, ColorSpace, RenderingIntent, SampleLayout};
     let profile = |id| {
         let mut bytes = [0u8; 132];
+        bytes[0..4].copy_from_slice(&132u32.to_be_bytes());
+        bytes[12..16].copy_from_slice(b"mntr");
         bytes[16..20].copy_from_slice(b"GRAY");
+        bytes[20..24].copy_from_slice(b"XYZ ");
         bytes[36..40].copy_from_slice(b"acsp");
         bytes[82] = id;
         ImageSpec::new(
@@ -455,7 +462,14 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
             ))
             .await?;
             ctx.set_output_descriptor(changed.clone());
-            let pixels = PixelView::new(&[81], 1, 1, 1, changed.clone()).unwrap();
+            let pixels = PixelView::new_with_spec_cow(
+                &[81],
+                1,
+                1,
+                1,
+                zenpixels::SpecCow::from_owned(changed.clone()),
+            )
+            .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &pixels).await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, changed))
         },

@@ -611,7 +611,7 @@ fn copy_rows(
         rows.width,
         rows.rows,
         rows.stride,
-        rows.descriptor.clone(),
+        &rows.descriptor,
     )?;
     rows.meta
         .y

@@ -114,7 +114,7 @@ impl RenderFrame for Gray8 {
         if track.video_info().is_none() {
             return Err(convert_error("Gray8 renders video tracks only"));
         }
-        Ok(ImageSpec::gray8_srgb())
+        Ok(ImageSpec::GRAY8_SRGB)
     }
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelViewMut<'_>) -> Result<(), BoxedError> {
@@ -133,8 +133,7 @@ impl RenderFrame for Gray8 {
             Some(cicp) => cicp == zencodec::Cicp::SRGB,
             None => color.bitstream.is_none() && color.container.is_none(),
         };
-        if canvas.spec() != &ImageSpec::gray8_srgb() || interp.geometry != geometry || !exact_color
-        {
+        if canvas.spec() != &ImageSpec::GRAY8_SRGB || interp.geometry != geometry || !exact_color {
             return Err(convert_error(
                 "Gray8 requires a full-size sRGB monochrome interpretation",
             ));
@@ -158,7 +157,7 @@ impl RenderFrame for Gray8 {
 
 impl CaptureFrame for Gray8 {
     fn validate_input(&self, spec: &ImageSpec, _config: &CodecConfig) -> Result<(), BoxedError> {
-        if spec == &ImageSpec::gray8_srgb() {
+        if spec == &ImageSpec::GRAY8_SRGB {
             Ok(())
         } else {
             Err(Box::new(UnsupportedOperation::PixelFormat))

@@ -491,11 +491,11 @@ mod tests {
             _: Option<&dyn crate::Pulse>,
         ) -> Result<Progress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            sink.begin(1, 1, ImageSpec::rgba8_srgb())
+            sink.begin(1, 1, ImageSpec::RGBA8_SRGB)
                 .map_err(StepError::Sink)?;
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgba8_srgb())),
+                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGBA8_SRGB)),
             ))
         }
         fn requested(&self) -> &[InputRequest] {
@@ -520,17 +520,17 @@ mod tests {
                 self.early_output
             } {
                 1 => {
-                    let _ = sink.begin(1, 1, ImageSpec::rgba8_srgb());
+                    let _ = sink.begin(1, 1, ImageSpec::RGBA8_SRGB);
                 }
                 2 => {
-                    let _ = sink.provide_next_buffer(0, 1, 1, ImageSpec::rgba8_srgb());
+                    let _ = sink.provide_next_buffer(0, 1, 1, ImageSpec::RGBA8_SRGB);
                 }
                 3 => {
                     let _ = sink.provide_pass_buffer(
                         super::super::BatchMeta::new(0, false),
                         1,
                         1,
-                        ImageSpec::rgba8_srgb(),
+                        ImageSpec::RGBA8_SRGB,
                     );
                 }
                 4 => {
@@ -542,7 +542,7 @@ mod tests {
                 let _ = sink.finish(); // A swallowed failure must block later effects too.
                 return Ok(Progress::new(
                     0,
-                    Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::rgba8_srgb())),
+                    Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGBA8_SRGB)),
                 )
                 .into());
             }
@@ -593,7 +593,7 @@ mod tests {
         let boundary = DecodeBoundary::new(InterpretationFacts::new(
             1,
             1,
-            Some(ImageSpec::rgba8_srgb()),
+            Some(ImageSpec::RGBA8_SRGB),
             InterpretationState::Final,
         ))
         .unwrap();

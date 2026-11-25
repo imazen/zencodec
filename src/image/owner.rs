@@ -392,26 +392,32 @@ mod tests {
                 ))));
             }
             let descriptor = if mode == 3 {
+                let mut icc = [0u8; 132];
+                icc[0..4].copy_from_slice(&132u32.to_be_bytes());
+                icc[12..16].copy_from_slice(b"mntr");
+                icc[16..20].copy_from_slice(b"RGB ");
+                icc[20..24].copy_from_slice(b"XYZ ");
+                icc[36..40].copy_from_slice(b"acsp");
                 ImageSpec::new(
                     zenpixels::SampleLayout::RGB8,
                     zenpixels::ColorSpace::Icc {
-                        profile: Arc::from([1, 2, 3]),
+                        profile: Arc::from(icc),
                         channels: 3,
                         alpha: AlphaMode::None,
                         intent: zenpixels::RenderingIntent::RelativeColorimetric,
                     },
                 )
             } else if mode == 2 {
-                ImageSpec::rgb8_srgb().with_transfer(zenpixels::Transfer::Linear)
+                ImageSpec::RGB8_SRGB.with_transfer(zenpixels::Transfer::Linear)
             } else {
-                ImageSpec::rgb8_srgb()
+                ImageSpec::RGB8_SRGB
             };
-            let pixels = PixelView::new(
+            let pixels = PixelView::new_with_spec_cow(
                 &self.pixels,
                 if mode == 1 { 1 } else { 2 },
                 2,
                 if mode == 7 { 12 } else { 9 },
-                descriptor,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
             .unwrap();
             Ok(pixels)

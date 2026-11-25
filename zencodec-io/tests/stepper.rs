@@ -200,7 +200,7 @@ mod async_cursor {
                     self.0.as_mut().unwrap().finish()
                 }
             }
-            let d = ImageSpec::rgba8_srgb();
+            let d = ImageSpec::RGBA8_SRGB;
             let native = CoroutineDecoder::controlled(
                 32,
                 AccessPattern::RandomAccess,
@@ -220,7 +220,7 @@ mod async_cursor {
                     ctx.read_exact_at(1, &mut rows).await?;
                     ctx.write_rows(
                         BatchMeta::final_rows(0),
-                        &PixelView::new(&rows, 2, 2, 12, d.clone()).unwrap(),
+                        &PixelView::new(&rows, 2, 2, 12, &d).unwrap(),
                     )
                     .await?;
                     Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, d))

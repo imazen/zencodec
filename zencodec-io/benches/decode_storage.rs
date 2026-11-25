@@ -29,9 +29,9 @@ fn collect(w: u32, h: u32, d: ImageSpec, fill: u8) -> PixelBuf {
 fn main() {
     zenbench::run(|suite| {
         let formats = [
-            ("u8 RGB8", ImageSpec::rgb8_srgb()),
-            ("u16 RGB16", ImageSpec::rgb16_srgb()),
-            ("f32 RGBA", ImageSpec::rgbaf32_linear()),
+            ("u8 RGB8", ImageSpec::RGB8_SRGB),
+            ("u16 RGB16", ImageSpec::RGB16_SRGB),
+            ("f32 RGBA", ImageSpec::RGBAF32_LINEAR),
         ];
         for (name, d) in formats {
             for (w, h) in [(64u32, 64u32), (1024, 1024), (4096, 4096)] {

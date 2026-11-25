@@ -777,7 +777,7 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
 fn animation_round_trips_through_the_video_model_with_exact_timing() {
     let frames: Vec<PixelBuf> = (0..5u8)
         .map(|i| {
-            let mut b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
+            let mut b = PixelBuf::new(W, H, ImageSpec::GRAY8_SRGB).unwrap();
             for y in 0..H {
                 for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 40 + y as u8 * 4 + x as u8;
@@ -796,7 +796,7 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
         let enc = ToyEncoder::new(W, H, tb(), 1, 3);
         let mut a =
             AnimationVideoEncoder::new(enc, ToyMuxer::new(false), Gray8::default(), 1).unwrap();
-        let timing = a.begin(W, H, ImageSpec::gray8_srgb(), Some(5)).unwrap();
+        let timing = a.begin(W, H, ImageSpec::GRAY8_SRGB, Some(5)).unwrap();
         let mut out = Vec::new();
         let mut pending_after_push = Vec::new();
         if drain {
@@ -861,8 +861,8 @@ fn animation_round_trips_through_the_video_model_with_exact_timing() {
 fn declared_frame_count_is_binding() {
     let enc = ToyEncoder::new(W, H, tb(), 1, 3);
     let mut a = AnimationVideoEncoder::new(enc, ToyMuxer::new(false), Gray8::default(), 1).unwrap();
-    a.begin(W, H, ImageSpec::gray8_srgb(), Some(2)).unwrap();
-    let b = PixelBuf::new(W, H, ImageSpec::gray8_srgb()).unwrap();
+    a.begin(W, H, ImageSpec::GRAY8_SRGB, Some(2)).unwrap();
+    let b = PixelBuf::new(W, H, ImageSpec::GRAY8_SRGB).unwrap();
     a.push_frame_exact(b.as_view(), FrameDuration::new(1001, 30000).unwrap(), None)
         .unwrap();
     assert!(matches!(

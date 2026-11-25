@@ -456,13 +456,15 @@ fn raster_copies_the_claim_but_not_stride_or_rgbx_padding_into_the_verifier() {
         // assertion; only real RGB values may be checked. Final row has no pad.
         let bytes = [0, 255, 0, 7, 3, 4, 5, 6, 255, 0, 255, 9];
         let exact = ExactDepth::new(SampleType::U8, SignalRange::Full, 1, 8).unwrap();
-        let pixels = PixelView::new(
+        let pixels = PixelView::new_with_spec_cow(
             &bytes,
             1,
             2,
             8,
-            codec_spec(zenpixels::SampleLayout::RGBX8)
-                .with_primaries(zenpixels::Primaries::DisplayP3),
+            zenpixels::SpecCow::from_owned(
+                codec_spec(zenpixels::SampleLayout::RGBX8)
+                    .with_primaries(zenpixels::Primaries::DisplayP3),
+            ),
         )
         .unwrap();
         let raster = Raster::new(pixels).with_exact_depth(exact);
@@ -504,7 +506,14 @@ fn strided_u16_narrow_color_checks_full_scale_alpha_and_excludes_row_padding() {
             ] {
                 bytes.0[offset..offset + 2].copy_from_slice(&value.to_ne_bytes());
             }
-            let pixels = PixelView::new(&bytes.0, 1, 2, 8, descriptor.clone()).unwrap();
+            let pixels = PixelView::new_with_spec_cow(
+                &bytes.0,
+                1,
+                2,
+                8,
+                zenpixels::SpecCow::from_owned(descriptor.clone()),
+            )
+            .unwrap();
             let s = setup(descriptor, 2, Some(exact));
             let result = run(
                 route,
@@ -828,14 +837,14 @@ fn full_range_color_and_alpha_depth_reach_native_begin_and_rows_independently() 
     let exact = ExactDepth::new(SampleType::U16, SignalRange::Full, 5, 3).unwrap();
     // round(65535/31) and round(65535/7) are independent authored code values.
     let samples = [2114u16, 9362, 4228, 18724];
-    let mut pixels = PixelBuf::from_vec(samples.to_vec(), 2, 1, spec.clone()).unwrap();
+    let mut pixels = PixelBuf::from_typed(samples.to_vec(), 2, 1, spec.clone()).unwrap();
     let measured = ExactDepth::measure(&pixels.as_view()).unwrap();
     assert_eq!((measured.color_bits(), measured.alpha_bits()), (5, 3));
     let wrong = ExactDepth::new(SampleType::U16, SignalRange::Full, 5, 5).unwrap();
     assert!(!wrong.holds_for(&pixels.as_view()).unwrap());
     let mut facts = SampleFacts::NONE.with_depth(exact);
     facts.all_grayscale = true;
-    pixels.set_facts(facts);
+    pixels.assume_facts(facts);
     let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
     let hdr = zenpixels::HdrMetadata {
         cll: Some(zencodec::ContentLightLevel::new(997, 197)),
@@ -874,7 +883,7 @@ fn contradictory_layout_alpha_or_range_refuses_before_native_startup() {
         alpha: AlphaMode::None,
         white: None,
     };
-    let narrow = ImageSpec::rgbaf32_linear().with_range(SignalRange::Narrow);
+    let narrow = ImageSpec::RGBAF32_LINEAR.with_range(SignalRange::Narrow);
     for spec in [
         ImageSpec::new(SampleLayout::RGB8, gray),
         ImageSpec::new(SampleLayout::RGBA8, ColorSpace::SRGB),

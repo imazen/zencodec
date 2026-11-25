@@ -74,7 +74,7 @@ impl CollectSink {
             parts.width,
             parts.height,
             parts.stride,
-            parts.spec.clone(),
+            &parts.spec,
         )
         .ok()?;
         Some(match (&self.metadata, self.finished) {
@@ -91,21 +91,13 @@ impl CollectSink {
     /// retained. Container metadata remains in the decoder's completion details.
     pub fn into_buffer(self) -> Option<PixelBuf> {
         let parts = self.finished.then_some(self.data).flatten()?;
-        let buffer = PixelBuf::from_parts(
-            parts.storage,
-            parts.offset,
-            parts.width,
-            parts.height,
-            parts.stride,
-            parts.spec,
-        )
-        .ok()?;
+        let buffer = PixelBuf::from_parts(parts).ok()?;
         Some(self.metadata.unwrap_or_default().attach_owned(buffer))
     }
 
     /// Copy the collected image into an owned [`PixelBuf`].
     pub fn to_buffer(&self) -> Option<PixelBuf> {
-        self.as_pixel_slice()?.try_to_tight_buf().ok()
+        self.as_pixel_slice()?.to_tight_buf().ok()
     }
 }
 
@@ -198,7 +190,7 @@ impl DecodeRowSink for CollectSink {
             width,
             height,
             parts.stride,
-            descriptor,
+            &parts.spec,
         )?;
         if height != 0 {
             if let Some(prior) = &mut self.metadata {
@@ -249,12 +241,12 @@ mod tests {
     #[test]
     fn completed_pixels_cannot_be_reopened_for_writing() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 1, ImageSpec::gray8_srgb()).unwrap();
-        sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
+        sink.begin(1, 1, ImageSpec::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
                 .is_err()
         );
     }
@@ -262,22 +254,22 @@ mod tests {
     #[test]
     fn completion_requires_unique_coverage_and_closes_writes() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 65, ImageSpec::gray8_srgb()).unwrap();
+        sink.begin(1, 65, ImageSpec::GRAY8_SRGB).unwrap();
         for _ in 0..65 {
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
                 .unwrap();
         }
         assert_eq!(sink.rows_written(), 65);
         assert!(sink.finish().is_err());
         assert!(!sink.finished());
         // Out-of-order and overlapping delivery remain valid.
-        sink.provide_next_buffer(32, 33, 1, ImageSpec::gray8_srgb())
+        sink.provide_next_buffer(32, 33, 1, ImageSpec::GRAY8_SRGB)
             .unwrap();
-        sink.provide_next_buffer(1, 32, 1, ImageSpec::gray8_srgb())
+        sink.provide_next_buffer(1, 32, 1, ImageSpec::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::gray8_srgb())
+            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
                 .is_err()
         );
         assert!(sink.into_buffer().is_some());
@@ -286,9 +278,9 @@ mod tests {
     #[test]
     fn finished_storage_moves_without_copy_for_integer_and_float_rows() {
         for descriptor in [
-            ImageSpec::rgb8_srgb(),
-            ImageSpec::rgb16_srgb(),
-            ImageSpec::rgbaf32_linear(),
+            ImageSpec::RGB8_SRGB,
+            ImageSpec::RGB16_SRGB,
+            ImageSpec::RGBAF32_LINEAR,
         ] {
             let mut sink = CollectSink::new();
             sink.begin(3, 2, descriptor.clone()).unwrap();
@@ -313,8 +305,8 @@ mod tests {
     fn unfinished_collectors_do_not_yield_owned_completion() {
         assert!(CollectSink::new().into_buffer().is_none());
         let mut sink = CollectSink::new();
-        sink.begin(2, 1, ImageSpec::gray8_srgb()).unwrap();
-        sink.provide_next_buffer(0, 1, 2, ImageSpec::gray8_srgb())
+        sink.begin(2, 1, ImageSpec::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 2, ImageSpec::GRAY8_SRGB)
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[17, 23]);
@@ -327,16 +319,16 @@ mod tests {
         // On 64-bit this fits usize but exceeds Vec's isize capacity limit;
         // on 32-bit the multiplication itself must refuse. Neither allocates.
         assert!(
-            sink.begin(u32::MAX, u32::MAX, ImageSpec::gray8_srgb())
+            sink.begin(u32::MAX, u32::MAX, ImageSpec::GRAY8_SRGB)
                 .is_err()
         );
         assert_eq!(sink.descriptor(), None);
         assert_eq!((sink.width(), sink.height()), (0, 0));
         assert!(sink.bytes().is_empty());
         assert!(!sink.finished());
-        sink.begin(3, 2, ImageSpec::gray8_srgb()).unwrap();
+        sink.begin(3, 2, ImageSpec::GRAY8_SRGB).unwrap();
         for y in 0..2 {
-            sink.provide_next_buffer(y, 1, 3, ImageSpec::gray8_srgb())
+            sink.provide_next_buffer(y, 1, 3, ImageSpec::GRAY8_SRGB)
                 .unwrap()
                 .row_mut(0)
                 .copy_from_slice(&[1 + y as u8, 3, 5]);
@@ -351,7 +343,7 @@ mod tests {
     fn collect_sink_refuses_geometry_overflow() {
         let mut sink = CollectSink::new();
         assert!(
-            sink.begin(u32::MAX, u32::MAX, ImageSpec::rgbaf32_linear())
+            sink.begin(u32::MAX, u32::MAX, ImageSpec::RGBAF32_LINEAR)
                 .is_err()
         );
         assert!(sink.bytes().is_empty());
@@ -367,7 +359,7 @@ mod metadata_tests {
 
     #[test]
     fn collected_strip_facts_cover_both_grids_and_keep_original_provenance() {
-        let spec = ImageSpec::gray16_srgb();
+        let spec = ImageSpec::GRAY16_SRGB;
         let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
         let hdr = HdrMetadata {
             cll: Some(zencodec::ContentLightLevel::new(1111, 227)),
@@ -378,11 +370,11 @@ mod metadata_tests {
         // Nonoverlapping five-bit and three-bit full-range code grids first
         // share a 15-bit grid: lcm(5, 3). The loan order is deliberately reversed.
         for (row, bits, sample) in [(1, 3, 9362u16), (0, 5, 2114u16)] {
-            let mut buffer = PixelBuf::from_vec(alloc::vec![sample], 1, 1, spec.clone())
+            let mut buffer = PixelBuf::from_typed(alloc::vec![sample], 1, 1, spec.clone())
                 .unwrap()
                 .with_origin(origin.clone())
                 .with_hdr(hdr);
-            buffer.set_facts(SampleFacts::NONE.with_depth(
+            buffer.assume_facts(SampleFacts::NONE.with_depth(
                 ExactDepth::new(SampleType::U16, SignalRange::Full, bits, 16).unwrap(),
             ));
             zencodec::helpers::copy_rows_to_sink(

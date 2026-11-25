@@ -44,8 +44,8 @@ zenmeta = { path = "../../zenmeta" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 # Paired exact-depth/conversion revision used by the qualified optional-control
 # native codecs and zenpipe checked-publication candidate.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

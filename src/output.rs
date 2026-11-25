@@ -367,7 +367,7 @@ pub struct DecodeOutput {
 
 // PixelBuf carries its active spec, HDR metadata, sample facts and source provenance.
 #[cfg(target_pointer_width = "64")]
-const _: [(); 520] = [(); core::mem::size_of::<DecodeOutput>()];
+const _: [(); 456] = [(); core::mem::size_of::<DecodeOutput>()];
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuf`].
@@ -392,7 +392,7 @@ impl DecodeOutput {
     /// use zencodec::{ImageFormat, ImageInfo, decode::DecodeOutput};
     /// use zenpixels::{PixelBuf, ImageSpec};
     /// let decoded = DecodeOutput::new(
-    ///     PixelBuf::new(3, 2, ImageSpec::rgb8_srgb()).unwrap(),
+    ///     PixelBuf::new(3, 2, ImageSpec::RGB8_SRGB).unwrap(),
     ///     ImageInfo::new(3, 2, ImageFormat::Png),
     /// );
     /// let (pixels, details) = decoded.into_parts();
@@ -656,7 +656,7 @@ impl<'a> AnimationFrame<'a> {
         &self,
     ) -> Result<OwnedAnimationFrame, whereat::At<zenpixels::BufferError>> {
         Ok(OwnedAnimationFrame {
-            pixels: self.pixels.try_to_tight_buf()?,
+            pixels: self.pixels.to_tight_buf()?,
             duration: self.duration,
             frame_index: self.frame_index,
             pts: self.pts,
@@ -860,15 +860,15 @@ mod tests {
     }
 
     fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::rgb8_srgb()).unwrap()
+        PixelBuf::new(w, h, ImageSpec::RGB8_SRGB).unwrap()
     }
 
     fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::rgba8_srgb()).unwrap()
+        PixelBuf::new(w, h, ImageSpec::RGBA8_SRGB).unwrap()
     }
 
     fn make_gray8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::gray8_srgb()).unwrap()
+        PixelBuf::new(w, h, ImageSpec::GRAY8_SRGB).unwrap()
     }
 
     /// Regression for zencodec#25: `to_owned_frame` copies pixels into a fresh
@@ -880,7 +880,7 @@ mod tests {
         let src = PixelBuf::new(
             3,
             2,
-            ImageSpec::rgb8_srgb().with_primaries(zenpixels::Primaries::DisplayP3),
+            ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
         )
         .unwrap();
         let frame = AnimationFrame::new(src.as_view(), 40, 0);

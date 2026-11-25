@@ -92,8 +92,8 @@ mod tests {
             self.prepared = true;
             match self.mode {
                 0 | 3 | 4 | 6 => Ok(None),
-                1 => Ok(Some(ImageSpec::rgb8_srgb())),
-                2 => Ok(Some(ImageSpec::rgba8_srgb())),
+                1 => Ok(Some(ImageSpec::RGB8_SRGB)),
+                2 => Ok(Some(ImageSpec::RGBA8_SRGB)),
                 _ => Err(core::fmt::Error),
             }
         }
@@ -103,7 +103,7 @@ mod tests {
             } else {
                 vec![1, 2, 3]
             };
-            let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, ImageSpec::rgb8_srgb()).unwrap();
+            let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, ImageSpec::RGB8_SRGB).unwrap();
             if self.prepared && self.mode == 6 {
                 pixels = pixels.with_origin(zenpixels::ColorOrigin::from_cicp(Cicp::BT2100_PQ));
             }

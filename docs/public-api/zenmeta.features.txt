@@ -15,7 +15,7 @@
 #   free functions                             32
 #   inherent methods                           97
 #   struct fields                              81
-#   enum variants                              45
+#   enum variants                              46
 #   trait roster entries (type × trait)        83
 #   auto-trait-complete types                  31
 #   auto-trait exceptions                       2
@@ -27,9 +27,9 @@
 #   bplist                           11
 #   ifd                             175
 #   rewrite                          21
-#   xmp                              57
+#   xmp                              58
 
-## items (321 lines)
+## items (322 lines)
 
 pub mod apple
 pub mod apple::compatibility
@@ -324,15 +324,16 @@ pub xmp::gainmap::XmpError::LengthLimit
 pub xmp::gainmap::XmpError::LengthLimit::got: usize
 pub xmp::gainmap::XmpError::LengthLimit::max: usize
 pub xmp::gainmap::XmpError::NotUltraHdr
+pub xmp::gainmap::XmpError::ParametersAbsent
 pub const xmp::gainmap::CONTAINER_NAMESPACE: &str
 pub const xmp::gainmap::HDRGM_NAMESPACE: &str
 pub const xmp::gainmap::ITEM_NAMESPACE: &str
 pub const xmp::gainmap::MAX_XMP_LENGTH: usize
-pub fn xmp::gainmap::generate_gainmap_xmp(&zencodec::gainmap::GainMapParams) -> alloc::string::String
+pub fn xmp::gainmap::generate_gainmap_xmp(&zencodec::gainmap::GainMapParams) -> core::result::Result<alloc::string::String, xmp::gainmap::XmpError>
 pub fn xmp::gainmap::generate_primary_xmp(usize) -> alloc::string::String
 pub fn xmp::gainmap::generate_primary_xmp_with_items(&[xmp::container::ContainerItem]) -> alloc::string::String
-pub fn xmp::gainmap::generate_xmp(&zencodec::gainmap::GainMapParams, usize) -> alloc::string::String
-pub fn xmp::gainmap::generate_xmp_with_items(&zencodec::gainmap::GainMapParams, &[xmp::container::ContainerItem]) -> alloc::string::String
+pub fn xmp::gainmap::generate_xmp(&zencodec::gainmap::GainMapParams, usize) -> core::result::Result<alloc::string::String, xmp::gainmap::XmpError>
+pub fn xmp::gainmap::generate_xmp_with_items(&zencodec::gainmap::GainMapParams, &[xmp::container::ContainerItem]) -> core::result::Result<alloc::string::String, xmp::gainmap::XmpError>
 pub fn xmp::gainmap::parse_xmp(&str) -> core::result::Result<(zencodec::gainmap::GainMapParams, core::option::Option<usize>), xmp::gainmap::XmpError>
 pub fn xmp::gainmap::parse_xmp_full(&str) -> (core::option::Option<zencodec::gainmap::GainMapParams>, alloc::vec::Vec<xmp::container::ContainerItem>)
 #[non_exhaustive] pub enum xmp::Error

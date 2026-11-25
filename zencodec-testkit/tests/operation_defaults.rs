@@ -25,7 +25,7 @@ impl EncoderConfig for Recorder {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
         SUPPORTED
     }
     fn with_fidelity(self, _: Fidelity) -> Self {

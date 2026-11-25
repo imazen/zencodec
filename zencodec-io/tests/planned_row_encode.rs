@@ -87,7 +87,7 @@ impl EncoderConfig for Config {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::rgb8_srgb()];
+        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
         SUPPORTED
     }
     fn job(self) -> Job {
@@ -291,7 +291,7 @@ impl Setup {
             events: Arc::default(),
             bytes: Arc::default(),
             description: Arc::new(Mutex::new(
-                Description::new(2, 2, ImageSpec::rgb8_srgb()).with_color(ColorSpace::DISPLAY_P3),
+                Description::new(2, 2, ImageSpec::RGB8_SRGB).with_color(ColorSpace::DISPLAY_P3),
             )),
         }
     }
@@ -668,12 +668,14 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
     let s = Setup::new();
     let codecs = zencodec::CodecSet::new().with_encoder(Config(s.job()));
     let bytes = [7; 12];
-    let pixels = PixelView::new(
+    let pixels = PixelView::new_with_spec_cow(
         &bytes,
         2,
         2,
         6,
-        ImageSpec::rgb8_srgb().with_primaries(zenpixels::Primaries::DisplayP3),
+        zenpixels::SpecCow::from_owned(
+            ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+        ),
     )
     .unwrap();
     let mut output = Vec::new();
@@ -706,12 +708,14 @@ fn retained_raster_rows_reach_native_push_without_copying_or_padding_changes() {
         for batch in [1, 2] {
             let setup = Setup::new();
             let bytes = [1, 2, 3, 4, 5, 6, 99, 98, 97, 7, 8, 9, 10, 11, 12];
-            let pixels = PixelView::new(
+            let pixels = PixelView::new_with_spec_cow(
                 &bytes,
                 2,
                 2,
                 9,
-                ImageSpec::rgb8_srgb().with_primaries(zenpixels::Primaries::DisplayP3),
+                zenpixels::SpecCow::from_owned(
+                    ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+                ),
             )
             .unwrap();
             let expected = (0..2)

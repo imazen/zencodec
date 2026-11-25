@@ -34,13 +34,13 @@ fn test_rgb8_pixels() -> PixelBuf {
           0, 255, 255,
         255,   0, 255,
     ];
-    PixelBuf::from_bytes(data, 4, 2, ImageSpec::rgb8_srgb()).expect("valid test buffer")
+    PixelBuf::from_bytes(data, 4, 2, ImageSpec::RGB8_SRGB).expect("valid test buffer")
 }
 
 /// Create a 3x2 Gray8 test image.
 fn test_gray8_pixels() -> PixelBuf {
     let data: Vec<u8> = vec![0, 128, 255, 64, 192, 32];
-    PixelBuf::from_bytes(data, 3, 2, ImageSpec::gray8_srgb()).expect("valid test buffer")
+    PixelBuf::from_bytes(data, 3, 2, ImageSpec::GRAY8_SRGB).expect("valid test buffer")
 }
 
 // =========================================================================
@@ -254,8 +254,8 @@ fn encoder_config_static_methods() {
     );
 
     let descs = <PnmEncoderConfig as EncoderConfig>::supported_descriptors();
-    assert!(descs.contains(&ImageSpec::rgb8_srgb()));
-    assert!(descs.contains(&ImageSpec::gray8_srgb()));
+    assert!(descs.contains(&ImageSpec::RGB8_SRGB));
+    assert!(descs.contains(&ImageSpec::GRAY8_SRGB));
 
     let caps = <PnmEncoderConfig as EncoderConfig>::capabilities();
     assert!(caps.lossless());
@@ -269,8 +269,8 @@ fn decoder_config_static_methods() {
     );
 
     let descs = <PnmDecoderConfig as DecoderConfig>::supported_descriptors();
-    assert!(descs.contains(&ImageSpec::rgb8_srgb()));
-    assert!(descs.contains(&ImageSpec::gray8_srgb()));
+    assert!(descs.contains(&ImageSpec::RGB8_SRGB));
+    assert!(descs.contains(&ImageSpec::GRAY8_SRGB));
 
     let caps = <PnmDecoderConfig as DecoderConfig>::capabilities();
     assert!(caps.cheap_probe());
@@ -302,7 +302,7 @@ fn probe_and_output_info() {
     let out_info = job.output_info(&encoded).unwrap();
     assert_eq!(out_info.width, 4);
     assert_eq!(out_info.height, 2);
-    assert_eq!(out_info.native_format, ImageSpec::rgb8_srgb());
+    assert_eq!(out_info.native_format, ImageSpec::RGB8_SRGB);
 }
 
 // =========================================================================
@@ -609,7 +609,7 @@ fn sink_preallocated_buffer() {
     // Pre-allocate a buffer for decode output
     let width = 4u32;
     let height = 2u32;
-    let desc = ImageSpec::rgb8_srgb();
+    let desc = ImageSpec::RGB8_SRGB;
     let bpp = desc.layout.bytes_per_pixel();
     let stride = width as usize * bpp;
     let mut buffer = vec![0u8; stride * height as usize];
@@ -653,12 +653,12 @@ fn sink_preallocated_buffer() {
             let bpp = descriptor.layout.bytes_per_pixel();
             let row_bytes = width as usize * bpp;
             let end = start + (height as usize - 1) * self.stride + row_bytes;
-            Ok(PixelViewMut::new(
+            Ok(PixelViewMut::new_with_spec_cow(
                 &mut self.buf[start..end],
                 width,
                 height,
                 self.stride,
-                descriptor,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
             .expect("valid slice"))
         }
@@ -681,7 +681,7 @@ fn sink_preallocated_buffer() {
 
     assert_eq!(info.width, 4);
     assert_eq!(info.height, 2);
-    assert_eq!(info.native_format, ImageSpec::rgb8_srgb());
+    assert_eq!(info.native_format, ImageSpec::RGB8_SRGB);
 
     // Verify pixel data matches original
     let orig = pixels.as_view();
@@ -712,7 +712,7 @@ fn sink_format_mismatch_rejected_at_begin() {
             _height: u32,
             descriptor: ImageSpec,
         ) -> Result<(), SinkError> {
-            if descriptor != ImageSpec::rgba8_srgb() {
+            if descriptor != ImageSpec::RGBA8_SRGB {
                 return Err(format!("sink requires RGBA8, got {:?}", descriptor).into());
             }
             Ok(())
@@ -729,24 +729,28 @@ fn sink_format_mismatch_rejected_at_begin() {
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
-            Ok(
-                PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .expect("valid slice"),
+            Ok(PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .expect("valid slice"))
         }
     }
 
     let mut sink = Rgba8OnlySink { buf: Vec::new() };
 
     // RGB8 → rejected at begin(), before any strips are pushed
-    let result = sink.begin(4, 2, ImageSpec::rgb8_srgb());
+    let result = sink.begin(4, 2, ImageSpec::RGB8_SRGB);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("RGBA8"), "{err_msg}");
 
     // RGBA8 → accepted
     let mut sink2 = Rgba8OnlySink { buf: Vec::new() };
-    sink2.begin(4, 2, ImageSpec::rgba8_srgb()).unwrap();
+    sink2.begin(4, 2, ImageSpec::RGBA8_SRGB).unwrap();
 }
 
 /// Use case: row-processing pipeline sink.
@@ -806,10 +810,14 @@ fn sink_row_processing_pipeline() {
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.strip_buf.resize(needed, 0);
-            Ok(
-                PixelViewMut::new(&mut self.strip_buf, width, height, stride, descriptor)
-                    .expect("valid slice"),
+            Ok(PixelViewMut::new_with_spec_cow(
+                &mut self.strip_buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .expect("valid slice"))
         }
 
         fn finish(&mut self) -> Result<(), SinkError> {
@@ -818,7 +826,6 @@ fn sink_row_processing_pipeline() {
             Ok(())
         }
     }
-
     let mut sink = ProcessingSink {
         strip_buf: Vec::new(),
         row_sums: Vec::new(),
@@ -847,22 +854,22 @@ fn borrow_rows(
     spec: ImageSpec,
 ) -> Result<PixelViewMut<'_>, SinkError> {
     let offset = parts.offset + y as usize * parts.stride;
-    Ok(PixelViewMut::new(
+    Ok(PixelViewMut::new_with_spec_cow(
         &mut parts.storage.as_bytes_mut()[offset..],
         parts.width,
         height,
         parts.stride,
-        spec,
+        zenpixels::SpecCow::from_owned(spec),
     )?)
 }
 
 fn pixels_from_parts(parts: &PixelBufParts) -> PixelView<'_> {
-    PixelView::new(
+    PixelView::new_with_spec_cow(
         &parts.storage.as_bytes()[parts.offset..],
         parts.width,
         parts.height,
         parts.stride,
-        parts.spec.clone(),
+        zenpixels::SpecCow::from_owned(parts.spec.clone()),
     )
     .unwrap()
 }
@@ -1016,12 +1023,12 @@ fn sink_simd_aligned_decode_into() {
             let start = y as usize * self.stride;
             let end = start + (height as usize - 1) * self.stride + row_bytes;
 
-            Ok(PixelViewMut::new(
+            Ok(PixelViewMut::new_with_spec_cow(
                 &mut self.buf[start..end],
                 width,
                 height,
                 self.stride,
-                descriptor,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
             .expect("valid"))
         }
@@ -1033,7 +1040,6 @@ fn sink_simd_aligned_decode_into() {
 
     let mut sink =
         AlignedDecodeIntoSink::new(out_info.width, out_info.height, out_info.native_format);
-
     let dec_config2 = PnmDecoderConfig::new();
     dec_config2
         .job()
@@ -1107,7 +1113,14 @@ fn sink_through_dyn_dispatch() {
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
-            Ok(PixelViewMut::new(&mut self.buf, width, height, stride, descriptor).expect("valid"))
+            Ok(PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
+            )
+            .expect("valid"))
         }
     }
 
@@ -1129,7 +1142,7 @@ fn sink_through_dyn_dispatch() {
         )
         .expect("push_decoder");
 
-    assert_eq!(sink.desc, Some(ImageSpec::rgb8_srgb()));
+    assert_eq!(sink.desc, Some(ImageSpec::RGB8_SRGB));
     assert_eq!(sink.dimensions, Some((4, 2)));
 }
 
@@ -1189,7 +1202,7 @@ fn sink_deferred_allocation() {
     let buf = sink.buf.expect("begin() should have allocated");
     assert_eq!(buf.width, 3);
     assert_eq!(buf.height, 2);
-    assert_eq!(buf.spec, ImageSpec::gray8_srgb());
+    assert_eq!(buf.spec, ImageSpec::GRAY8_SRGB);
 
     // Verify data
     let orig = pixels.as_view();
@@ -1210,7 +1223,7 @@ fn sink_multi_strip_simulation() {
     // Create a larger test image to exercise multi-strip
     let width = 8u32;
     let height = 24u32;
-    let desc = ImageSpec::rgb8_srgb();
+    let desc = ImageSpec::RGB8_SRGB;
     let bpp = desc.layout.bytes_per_pixel();
     let mut data = vec![0u8; width as usize * height as usize * bpp];
     // Fill with row-dependent pattern
@@ -1287,7 +1300,7 @@ fn sink_early_abort() {
     // Build a test image
     let width = 4u32;
     let height = 16u32;
-    let desc = ImageSpec::rgb8_srgb();
+    let desc = ImageSpec::RGB8_SRGB;
     let data = vec![128u8; width as usize * height as usize * 3];
     let source = PixelBuf::from_bytes(data, width, height, desc.clone()).unwrap();
 
@@ -1313,7 +1326,14 @@ fn sink_early_abort() {
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
             self.buf.resize(needed, 0);
-            Ok(PixelViewMut::new(&mut self.buf, width, height, stride, descriptor).expect("valid"))
+            Ok(PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
+            )
+            .expect("valid"))
         }
     }
 

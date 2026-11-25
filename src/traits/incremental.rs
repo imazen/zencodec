@@ -969,7 +969,7 @@ mod tests {
             }
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::gray8_srgb())),
+                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::GRAY8_SRGB)),
             ))
         }
         fn requested(&self) -> &[InputRequest] {

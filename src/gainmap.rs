@@ -356,12 +356,10 @@ impl GainMapParams {
         } else {
             GainMapColorSpace::Alternate
         };
-        let metadata =
-            GainMapMetadata::try_new(channels, wire.unsigned(0), wire.unsigned(1), space).ok_or(
-                GainMapParseError::UnrepresentableValue {
-                    field: "rendering headroom",
-                },
-            )?;
+        let metadata = GainMapMetadata::new(channels, wire.unsigned(0), wire.unsigned(1), space)
+            .ok_or(GainMapParseError::UnrepresentableValue {
+                field: "rendering headroom",
+            })?;
         let direction = match self.direction() {
             GainMapDirection::BaseIsHdr => zenpixels::GainMapDirection::Reverse,
             GainMapDirection::BaseIsSdr => zenpixels::GainMapDirection::Forward,

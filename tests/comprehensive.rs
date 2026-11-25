@@ -44,7 +44,7 @@ fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuf {
             data[idx + 2] = ((x + y) & 0xFF) as u8;
         }
     }
-    PixelBuf::from_bytes(data, w, h, ImageSpec::rgb8_srgb()).unwrap()
+    PixelBuf::from_bytes(data, w, h, ImageSpec::RGB8_SRGB).unwrap()
 }
 
 fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
@@ -60,7 +60,7 @@ fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
             data[idx + 3] = 255;
         }
     }
-    PixelBuf::from_bytes(data, w, h, ImageSpec::rgba8_srgb()).unwrap()
+    PixelBuf::from_bytes(data, w, h, ImageSpec::RGBA8_SRGB).unwrap()
 }
 
 /// Encode a single frame via the mock codec, return raw mock bytes.
@@ -157,7 +157,8 @@ fn encoder_push_rows_and_finish() {
         for r in 0..2u32 {
             strip_data.extend_from_slice(ps.row(y + r));
         }
-        let strip_ps = PixelView::new(&strip_data, 4, 2, 4 * 3, ImageSpec::rgb8_srgb()).unwrap();
+        let strip_ps =
+            PixelView::new(&strip_data, 4, 2, 4 * 3, &zenpixels::specs::RGB8_SRGB).unwrap();
         enc.push_rows(strip_ps).unwrap();
     }
 
@@ -358,10 +359,14 @@ fn animation_render_to_sink() {
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
-            Ok(
-                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .unwrap(),
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .unwrap())
         }
         fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
             self.finished = true;
@@ -478,10 +483,14 @@ fn dyn_decode_push_decode() {
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
-            Ok(
-                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .unwrap(),
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .unwrap())
         }
     }
 
@@ -601,7 +610,7 @@ fn dyn_encode_push_rows_and_finish() {
     let ps = buf.as_view();
     for y in 0..4u32 {
         let row_data = ps.row(y);
-        let row_ps = PixelView::new(row_data, 4, 1, 4 * 3, ImageSpec::rgb8_srgb()).unwrap();
+        let row_ps = PixelView::new(row_data, 4, 1, 4 * 3, &zenpixels::specs::RGB8_SRGB).unwrap();
         enc.push_rows(row_ps).unwrap();
     }
     let output = enc.finish().unwrap();
@@ -889,7 +898,7 @@ fn decode_output_into_buffer() {
     let output = DecodeOutput::new(buf, info);
 
     assert!(output.has_alpha());
-    assert_eq!(output.descriptor(), ImageSpec::rgba8_srgb());
+    assert_eq!(output.descriptor(), ImageSpec::RGBA8_SRGB);
     assert_eq!(output.format(), ImageFormat::Avif);
 
     let recovered = output.into_buffer();
@@ -933,7 +942,7 @@ fn animation_frame_to_owned_strips_padding() {
     // Create a buffer with padded stride (pixel-aligned, larger than needed)
     let w = 10u32;
     let h = 2u32;
-    let desc = ImageSpec::rgb8_srgb();
+    let desc = ImageSpec::RGB8_SRGB;
     let bpp = 3;
     let row_bytes = w as usize * bpp;
     let stride = 66; // padded (must be multiple of bpp=3): 22 pixels * 3 = 66
@@ -947,7 +956,9 @@ fn animation_frame_to_owned_strips_padding() {
         }
     }
 
-    let ps = PixelView::new(&data, w, h, stride, desc).unwrap();
+    let ps =
+        PixelView::new_with_spec_cow(&data, w, h, stride, zenpixels::SpecCow::from_owned(desc))
+            .unwrap();
     let frame = AnimationFrame::new(ps, 100, 0);
     let owned = frame.try_to_owned_frame().unwrap();
 
@@ -1008,7 +1019,7 @@ fn limits_large_dimensions_overflow_safe() {
 #[test]
 fn limits_check_output_info() {
     let limits = ResourceLimits::none().with_max_width(50);
-    let info = OutputInfo::full_decode(100, 50, ImageSpec::rgb8_srgb());
+    let info = OutputInfo::full_decode(100, 50, ImageSpec::RGB8_SRGB);
     let err = limits.check_output_info(&info).unwrap_err();
     assert!(matches!(
         err,
@@ -1379,7 +1390,7 @@ fn negotiate_same_format_different_metadata() {
     use zencodec::decode::negotiate_pixel_format;
 
     // Caller wants sRGB, decoder has unknown-transfer — format match wins
-    let preferred = &[ImageSpec::rgba8_srgb()];
+    let preferred = &[ImageSpec::RGBA8_SRGB];
     let available = &[codec_spec(zenpixels::SampleLayout::RGBA8)]; // unknown transfer
     let picked = negotiate_pixel_format(preferred, available);
     // Returns the available entry (unknown transfer), not the preferred
@@ -1393,16 +1404,16 @@ fn negotiate_multiple_preferences_multiple_available() {
     // Caller prefers: RGBA8_SRGB, then GRAY8_SRGB
     // Available: GRAY8_SRGB, RGB8_SRGB
     // RGBA8 doesn't match anything, so GRAY8 matches second preference
-    let preferred = &[ImageSpec::rgba8_srgb(), ImageSpec::gray8_srgb()];
-    let available = &[ImageSpec::gray8_srgb(), ImageSpec::rgb8_srgb()];
+    let preferred = &[ImageSpec::RGBA8_SRGB, ImageSpec::GRAY8_SRGB];
+    let available = &[ImageSpec::GRAY8_SRGB, ImageSpec::RGB8_SRGB];
     let picked = negotiate_pixel_format(preferred, available);
-    assert_eq!(picked, Some(ImageSpec::gray8_srgb()));
+    assert_eq!(picked, Some(ImageSpec::GRAY8_SRGB));
 }
 
 #[test]
 fn best_encode_format_no_match_returns_none() {
     use zencodec::encode::best_encode_format;
-    let result = best_encode_format(ImageSpec::gray8_srgb(), &[ImageSpec::rgb8_srgb()]);
+    let result = best_encode_format(ImageSpec::GRAY8_SRGB, &[ImageSpec::RGB8_SRGB]);
     assert_eq!(result, None);
 }
 
@@ -1600,7 +1611,7 @@ fn rgba8_roundtrip() {
     let result = dec.decode().unwrap();
 
     assert!(result.has_alpha());
-    assert_eq!(result.descriptor(), ImageSpec::rgba8_srgb());
+    assert_eq!(result.descriptor(), ImageSpec::RGBA8_SRGB);
     assert_eq!(result.width(), 4);
     assert_eq!(result.height(), 4);
 
@@ -1670,10 +1681,14 @@ fn dyn_animation_frame_decoder_render_to_sink() {
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
-            Ok(
-                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .unwrap(),
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .unwrap())
         }
     }
 
@@ -1729,10 +1744,10 @@ fn codec_agnostic_pipeline() {
 
 #[test]
 fn output_info_full_decode() {
-    let info = OutputInfo::full_decode(100, 200, ImageSpec::rgba8_srgb());
+    let info = OutputInfo::full_decode(100, 200, ImageSpec::RGBA8_SRGB);
     assert_eq!(info.width, 100);
     assert_eq!(info.height, 200);
-    assert_eq!(info.native_format, ImageSpec::rgba8_srgb());
+    assert_eq!(info.native_format, ImageSpec::RGBA8_SRGB);
 }
 
 // =========================================================================
@@ -1792,10 +1807,14 @@ fn push_decoder_sink_finish_error_propagates() {
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
-            Ok(
-                zenpixels::PixelViewMut::new(&mut self.buf, width, height, stride, descriptor)
-                    .unwrap(),
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
+                &mut self.buf,
+                width,
+                height,
+                stride,
+                zenpixels::SpecCow::from_owned(descriptor),
             )
+            .unwrap())
         }
         fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
             Err("finish failed".into())
@@ -2265,7 +2284,7 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
 
 #[test]
 fn still_push_reports_the_actual_crop_and_transform() {
-    let spec = ImageSpec::rgb8_srgb();
+    let spec = ImageSpec::RGB8_SRGB;
     let bytes = [1u8, 2, 3, 4, 5, 6]
         .into_iter()
         .flat_map(|id| [id, 0, 0])
@@ -2297,7 +2316,13 @@ fn still_push_reports_the_actual_crop_and_transform() {
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
             assert_eq!(y, 0);
             assert_eq!(self.geometry, Some((w, h, spec.clone())));
-            Ok(zenpixels::PixelViewMut::new(&mut self.data, w, h, 8, spec)?)
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
+                &mut self.data,
+                w,
+                h,
+                8,
+                zenpixels::SpecCow::from_owned(spec),
+            )?)
         }
         fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
             self.done = true;
@@ -2367,7 +2392,7 @@ fn rational_animation_completion_and_erased_borrow_preserve_source_frame() {
     }
     impl DecodeRowSink for FrameSink {
         fn begin(&mut self, w: u32, h: u32, spec: ImageSpec) -> Result<(), SinkError> {
-            assert_eq!((w, h, spec), (2, 1, ImageSpec::rgba8_srgb()));
+            assert_eq!((w, h, spec), (2, 1, ImageSpec::RGBA8_SRGB));
             self.calls.push("begin");
             Ok(())
         }
@@ -2380,12 +2405,12 @@ fn rational_animation_completion_and_erased_borrow_preserve_source_frame() {
         ) -> Result<zenpixels::PixelViewMut<'_>, SinkError> {
             assert_eq!((y, rows, width), (0, 1, 2));
             self.calls.push("rows");
-            Ok(zenpixels::PixelViewMut::new(
+            Ok(zenpixels::PixelViewMut::new_with_spec_cow(
                 &mut self.bytes,
                 width,
                 rows,
                 8,
-                spec,
+                zenpixels::SpecCow::from_owned(spec),
             )?)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
@@ -2393,7 +2418,7 @@ fn rational_animation_completion_and_erased_borrow_preserve_source_frame() {
             Ok(())
         }
     }
-    let spec = ImageSpec::rgba8_srgb();
+    let spec = ImageSpec::RGBA8_SRGB;
     let expected: [[u8; 8]; 2] = [[101, 12, 43, 0, 93, 255, 7, 17], [6, 5, 4, 3, 2, 1, 0, 255]];
     let buffers =
         expected.map(|bytes| PixelBuf::from_bytes(bytes.to_vec(), 2, 1, spec.clone()).unwrap());

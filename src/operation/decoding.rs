@@ -219,15 +219,15 @@ mod admission_tests {
         fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
             self.executions.set(self.executions.get() + 1);
             Ok(DecodeOutput::new(
-                PixelBuf::from_bytes(vec![1, 2, 3], 1, 1, ImageSpec::rgb8_srgb()).unwrap(),
+                PixelBuf::from_bytes(vec![1, 2, 3], 1, 1, ImageSpec::RGB8_SRGB).unwrap(),
                 ImageInfo::new(1, 1, ImageFormat::Jpeg),
             ))
         }
     }
     #[test]
     fn preparation_is_optional_but_actual_output_is_always_checked() {
-        let rgb = ImageSpec::rgb8_srgb();
-        let rgba = ImageSpec::rgba8_srgb();
+        let rgb = ImageSpec::RGB8_SRGB;
+        let rgba = ImageSpec::RGBA8_SRGB;
         for (required, prepared, fail, prepares, executes, succeeds) in [
             (None, Some(rgba.clone()), true, 0, 1, true),
             (Some(rgb.clone()), Some(rgb.clone()), false, 1, 1, true),
@@ -281,8 +281,8 @@ mod admission_tests {
             for cancelled in [false, true] {
                 for prepared in [
                     None,
-                    Some(ImageSpec::rgb8_srgb()),
-                    Some(ImageSpec::rgba8_srgb()),
+                    Some(ImageSpec::RGB8_SRGB),
+                    Some(ImageSpec::RGBA8_SRGB),
                 ] {
                     for fail in [false, true] {
                         let flag = Arc::new(AtomicBool::new(cancelled));
@@ -299,7 +299,7 @@ mod admission_tests {
                         };
                         let pulse = crate::how_far::StopOnly::new(Cancel(flag, reason));
                         let result =
-                            decode_owned(Box::new(native), Some(ImageSpec::rgb8_srgb()), &pulse);
+                            decode_owned(Box::new(native), Some(ImageSpec::RGB8_SRGB), &pulse);
                         if fail && !cancelled {
                             // Native failure remains primary even when it also raises a stop.
                             assert!(

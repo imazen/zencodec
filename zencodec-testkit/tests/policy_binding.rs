@@ -47,7 +47,7 @@ impl<R: PolicyResolver> ExerciseBinding for BoundPolicy<R> {
             DecodeBoundary::new(InterpretationFacts::new(
                 3,
                 2,
-                (state == InterpretationState::Final).then_some(ImageSpec::rgb8_srgb()),
+                (state == InterpretationState::Final).then_some(ImageSpec::RGB8_SRGB),
                 state,
             ))
             .unwrap(),

@@ -37,8 +37,8 @@ linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426
 zencodec = { path = "../.." }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
 # Combined output planning and native sample carriage from zenpixels PRs 92/93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "0f0ad4c019fd827de2ee24f0c08e577fb2af6852" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
 
 [profile.release]
 debug = 1

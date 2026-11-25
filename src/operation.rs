@@ -711,7 +711,7 @@ mod descriptor_diagnostics {
         );
         let failure = OperationError::OutputDescriptor {
             requested: Box::new(request),
-            actual: Box::new(ImageSpec::rgb8_srgb()),
+            actual: Box::new(ImageSpec::RGB8_SRGB),
         };
         for diagnostic in [alloc::format!("{failure}"), alloc::format!("{failure:?}")] {
             assert!(!diagnostic.contains("239, 239"));

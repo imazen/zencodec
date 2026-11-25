@@ -98,9 +98,9 @@ pub trait Encoder: Sized {
         stride_pixels: u32,
     ) -> Result<EncodeOutput, Self::Error> {
         let descriptor = if make_opaque {
-            ImageSpec::rgbx8_srgb()
+            &zenpixels::specs::RGBX8_SRGB
         } else {
-            ImageSpec::rgba8_srgb()
+            &zenpixels::specs::RGBA8_SRGB
         };
         let stride_bytes = stride_pixels as usize * 4;
         // PixelView::new only fails on dimension/stride/length mismatch,

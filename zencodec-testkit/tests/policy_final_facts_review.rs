@@ -38,10 +38,10 @@ impl ControlledIncrementalDecode for ChangedCompletion {
                 boundary: self.boundary.clone(),
             });
         }
-        sink.begin(1, 1, ImageSpec::rgb8_srgb())
+        sink.begin(1, 1, ImageSpec::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         let _ = sink
-            .provide_next_buffer(0, 1, 1, ImageSpec::rgb8_srgb())
+            .provide_next_buffer(0, 1, 1, ImageSpec::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         sink.finish().map_err(StepError::Sink)?;
         // All sink calls match the adopted facts. Only the successful completion
@@ -64,15 +64,15 @@ impl ControlledIncrementalDecode for ChangedCompletion {
 #[test]
 fn policy_decoder_rejects_done_facts_that_contradict_adopted_output() {
     for done in [
-        OutputInfo::full_decode(2, 1, ImageSpec::rgb8_srgb()),
-        OutputInfo::full_decode(1, 2, ImageSpec::rgb8_srgb()),
-        OutputInfo::full_decode(1, 1, ImageSpec::rgba8_srgb()),
+        OutputInfo::full_decode(2, 1, ImageSpec::RGB8_SRGB),
+        OutputInfo::full_decode(1, 2, ImageSpec::RGB8_SRGB),
+        OutputInfo::full_decode(1, 1, ImageSpec::RGBA8_SRGB),
     ] {
         let decoder = ChangedCompletion {
             boundary: DecodeBoundary::new(InterpretationFacts::new(
                 1,
                 1,
-                Some(ImageSpec::rgb8_srgb()),
+                Some(ImageSpec::RGB8_SRGB),
                 InterpretationState::Final,
             ))
             .unwrap(),
