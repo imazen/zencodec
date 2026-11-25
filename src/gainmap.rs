@@ -360,16 +360,23 @@ impl GainMapParams {
             .ok_or(GainMapParseError::UnrepresentableValue {
                 field: "rendering headroom",
             })?;
-        let direction = match self.direction() {
-            GainMapDirection::BaseIsHdr => zenpixels::GainMapDirection::Reverse,
-            GainMapDirection::BaseIsSdr => zenpixels::GainMapDirection::Forward,
-        };
-        if self.base_hdr_headroom == self.alternate_hdr_headroom
-            || metadata.direction() != Some(direction)
-        {
-            return Err(GainMapParseError::UnrepresentableValue {
+        // Use exact rational direction from `metadata` so distinct ISO wire
+        // rationals whose lossy `f64` projections collide still render cleanly.
+        let direction = metadata
+            .direction()
+            .ok_or(GainMapParseError::UnrepresentableValue {
                 field: "rendering headroom",
-            });
+            })?;
+        if self.base_hdr_headroom != self.alternate_hdr_headroom {
+            let float_direction = match self.direction() {
+                GainMapDirection::BaseIsHdr => zenpixels::GainMapDirection::Reverse,
+                GainMapDirection::BaseIsSdr => zenpixels::GainMapDirection::Forward,
+            };
+            if direction != float_direction {
+                return Err(GainMapParseError::UnrepresentableValue {
+                    field: "rendering headroom",
+                });
+            }
         }
         if self.backward_direction {
             if direction != zenpixels::GainMapDirection::Reverse {
@@ -2634,6 +2641,66 @@ mod tests {
         );
         assert!(matches!(
             decoded.exact_metadata(),
+            Err(GainMapParseError::UnrepresentableValue {
+                field: "backward_direction"
+            })
+        ));
+    }
+
+    #[test]
+    fn exact_iso_headrooms_survive_equal_f64_projection() {
+        // Two distinct exact ISO 21496-1 unsigned rationals whose lossy f64
+        // quotients round to the identical bit pattern (from ultrahdr-core).
+        let base_den: u32 = 2_147_483_649;
+        let base_num: u32 = base_den + 256;
+        let alt_den: u32 = 2_155_872_255;
+        let alt_num: u32 = alt_den + 257;
+        assert_eq!(
+            f64::from(base_num) / f64::from(base_den),
+            f64::from(alt_num) / f64::from(alt_den)
+        );
+        assert!(
+            u64::from(base_num) * u64::from(alt_den) < u64::from(alt_num) * u64::from(base_den)
+        );
+
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+        blob.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+        blob.push(0x40); // single channel, use_base_colour_space
+        blob.extend_from_slice(&base_num.to_be_bytes());
+        blob.extend_from_slice(&base_den.to_be_bytes());
+        blob.extend_from_slice(&alt_num.to_be_bytes());
+        blob.extend_from_slice(&alt_den.to_be_bytes());
+        // Channel 0: min=0, max=2, gamma=1, base_offset=1/64, alt_offset=1/64
+        blob.extend_from_slice(&0i32.to_be_bytes());
+        blob.extend_from_slice(&1u32.to_be_bytes());
+        blob.extend_from_slice(&2i32.to_be_bytes());
+        blob.extend_from_slice(&1u32.to_be_bytes());
+        blob.extend_from_slice(&1u32.to_be_bytes());
+        blob.extend_from_slice(&1u32.to_be_bytes());
+        blob.extend_from_slice(&1i32.to_be_bytes());
+        blob.extend_from_slice(&64u32.to_be_bytes());
+        blob.extend_from_slice(&1i32.to_be_bytes());
+        blob.extend_from_slice(&64u32.to_be_bytes());
+
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
+        assert_eq!(parsed.base_hdr_headroom, parsed.alternate_hdr_headroom);
+
+        let exact = parsed.exact_metadata().unwrap();
+        assert_eq!(exact.base_hdr_headroom.num, base_num);
+        assert_eq!(exact.base_hdr_headroom.den.get(), base_den);
+        assert_eq!(exact.alternate_hdr_headroom.num, alt_num);
+        assert_eq!(exact.alternate_hdr_headroom.den.get(), alt_den);
+        assert_eq!(
+            exact.direction(),
+            Some(zenpixels::GainMapDirection::Forward)
+        );
+
+        // Setting backward_direction on a forward rational pair must still reject.
+        let mut contradictory = parsed;
+        contradictory.backward_direction = true;
+        assert!(matches!(
+            contradictory.exact_metadata(),
             Err(GainMapParseError::UnrepresentableValue {
                 field: "backward_direction"
             })
