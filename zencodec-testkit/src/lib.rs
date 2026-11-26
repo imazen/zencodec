@@ -104,7 +104,7 @@ use zencodec::{
     UnsupportedOperation,
 };
 use zenpixels::{
-    AlignedSamples, ByteStorage, ColorSpace, ImageSpec, PixelBuf, PixelStorage, PixelView,
+    AlignedSamples, ByteStorage, ColorSpace, PixelBuf, PixelFormat, PixelStorage, PixelView,
     PixelViewMut, SampleLayout, Transfer,
 };
 
@@ -176,7 +176,7 @@ fn fail(check: &'static str, detail: impl Into<String>) -> Failure {
 pub struct TestImage {
     width: u32,
     height: u32,
-    desc: ImageSpec,
+    desc: PixelFormat,
     data: PixelStorage,
 }
 
@@ -184,31 +184,31 @@ impl TestImage {
     /// An RGBA8 image whose channels vary with position, so any row/column
     /// transposition shows up as a pixel diff.
     pub fn rgba8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, ImageSpec::RGBA8_SRGB, 4, 0)
+        Self::gradient(width, height, PixelFormat::RGBA8_SRGB, 4, 0)
     }
 
     /// An RGB8 image with the same gradient pattern.
     pub fn rgb8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, ImageSpec::RGB8_SRGB, 3, 0)
+        Self::gradient(width, height, PixelFormat::RGB8_SRGB, 3, 0)
     }
 
     /// An RGBA8 gradient offset by `seed`, so distinct same-size frames (for
     /// animation tests) differ in content and a frame-ordering bug is visible.
     pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, ImageSpec::RGBA8_SRGB, 4, seed)
+        Self::gradient(width, height, PixelFormat::RGBA8_SRGB, 4, seed)
     }
 
     /// An opaque RGB8 gradient offset by `seed`: distinct frames for codecs
     /// whose animations carry no partial transparency (GIF).
     pub fn rgb8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, ImageSpec::RGB8_SRGB, 3, seed)
+        Self::gradient(width, height, PixelFormat::RGB8_SRGB, 3, seed)
     }
 
     /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
     /// descriptor such as `RGB16_BT2100_PQ`). Samples span the full 16-bit range
     /// with distinct high and low bytes, so a byte-order bug or an 8-bit
     /// truncation shows up as a pixel diff.
-    pub(crate) fn rgb16_gradient(width: u32, height: u32, desc: ImageSpec) -> Self {
+    pub(crate) fn rgb16_gradient(width: u32, height: u32, desc: PixelFormat) -> Self {
         assert!(width > 0 && height > 0, "test image must be non-empty");
         assert_eq!(
             desc.layout.bytes_per_pixel(),
@@ -231,7 +231,7 @@ impl TestImage {
         }
     }
 
-    fn gradient(width: u32, height: u32, desc: ImageSpec, bpp: usize, seed: u8) -> Self {
+    fn gradient(width: u32, height: u32, desc: PixelFormat, bpp: usize, seed: u8) -> Self {
         assert!(width > 0 && height > 0, "test image must be non-empty");
         let s = seed as usize;
         let mut data = vec![0u8; width as usize * height as usize * bpp];
@@ -290,7 +290,7 @@ impl TestImage {
 struct Pixels {
     width: u32,
     rows: u32,
-    desc: ImageSpec,
+    desc: PixelFormat,
     bytes: Vec<u8>,
 }
 
@@ -341,7 +341,7 @@ fn render(p: &Pixels, orientation: Orientation) -> Pixels {
 /// `grab` for a borrowed slice — e.g. [`AnimationFrame::pixels`], which returns a
 /// reference into the decoder's canvas.
 fn grab_ref(ps: &PixelView<'_>) -> Pixels {
-    let rb = ps.width() as usize * ps.spec().clone().layout.bytes_per_pixel();
+    let rb = ps.width() as usize * ps.format().clone().layout.bytes_per_pixel();
     let mut bytes = Vec::with_capacity(rb * ps.rows() as usize);
     for y in 0..ps.rows() {
         bytes.extend_from_slice(&ps.row(y)[..rb]);
@@ -349,7 +349,7 @@ fn grab_ref(ps: &PixelView<'_>) -> Pixels {
     Pixels {
         width: ps.width(),
         rows: ps.rows(),
-        desc: ps.spec().clone(),
+        desc: ps.format().clone(),
         bytes,
     }
 }
@@ -363,7 +363,7 @@ fn grab_ref(ps: &PixelView<'_>) -> Pixels {
 struct CollectSink {
     width: u32,
     rows: u32,
-    desc: Option<ImageSpec>,
+    desc: Option<PixelFormat>,
     stride: usize,
     next: u32,
     buf: Option<AlignedSamples>,
@@ -372,7 +372,7 @@ struct CollectSink {
 }
 
 impl DecodeRowSink for CollectSink {
-    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelFormat) -> Result<(), SinkError> {
         if self.desc.is_some() {
             return Err("decoder began more than once".into());
         }
@@ -402,7 +402,7 @@ impl DecodeRowSink for CollectSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if self.finished
             || self.desc.as_ref() != Some(&descriptor)
@@ -434,7 +434,7 @@ impl DecodeRowSink for CollectSink {
         meta: zencodec::decode::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if !meta.is_final {
@@ -689,7 +689,7 @@ where
         }
         return Ok(());
     }
-    let desc = img.strip(0, 1).spec().clone();
+    let desc = img.strip(0, 1).format().clone();
     /// How a run drains `pending_output`.
     #[derive(Clone, Copy, PartialEq)]
     enum Drain {
@@ -996,7 +996,7 @@ where
         let Ok(mut e) = enc.clone().job().encoder() else {
             break;
         };
-        let Ok(timing) = e.begin(40, height, ImageSpec::RGBA8_SRGB) else {
+        let Ok(timing) = e.begin(40, height, PixelFormat::RGBA8_SRGB) else {
             break;
         };
         let Some(lag) = timing.lag_rows() else {
@@ -1316,7 +1316,7 @@ where
         return Err(fail(CHECK, "no frames supplied"));
     };
     let (width, height) = (first.width, first.height);
-    let desc = first.strip(0, 1).spec().clone();
+    let desc = first.strip(0, 1).format().clone();
     let count = frames.len() as u32;
     let encoder = || {
         enc.clone()
@@ -1577,7 +1577,7 @@ where
             .with_loop_count(Some(0))
             .animation_frame_encoder()
             .ok()
-            .and_then(|mut a| a.begin(24, 16, ImageSpec::RGBA8_SRGB, Some(count)).ok())
+            .and_then(|mut a| a.begin(24, 16, PixelFormat::RGBA8_SRGB, Some(count)).ok())
             .and_then(|t| t.lag_frames());
         match lag {
             Some(lag) if count <= lag + 1 => count = (lag + 4).min(200),
@@ -1990,13 +1990,13 @@ where
         (
             "PQ",
             Cicp::BT2100_PQ,
-            ImageSpec::RGB16_BT2100_PQ,
+            PixelFormat::RGB16_BT2100_PQ,
             Transfer::Pq,
         ),
         (
             "HLG",
             Cicp::BT2100_HLG,
-            ImageSpec::RGB16_BT2100_HLG_SCENE,
+            PixelFormat::RGB16_BT2100_HLG_SCENE,
             Transfer::Hlg(zenpixels::HlgMode::Scene),
         ),
     ];
@@ -2007,7 +2007,7 @@ where
             TestImage::gradient(
                 20,
                 14,
-                ImageSpec::new(SampleLayout::RGB8, desc16.color.clone()),
+                PixelFormat::new(SampleLayout::RGB8, desc16.color.clone()),
                 3,
                 0,
             )
@@ -2165,13 +2165,13 @@ fn gain_map_params(case: GainMapCase) -> GainMapParams {
     p
 }
 
-fn gain_map_spec(channels: u8) -> ImageSpec {
+fn gain_map_spec(channels: u8) -> PixelFormat {
     let layout = if channels == 1 {
         SampleLayout::GRAY8
     } else {
         SampleLayout::RGB8
     };
-    ImageSpec::new(
+    PixelFormat::new(
         layout,
         ColorSpace::Untagged {
             channels,
@@ -2683,7 +2683,7 @@ where
         };
         match dec_render(&dec, &bytes, recon) {
             Ok(out) => {
-                let desc = out.pixels().spec().clone();
+                let desc = out.pixels().format().clone();
                 let hdr_labelled = matches!(
                     sample_transfer(&desc.color),
                     Transfer::Pq | Transfer::Hlg(_) | Transfer::Linear
@@ -2849,7 +2849,7 @@ fn icc_fits(class: zenpixels::IccColorSpace, layout: zenpixels::SampleLayout) ->
     }
 }
 
-fn validate_buffer_context(spec: &ImageSpec) -> Result<(), String> {
+fn validate_buffer_context(spec: &PixelFormat) -> Result<(), String> {
     if let Some(icc) = active_icc(&spec.color) {
         match zenpixels::IccColorSpace::from_icc(icc) {
             Some(class) if icc_fits(class, spec.layout) => {}
@@ -2884,7 +2884,7 @@ where
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
     use zencodec::decode::RowMetadata;
-    let oneshot = out.buffer().spec();
+    let oneshot = out.buffer().format();
     let oneshot_metadata = RowMetadata::from_view(&out.pixels());
     validate_buffer_context(oneshot).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
 
@@ -2913,9 +2913,9 @@ where
             .next_batch()
             .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?
         {
-            validate_buffer_context(strip.spec())
+            validate_buffer_context(strip.format())
                 .map_err(|e| fail(CHECK, format!("streaming strip at y={y}: {e}")))?;
-            if strip.spec() != oneshot || RowMetadata::from_view(&strip) != oneshot_metadata {
+            if strip.format() != oneshot || RowMetadata::from_view(&strip) != oneshot_metadata {
                 return Err(fail(
                     CHECK,
                     format!(
@@ -2935,7 +2935,7 @@ where
             .map_err(|e| fail(CHECK, format!("animation encode: {e}")))?;
         let primary = dec_output(&dec, &anim)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
-        let primary_spec = primary.buffer().spec();
+        let primary_spec = primary.buffer().format();
         let primary_metadata = RowMetadata::from_view(&primary.pixels());
         validate_buffer_context(primary_spec)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
@@ -2951,9 +2951,9 @@ where
         {
             let i = frame.frame_index();
             let px = frame.pixels();
-            validate_buffer_context(px.spec())
+            validate_buffer_context(px.format())
                 .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
-            if px.spec() != primary_spec || RowMetadata::from_view(px) != primary_metadata {
+            if px.format() != primary_spec || RowMetadata::from_view(px) != primary_metadata {
                 return Err(fail(
                     CHECK,
                     format!(
@@ -2974,9 +2974,9 @@ where
         {
             let i = frame.frame_index();
             let px = frame.pixels();
-            validate_buffer_context(px.spec())
+            validate_buffer_context(px.format())
                 .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
-            if px.spec() != primary_spec || RowMetadata::from_view(&px) != primary_metadata {
+            if px.format() != primary_spec || RowMetadata::from_view(&px) != primary_metadata {
                 return Err(fail(
                     CHECK,
                     format!(
@@ -3011,7 +3011,7 @@ where
     .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
     let src = out.info().source_color.clone();
-    let spec = out.buffer().spec();
+    let spec = out.buffer().format();
     let source = src.authoritative_origin();
     if source.kind == zenpixels::OriginKind::Assumed {
         return Ok(());
@@ -3062,7 +3062,7 @@ where
             .next_batch()
             .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?;
         if let Some((y, strip)) = first
-            && strip.spec().color != spec.color
+            && strip.format().color != spec.color
         {
             return Err(fail(
                 CHECK,
@@ -5008,11 +5008,11 @@ mod tests {
     #[test]
     fn reference_hdr_decode_is_labelled_pq() {
         let (e, d) = ref_codecs();
-        let img = TestImage::rgb16_gradient(6, 5, ImageSpec::RGB16_BT2100_PQ);
+        let img = TestImage::rgb16_gradient(6, 5, PixelFormat::RGB16_BT2100_PQ);
         let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ);
         let bytes = enc_oneshot(&e, &img, meta, MetadataPolicy::PreserveExact).unwrap();
         let out = dec_output(&d, &bytes).unwrap();
-        assert_eq!(out.pixels().spec().clone(), ImageSpec::RGB16_BT2100_PQ);
+        assert_eq!(out.pixels().format().clone(), PixelFormat::RGB16_BT2100_PQ);
         assert_eq!(grab(out.pixels()), img.pixels());
     }
 
@@ -5081,8 +5081,8 @@ mod tests {
         let rgb: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"RGB "));
         let gray: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"GRAY"));
         let junk: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"????"));
-        let icc = |profile: Arc<[u8]>, spec: ImageSpec, channels| {
-            ImageSpec::new(
+        let icc = |profile: Arc<[u8]>, spec: PixelFormat, channels| {
+            PixelFormat::new(
                 spec.layout,
                 ColorSpace::Icc {
                     profile,
@@ -5093,23 +5093,24 @@ mod tests {
             )
         };
 
-        assert!(validate_buffer_context(&ImageSpec::RGB8_SRGB).is_ok());
-        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::RGB8_SRGB, 3)).is_ok());
-        assert!(validate_buffer_context(&icc(rgb.clone(), ImageSpec::RGBA8_SRGB, 3)).is_ok());
-        assert!(validate_buffer_context(&icc(gray.clone(), ImageSpec::GRAY8_SRGB, 1)).is_ok());
+        assert!(validate_buffer_context(&PixelFormat::RGB8_SRGB).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), PixelFormat::RGB8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), PixelFormat::RGBA8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(gray.clone(), PixelFormat::GRAY8_SRGB, 1)).is_ok());
         assert!(
-            validate_buffer_context(&ImageSpec::GRAY8_SRGB.with_transfer(Transfer::Pq)).is_ok()
+            validate_buffer_context(&PixelFormat::GRAY8_SRGB.with_transfer(Transfer::Pq)).is_ok()
         );
 
-        let e = validate_buffer_context(&icc(gray, ImageSpec::RGB8_SRGB, 3)).unwrap_err();
+        let e = validate_buffer_context(&icc(gray, PixelFormat::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("device class Gray"), "{e}");
-        let e = validate_buffer_context(&icc(rgb, ImageSpec::GRAY8_SRGB, 1)).unwrap_err();
+        let e = validate_buffer_context(&icc(rgb, PixelFormat::GRAY8_SRGB, 1)).unwrap_err();
         assert!(e.contains("device class Rgb"), "{e}");
-        let e = validate_buffer_context(&icc(junk, ImageSpec::RGB8_SRGB, 3)).unwrap_err();
+        let e = validate_buffer_context(&icc(junk, PixelFormat::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("unreadable"), "{e}");
-        let e = validate_buffer_context(&icc(Arc::from([]), ImageSpec::RGB8_SRGB, 3)).unwrap_err();
+        let e =
+            validate_buffer_context(&icc(Arc::from([]), PixelFormat::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("unreadable"), "{e}");
-        assert_eq!(ImageSpec::RGB8_SRGB.layout, SampleLayout::RGB8);
+        assert_eq!(PixelFormat::RGB8_SRGB.layout, SampleLayout::RGB8);
     }
 
     /// The reference's worked-example gate: a class-matching ICC rides as-is

@@ -20,9 +20,9 @@ use zencodec::source::{AccessPattern, ReadAt};
 use zencodec::{ImageFormat, ImageInfo, UnsupportedOperation};
 use zencodec_io::tokio_io::{BytesSource, Inline, transcode_async};
 use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, FileReadAt, encode_to_writer};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
-const DESC: ImageSpec = ImageSpec::RGBA8_SRGB;
+const DESC: PixelFormat = PixelFormat::RGBA8_SRGB;
 const WIDTH: u32 = 256;
 const HEIGHT: u32 = 1024;
 
@@ -76,7 +76,7 @@ impl Encoder for Raw {
     fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         OneShot.encode(pixels)
     }
-    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<OutputTiming, Error> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<OutputTiming, Error> {
         Ok(OutputTiming::streaming(0))
     }
     fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Error> {
@@ -157,7 +157,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -307,8 +307,8 @@ fn file_error_provenance() {
 async fn main() {
     file_error_provenance();
     let data = [7u8; 4];
-    let px =
-        PixelView::new_with_spec_cow(&data, 1, 1, 4, zenpixels::SpecCow::from_owned(DESC)).unwrap();
+    let px = PixelView::new_with_format_cow(&data, 1, 1, 4, zenpixels::FormatCow::from_owned(DESC))
+        .unwrap();
     assert_eq!(OneShot.encode(px.clone()).unwrap().data(), data);
     let mut out = Vec::new();
     println!(

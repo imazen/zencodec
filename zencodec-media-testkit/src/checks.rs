@@ -897,7 +897,7 @@ where
     let (w, h, desc) = (
         frames[0].width(),
         frames[0].height(),
-        frames[0].spec().clone(),
+        frames[0].format().clone(),
     );
     let count = frames.len() as u32;
     // The file, bytes available after each push, and the reported lag.
@@ -990,7 +990,7 @@ where
         if f.frame_index() != index as u32
             || f.pts()
                 .is_none_or(|pts| !pts.same_instant(Timestamp::new(expected_tick, clock)))
-            || f.pixels().spec() != want.spec()
+            || f.pixels().format() != want.format()
             || f.pixels().width() != w
             || f.pixels().rows() != h
         {

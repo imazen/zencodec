@@ -37,7 +37,7 @@ impl zencodec::encode::Encoder for FinalizationProbe {
         &mut self,
         _: u32,
         h: u32,
-        _: ImageSpec,
+        _: PixelFormat,
     ) -> Result<zencodec::encode::OutputTiming, EncErr> {
         self.remaining = h;
         Ok(zencodec::encode::OutputTiming::streaming(

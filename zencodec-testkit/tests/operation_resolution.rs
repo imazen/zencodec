@@ -13,7 +13,7 @@ fn pixels() -> PixelView<'static> {
         1,
         2,
         6,
-        &zenpixels::specs::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )
     .unwrap()
 }

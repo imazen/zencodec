@@ -51,7 +51,7 @@ impl IncrementalDecode for BatchCancellationProbe {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {

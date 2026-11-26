@@ -14,7 +14,7 @@ use zencodec::{
         PolicySet, Question, RequirementEvidence, resolve_boundary, resolve_output_schedule,
     },
 };
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 trait ExerciseBinding {
     fn schedule(
@@ -47,7 +47,7 @@ impl<R: PolicyResolver> ExerciseBinding for BoundPolicy<R> {
             DecodeBoundary::new(InterpretationFacts::new(
                 3,
                 2,
-                (state == InterpretationState::Final).then_some(ImageSpec::RGB8_SRGB),
+                (state == InterpretationState::Final).then_some(PixelFormat::RGB8_SRGB),
                 state,
             ))
             .unwrap(),

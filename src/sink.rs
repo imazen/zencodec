@@ -30,7 +30,7 @@
 
 use alloc::boxed::Box;
 
-use zenpixels::{ColorOrigin, HdrMetadata, ImageSpec, PixelView, PixelViewMut, SampleFacts};
+use zenpixels::{ColorOrigin, HdrMetadata, PixelFormat, PixelView, PixelViewMut, SampleFacts};
 
 /// Boxed error type for sink failures.
 pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
@@ -127,19 +127,19 @@ impl RowMetadata {
 ///
 /// ```
 /// use zencodec::decode::DecodeRowSink;
-/// use zenpixels::{ImageSpec, PixelViewMut, SpecCow};
+/// use zenpixels::{PixelFormat, PixelViewMut, FormatCow};
 ///
 /// struct CollectSink {
 ///     buf: Vec<u8>,
 /// }
 ///
 /// impl DecodeRowSink for CollectSink {
-///     fn provide_next_buffer(&mut self, _y: u32, height: u32, width: u32, descriptor: ImageSpec) -> Result<PixelViewMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
+///     fn provide_next_buffer(&mut self, _y: u32, height: u32, width: u32, descriptor: PixelFormat) -> Result<PixelViewMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
 ///         let bpp = descriptor.layout.bytes_per_pixel();
 ///         let stride = width as usize * bpp;
 ///         let needed = height as usize * stride;
 ///         self.buf.resize(needed, 0);
-///         Ok(PixelViewMut::new_with_spec_cow(&mut self.buf, width, height, stride, SpecCow::from_owned(descriptor))
+///         Ok(PixelViewMut::new_with_format_cow(&mut self.buf, width, height, stride, FormatCow::from_owned(descriptor))
 ///             .expect("buffer sized correctly"))
 ///     }
 /// }
@@ -158,7 +158,7 @@ pub trait DecodeRowSink {
         &mut self,
         _width: u32,
         _height: u32,
-        _descriptor: ImageSpec,
+        _descriptor: PixelFormat,
     ) -> Result<(), SinkError> {
         Ok(())
     }
@@ -197,7 +197,7 @@ pub trait DecodeRowSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError>;
 
     /// Lend rows whose incoming samples carry explicit evidence or provenance.
@@ -210,7 +210,7 @@ pub trait DecodeRowSink {
         meta: crate::decode::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         let view = if meta.is_final {
@@ -260,7 +260,7 @@ pub trait DecodeRowSink {
         meta: crate::traits::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         let _ = (meta, height, width, descriptor);
         Err("this sink does not accept provisional rows".into())
@@ -289,7 +289,7 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                _descriptor: ImageSpec,
+                _descriptor: PixelFormat,
             ) -> Result<(), SinkError> {
                 assert!(!self.began, "begin called twice");
                 self.began = true;
@@ -301,7 +301,7 @@ mod tests {
                 y: u32,
                 height: u32,
                 width: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 assert!(self.began, "provide_next_buffer before begin");
                 self.strips.push((y, height));
@@ -309,12 +309,12 @@ mod tests {
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
-                Ok(PixelViewMut::new_with_spec_cow(
+                Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
                     width,
                     height,
                     stride,
-                    zenpixels::SpecCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(descriptor),
                 )
                 .expect("valid buffer"))
             }
@@ -335,7 +335,7 @@ mod tests {
         };
 
         let width = 10u32;
-        let desc = ImageSpec::RGB8_SRGB;
+        let desc = PixelFormat::RGB8_SRGB;
         let bpp = desc.layout.bytes_per_pixel();
 
         sink.begin(width, 24, desc.clone()).unwrap();
@@ -374,27 +374,27 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
-                Ok(PixelViewMut::new_with_spec_cow(
+                Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
                     width,
                     height,
                     stride,
-                    zenpixels::SpecCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(descriptor),
                 )
                 .expect("valid buffer"))
             }
         }
 
         fn use_sink(sink: &mut dyn DecodeRowSink) {
-            sink.begin(10, 8, ImageSpec::RGB8_SRGB).unwrap();
+            sink.begin(10, 8, PixelFormat::RGB8_SRGB).unwrap();
             let ps = sink
-                .provide_next_buffer(0, 8, 10, ImageSpec::RGB8_SRGB)
+                .provide_next_buffer(0, 8, 10, PixelFormat::RGB8_SRGB)
                 .unwrap();
             assert_eq!(ps.stride(), 30);
             assert_eq!(ps.width(), 10);
@@ -419,19 +419,19 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 self.call_count += 1;
                 let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
-                Ok(PixelViewMut::new_with_spec_cow(
+                Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
                     width,
                     height,
                     stride,
-                    zenpixels::SpecCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(descriptor),
                 )
                 .expect("valid buffer"))
             }
@@ -442,7 +442,7 @@ mod tests {
             call_count: 0,
         };
 
-        let desc = ImageSpec::GRAY8_SRGB;
+        let desc = PixelFormat::GRAY8_SRGB;
 
         // Multiple sequential borrows — each one ends before the next starts
         {
@@ -481,7 +481,7 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 let bpp = descriptor.layout.bytes_per_pixel();
                 let row_bytes = width as usize * bpp;
@@ -493,12 +493,12 @@ mod tests {
                     0
                 };
                 self.buf.resize(needed, 0);
-                Ok(PixelViewMut::new_with_spec_cow(
+                Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
                     width,
                     height,
                     stride,
-                    zenpixels::SpecCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(descriptor),
                 )
                 .expect("valid buffer"))
             }
@@ -508,12 +508,12 @@ mod tests {
 
         // RGBA8: width=10, bpp=4 → row_bytes=40, stride=64
         let ps = sink
-            .provide_next_buffer(0, 4, 10, ImageSpec::RGBA8_SRGB)
+            .provide_next_buffer(0, 4, 10, PixelFormat::RGBA8_SRGB)
             .unwrap();
         assert_eq!(ps.stride(), 64);
         assert_eq!(ps.width(), 10);
         assert_eq!(ps.rows(), 4);
-        assert_eq!(ps.spec().clone(), ImageSpec::RGBA8_SRGB);
+        assert_eq!(ps.format().clone(), PixelFormat::RGBA8_SRGB);
     }
 
     /// Verify sink error propagation from provide_next_buffer.
@@ -526,14 +526,14 @@ mod tests {
                 _y: u32,
                 _height: u32,
                 _width: u32,
-                _descriptor: ImageSpec,
+                _descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 Err("sink cancelled".into())
             }
         }
 
         let mut sink = FailSink;
-        let result = sink.provide_next_buffer(0, 8, 10, ImageSpec::RGB8_SRGB);
+        let result = sink.provide_next_buffer(0, 8, 10, PixelFormat::RGB8_SRGB);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "sink cancelled");
     }
@@ -549,9 +549,9 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<(), SinkError> {
-                if descriptor != ImageSpec::RGBA8_SRGB {
+                if descriptor != PixelFormat::RGBA8_SRGB {
                     return Err(format!("sink requires RGBA8, got {descriptor:?}").into());
                 }
                 Ok(())
@@ -562,18 +562,18 @@ mod tests {
                 _y: u32,
                 height: u32,
                 width: u32,
-                descriptor: ImageSpec,
+                descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 let bpp = descriptor.layout.bytes_per_pixel();
                 let stride = width as usize * bpp;
                 let needed = height as usize * stride;
                 self.buf.resize(needed, 0);
-                Ok(PixelViewMut::new_with_spec_cow(
+                Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
                     width,
                     height,
                     stride,
-                    zenpixels::SpecCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(descriptor),
                 )
                 .expect("valid buffer"))
             }
@@ -582,13 +582,13 @@ mod tests {
         let mut sink = Rgba8OnlySink { buf: Vec::new() };
 
         // RGB8 → rejected at begin()
-        let result = sink.begin(10, 8, ImageSpec::RGB8_SRGB);
+        let result = sink.begin(10, 8, PixelFormat::RGB8_SRGB);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("RGBA8"));
 
         // RGBA8 → accepted
         let mut sink2 = Rgba8OnlySink { buf: Vec::new() };
-        sink2.begin(10, 8, ImageSpec::RGBA8_SRGB).unwrap();
+        sink2.begin(10, 8, PixelFormat::RGBA8_SRGB).unwrap();
     }
 
     /// Verify finish() is called and can report errors.
@@ -601,7 +601,7 @@ mod tests {
                 _y: u32,
                 _height: u32,
                 _width: u32,
-                _descriptor: ImageSpec,
+                _descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 unreachable!("not called in this test")
             }

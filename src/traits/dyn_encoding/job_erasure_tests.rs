@@ -77,7 +77,7 @@ fn job() -> (Job, Arc<AtomicUsize>, Arc<AtomicUsize>) {
 fn configured_job_erasure_keeps_prepared_owner_without_startup_or_clone() {
     let (job, drops, starts) = job();
     let address = job.owned.as_ref() as *const Owned;
-    job.plan_encode(&EncodeDeclaration::new(1, 1, ImageSpec::RGB8_SRGB))
+    job.plan_encode(&EncodeDeclaration::new(1, 1, PixelFormat::RGB8_SRGB))
         .unwrap();
     let erased: Box<dyn DynEncodeJob + Send> = job.into_dyn_job();
     let retained = erased

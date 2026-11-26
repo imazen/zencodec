@@ -16,9 +16,9 @@ use zencodec::storage::{StorageBudget, StorageError};
 use zencodec::{At, ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
-const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 
 #[test]
 fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_unwind() {
@@ -226,12 +226,12 @@ fn storage_admission_precedes_initialization_and_row_publication() {
                 ctx.read_exact_at(0, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new_with_spec_cow(
+                    &PixelView::new_with_format_cow(
                         &pixels,
                         2,
                         2,
                         12,
-                        zenpixels::SpecCow::from_owned(RGBA),
+                        zenpixels::FormatCow::from_owned(RGBA),
                     )
                     .unwrap(),
                 )
@@ -266,7 +266,7 @@ struct Sink {
     ended: usize,
 }
 impl DecodeRowSink for Sink {
-    fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), SinkError> {
+    fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
         self.began += 1;
         self.pixels.begin(w, h, d)
     }
@@ -275,7 +275,7 @@ impl DecodeRowSink for Sink {
         y: u32,
         h: u32,
         w: u32,
-        d: ImageSpec,
+        d: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.rows += 1;
         self.pixels.provide_next_buffer(y, h, w, d)
@@ -299,7 +299,7 @@ fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
         fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
             core::num::NonZeroU32::MIN
         }
-        fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), SinkError> {
+        fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
             self.0.begin(w, h, d)
         }
         fn provide_next_buffer(
@@ -307,7 +307,7 @@ fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
             y: u32,
             h: u32,
             w: u32,
-            d: ImageSpec,
+            d: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             assert_eq!(h, 1);
             self.0.provide_next_buffer(y, h, w, d)
@@ -348,12 +348,12 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             if early {
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new_with_spec_cow(
+                    &PixelView::new_with_format_cow(
                         &[0; 16],
                         2,
                         2,
                         8,
-                        zenpixels::SpecCow::from_owned(RGBA),
+                        zenpixels::FormatCow::from_owned(RGBA),
                     )
                     .unwrap(),
                 )
@@ -381,12 +381,12 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             ctx.read_exact_at(1, &mut rows).await?;
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelView::new_with_spec_cow(
+                &PixelView::new_with_format_cow(
                     &rows,
                     2,
                     2,
                     12,
-                    zenpixels::SpecCow::from_owned(RGBA),
+                    zenpixels::FormatCow::from_owned(RGBA),
                 )
                 .unwrap(),
             )

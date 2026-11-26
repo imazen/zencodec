@@ -619,13 +619,13 @@ pub fn check_read_at_contract(
     Ok(())
 }
 
-fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, ImageSpec, Vec<u8>) {
+fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, PixelFormat, Vec<u8>) {
     let ps = out.pixels();
     let mut bytes = Vec::new();
     for y in 0..ps.rows() {
         bytes.extend_from_slice(ps.row(y));
     }
-    (ps.width(), ps.rows(), ps.spec().clone(), bytes)
+    (ps.width(), ps.rows(), ps.format().clone(), bytes)
 }
 
 /// Verify the `seekable` capability flag in both directions. A decoder
@@ -719,7 +719,7 @@ struct OrderSink {
 }
 
 impl zencodec::decode::DecodeRowSink for OrderSink {
-    fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), zencodec::decode::SinkError> {
+    fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), zencodec::decode::SinkError> {
         self.began += 1;
         self.inner.begin(w, h, d)
     }
@@ -728,7 +728,7 @@ impl zencodec::decode::DecodeRowSink for OrderSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.final_ys.push((y, height));
         self.inner.provide_next_buffer(y, height, width, descriptor)
@@ -766,7 +766,7 @@ impl zencodec::decode::DecodeRowSink for PassSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.ship();
         let (_, buf) = self.current.insert((
@@ -783,7 +783,7 @@ impl zencodec::decode::DecodeRowSink for PassSink {
         meta: zencodec::decode::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         if meta.is_final {
             self.final_through_pass += 1;
@@ -807,7 +807,7 @@ struct UntouchedSink {
 }
 
 impl zencodec::decode::DecodeRowSink for UntouchedSink {
-    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), zencodec::decode::SinkError> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), zencodec::decode::SinkError> {
         self.calls += 1;
         Ok(())
     }
@@ -817,7 +817,7 @@ impl zencodec::decode::DecodeRowSink for UntouchedSink {
         _: u32,
         _: u32,
         _: u32,
-        _: ImageSpec,
+        _: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;
         Err("pre-cancelled decoder requested rows".into())
@@ -837,7 +837,7 @@ impl zencodec::decode::DecodeRowSink for UntouchedSink {
         _: zencodec::decode::BatchMeta,
         _: u32,
         _: u32,
-        _: ImageSpec,
+        _: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;
         Err("pre-cancelled decoder requested provisional rows".into())

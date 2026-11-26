@@ -18,9 +18,9 @@ use zencodec::{
 };
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
-const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 static FORMAT: ImageFormatDefinition = ImageFormatDefinition::new(
     "controlled-fixture",
     None,
@@ -49,8 +49,8 @@ impl DecoderConfig for Config {
     fn formats() -> &'static [ImageFormat] {
         &[IMAGE]
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[RGBA];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[RGBA];
         SUPPORTED
     }
     fn job<'a>(self) -> Self::Job<'a> {
@@ -85,34 +85,34 @@ impl<'a> DecodeJob<'a> for Config {
     fn output_info(&self, _: &[u8]) -> Result<OutputInfo, Self::Error> {
         Ok(OutputInfo::full_decode(2, 2, RGBA))
     }
-    fn decoder(self, _: Cow<'a, [u8]>, _: &[ImageSpec]) -> Result<Self::Dec, Self::Error> {
+    fn decoder(self, _: Cow<'a, [u8]>, _: &[PixelFormat]) -> Result<Self::Dec, Self::Error> {
         panic!("no silent one-shot fallback")
     }
     fn push_decoder(
         self,
         _: Cow<'a, [u8]>,
         _: &mut dyn DecodeRowSink,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<OutputInfo, Self::Error> {
         panic!("no silent push fallback")
     }
     fn streaming_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<Self::StreamDec, Self::Error> {
         panic!("no silent streaming fallback")
     }
     fn animation_frame_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<Self::AnimationFrameDec, Self::Error> {
         panic!("no animation fallback")
     }
     fn dyn_controlled_decoder(
         self,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
         storage: StorageBudget,
     ) -> Result<Box<DynControlledDecoder>, BoxedError> {
         self.limits.check_dimensions(2, 2)?;
@@ -138,12 +138,12 @@ impl<'a> DecodeJob<'a> for Config {
                 ctx.read_exact_at(4, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelView::new_with_spec_cow(
+                    &PixelView::new_with_format_cow(
                         &pixels,
                         2,
                         2,
                         8,
-                        zenpixels::SpecCow::from_owned(RGBA),
+                        zenpixels::FormatCow::from_owned(RGBA),
                     )
                     .unwrap(),
                 )
@@ -215,7 +215,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
 fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(ImageSpec::RGB8_SRGB);
+    let request = DecodeRequest::new().with_output(PixelFormat::RGB8_SRGB);
     let mut resolver = |_q: Question<'_>| -> Result<Decision, At<Infallible>> {
         panic!("an unmet requirement is not a policy choice")
     };
@@ -231,13 +231,13 @@ fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     ));
     assert!(sink.as_pixel_slice().is_none());
     assert_eq!(work.load(Ordering::SeqCst), 0);
-    let preferred = DecodeRequest::new().preferring_output(vec![ImageSpec::RGB8_SRGB]);
+    let preferred = DecodeRequest::new().preferring_output(vec![PixelFormat::RGB8_SRGB]);
     let mut decoder = PolicyDecoder::new(
         preferred.start_controlled(&codecs, budget()).unwrap(),
         PolicySet::new(),
     );
     drive_from_slice(&mut decoder, &input(), &mut sink, None, 7).unwrap();
-    assert_eq!(sink.as_pixel_slice().unwrap().spec().clone(), RGBA);
+    assert_eq!(sink.as_pixel_slice().unwrap().format().clone(), RGBA);
 }
 
 #[test]

@@ -35,7 +35,7 @@ use zencodec::encode::{AnimationFrameEncoder, AnimationOutputTiming, BoxedError,
 use zencodec::time::{FrameDuration, Timestamp, TimingError, duration_to_ticks};
 use zencodec::{ImageFormat, ImageInfo, ImageSequence, UnsupportedOperation};
 use zencodec_io::{DriveFailure, SliceCursor};
-use zenpixels::{ImageSpec, PixelBuf, PixelView, PixelViewMut};
+use zenpixels::{PixelBuf, PixelFormat, PixelView, PixelViewMut};
 
 use crate::container::{DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer};
 use crate::frame::{
@@ -56,7 +56,7 @@ pub trait RenderFrame {
     /// # Errors
     ///
     /// When this renderer cannot produce a canvas for the track.
-    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<ImageSpec, BoxedError>;
+    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<PixelFormat, BoxedError>;
 
     /// Write `frame`'s pixels into `canvas`, which has the track's coded size
     /// and [`canvas_descriptor`](Self::canvas_descriptor).
@@ -71,7 +71,7 @@ pub trait RenderFrame {
 /// a video encoder.
 pub trait CaptureFrame {
     /// Admit the exact input spec before the muxer publishes any header.
-    fn validate_input(&self, spec: &ImageSpec, config: &CodecConfig) -> Result<(), BoxedError>;
+    fn validate_input(&self, spec: &PixelFormat, config: &CodecConfig) -> Result<(), BoxedError>;
 
     /// A frame holding `pixels` with `timing`, in the layout the encoder
     /// configured by `config` takes.
@@ -110,11 +110,11 @@ fn convert_error(msg: &'static str) -> BoxedError {
 }
 
 impl RenderFrame for Gray8 {
-    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<ImageSpec, BoxedError> {
+    fn canvas_descriptor(&self, track: &TrackInfo) -> Result<PixelFormat, BoxedError> {
         if track.video_info().is_none() {
             return Err(convert_error("Gray8 renders video tracks only"));
         }
-        Ok(ImageSpec::GRAY8_SRGB)
+        Ok(PixelFormat::GRAY8_SRGB)
     }
 
     fn render(&mut self, frame: &Frame, canvas: &mut PixelViewMut<'_>) -> Result<(), BoxedError> {
@@ -133,7 +133,10 @@ impl RenderFrame for Gray8 {
             Some(cicp) => cicp == zencodec::Cicp::SRGB,
             None => color.bitstream.is_none() && color.container.is_none(),
         };
-        if canvas.spec() != &ImageSpec::GRAY8_SRGB || interp.geometry != geometry || !exact_color {
+        if canvas.format() != &PixelFormat::GRAY8_SRGB
+            || interp.geometry != geometry
+            || !exact_color
+        {
             return Err(convert_error(
                 "Gray8 requires a full-size sRGB monochrome interpretation",
             ));
@@ -156,8 +159,8 @@ impl RenderFrame for Gray8 {
 }
 
 impl CaptureFrame for Gray8 {
-    fn validate_input(&self, spec: &ImageSpec, _config: &CodecConfig) -> Result<(), BoxedError> {
-        if spec == &ImageSpec::GRAY8_SRGB {
+    fn validate_input(&self, spec: &PixelFormat, _config: &CodecConfig) -> Result<(), BoxedError> {
+        if spec == &PixelFormat::GRAY8_SRGB {
             Ok(())
         } else {
             Err(Box::new(UnsupportedOperation::PixelFormat))
@@ -170,7 +173,7 @@ impl CaptureFrame for Gray8 {
         config: &CodecConfig,
         timing: FrameTiming,
     ) -> Result<Frame, BoxedError> {
-        self.validate_input(pixels.spec(), config)?;
+        self.validate_input(pixels.format(), config)?;
         let (w, h) = (pixels.width(), pixels.rows());
         if config
             .video
@@ -531,7 +534,7 @@ pub struct AnimationVideoEncoder<E, M, P> {
     mux: M,
     capture: P,
     next_pts: Timestamp,
-    spec: Option<ImageSpec>,
+    spec: Option<PixelFormat>,
     pushed: u32,
     declared: Option<u32>,
     lag_frames: u32,
@@ -565,7 +568,7 @@ impl<E: VideoEncoder, M: Muxer, P: CaptureFrame> AnimationVideoEncoder<E, M, P> 
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, EncErr<E, M>> {
         if self.spec.is_some() {
@@ -617,7 +620,7 @@ where
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, Self::Error> {
         self.begin_inner(width, height, descriptor, frame_count)
@@ -660,11 +663,11 @@ where
             .checked_add(duration)
             .map_err(AdaptError::Time)?;
         if let Some(spec) = &self.spec {
-            if spec != pixels.spec() {
+            if spec != pixels.format() {
                 return Err(AdaptError::Unsupported(UnsupportedOperation::PixelFormat));
             }
         } else {
-            self.begin_inner(pixels.width(), pixels.rows(), pixels.spec().clone(), None)?;
+            self.begin_inner(pixels.width(), pixels.rows(), pixels.format().clone(), None)?;
         }
         let cfg = self.enc.output_config().ok_or(AdaptError::Shape)?.clone();
         let frame = self

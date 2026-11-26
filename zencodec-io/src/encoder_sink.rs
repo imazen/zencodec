@@ -8,7 +8,7 @@ use core::fmt;
 use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zenpixels::{
-    ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelStorage, PixelView, PixelViewMut,
+    ByteStorage, ByteStorageMut, PixelBuf, PixelFormat, PixelStorage, PixelView, PixelViewMut,
 };
 
 /// Failure of [`EncoderSink::finish`].
@@ -62,7 +62,7 @@ pub struct EncoderSink<E> {
     encoder: Option<E>,
     strip: Option<PixelStorage>,
     pending: Option<(u32, RowMetadata)>,
-    declaration: Option<(u32, u32, ImageSpec)>,
+    declaration: Option<(u32, u32, PixelFormat)>,
     row_limit: core::num::NonZeroU32,
     finished: bool,
     failed: bool,
@@ -222,7 +222,7 @@ impl<E: Encoder> DecodeRowSink for EncoderSink<E>
 where
     E::Error: Send + Sync,
 {
-    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelFormat) -> Result<(), SinkError> {
         if self.declaration.is_some() || self.failed {
             return Err("EncoderSink: begin called twice or after failure".into());
         }
@@ -245,7 +245,7 @@ where
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.provide_buffer_with_metadata(
             BatchMeta::final_rows(y),
@@ -261,7 +261,7 @@ where
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         let Some((expected_width, total_rows, spec)) = &self.declaration else {
@@ -291,11 +291,9 @@ where
             .checked_mul(height as usize)
             .ok_or("EncoderSink: strip too large")?;
         let alignment = descriptor.layout.min_alignment();
-        if self
-            .strip
-            .as_ref()
-            .is_none_or(|storage| storage.byte_len() < len || storage.alloc_alignment() < alignment)
-        {
+        if self.strip.as_ref().is_none_or(|storage| {
+            storage.byte_len() < len || storage.allocation_alignment() < alignment
+        }) {
             self.strip = Some(
                 PixelBuf::new(width, height, descriptor.clone())?
                     .into_parts()
@@ -353,7 +351,7 @@ mod tests {
             &mut self,
             _width: u32,
             _height: u32,
-            _spec: ImageSpec,
+            _spec: PixelFormat,
         ) -> Result<OutputTiming, Self::Error> {
             self.bytes.push(0xCC);
             Ok(OutputTiming::streaming(0))
@@ -378,7 +376,7 @@ mod tests {
 
     #[test]
     fn checked_strip_order_mismatch_and_terminal_calls_preserve_accepted_bytes() {
-        let spec = ImageSpec::RGB8_SRGB;
+        let spec = PixelFormat::RGB8_SRGB;
         let alternate = spec.clone().with_primaries(Primaries::DisplayP3);
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() })
             .with_max_buffer_rows(core::num::NonZeroU32::MIN);
@@ -408,7 +406,7 @@ mod tests {
 
     #[test]
     fn native_row_refusal_remains_primary_and_keeps_confirmed_prefix() {
-        let spec = ImageSpec::RGB8_SRGB;
+        let spec = PixelFormat::RGB8_SRGB;
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() });
         sink.begin(1, 2, spec.clone()).unwrap();
         sink.provide_next_buffer(0, 1, 1, spec.clone())

@@ -8,7 +8,7 @@ use crate::{
     frame::{FrameTiming, Presentation},
     image::{ImageGeometry, ImageOutput, Placement},
 };
-use zenpixels::{ImageSpec, Orientation};
+use zenpixels::{Orientation, PixelFormat};
 
 /// Bounded diagnostic facts, without pixel bytes, names, profiles or source
 /// payloads. They describe the held output; they do not establish privacy or a
@@ -26,7 +26,7 @@ pub struct ImageFacts {
     /// Residual orientation, if the adapter establishes one.
     pub orientation: Option<Orientation>,
     /// Actual packed pixel descriptor, absent for native component codes.
-    pub packed: Option<ImageSpec>,
+    pub packed: Option<PixelFormat>,
     /// Declared emitted planes. Mapping checks the native storage separately.
     pub planes: usize,
     /// Number of retained auxiliary planes.

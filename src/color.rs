@@ -537,15 +537,15 @@ mod tests {
 
     #[test]
     fn reconstructed_gain_map_linear_color_emits_avif_cicp() {
-        use zenpixels::{AlphaMode, DiffuseWhite, ImageSpec, PixelBuf, SampleLayout};
+        use zenpixels::{AlphaMode, DiffuseWhite, PixelBuf, PixelFormat, SampleLayout};
         use zenpixels_convert::DualLayerHdrView;
         use zenpixels_convert::gainmap::{GainMapApplyConfig, apply_gain_map_with};
 
-        let base = PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
+        let base = PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
         let gain = PixelBuf::new(
             1,
             1,
-            ImageSpec::new(
+            PixelFormat::new(
                 SampleLayout::GRAY8,
                 ColorSpace::Untagged {
                     channels: 1,
@@ -568,10 +568,10 @@ mod tests {
             &enough::Unstoppable,
         )
         .unwrap();
-        assert_eq!(hdr.spec().color.white(), Some(DiffuseWhite::BT2408));
+        assert_eq!(hdr.format().color.white(), Some(DiffuseWhite::BT2408));
         let plan = resolve_color_emit(
             &src_cicp(Cicp::SRGB),
-            &hdr.spec().color,
+            &hdr.format().color,
             &caps_avif(),
             ColorEmitPolicy::Compact,
         )

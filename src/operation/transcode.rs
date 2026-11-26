@@ -8,7 +8,7 @@ use crate::{
     decode::{BoundaryAction, DecodeBoundary},
     operation::policy,
 };
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 /// Treatment of source descriptive metadata in a pixel transcode.
 /// Color interpretation is a separate obligation; this is not a certificate
@@ -35,7 +35,7 @@ pub struct TranscodeOffer {
     /// Confirmed configuration of the retained encoder job.
     pub encoder: EncodeOffer,
     /// Samples and interpretation delivered to that encoder after conversion.
-    pub output: ImageSpec,
+    pub output: PixelFormat,
     /// Descriptive source metadata treatment.
     pub metadata: MetadataTransfer,
     /// Whether the output retains an opaque source color profile. Preserving
@@ -61,7 +61,11 @@ pub struct TranscodeOffer {
 impl TranscodeOffer {
     /// Describe a route whose resource scope and opaque-profile retention must
     /// be filled in by its executing adapter. Unknown storage stays unknown.
-    pub const fn new(encoder: EncodeOffer, output: ImageSpec, metadata: MetadataTransfer) -> Self {
+    pub const fn new(
+        encoder: EncodeOffer,
+        output: PixelFormat,
+        metadata: MetadataTransfer,
+    ) -> Self {
         Self {
             encoder,
             output,
@@ -123,7 +127,7 @@ mod tests {
         DecodeBoundary::new(InterpretationFacts::new(
             97,
             65,
-            Some(ImageSpec::RGB8_SRGB),
+            Some(PixelFormat::RGB8_SRGB),
             state,
         ))
         .unwrap()
@@ -136,7 +140,7 @@ mod tests {
                 preference_index: 0,
                 resolution: None,
             },
-            ImageSpec::RGB8_SRGB,
+            PixelFormat::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
         );
         offer.retains_opaque_profile = Some(false);

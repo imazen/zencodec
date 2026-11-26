@@ -765,7 +765,7 @@ impl DecodedGainMap {
         mut metadata: GainMapInfo,
     ) -> Result<Self, GainMapIngestError> {
         use zenpixels::{AlphaMode, ChannelOrder, ColorSpace, SampleType};
-        let spec = pixels.spec();
+        let spec = pixels.format();
         let channels = match spec.layout.order {
             ChannelOrder::Gray => 1,
             ChannelOrder::Rgb => 3,
@@ -831,7 +831,7 @@ impl DecodedGainMap {
     /// [`metadata.channels`](GainMapInfo::channels), so a 1-vs-3-channel decision
     /// can never desync from the bytes actually present.
     pub fn channels(&self) -> u8 {
-        self.pixels.spec().layout.channels() as u8
+        self.pixels.format().layout.channels() as u8
     }
 }
 
@@ -2687,10 +2687,10 @@ mod tests {
         assert_eq!(parsed.base_hdr_headroom, parsed.alternate_hdr_headroom);
 
         let exact = parsed.exact_metadata().unwrap();
-        assert_eq!(exact.base_hdr_headroom.num, base_num);
-        assert_eq!(exact.base_hdr_headroom.den.get(), base_den);
-        assert_eq!(exact.alternate_hdr_headroom.num, alt_num);
-        assert_eq!(exact.alternate_hdr_headroom.den.get(), alt_den);
+        assert_eq!(exact.base_hdr_headroom.numerator, base_num);
+        assert_eq!(exact.base_hdr_headroom.denominator.get(), base_den);
+        assert_eq!(exact.alternate_hdr_headroom.numerator, alt_num);
+        assert_eq!(exact.alternate_hdr_headroom.denominator.get(), alt_den);
         assert_eq!(
             exact.direction(),
             Some(zenpixels::GainMapDirection::Forward)

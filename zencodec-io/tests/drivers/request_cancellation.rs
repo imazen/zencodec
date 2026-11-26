@@ -77,7 +77,7 @@ async fn request_drop_reaches_driver_worker_without_cancelling_parent() {
         fn info(&self) -> Option<&ImageInfo> {
             None
         }
-        fn output_descriptor(&self) -> Option<ImageSpec> {
+        fn output_descriptor(&self) -> Option<PixelFormat> {
             None
         }
     }

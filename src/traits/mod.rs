@@ -15,7 +15,7 @@
 //! Encoding and decoding are both **type-erased**: encoders accept any pixel
 //! format at runtime via [`PixelView`] and dispatch internally based on the
 //! descriptor. Decoders return native pixels; the caller provides a ranked
-//! preference list of [`ImageSpec`](crate::ImageSpec)s.
+//! preference list of [`PixelFormat`](crate::PixelFormat)s.
 //!
 //! Color management is explicitly **not** the codec's job. Decoders return
 //! native pixels with ICC/CICP metadata. Encoders accept pixels as-is and

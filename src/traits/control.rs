@@ -10,7 +10,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 /// How much a decoder knows about the interpretation of its proposed pixels.
 /// This does not describe metadata inventory or certify absence of private data.
@@ -53,7 +53,7 @@ pub struct InterpretationFacts {
     /// Proposed image height.
     pub height: u32,
     /// Proposed output layout and sample interpretation, when known.
-    pub descriptor: Option<ImageSpec>,
+    pub descriptor: Option<PixelFormat>,
     /// Whether this interpretation can still change.
     pub state: InterpretationState,
     /// Structured explanation when interpretation is unavailable. Older adapters
@@ -66,7 +66,7 @@ impl InterpretationFacts {
     pub const fn new(
         width: u32,
         height: u32,
-        descriptor: Option<ImageSpec>,
+        descriptor: Option<PixelFormat>,
         state: InterpretationState,
     ) -> Self {
         Self {
@@ -363,7 +363,7 @@ impl<'a> GuardedSink<'a> {
         &mut self,
         width: Option<u32>,
         extent: Option<(u32, u32)>,
-        descriptor: Option<&ImageSpec>,
+        descriptor: Option<&PixelFormat>,
     ) -> Result<(), crate::sink::SinkError> {
         if let Some(cause) = &self.sink_error {
             return Err(Box::new(RetainedSinkError(cause.clone())));
@@ -397,7 +397,7 @@ impl DecodeRowSink for GuardedSink<'_> {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<(), crate::sink::SinkError> {
         self.check(Some(width), Some((0, height)), Some(&descriptor))?;
         if self
@@ -418,7 +418,7 @@ impl DecodeRowSink for GuardedSink<'_> {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
         self.check(Some(width), Some((y, height)), Some(&descriptor))?;
         retain_sink_failure(
@@ -431,7 +431,7 @@ impl DecodeRowSink for GuardedSink<'_> {
         meta: super::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
         self.check(Some(width), Some((meta.y, height)), Some(&descriptor))?;
         retain_sink_failure(
@@ -445,7 +445,7 @@ impl DecodeRowSink for GuardedSink<'_> {
         meta: super::BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &crate::sink::RowMetadata,
     ) -> Result<zenpixels::PixelViewMut<'_>, crate::sink::SinkError> {
         self.check(Some(width), Some((meta.y, height)), Some(&descriptor))?;
@@ -491,11 +491,11 @@ mod tests {
             _: Option<&dyn crate::Pulse>,
         ) -> Result<Progress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            sink.begin(1, 1, ImageSpec::RGBA8_SRGB)
+            sink.begin(1, 1, PixelFormat::RGBA8_SRGB)
                 .map_err(StepError::Sink)?;
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGBA8_SRGB)),
+                Event::Done(OutputInfo::full_decode(1, 1, PixelFormat::RGBA8_SRGB)),
             ))
         }
         fn requested(&self) -> &[InputRequest] {
@@ -520,17 +520,17 @@ mod tests {
                 self.early_output
             } {
                 1 => {
-                    let _ = sink.begin(1, 1, ImageSpec::RGBA8_SRGB);
+                    let _ = sink.begin(1, 1, PixelFormat::RGBA8_SRGB);
                 }
                 2 => {
-                    let _ = sink.provide_next_buffer(0, 1, 1, ImageSpec::RGBA8_SRGB);
+                    let _ = sink.provide_next_buffer(0, 1, 1, PixelFormat::RGBA8_SRGB);
                 }
                 3 => {
                     let _ = sink.provide_pass_buffer(
                         super::super::BatchMeta::new(0, false),
                         1,
                         1,
-                        ImageSpec::RGBA8_SRGB,
+                        PixelFormat::RGBA8_SRGB,
                     );
                 }
                 4 => {
@@ -542,7 +542,7 @@ mod tests {
                 let _ = sink.finish(); // A swallowed failure must block later effects too.
                 return Ok(Progress::new(
                     0,
-                    Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGBA8_SRGB)),
+                    Event::Done(OutputInfo::full_decode(1, 1, PixelFormat::RGBA8_SRGB)),
                 )
                 .into());
             }
@@ -571,11 +571,11 @@ mod tests {
             _: super::super::BatchMeta,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("unexpected provisional rows")
         }
-        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), SinkError> {
             panic!("unexpected sink effect")
         }
         fn provide_next_buffer(
@@ -583,7 +583,7 @@ mod tests {
             _: u32,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("unexpected rows")
         }
@@ -593,7 +593,7 @@ mod tests {
         let boundary = DecodeBoundary::new(InterpretationFacts::new(
             1,
             1,
-            Some(ImageSpec::RGBA8_SRGB),
+            Some(PixelFormat::RGBA8_SRGB),
             InterpretationState::Final,
         ))
         .unwrap();
@@ -691,7 +691,7 @@ mod tests {
         }
     }
     impl DecodeRowSink for RefusingSink {
-        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), SinkError> {
             self.fail(1)
         }
         fn provide_next_buffer(
@@ -699,7 +699,7 @@ mod tests {
             _: u32,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             self.fail(2)
         }
@@ -708,7 +708,7 @@ mod tests {
             _: super::super::BatchMeta,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             self.fail(3)
         }

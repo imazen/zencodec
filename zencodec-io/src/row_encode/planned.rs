@@ -46,7 +46,7 @@ impl<S: Source> Input<'_, S> {
         if let Self::Raster { pixels, .. } = self
             && (pixels.width() != desc.width
                 || pixels.rows() != desc.height
-                || pixels.spec() != &desc.descriptor
+                || pixels.format() != &desc.descriptor
                 || pixels.facts().depth.is_some_and(|claim| {
                     desc.exact_depth.is_none_or(|declared| {
                         !claim.color_exact_at(declared.color_bits())
@@ -223,7 +223,7 @@ impl<S: Source> Filler<'_, S> {
         check(self.control)?;
         let count = rows.rows();
         if rows.width() != self.desc.width
-            || rows.spec() != &self.desc.descriptor
+            || rows.format() != &self.desc.descriptor
             || count == 0
             || first
                 .checked_add(count)

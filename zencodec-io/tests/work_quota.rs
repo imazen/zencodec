@@ -18,10 +18,10 @@ use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_io::tokio_io::{BytesSource, Inline, Job, decode_async, transcode_async};
 use zencodec_io::{CollectSink, DriveOptions, WorkQuota};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 const ROWS: u32 = 37;
-const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 #[derive(Debug)]
 struct Failed;
 impl core::fmt::Display for Failed {
@@ -77,7 +77,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {
@@ -167,7 +167,7 @@ impl Encoder for Raw {
     fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Failed> {
         Err(Failed)
     }
-    fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<OutputTiming, Failed> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<OutputTiming, Failed> {
         self.bytes.extend_from_slice(b"RAW!");
         Ok(OutputTiming::streaming(0))
     }

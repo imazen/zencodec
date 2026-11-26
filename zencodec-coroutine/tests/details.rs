@@ -6,8 +6,8 @@ use std::sync::{
 use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
-const DESC: ImageSpec = ImageSpec::GRAY8_SRGB;
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
+const DESC: PixelFormat = PixelFormat::GRAY8_SRGB;
 struct Owner(Arc<AtomicUsize>);
 impl Drop for Owner {
     fn drop(&mut self) {
@@ -33,14 +33,14 @@ impl DecodeRowSink for Sink {
         _: u32,
         rows: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        Ok(PixelViewMut::new_with_spec_cow(
+        Ok(PixelViewMut::new_with_format_cow(
             &mut self.bytes,
             width,
             rows,
             1,
-            zenpixels::SpecCow::from_owned(descriptor),
+            zenpixels::FormatCow::from_owned(descriptor),
         )?)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
@@ -65,7 +65,7 @@ fn producer(
         }
         ctx.set_details(result);
         let rows =
-            PixelView::new_with_spec_cow(&[17], 1, 1, 1, zenpixels::SpecCow::from_owned(DESC))
+            PixelView::new_with_format_cow(&[17], 1, 1, 1, zenpixels::FormatCow::from_owned(DESC))
                 .unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
         Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
@@ -250,9 +250,14 @@ fn terminal_details_cannot_change_adopted_interpretation() {
             let mut result = details(owned);
             result.info.width = 2;
             ctx.set_details(result);
-            let rows =
-                PixelView::new_with_spec_cow(&[17], 1, 1, 1, zenpixels::SpecCow::from_owned(DESC))
-                    .unwrap();
+            let rows = PixelView::new_with_format_cow(
+                &[17],
+                1,
+                1,
+                1,
+                zenpixels::FormatCow::from_owned(DESC),
+            )
+            .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
         },
@@ -304,11 +309,11 @@ fn sink_stop_prevents_completion_and_releases_details() {
             _: u32,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("completion-only producer has no row callback");
         }
-        fn begin(&mut self, _: u32, _: u32, _: ImageSpec) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), SinkError> {
             if self.at_begin {
                 self.signal.store(true, Ordering::SeqCst);
                 if self.fail {
@@ -434,7 +439,7 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
         bytes[20..24].copy_from_slice(b"XYZ ");
         bytes[36..40].copy_from_slice(b"acsp");
         bytes[82] = id;
-        ImageSpec::new(
+        PixelFormat::new(
             SampleLayout::GRAY8,
             ColorSpace::Icc {
                 profile: Arc::from(bytes),
@@ -462,12 +467,12 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
             ))
             .await?;
             ctx.set_output_descriptor(changed.clone());
-            let pixels = PixelView::new_with_spec_cow(
+            let pixels = PixelView::new_with_format_cow(
                 &[81],
                 1,
                 1,
                 1,
-                zenpixels::SpecCow::from_owned(changed.clone()),
+                zenpixels::FormatCow::from_owned(changed.clone()),
             )
             .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &pixels).await?;

@@ -14,7 +14,7 @@ use zencodec::encode::Fidelity;
 use zencodec::estimate::ComputeEnvironment;
 use zencodec::{CodecSet, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy};
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 // The reference codec stands in for a real one. Its encoder emits a "ZCR1" wire
 // format; `ReferenceZcrDecoderConfig` registers the decoder under a format whose
@@ -27,7 +27,7 @@ const RGB: [u8; 12] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 /// View tightly-packed RGB8 bytes as a [`PixelView`].
 fn rgb8(bytes: &[u8]) -> PixelView<'_> {
-    PixelView::new(bytes, W, H, W as usize * 3, &zenpixels::specs::RGB8_SRGB).unwrap()
+    PixelView::new(bytes, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap()
 }
 
 /// One codec set, built once. Real code registers real codecs here.
@@ -133,9 +133,9 @@ fn decode_requesting_a_pixel_format() {
     // When you truly need a format the decoder can't make, convert the output
     // (see `convert_a_decoded_image_to_another_format`).
     let image = codecs
-        .decode_preferring(file.data(), &[ImageSpec::RGBA8_SRGB])
+        .decode_preferring(file.data(), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
-    let _got = image.pixels().spec().clone();
+    let _got = image.pixels().format().clone();
     assert_eq!((image.width(), image.height()), (W, H));
 }
 
@@ -206,12 +206,12 @@ fn encode_from_a_foreign_pixel_format() {
         .supported_descriptors();
 
     let source =
-        PixelView::new(&bgra, W, H, W as usize * 4, &zenpixels::specs::BGRA8_SRGB).unwrap();
+        PixelView::new(&bgra, W, H, W as usize * 4, &zenpixels::formats::BGRA8_SRGB).unwrap();
     let policy = ConvertPolicy::permissive();
-    let target = Negotiate::select(source.spec(), supported, &policy).unwrap();
+    let target = Negotiate::select(source.format(), supported, &policy).unwrap();
     let plan = OutputPlan::build(
-        source.spec(),
-        &target.spec,
+        source.format(),
+        &target.format,
         &policy,
         PeakSource::Measured,
         OutputSignaling::Strip,
@@ -239,16 +239,16 @@ fn convert_a_decoded_image_to_another_format() {
     // Decode gives the codec's native format; convert the owned buffer to
     // whatever a downstream consumer wants (here BGRA8, e.g. for a GPU upload).
     let image = codecs.decode(file.data()).unwrap();
-    let target = ImageSpec::BGRA8_SRGB;
+    let target = PixelFormat::BGRA8_SRGB;
     let conversion = ImagePlan::build(
-        image.buffer().spec(),
+        image.buffer().format(),
         &target,
         &ConvertPolicy::lossless(),
         PeakSource::Measured,
     )
     .unwrap();
     let bgra = conversion.execute(image.buffer()).unwrap();
-    assert_eq!(bgra.spec(), &target);
+    assert_eq!(bgra.format(), &target);
 }
 
 #[test]
@@ -259,9 +259,9 @@ fn ranked_alpha_corrected_animation_and_exact_begin_admission() {
         DisplayFrameCase, ExpectedError, ReferenceDecoderConfig, ReferenceEncoderConfig,
         check_animation_begin_refusal, check_animation_delivery, check_decode_preferences,
     };
-    use zenpixels::{ImageSpec, PixelView, Primaries};
+    use zenpixels::{PixelFormat, PixelView, Primaries};
 
-    let rgba = ImageSpec::RGBA8_SRGB;
+    let rgba = PixelFormat::RGBA8_SRGB;
     let raw = [
         10, 11, 12, 0, 20, 21, 22, 64, 30, 31, 32, 255, 40, 41, 42, 255, 50, 51, 52, 99, 60, 61,
         62, 5,
@@ -282,7 +282,11 @@ fn ranked_alpha_corrected_animation_and_exact_begin_admission() {
         file.extend_from_slice(samples);
     }
     let decoder = ReferenceDecoderConfig;
-    let prefs = [ImageSpec::GRAY8_SRGB, rgba.clone(), ImageSpec::RGB8_SRGB];
+    let prefs = [
+        PixelFormat::GRAY8_SRGB,
+        rgba.clone(),
+        PixelFormat::RGB8_SRGB,
+    ];
     check_decode_preferences(decoder.clone(), &file, &prefs, source.clone()).unwrap();
     let displayed = [
         [
@@ -327,7 +331,7 @@ fn ranked_alpha_corrected_animation_and_exact_begin_admission() {
         .is_err()
     );
 
-    let p3_spec = ImageSpec::RGBA8_SRGB.with_primaries(Primaries::DisplayP3);
+    let p3_spec = PixelFormat::RGBA8_SRGB.with_primaries(Primaries::DisplayP3);
     let p3 = PixelView::new(&raw, 3, 2, 12, &p3_spec).unwrap();
     check_animation_begin_refusal(
         ReferenceEncoderConfig::new(),

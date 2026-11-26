@@ -3,7 +3,7 @@
 //! [`OutputInfo`] describes what a decode will produce given current hints.
 
 use crate::Orientation;
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 /// Exact timing of a successfully delivered animation frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,7 +46,7 @@ pub struct OutputInfo {
     /// For `decode_into()`, use any format from
     /// [`supported_descriptors()`](crate::decode::DecoderConfig::supported_descriptors) —
     /// this field tells you what the codec would pick if you let it choose.
-    pub native_format: ImageSpec,
+    pub native_format: PixelFormat,
     /// Whether the output has an alpha channel.
     pub has_alpha: bool,
     /// Orientation the decoder will apply internally.
@@ -71,7 +71,7 @@ pub struct OutputInfo {
 
 impl OutputInfo {
     /// Create an `OutputInfo` for a simple full-frame decode (no hints applied).
-    pub fn full_decode(width: u32, height: u32, native_format: ImageSpec) -> Self {
+    pub fn full_decode(width: u32, height: u32, native_format: PixelFormat) -> Self {
         Self {
             width,
             height,
@@ -124,11 +124,11 @@ impl OutputInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::ImageSpec;
+    use zenpixels::PixelFormat;
 
     #[test]
     fn output_info_full_decode() {
-        let info = OutputInfo::full_decode(10, 5, ImageSpec::RGBA8_SRGB);
+        let info = OutputInfo::full_decode(10, 5, PixelFormat::RGBA8_SRGB);
         assert_eq!(info.buffer_size(), 200); // 10*5*4
         assert_eq!(info.pixel_count(), 50); // 10*5
         assert!(info.has_alpha); // RGBA8 has alpha

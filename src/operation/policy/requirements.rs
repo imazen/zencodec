@@ -278,13 +278,13 @@ mod tests {
         operation::{Decision, EncodeOffer, MetadataTransfer, TranscodeOffer, resolve_transcode},
     };
     use core::convert::Infallible;
-    use zenpixels::ImageSpec;
+    use zenpixels::PixelFormat;
 
     fn boundary() -> DecodeBoundary {
         DecodeBoundary::new(InterpretationFacts::new(
             3,
             2,
-            Some(ImageSpec::RGB8_SRGB),
+            Some(PixelFormat::RGB8_SRGB),
             InterpretationState::Final,
         ))
         .unwrap()
@@ -297,7 +297,7 @@ mod tests {
                 preference_index: 0,
                 resolution: None,
             },
-            ImageSpec::RGB8_SRGB,
+            PixelFormat::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
         );
         offer.retains_opaque_profile = Some(false);

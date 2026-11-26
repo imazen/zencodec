@@ -26,7 +26,7 @@ pub trait Decode: Sized {
     /// an output raster or perform pixel/coefficient reconstruction. This is not
     /// a whole-operation memory bound. Native errors retain their original type;
     /// retained cancellation controls apply. The default does no work.
-    fn prepare_output(&mut self) -> Result<Option<zenpixels::ImageSpec>, Self::Error> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelFormat>, Self::Error> {
         Ok(None)
     }
 

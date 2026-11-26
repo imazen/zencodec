@@ -2,7 +2,7 @@
 
 use alloc::sync::Arc;
 use core::fmt;
-use zenpixels::{ColorSpace, ImageSpec};
+use zenpixels::{ColorSpace, PixelFormat};
 
 use crate::sample::{ExactDepth, ExactDepthError};
 use crate::{Cicp, encode::OutputTiming, output_patch::OutputAccess};
@@ -20,7 +20,7 @@ pub struct EncodeDeclaration {
     /// Full image height.
     pub height: u32,
     /// Descriptor of the samples supplied to the encoder.
-    pub descriptor: ImageSpec,
+    pub descriptor: PixelFormat,
     /// Actual destination access; it does not authorize a quality change.
     pub access: OutputAccess,
     /// Optional assertion about the current canonical sample grids.
@@ -48,7 +48,7 @@ impl fmt::Debug for EncodeDeclaration {
 
 impl EncodeDeclaration {
     /// Declare a forward destination and descriptor-only interpretation.
-    pub const fn new(width: u32, height: u32, descriptor: ImageSpec) -> Self {
+    pub const fn new(width: u32, height: u32, descriptor: PixelFormat) -> Self {
         Self {
             width,
             height,
@@ -89,7 +89,7 @@ impl EncodeDeclaration {
     }
 
     /// Validate the layout, color model, alpha, range and any active ICC before startup.
-    pub fn validate_spec(&self) -> Result<(), whereat::At<zenpixels::ColorError>> {
+    pub fn validate_format(&self) -> Result<(), whereat::At<zenpixels::ColorError>> {
         self.descriptor.validate()
     }
 
@@ -97,7 +97,7 @@ impl EncodeDeclaration {
     /// source samples. Success does not establish that actual samples comply.
     pub fn validate_exact_depth(&self) -> Result<(), ExactDepthError> {
         if let Some(exact) = self.exact_depth {
-            exact.validate_spec(&self.descriptor)?;
+            exact.validate_format(&self.descriptor)?;
         }
         Ok(())
     }
@@ -402,7 +402,7 @@ mod tests {
             alpha: zenpixels::AlphaMode::None,
             intent: zenpixels::RenderingIntent::RelativeColorimetric,
         };
-        let declaration = EncodeDeclaration::new(3, 4, ImageSpec::RGB8_SRGB).with_color(context);
+        let declaration = EncodeDeclaration::new(3, 4, PixelFormat::RGB8_SRGB).with_color(context);
         let carriers = ColorCarriers::new(Some(Arc::from([88; 2048])), None);
         let rendered = alloc::format!("{declaration:?} {carriers:?}");
         assert!(rendered.len() < 1024);
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn declaration_refuses_impossible_lag_and_patch_access() {
-        let declaration = EncodeDeclaration::new(7, 9, ImageSpec::RGB8_SRGB);
+        let declaration = EncodeDeclaration::new(7, 9, PixelFormat::RGB8_SRGB);
         let plan = EncodePlan::rows(OutputTiming::streaming(9));
         assert_eq!(plan.validate(&declaration), Err(EncodePlanError::OutputLag));
         let plan = EncodePlan::rows(OutputTiming::AT_FINISH.with_patches());
@@ -524,7 +524,7 @@ mod orientation_tests {
 
     #[test]
     fn spatial_evidence_is_unknown_by_default_and_stable_through_startup() {
-        let declaration = EncodeDeclaration::new(3, 2, ImageSpec::RGB8_SRGB);
+        let declaration = EncodeDeclaration::new(3, 2, PixelFormat::RGB8_SRGB);
         let empty = EncodePlan::whole_raster();
         assert_eq!(empty.orientation, None);
         for input in ALL {

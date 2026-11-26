@@ -1,6 +1,6 @@
 //! Keep a caller-defined immutable packed owner through shared image publication.
 use super::*;
-use zenpixels::{HdrMetadata, ImageSpec};
+use zenpixels::{HdrMetadata, PixelFormat};
 
 /// An immutable owner of scalar auxiliary planes independent of packed color.
 ///
@@ -72,7 +72,7 @@ struct Held<P> {
     width: u32,
     height: u32,
     stride: usize,
-    descriptor: ImageSpec,
+    descriptor: PixelFormat,
     hdr: HdrMetadata,
     extras: Arc<Vec<(Meaning, ValueLayout)>>,
 }
@@ -159,7 +159,7 @@ impl ImageOutput {
         if (width, height) != (g.region.width, g.region.height) {
             return Err(fail(OutputError::Geometry));
         }
-        let descriptor = pixels.spec().clone();
+        let descriptor = pixels.format().clone();
         let stride = pixels.stride();
         let hdr = pixels.hdr();
         let mut extras = Vec::new();
@@ -260,7 +260,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
         {
             return Err(fail(OutputError::Geometry));
         }
-        if pixels.spec() != &self.descriptor || pixels.hdr() != self.hdr {
+        if pixels.format() != &self.descriptor || pixels.hdr() != self.hdr {
             return Err(fail(OutputError::Interpretation));
         }
         for index in 0..self.extras.len() {
@@ -398,7 +398,7 @@ mod tests {
                 icc[16..20].copy_from_slice(b"RGB ");
                 icc[20..24].copy_from_slice(b"XYZ ");
                 icc[36..40].copy_from_slice(b"acsp");
-                ImageSpec::new(
+                PixelFormat::new(
                     zenpixels::SampleLayout::RGB8,
                     zenpixels::ColorSpace::Icc {
                         profile: Arc::from(icc),
@@ -408,16 +408,16 @@ mod tests {
                     },
                 )
             } else if mode == 2 {
-                ImageSpec::RGB8_SRGB.with_transfer(zenpixels::Transfer::Linear)
+                PixelFormat::RGB8_SRGB.with_transfer(zenpixels::Transfer::Linear)
             } else {
-                ImageSpec::RGB8_SRGB
+                PixelFormat::RGB8_SRGB
             };
-            let pixels = PixelView::new_with_spec_cow(
+            let pixels = PixelView::new_with_format_cow(
                 &self.pixels,
                 if mode == 1 { 1 } else { 2 },
                 2,
                 if mode == 7 { 12 } else { 9 },
-                zenpixels::SpecCow::from_owned(descriptor),
+                zenpixels::FormatCow::from_owned(descriptor),
             )
             .unwrap();
             Ok(pixels)

@@ -462,7 +462,7 @@ pub trait IncrementalDecode {
     }
 
     /// Output pixel descriptor, once the header has been parsed.
-    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
+    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
         None
     }
 
@@ -555,7 +555,7 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
+    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
         (**self).output_descriptor()
     }
 
@@ -588,7 +588,7 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
+    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
         (**self).output_descriptor()
     }
 
@@ -717,7 +717,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         self.inner.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
+    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
         self.inner.output_descriptor()
     }
 
@@ -855,7 +855,7 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         self.0.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::ImageSpec> {
+    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
         self.0.output_descriptor()
     }
 
@@ -876,7 +876,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::{ImageSpec, PixelViewMut};
+    use zenpixels::{PixelFormat, PixelViewMut};
 
     struct NullSink;
     impl DecodeRowSink for NullSink {
@@ -885,7 +885,7 @@ mod tests {
             _y: u32,
             _h: u32,
             _w: u32,
-            _d: ImageSpec,
+            _d: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             Err("null sink".into())
         }
@@ -969,7 +969,7 @@ mod tests {
             }
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::GRAY8_SRGB)),
+                Event::Done(OutputInfo::full_decode(1, 1, PixelFormat::GRAY8_SRGB)),
             ))
         }
         fn requested(&self) -> &[InputRequest] {

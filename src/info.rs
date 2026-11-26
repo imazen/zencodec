@@ -250,7 +250,7 @@ impl ColorAuthority {
 /// (content light level, mastering display).
 ///
 /// These describe the *source* color space — not the current pixel
-/// data's color space (which is tracked by [`zenpixels::ImageSpec`]).
+/// data's color space (which is tracked by [`zenpixels::PixelFormat`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct SourceColor {
@@ -374,7 +374,7 @@ impl SourceColor {
     /// This inspects [`Self::cicp`] even when ICC is authoritative. An absent
     /// or unrecognized CICP transfer yields [`Transfer::Unknown`]. For the
     /// selected source carrier, use [`Self::authoritative_origin`]. For
-    /// decoded samples, consult their [`zenpixels::ImageSpec`].
+    /// decoded samples, consult their [`zenpixels::PixelFormat`].
     pub fn transfer_function(&self) -> Transfer {
         self.cicp
             .and_then(|c| Transfer::from_cicp(c.transfer_characteristics))
@@ -815,7 +815,7 @@ impl ImageInfo {
     /// Read the transfer function from the raw source CICP tuple.
     ///
     /// Delegates to [`SourceColor::transfer_function()`]. Consult the decoded
-    /// pixels' [`zenpixels::ImageSpec`] for their current transfer function.
+    /// pixels' [`zenpixels::PixelFormat`] for their current transfer function.
     pub fn transfer_function(&self) -> Transfer {
         self.source_color.transfer_function()
     }

@@ -48,7 +48,7 @@ use zencodec::{
     },
     storage::{OwnedStorage, StorageBudget},
 };
-use zenpixels::{ColorSpace, ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{ColorSpace, PixelFormat, PixelView, PixelViewMut};
 
 mod planned;
 
@@ -60,7 +60,7 @@ pub struct Description {
     /// Total rows.
     pub height: u32,
     /// Complete sample descriptor accepted by the configured encoder.
-    pub descriptor: ImageSpec,
+    pub descriptor: PixelFormat,
     /// Optional assertion about current canonical samples, checked before push.
     /// `Some` is strict: unsupported layouts refuse before startup, including
     /// full-storage CMYK claims. `None` does not restrict sample depth.
@@ -71,7 +71,7 @@ pub struct Description {
 }
 impl Description {
     /// Construct a declaration; execution checks dimensions and size arithmetic.
-    pub const fn new(width: u32, height: u32, descriptor: ImageSpec) -> Self {
+    pub const fn new(width: u32, height: u32, descriptor: PixelFormat) -> Self {
         Self {
             width,
             height,
@@ -120,7 +120,7 @@ impl Description {
         } else {
             view
         };
-        let facts = view.facts().with_depth_opt(self.exact_depth);
+        let facts = view.facts().with_depth(self.exact_depth);
         view.with_assumed_facts(facts)
     }
 }
@@ -186,7 +186,7 @@ impl Source for Raster<'_> {
     fn description(&self) -> Description {
         let mut metadata = RowMetadata::from_view(&self.0);
         metadata.facts.depth = self.1;
-        let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.spec().clone());
+        let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.format().clone());
         if metadata != RowMetadata::default() {
             desc = desc.with_pixel_metadata(metadata);
         }
@@ -206,7 +206,7 @@ impl Source for Raster<'_> {
     ) -> Result<(), Self::Error> {
         let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if rows.width() != self.0.width()
-            || rows.spec() != self.0.spec()
+            || rows.format() != self.0.format()
             || first
                 .checked_add(rows.rows())
                 .is_none_or(|end| end > self.0.rows())
@@ -1075,11 +1075,11 @@ mod tests {
     #[test]
     fn raster_honors_both_strides_and_refuses_context_mismatch_before_copy() {
         let input = [1, 2, 3, 99, 98, 97, 4, 5, 6];
-        let spec = ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3);
+        let spec = PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3);
         let pixels = PixelView::new(&input, 1, 2, 6, &spec).unwrap();
         let mut source = Raster::new(pixels);
         let mut output = [77; 12];
-        let view = PixelViewMut::new(&mut output, 1, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap();
+        let view = PixelViewMut::new(&mut output, 1, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
         assert!(
             source
                 .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
@@ -1118,7 +1118,7 @@ mod patch_tests {
             &mut self,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
             _: OutputAccess,
         ) -> Result<OutputTiming, Self::Error> {
             self.pending = true;
@@ -1168,7 +1168,7 @@ mod patch_tests {
         }
     }
     fn source() -> Raster<'static> {
-        Raster::new(PixelView::new(&[7, 8, 9], 1, 1, 3, &zenpixels::specs::RGB8_SRGB).unwrap())
+        Raster::new(PixelView::new(&[7, 8, 9], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap())
     }
     fn options() -> Options {
         Options::new(StorageBudget::new(1024, 16), 1024)

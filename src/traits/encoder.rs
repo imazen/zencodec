@@ -3,7 +3,7 @@
 use crate::EncodeOutput;
 use alloc::vec::Vec;
 
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 /// Type-erased single-image encoder.
 ///
@@ -98,9 +98,9 @@ pub trait Encoder: Sized {
         stride_pixels: u32,
     ) -> Result<EncodeOutput, Self::Error> {
         let descriptor = if make_opaque {
-            &zenpixels::specs::RGBX8_SRGB
+            &zenpixels::formats::RGBX8_SRGB
         } else {
-            &zenpixels::specs::RGBA8_SRGB
+            &zenpixels::formats::RGBA8_SRGB
         };
         let stride_bytes = stride_pixels as usize * 4;
         // PixelView::new only fails on dimension/stride/length mismatch,
@@ -167,7 +167,7 @@ pub trait Encoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: zenpixels::ImageSpec,
+        descriptor: zenpixels::PixelFormat,
     ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = (width, height, descriptor);
         Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
@@ -223,7 +223,7 @@ pub trait Encoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         access: crate::output_patch::OutputAccess,
     ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = access;
@@ -371,7 +371,7 @@ pub trait AnimationFrameEncoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<crate::encode::AnimationOutputTiming, Self::Error> {
         let _ = (width, height, descriptor, frame_count);

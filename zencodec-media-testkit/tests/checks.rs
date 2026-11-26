@@ -24,7 +24,7 @@ use zencodec_media_testkit::{
     check_animation_over_video, check_demuxer_contract, check_demuxer_seek,
     check_muxer_output_honesty, check_video_decoder_contract, check_video_encoder_contract,
 };
-use zenpixels::{ImageSpec, PixelBuf};
+use zenpixels::{PixelBuf, PixelFormat};
 
 const W: u32 = 5;
 const H: u32 = 3;
@@ -113,7 +113,7 @@ fn frames(n: u8) -> Vec<Frame> {
     let mut cap = Gray8::default();
     (0..n)
         .map(|i| {
-            let mut b = PixelBuf::new(W, H, ImageSpec::GRAY8_SRGB).unwrap();
+            let mut b = PixelBuf::new(W, H, PixelFormat::GRAY8_SRGB).unwrap();
             for y in 0..H {
                 for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 31 + y as u8 * 5 + x as u8;
@@ -184,7 +184,7 @@ fn the_toy_muxer_passes() {
 fn animation_over_the_toy_passes() {
     let frames: Vec<PixelBuf> = (0..6u8)
         .map(|i| {
-            let mut b = PixelBuf::new(W, H, ImageSpec::GRAY8_SRGB).unwrap();
+            let mut b = PixelBuf::new(W, H, PixelFormat::GRAY8_SRGB).unwrap();
             for y in 0..H {
                 for (x, px) in b.as_view_mut().row_mut(y).iter_mut().enumerate() {
                     *px = i * 40 + y as u8 * 4 + x as u8;

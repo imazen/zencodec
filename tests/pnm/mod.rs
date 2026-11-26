@@ -17,7 +17,7 @@ use zencodec::{
 use enough::{Stop, StopReason};
 use whereat::{At, ErrorAtExt};
 use zencodec::decode::{DecodeOutput, OutputInfo};
-use zenpixels::{ImageSpec, PixelBuf, PixelView};
+use zenpixels::{PixelBuf, PixelFormat, PixelView};
 
 // =========================================================================
 // Error
@@ -82,8 +82,8 @@ impl EncoderConfig for PnmEncoderConfig {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::GRAY8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::GRAY8_SRGB];
         SUPPORTED
     }
 
@@ -140,7 +140,7 @@ impl Encoder for PnmEnc {
     }
 
     fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, At<PnmError>> {
-        let desc = pixels.spec().clone();
+        let desc = pixels.format().clone();
         let w = pixels.width();
         let h = pixels.rows();
 
@@ -218,8 +218,8 @@ impl DecoderConfig for PnmDecoderConfig {
         &[ImageFormat::Pnm]
     }
 
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::GRAY8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::GRAY8_SRGB];
         SUPPORTED
     }
 
@@ -260,9 +260,9 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, At<PnmError>> {
         let (w, h, is_gray) = parse_pnm_header(data).map_err(|e| e.start_at())?;
         let desc = if is_gray {
-            ImageSpec::GRAY8_SRGB
+            PixelFormat::GRAY8_SRGB
         } else {
-            ImageSpec::RGB8_SRGB
+            PixelFormat::RGB8_SRGB
         };
         Ok(OutputInfo::full_decode(w, h, desc))
     }
@@ -270,7 +270,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<PnmDec<'a>, At<PnmError>> {
         let (w, h, _) = parse_pnm_header(&data).map_err(|e| e.start_at())?;
         self.limits
@@ -283,7 +283,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn zencodec::decode::DecodeRowSink,
-        preferred: &[ImageSpec],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, At<PnmError>> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, |e| {
             PnmError::InvalidData(e.to_string()).start_at()
@@ -293,7 +293,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn streaming_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
         Err(PnmError::from(UnsupportedOperation::RowLevelDecode).start_at())
     }
@@ -301,7 +301,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     fn animation_frame_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
         Err(PnmError::from(UnsupportedOperation::AnimationDecode).start_at())
     }
@@ -320,7 +320,7 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = ImageSpec::GRAY8_SRGB;
+            let desc = PixelFormat::GRAY8_SRGB;
             let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
@@ -330,7 +330,7 @@ impl<'a> Decode for PnmDec<'a> {
             if pixel_data.len() < expected {
                 return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
-            let desc = ImageSpec::RGB8_SRGB;
+            let desc = PixelFormat::RGB8_SRGB;
             let buf = PixelBuf::from_bytes(pixel_data[..expected].to_vec(), w, h, desc)
                 .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);

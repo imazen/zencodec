@@ -15,7 +15,7 @@ fn claim() -> ExactDepth {
 struct ClaimJob {
     inner: Job,
     expected: Option<ExactDepth>,
-    interpretation: Option<(ImageSpec, zencodec::decode::RowMetadata)>,
+    interpretation: Option<(PixelFormat, zencodec::decode::RowMetadata)>,
 }
 impl EncodeJob for ClaimJob {
     type Error = io::Error;
@@ -57,8 +57,8 @@ impl EncoderConfig for ClaimConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[codec_spec(zenpixels::SampleLayout::RGB16)];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[codec_spec(zenpixels::SampleLayout::RGB16)];
         SUPPORTED
     }
     fn job(self) -> Self::Job {
@@ -68,7 +68,7 @@ impl EncoderConfig for ClaimConfig {
 struct ClaimEncoder {
     inner: Enc,
     expected: Option<ExactDepth>,
-    interpretation: Option<(ImageSpec, zencodec::decode::RowMetadata)>,
+    interpretation: Option<(PixelFormat, zencodec::decode::RowMetadata)>,
 }
 impl Encoder for ClaimEncoder {
     type Error = io::Error;
@@ -93,7 +93,7 @@ impl Encoder for ClaimEncoder {
         &mut self,
         _: u32,
         _: u32,
-        _: ImageSpec,
+        _: PixelFormat,
         _: zencodec::output_patch::OutputAccess,
     ) -> Result<OutputTiming, Self::Error> {
         // The legacy seam has no declaration parameter. Preserve its startup
@@ -117,7 +117,7 @@ impl Encoder for ClaimEncoder {
         if let Some((spec, metadata)) = &self.interpretation {
             let mut observed = zencodec::decode::RowMetadata::from_view(&pixels);
             observed.facts.depth = None;
-            assert_eq!(pixels.spec(), spec);
+            assert_eq!(pixels.format(), spec);
             assert_eq!(&observed, metadata);
         }
         if let Some(exact) = self.expected {
@@ -209,7 +209,7 @@ fn run_with_pulse<S: Source, W: io::Write, R: OperationPolicy>(
 fn options(storage: StorageBudget) -> Options {
     Options::new(storage, 4096).with_batch_rows(NonZeroU32::new(2).unwrap())
 }
-fn setup(descriptor: ImageSpec, height: u32, exact: Option<ExactDepth>) -> Setup {
+fn setup(descriptor: PixelFormat, height: u32, exact: Option<ExactDepth>) -> Setup {
     let s = Setup::new();
     let mut description = Description::new(
         2,
@@ -310,12 +310,12 @@ fn inconsistent_claims_refuse_before_native_start_source_reads_or_publication() 
         (
             codec_spec(zenpixels::SampleLayout::RGB8),
             claim(),
-            ExactDepthError::SpecMismatch,
+            ExactDepthError::FormatMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::RGB16).with_range(SignalRange::Narrow),
             claim(),
-            ExactDepthError::SpecMismatch,
+            ExactDepthError::FormatMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::CMYK8),
@@ -456,12 +456,12 @@ fn raster_copies_the_claim_but_not_stride_or_rgbx_padding_into_the_verifier() {
         // assertion; only real RGB values may be checked. Final row has no pad.
         let bytes = [0, 255, 0, 7, 3, 4, 5, 6, 255, 0, 255, 9];
         let exact = ExactDepth::new(SampleType::U8, SignalRange::Full, 1, 8).unwrap();
-        let pixels = PixelView::new_with_spec_cow(
+        let pixels = PixelView::new_with_format_cow(
             &bytes,
             1,
             2,
             8,
-            zenpixels::SpecCow::from_owned(
+            zenpixels::FormatCow::from_owned(
                 codec_spec(zenpixels::SampleLayout::RGBX8)
                     .with_primaries(zenpixels::Primaries::DisplayP3),
             ),
@@ -506,12 +506,12 @@ fn strided_u16_narrow_color_checks_full_scale_alpha_and_excludes_row_padding() {
             ] {
                 bytes.0[offset..offset + 2].copy_from_slice(&value.to_ne_bytes());
             }
-            let pixels = PixelView::new_with_spec_cow(
+            let pixels = PixelView::new_with_format_cow(
                 &bytes.0,
                 1,
                 2,
                 8,
-                zenpixels::SpecCow::from_owned(descriptor.clone()),
+                zenpixels::FormatCow::from_owned(descriptor.clone()),
             )
             .unwrap();
             let s = setup(descriptor, 2, Some(exact));
@@ -883,10 +883,10 @@ fn contradictory_layout_alpha_or_range_refuses_before_native_startup() {
         alpha: AlphaMode::None,
         white: None,
     };
-    let narrow = ImageSpec::RGBAF32_LINEAR.with_range(SignalRange::Narrow);
+    let narrow = PixelFormat::RGBAF32_LINEAR.with_range(SignalRange::Narrow);
     for spec in [
-        ImageSpec::new(SampleLayout::RGB8, gray),
-        ImageSpec::new(SampleLayout::RGBA8, ColorSpace::SRGB),
+        PixelFormat::new(SampleLayout::RGB8, gray),
+        PixelFormat::new(SampleLayout::RGBA8, ColorSpace::SRGB),
         narrow,
     ] {
         for route in ROUTES {

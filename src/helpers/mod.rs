@@ -12,7 +12,7 @@
 
 use alloc::borrow::Cow;
 
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 use crate::cost::OutputInfo;
 use crate::sink::SinkError;
@@ -65,10 +65,10 @@ pub fn copy_rows_to_sink(
             part,
             rows,
             pixels.width(),
-            pixels.spec().clone(),
+            pixels.format().clone(),
             &metadata,
         )?;
-        if dst.width() != pixels.width() || dst.rows() != rows || dst.spec() != pixels.spec() {
+        if dst.width() != pixels.width() || dst.rows() != rows || dst.format() != pixels.format() {
             return Err("sink returned a buffer with a different geometry or descriptor".into());
         }
         for row in 0..rows {
@@ -89,7 +89,7 @@ pub fn copy_rows_to_sink(
 ///     self,
 ///     data: Cow<'a, [u8]>,
 ///     sink: &mut dyn DecodeRowSink,
-///     preferred: &[ImageSpec],
+///     preferred: &[PixelFormat],
 /// ) -> Result<OutputInfo, Self::Error> {
 ///     zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, MyError::from_sink)
 /// }
@@ -98,7 +98,7 @@ pub fn copy_decode_to_sink<'a, J>(
     job: J,
     data: Cow<'a, [u8]>,
     sink: &mut dyn crate::DecodeRowSink,
-    preferred: &[ImageSpec],
+    preferred: &[PixelFormat],
     wrap_sink_error: fn(SinkError) -> J::Error,
 ) -> Result<OutputInfo, J::Error>
 where
@@ -108,7 +108,7 @@ where
     let dec = job.decoder(data, preferred)?;
     let output = dec.decode()?;
     let ps = output.pixels();
-    let desc = ps.spec().clone();
+    let desc = ps.format().clone();
     let w = ps.width();
     let h = ps.rows();
 
@@ -150,7 +150,7 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
         None => return Ok(None),
     };
     let ps = frame.pixels();
-    let desc = ps.spec().clone();
+    let desc = ps.format().clone();
     let w = ps.width();
     let h = ps.rows();
 

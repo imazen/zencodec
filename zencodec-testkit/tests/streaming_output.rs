@@ -16,7 +16,7 @@ use zencodec_testkit::reference::{
 use zencodec_testkit::{
     TestImage, check_animation_streaming_output_honesty, check_streaming_output_honesty,
 };
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 /// How a [`Liar`] misbehaves.
 const HOLD_ROWS: u8 = 0; // reports lag 0, exposes only the header until finish
@@ -68,7 +68,7 @@ impl<const F: u8> EncoderConfig for Liar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         ReferenceEncoderConfig::supported_descriptors()
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -144,7 +144,7 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         &mut self,
         width: u32,
         height: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
     ) -> Result<OutputTiming, RefError> {
         if F == DECLINE {
             return Err(RefError::Unsupported(UnsupportedOperation::RowLevelEncode));
@@ -231,7 +231,7 @@ fn img() -> TestImage {
 #[test]
 fn the_reference_encoder_streams_and_says_so() {
     let mut enc = ReferenceEncoderConfig::new().job().encoder().unwrap();
-    let timing = enc.begin(4, 4, ImageSpec::RGBA8_SRGB).unwrap();
+    let timing = enc.begin(4, 4, PixelFormat::RGBA8_SRGB).unwrap();
     assert_eq!(timing, OutputTiming::streaming(0));
     assert!(timing.streams());
     assert!(!enc.pending_output().is_empty(), "header at begin");
@@ -413,7 +413,7 @@ impl<const F: u8> EncoderConfig for AnimLiar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         ReferenceEncoderConfig::supported_descriptors()
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -485,7 +485,7 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
         &mut self,
         width: u32,
         height: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, RefError> {
         if F == A_STALE {
@@ -558,11 +558,11 @@ fn the_reference_animation_streams_only_with_a_frame_count() {
             .unwrap()
     };
     let mut a = job();
-    let t = a.begin(12, 8, ImageSpec::RGBA8_SRGB, Some(3)).unwrap();
+    let t = a.begin(12, 8, PixelFormat::RGBA8_SRGB, Some(3)).unwrap();
     assert_eq!(t, AnimationOutputTiming::streaming(0));
     assert!(!a.pending_output().is_empty(), "header at begin");
     let mut a = job();
-    let t = a.begin(12, 8, ImageSpec::RGBA8_SRGB, None).unwrap();
+    let t = a.begin(12, 8, PixelFormat::RGBA8_SRGB, None).unwrap();
     assert_eq!(t, AnimationOutputTiming::AT_FINISH);
     assert!(a.pending_output().is_empty());
     check_animation_streaming_output_honesty(

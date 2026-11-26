@@ -6,7 +6,7 @@ use crate::{
 };
 use alloc::boxed::Box;
 
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 pub(super) struct CheckedDecoder {
     request: DecodeRequest,
@@ -75,7 +75,7 @@ impl IncrementalDecode for CheckedDecoder {
     fn take_details(&mut self) -> Option<DecodeDetails> {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         self.inner.as_ref().and_then(|d| d.output_descriptor())
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -145,7 +145,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
 /// authoritative even when a native implementation supplies incorrect facts.
 pub(super) fn decode_owned(
     mut decoder: Box<dyn DynDecoder + '_>,
-    required: Option<ImageSpec>,
+    required: Option<PixelFormat>,
     pulse: &dyn crate::Pulse,
 ) -> Result<crate::DecodeOutput, OperationError> {
     pulse.check().map_err(OperationError::Stopped)?;
@@ -172,7 +172,7 @@ pub(super) fn decode_owned(
         .map_err(|e| OperationError::Codec(e.into()))?;
     pulse.check().map_err(OperationError::Stopped)?;
     if let Some(requested) = required {
-        let actual = output.pixels().spec().clone();
+        let actual = output.pixels().format().clone();
         if actual != requested {
             return Err(OperationError::OutputDescriptor {
                 requested: Box::new(requested),
@@ -193,7 +193,7 @@ mod admission_tests {
     use zenpixels::PixelBuf;
 
     struct Native {
-        prepared: Option<ImageSpec>,
+        prepared: Option<PixelFormat>,
         fail: bool,
         cancel: Option<Arc<AtomicBool>>,
         preparations: Rc<Cell<usize>>,
@@ -206,7 +206,7 @@ mod admission_tests {
         }
     }
     impl DynDecoder for Native {
-        fn prepare_output(&mut self) -> Result<Option<ImageSpec>, BoxedError> {
+        fn prepare_output(&mut self) -> Result<Option<PixelFormat>, BoxedError> {
             self.preparations.set(self.preparations.get() + 1);
             if let Some(cancel) = &self.cancel {
                 cancel.store(true, Ordering::SeqCst);
@@ -219,15 +219,15 @@ mod admission_tests {
         fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
             self.executions.set(self.executions.get() + 1);
             Ok(DecodeOutput::new(
-                PixelBuf::from_bytes(vec![1, 2, 3], 1, 1, ImageSpec::RGB8_SRGB).unwrap(),
+                PixelBuf::from_bytes(vec![1, 2, 3], 1, 1, PixelFormat::RGB8_SRGB).unwrap(),
                 ImageInfo::new(1, 1, ImageFormat::Jpeg),
             ))
         }
     }
     #[test]
     fn preparation_is_optional_but_actual_output_is_always_checked() {
-        let rgb = ImageSpec::RGB8_SRGB;
-        let rgba = ImageSpec::RGBA8_SRGB;
+        let rgb = PixelFormat::RGB8_SRGB;
+        let rgba = PixelFormat::RGBA8_SRGB;
         for (required, prepared, fail, prepares, executes, succeeds) in [
             (None, Some(rgba.clone()), true, 0, 1, true),
             (Some(rgb.clone()), Some(rgb.clone()), false, 1, 1, true),
@@ -281,8 +281,8 @@ mod admission_tests {
             for cancelled in [false, true] {
                 for prepared in [
                     None,
-                    Some(ImageSpec::RGB8_SRGB),
-                    Some(ImageSpec::RGBA8_SRGB),
+                    Some(PixelFormat::RGB8_SRGB),
+                    Some(PixelFormat::RGBA8_SRGB),
                 ] {
                     for fail in [false, true] {
                         let flag = Arc::new(AtomicBool::new(cancelled));
@@ -299,7 +299,7 @@ mod admission_tests {
                         };
                         let pulse = crate::how_far::StopOnly::new(Cancel(flag, reason));
                         let result =
-                            decode_owned(Box::new(native), Some(ImageSpec::RGB8_SRGB), &pulse);
+                            decode_owned(Box::new(native), Some(PixelFormat::RGB8_SRGB), &pulse);
                         if fail && !cancelled {
                             // Native failure remains primary even when it also raises a stop.
                             assert!(

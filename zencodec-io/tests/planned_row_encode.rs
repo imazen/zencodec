@@ -17,7 +17,7 @@ use zencodec::{
     storage::StorageBudget,
 };
 use zencodec_io::row_encode::{self, Description, Options, Source, Stage};
-use zenpixels::{ColorSpace, ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{ColorSpace, PixelFormat, PixelView, PixelViewMut};
 
 type Events = Arc<Mutex<Vec<&'static str>>>;
 fn event(events: &Events, name: &'static str) {
@@ -86,8 +86,8 @@ impl EncoderConfig for Config {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
     fn job(self) -> Job {
@@ -139,7 +139,7 @@ impl Encoder for Enc {
         &mut self,
         _: u32,
         _: u32,
-        _: ImageSpec,
+        _: PixelFormat,
         _: zencodec::output_patch::OutputAccess,
     ) -> Result<OutputTiming, Self::Error> {
         panic!("must declare color before headers")
@@ -184,9 +184,9 @@ impl Encoder for Enc {
             .check()
             .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "push");
-        if pixels.spec().layout.order.is_rgb_family() {
+        if pixels.format().layout.order.is_rgb_family() {
             assert!(matches!(
-                pixels.spec().color,
+                pixels.format().color,
                 ColorSpace::Rgb {
                     primaries: zenpixels::Primaries::DisplayP3,
                     ..
@@ -291,7 +291,7 @@ impl Setup {
             events: Arc::default(),
             bytes: Arc::default(),
             description: Arc::new(Mutex::new(
-                Description::new(2, 2, ImageSpec::RGB8_SRGB).with_color(ColorSpace::DISPLAY_P3),
+                Description::new(2, 2, PixelFormat::RGB8_SRGB).with_color(ColorSpace::DISPLAY_P3),
             )),
         }
     }
@@ -668,13 +668,13 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
     let s = Setup::new();
     let codecs = zencodec::CodecSet::new().with_encoder(Config(s.job()));
     let bytes = [7; 12];
-    let pixels = PixelView::new_with_spec_cow(
+    let pixels = PixelView::new_with_format_cow(
         &bytes,
         2,
         2,
         6,
-        zenpixels::SpecCow::from_owned(
-            ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+        zenpixels::FormatCow::from_owned(
+            PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
         ),
     )
     .unwrap();
@@ -708,13 +708,13 @@ fn retained_raster_rows_reach_native_push_without_copying_or_padding_changes() {
         for batch in [1, 2] {
             let setup = Setup::new();
             let bytes = [1, 2, 3, 4, 5, 6, 99, 98, 97, 7, 8, 9, 10, 11, 12];
-            let pixels = PixelView::new_with_spec_cow(
+            let pixels = PixelView::new_with_format_cow(
                 &bytes,
                 2,
                 2,
                 9,
-                zenpixels::SpecCow::from_owned(
-                    ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+                zenpixels::FormatCow::from_owned(
+                    PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
                 ),
             )
             .unwrap();

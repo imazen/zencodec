@@ -163,7 +163,7 @@ mod async_cursor {
             use zencodec::source::AccessPattern;
             use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
             use zencodec_io::{CollectSink, ControlledEvent, ControlledStepper};
-            use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+            use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
             struct Counted {
                 source: Trickle,
@@ -181,7 +181,7 @@ mod async_cursor {
             // Preparation happens only after the final boundary becomes available.
             struct Destination(Option<CollectSink>);
             impl DecodeRowSink for Destination {
-                fn begin(&mut self, w: u32, h: u32, d: ImageSpec) -> Result<(), SinkError> {
+                fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
                     self.0
                         .as_mut()
                         .expect("destination is not prepared")
@@ -192,7 +192,7 @@ mod async_cursor {
                     y: u32,
                     h: u32,
                     w: u32,
-                    d: ImageSpec,
+                    d: PixelFormat,
                 ) -> Result<PixelViewMut<'_>, SinkError> {
                     self.0.as_mut().unwrap().provide_next_buffer(y, h, w, d)
                 }
@@ -200,7 +200,7 @@ mod async_cursor {
                     self.0.as_mut().unwrap().finish()
                 }
             }
-            let d = ImageSpec::RGBA8_SRGB;
+            let d = PixelFormat::RGBA8_SRGB;
             let native = CoroutineDecoder::controlled(
                 32,
                 AccessPattern::RandomAccess,

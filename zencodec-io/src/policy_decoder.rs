@@ -11,7 +11,7 @@ use zencodec::operation::{
 };
 use zencodec::source::AccessPattern;
 use zencodec::{At, ImageInfo};
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 /// Native failure or traced application-policy failure during controlled decode.
 #[derive(Debug)]
@@ -227,7 +227,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         }
         self.decoder.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         self.decoder.as_ref().and_then(|d| d.output_descriptor())
     }
     fn access_pattern(&self) -> AccessPattern {

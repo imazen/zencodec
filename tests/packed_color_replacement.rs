@@ -18,7 +18,7 @@ use zencodec::{
     },
     storage::{SharedStorage, StorageBudget},
 };
-use zenpixels::{ColorSpace, ImageSpec, Orientation, PixelView, SampleType};
+use zenpixels::{ColorSpace, Orientation, PixelFormat, PixelView, SampleType};
 
 #[derive(Debug)]
 struct NativeMapFailure;
@@ -37,7 +37,7 @@ struct Owner {
 impl PackedImageOwner for Owner {
     fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         let mode = self.mode.load(Ordering::SeqCst);
-        let pixels = PixelView::new_with_spec_cow(
+        let pixels = PixelView::new_with_format_cow(
             self.pixels.as_slice(),
             if mode == 1 { 1 } else { 2 },
             2,
@@ -49,7 +49,7 @@ impl PackedImageOwner for Owner {
                 else {
                     panic!("expected a real RGB profile");
                 };
-                zenpixels::SpecCow::from_owned(ImageSpec::new(
+                zenpixels::FormatCow::from_owned(PixelFormat::new(
                     zenpixels::SampleLayout::RGB8,
                     ColorSpace::Icc {
                         profile: Arc::from(profile.as_ref()),
@@ -59,7 +59,7 @@ impl PackedImageOwner for Owner {
                     },
                 ))
             } else {
-                zenpixels::SpecCow::Borrowed(&zenpixels::specs::RGB8_SRGB)
+                zenpixels::FormatCow::Borrowed(&zenpixels::formats::RGB8_SRGB)
             },
         )
         .unwrap();

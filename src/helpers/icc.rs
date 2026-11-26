@@ -3,7 +3,8 @@
 use crate::decode::SourceColor;
 use crate::info::AuthoritativeColor;
 use zenpixels::{
-    Cicp, ColorSpace, IccColorSpace, ImageSpec, Primaries, RenderingIntent, SampleLayout, Transfer,
+    Cicp, ColorSpace, IccColorSpace, PixelFormat, Primaries, RenderingIntent, SampleLayout,
+    Transfer,
 };
 
 /// Derive the current image spec for decoded, full-range samples.
@@ -17,7 +18,7 @@ pub fn descriptor_for_decoded_pixels(
     source_color: &SourceColor,
     corrected_to: Option<&Cicp>,
     _tolerance: IccMatchTolerance,
-) -> ImageSpec {
+) -> PixelFormat {
     let base = super::codec_spec(layout);
     let corrected = corrected_to.map(|cicp| {
         base.clone()
@@ -38,7 +39,7 @@ pub fn descriptor_for_decoded_pixels(
 /// A codec that color-corrected the samples supplies the complete target
 /// color. For source color, a class-compatible ICC remains authoritative;
 /// a CICP claim contributes primaries and transfer after any component
-/// reconstruction. The codec should build an explicit [`ImageSpec`] when
+/// reconstruction. The codec should build an explicit [`PixelFormat`] when
 /// returning narrow-range, native component or non-RGB/gray data.
 ///
 /// An untagged source uses the conventional sRGB transfer. A present but
@@ -47,14 +48,14 @@ pub fn descriptor_for_decoded_pixels_v2(
     layout: SampleLayout,
     source_color: &SourceColor,
     corrected_to: Option<&ColorSpace>,
-) -> Result<ImageSpec, whereat::At<zenpixels::ColorError>> {
+) -> Result<PixelFormat, whereat::At<zenpixels::ColorError>> {
     let base = super::codec_spec(layout);
-    let checked = |spec: ImageSpec| {
+    let checked = |spec: PixelFormat| {
         spec.validate()?;
         Ok(spec)
     };
     if let Some(corrected) = corrected_to {
-        return checked(ImageSpec::new(layout, corrected.clone()));
+        return checked(PixelFormat::new(layout, corrected.clone()));
     }
 
     if let Some(AuthoritativeColor::Icc(profile)) = source_color.authoritative() {
@@ -66,7 +67,7 @@ pub fn descriptor_for_decoded_pixels_v2(
                 inverted, alpha, ..
             } = base.color
         {
-            return checked(ImageSpec::new(
+            return checked(PixelFormat::new(
                 layout,
                 ColorSpace::Cmyk {
                     inverted,
@@ -81,7 +82,7 @@ pub fn descriptor_for_decoded_pixels_v2(
             _ => None,
         };
         if let Some(channels) = channels {
-            return checked(ImageSpec::new(
+            return checked(PixelFormat::new(
                 layout,
                 ColorSpace::Icc {
                     profile: profile.clone(),

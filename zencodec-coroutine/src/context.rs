@@ -15,7 +15,7 @@ use zencodec::decode::{
 };
 use zencodec::source::SourceError;
 use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 use crate::input::InputStore;
 
@@ -184,7 +184,7 @@ pub(crate) struct PendingRows {
     pub(crate) rows: u32,
     pub(crate) stride: usize,
     pub(crate) offset: usize,
-    pub(crate) descriptor: ImageSpec,
+    pub(crate) descriptor: PixelFormat,
     pub(crate) metadata: zencodec::decode::RowMetadata,
 }
 
@@ -211,7 +211,7 @@ pub(crate) struct Shared {
     pub(crate) details: Option<zencodec::decode::DecodeDetails>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
     pub(crate) info_generation: u64,
-    pub(crate) descriptor: Option<ImageSpec>,
+    pub(crate) descriptor: Option<PixelFormat>,
     pub(crate) accepts_provisional: bool,
     pub(crate) cancelled: Option<StopReason>,
 }
@@ -362,7 +362,7 @@ impl CoroutineContext {
         }
         let width = rows.width();
         let count = rows.rows();
-        let descriptor = rows.spec().clone();
+        let descriptor = rows.format().clone();
         let size = (width as usize)
             .checked_mul(descriptor.layout.bytes_per_pixel())
             .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
@@ -469,7 +469,7 @@ impl CoroutineContext {
     }
 
     /// Set the negotiated output descriptor.
-    pub fn set_output_descriptor(&mut self, descriptor: ImageSpec) {
+    pub fn set_output_descriptor(&mut self, descriptor: PixelFormat) {
         let mut shared = self.shared.lock();
         if shared.adopted.is_some() && shared.descriptor.as_ref() != Some(&descriptor) {
             shared.control_failure = Some(ControlError::FinalInterpretationChanged);

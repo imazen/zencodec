@@ -291,7 +291,7 @@ mod tests {
 pub fn check_decode_preferences<D: DecoderConfig + 'static>(
     decoder: D,
     bytes: &[u8],
-    preferred: &[ImageSpec],
+    preferred: &[PixelFormat],
     expected: PixelView<'_>,
 ) -> Conformance {
     const CHECK: &str = "ranked decode preferences";
@@ -404,7 +404,7 @@ pub struct DisplayFrameCase<'a> {
 pub fn check_animation_delivery<D: DecoderConfig + 'static>(
     decoder: D,
     bytes: &[u8],
-    preferred: &[ImageSpec],
+    preferred: &[PixelFormat],
     orientation: zencodec::OrientationHint,
     expected_loop_count: Option<u32>,
     cases: &[DisplayFrameCase<'_>],
@@ -569,7 +569,8 @@ where
 {
     const CHECK: &str = "animation begin admission";
     let (width, height) = (accepted.width(), accepted.rows());
-    if (rejected.width(), rejected.rows()) != (width, height) || accepted.spec() == rejected.spec()
+    if (rejected.width(), rejected.rows()) != (width, height)
+        || accepted.format() == rejected.format()
     {
         return Err(fail(
             CHECK,
@@ -585,7 +586,7 @@ where
         .dyn_job()
         .into_animation_frame_encoder()
         .map_err(|error| fail(CHECK, error.to_string()))?;
-    let reject = rejected.spec().clone();
+    let reject = rejected.format().clone();
     let typed_failure = typed
         .begin(width, height, reject.clone(), Some(1))
         .err()
@@ -605,10 +606,10 @@ where
         ));
     }
     typed
-        .begin(width, height, accepted.spec().clone(), Some(1))
+        .begin(width, height, accepted.format().clone(), Some(1))
         .map_err(|error| fail(CHECK, error.to_string()))?;
     erased
-        .begin(width, height, accepted.spec().clone(), Some(1))
+        .begin(width, height, accepted.format().clone(), Some(1))
         .map_err(|error| fail(CHECK, error.to_string()))?;
     let typed_len = typed.pending_output().len();
     let erased_len = erased.pending_output().len();
@@ -657,7 +658,7 @@ mod prefix_tests {
         }
         bytes.extend_from_slice(&[3, 1, 0, 0, 0, 0, 0, 49, 78, 128]);
         let raw = [49, 78, 128];
-        let expected = PixelView::new(&raw, 1, 1, 3, &zenpixels::specs::RGB8_SRGB).unwrap();
+        let expected = PixelView::new(&raw, 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap();
         bytes.extend_from_slice(&[0xE3; 128]);
         let incomplete =
             ExpectedError::Category(ErrorCategory::Image(zencodec::ImageError::Malformed));

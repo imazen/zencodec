@@ -1,6 +1,6 @@
 use zencodec::animation::{FrameDuration, TimingError};
 use zencodec::{AnimationFrame, OwnedAnimationFrame};
-use zenpixels::{ImageSpec, PixelBuf};
+use zenpixels::{PixelBuf, PixelFormat};
 
 #[test]
 fn rational_source_durations_are_canonical_and_never_clamped() {
@@ -45,7 +45,8 @@ fn destination_clocks_are_exact_or_fail_without_wrapping() {
 #[test]
 #[allow(deprecated)] // This test keeps the published legacy getter's conversion contract.
 fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
-    let pixels = PixelBuf::from_bytes(vec![1, 2, 3, 4, 5, 6], 2, 1, ImageSpec::RGB8_SRGB).unwrap();
+    let pixels =
+        PixelBuf::from_bytes(vec![1, 2, 3, 4, 5, 6], 2, 1, PixelFormat::RGB8_SRGB).unwrap();
     for (duration, legacy) in [
         (FrameDuration::new(1001, 30000).unwrap(), 33),
         (FrameDuration::new(1, 65535).unwrap(), 0),

@@ -10,7 +10,7 @@ use zencodec::{
     how_far::StopOnly,
 };
 use zencodec_io::CollectSink;
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 struct Once {
     pending: Arc<AtomicBool>,
@@ -42,7 +42,7 @@ impl Native {
         }
         Ok(Progress::new(
             0,
-            Event::Done(OutputInfo::full_decode(1, 1, ImageSpec::RGB8_SRGB)),
+            Event::Done(OutputInfo::full_decode(1, 1, PixelFormat::RGB8_SRGB)),
         ))
     }
 }
@@ -108,7 +108,7 @@ fn setup(
     let boundary = DecodeBoundary::new(InterpretationFacts::new(
         1,
         1,
-        Some(ImageSpec::RGB8_SRGB),
+        Some(PixelFormat::RGB8_SRGB),
         InterpretationState::Final,
     ))
     .unwrap();

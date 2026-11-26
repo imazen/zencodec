@@ -8,7 +8,7 @@ use crate::{
     At,
     image::{ImageGeometry, ImageOutput},
 };
-use zenpixels::{ImageSpec, Orientation};
+use zenpixels::{Orientation, PixelFormat};
 
 /// Effects of one prepared conversion of the exact held image.
 ///
@@ -20,7 +20,7 @@ use zenpixels::{ImageSpec, Orientation};
 pub struct ImageConversionOffer {
     /// Actual output pixel representation and compact color interpretation.
     /// Profiles/context must also satisfy the caller's configured target.
-    pub output: ImageSpec,
+    pub output: PixelFormat,
     /// Stored output extent, before residual orientation.
     pub geometry: ImageGeometry,
     /// Residual orientation after this conversion; no inferred rotation.
@@ -44,7 +44,11 @@ pub struct ImageConversionOffer {
 impl ImageConversionOffer {
     /// Describe the target; assumptions must be explicit and resource/extended
     /// range guarantees start unqualified until supplied by the prepared adapter.
-    pub const fn new(output: ImageSpec, geometry: ImageGeometry, orientation: Orientation) -> Self {
+    pub const fn new(
+        output: PixelFormat,
+        geometry: ImageGeometry,
+        orientation: Orientation,
+    ) -> Self {
         Self {
             output,
             geometry,

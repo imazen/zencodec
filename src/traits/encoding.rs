@@ -6,7 +6,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, UnsupportedOperation};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 use super::BoxedError;
 use super::dyn_encoding::{
@@ -45,7 +45,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// Every descriptor in this list is a guarantee: the corresponding
     /// per-format encode trait is implemented and will work without format
     /// conversion. Must not be empty.
-    fn supported_descriptors() -> &'static [ImageSpec];
+    fn supported_descriptors() -> &'static [PixelFormat];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).
     ///

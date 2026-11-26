@@ -9,7 +9,7 @@ use zencodec::{
     AnimationFrame, CodecErrorExt, ErrorCategory, ImageFormat, ImageInfo, RequestError,
     ResourceLimits, SharedPulse, UnsupportedOperation,
 };
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 #[derive(Debug)]
 struct NativeError;
@@ -67,7 +67,7 @@ impl DecoderConfig for LegacyConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Png]
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         &[]
     }
     fn job<'a>(self) -> Self::Job<'a> {
@@ -92,28 +92,28 @@ impl<'a> DecodeJob<'a> for LegacyJob {
     fn output_info(&self, _: &[u8]) -> Result<OutputInfo, NativeError> {
         Err(NativeError)
     }
-    fn decoder(self, _: Cow<'a, [u8]>, _: &[ImageSpec]) -> Result<LegacyDecoder, NativeError> {
+    fn decoder(self, _: Cow<'a, [u8]>, _: &[PixelFormat]) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }
     fn push_decoder(
         self,
         _: Cow<'a, [u8]>,
         _: &mut dyn DecodeRowSink,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<OutputInfo, NativeError> {
         Err(NativeError)
     }
     fn streaming_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }
     fn animation_frame_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[ImageSpec],
+        _: &[PixelFormat],
     ) -> Result<LegacyDecoder, NativeError> {
         Err(NativeError)
     }

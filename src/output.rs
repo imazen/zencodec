@@ -7,7 +7,7 @@ use core::any::Any;
 use crate::detect::SourceEncodingDetails;
 use crate::extensions::Extensions;
 use crate::{ImageFormat, ImageInfo, Metadata};
-use zenpixels::{ImageSpec, PixelBuf, PixelView};
+use zenpixels::{PixelBuf, PixelFormat, PixelView};
 
 /// Output from an encode operation.
 ///
@@ -390,9 +390,9 @@ impl DecodeOutput {
     ///
     /// ```
     /// use zencodec::{ImageFormat, ImageInfo, decode::DecodeOutput};
-    /// use zenpixels::{PixelBuf, ImageSpec};
+    /// use zenpixels::{PixelBuf, PixelFormat};
     /// let decoded = DecodeOutput::new(
-    ///     PixelBuf::new(3, 2, ImageSpec::RGB8_SRGB).unwrap(),
+    ///     PixelBuf::new(3, 2, PixelFormat::RGB8_SRGB).unwrap(),
     ///     ImageInfo::new(3, 2, ImageFormat::Png),
     /// );
     /// let (pixels, details) = decoded.into_parts();
@@ -530,12 +530,12 @@ impl DecodeOutput {
 
     /// Whether the image has an alpha channel.
     pub fn has_alpha(&self) -> bool {
-        crate::helpers::has_alpha(self.pixels.spec())
+        crate::helpers::has_alpha(self.pixels.format())
     }
 
     /// Pixel format descriptor.
-    pub fn descriptor(&self) -> ImageSpec {
-        self.pixels.spec().clone()
+    pub fn descriptor(&self) -> PixelFormat {
+        self.pixels.format().clone()
     }
 
     /// Detected format.
@@ -647,7 +647,7 @@ impl<'a> AnimationFrame<'a> {
 
     /// Copy pixel data to produce an owned frame.
     ///
-    /// The frame's [`ImageSpec`] and HDR metadata ride
+    /// The frame's [`PixelFormat`] and HDR metadata ride
     /// along: the copy is a staging buffer, and staging buffers are where
     /// buffer-level color signaling silently dies (zencodec#25).
     ///
@@ -813,7 +813,7 @@ impl core::fmt::Debug for OwnedAnimationFrame {
 mod tests {
     use super::*;
     use alloc::vec;
-    use zenpixels::ImageSpec;
+    use zenpixels::PixelFormat;
 
     #[test]
     fn decode_parts_move_and_drop_each_owner_once() {
@@ -860,15 +860,15 @@ mod tests {
     }
 
     fn make_rgb8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::RGB8_SRGB).unwrap()
+        PixelBuf::new(w, h, PixelFormat::RGB8_SRGB).unwrap()
     }
 
     fn make_rgba8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::RGBA8_SRGB).unwrap()
+        PixelBuf::new(w, h, PixelFormat::RGBA8_SRGB).unwrap()
     }
 
     fn make_gray8_buffer(w: u32, h: u32) -> PixelBuf {
-        PixelBuf::new(w, h, ImageSpec::GRAY8_SRGB).unwrap()
+        PixelBuf::new(w, h, PixelFormat::GRAY8_SRGB).unwrap()
     }
 
     /// Regression for zencodec#25: `to_owned_frame` copies pixels into a fresh
@@ -880,22 +880,22 @@ mod tests {
         let src = PixelBuf::new(
             3,
             2,
-            ImageSpec::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+            PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
         )
         .unwrap();
         let frame = AnimationFrame::new(src.as_view(), 40, 0);
         assert_eq!(
-            frame.pixels().spec().color,
+            frame.pixels().format().color,
             zenpixels::ColorSpace::DISPLAY_P3
         );
 
         let owned = frame.try_to_owned_frame().unwrap();
-        assert_eq!(owned.pixels().spec(), src.spec());
+        assert_eq!(owned.pixels().format(), src.format());
         let plain = make_rgb8_buffer(3, 2);
         let bare = AnimationFrame::new(plain.as_view(), 40, 1);
         assert_eq!(
-            bare.try_to_owned_frame().unwrap().pixels().spec(),
-            plain.spec()
+            bare.try_to_owned_frame().unwrap().pixels().format(),
+            plain.format()
         );
     }
 

@@ -40,11 +40,11 @@ fn typed<D: Decode>(mut decoder: D, baseline: &DecodeOutput) -> Conformance {
 
 fn verify(
     path: &str,
-    facts: Option<ImageSpec>,
+    facts: Option<PixelFormat>,
     output: DecodeOutput,
     baseline: &DecodeOutput,
 ) -> Conformance {
-    if facts.is_some_and(|descriptor| &descriptor != output.buffer().spec()) {
+    if facts.is_some_and(|descriptor| &descriptor != output.buffer().format()) {
         return Err(fail(
             CHECK,
             format!("{path} preparation descriptor contradicts actual output"),
@@ -88,12 +88,12 @@ mod tests {
     }
     impl Decode for Mutant {
         type Error = core::fmt::Error;
-        fn prepare_output(&mut self) -> Result<Option<ImageSpec>, Self::Error> {
+        fn prepare_output(&mut self) -> Result<Option<PixelFormat>, Self::Error> {
             self.prepared = true;
             match self.mode {
                 0 | 3 | 4 | 6 => Ok(None),
-                1 => Ok(Some(ImageSpec::RGB8_SRGB)),
-                2 => Ok(Some(ImageSpec::RGBA8_SRGB)),
+                1 => Ok(Some(PixelFormat::RGB8_SRGB)),
+                2 => Ok(Some(PixelFormat::RGBA8_SRGB)),
                 _ => Err(core::fmt::Error),
             }
         }
@@ -103,7 +103,7 @@ mod tests {
             } else {
                 vec![1, 2, 3]
             };
-            let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, ImageSpec::RGB8_SRGB).unwrap();
+            let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, PixelFormat::RGB8_SRGB).unwrap();
             if self.prepared && self.mode == 6 {
                 pixels = pixels.with_origin(zenpixels::ColorOrigin::from_cicp(Cicp::BT2100_PQ));
             }

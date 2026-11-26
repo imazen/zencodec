@@ -55,7 +55,7 @@ use zencodec::decode::{
 use zencodec::encode::Encoder;
 use zencodec::how_far::NoPulse;
 use zencodec::source::{DynReadAt, SourceError};
-use zenpixels::{ImageSpec, PixelBuf, PixelViewMut};
+use zenpixels::{PixelBuf, PixelFormat, PixelViewMut};
 
 use crate::admission::{self, InputError};
 use crate::drive::{DriveOptions, Progressor};
@@ -1221,7 +1221,7 @@ pub enum StripEvent {
         /// Output height.
         height: u32,
         /// Output pixel format.
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     },
     /// One finished strip.
     Strip {
@@ -1321,7 +1321,7 @@ impl ChannelRowSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.ship()?;
@@ -1335,7 +1335,7 @@ impl ChannelRowSink {
 }
 
 impl DecodeRowSink for ChannelRowSink {
-    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelFormat) -> Result<(), SinkError> {
         self.send(StripEvent::Begin {
             width,
             height,
@@ -1348,7 +1348,7 @@ impl DecodeRowSink for ChannelRowSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(
             BatchMeta::final_rows(y),
@@ -1368,7 +1368,7 @@ impl DecodeRowSink for ChannelRowSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(meta, height, width, descriptor, &Default::default())
     }
@@ -1378,7 +1378,7 @@ impl DecodeRowSink for ChannelRowSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(meta, height, width, descriptor, metadata)

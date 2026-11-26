@@ -6,11 +6,11 @@ use zenbench::prelude::*;
 use zencodec::AnimationFrame;
 use zencodec::decode::DecodeRowSink;
 use zencodec_io::CollectSink;
-use zenpixels::{ImageSpec, PixelBuf};
+use zenpixels::{PixelBuf, PixelFormat};
 
 const STRIP: u32 = 16;
 
-fn collect(w: u32, h: u32, d: ImageSpec, fill: u8) -> PixelBuf {
+fn collect(w: u32, h: u32, d: PixelFormat, fill: u8) -> PixelBuf {
     let mut sink = CollectSink::new();
     sink.begin(w, h, d.clone()).unwrap();
     let mut y = 0;
@@ -29,9 +29,9 @@ fn collect(w: u32, h: u32, d: ImageSpec, fill: u8) -> PixelBuf {
 fn main() {
     zenbench::run(|suite| {
         let formats = [
-            ("u8 RGB8", ImageSpec::RGB8_SRGB),
-            ("u16 RGB16", ImageSpec::RGB16_SRGB),
-            ("f32 RGBA", ImageSpec::RGBAF32_LINEAR),
+            ("u8 RGB8", PixelFormat::RGB8_SRGB),
+            ("u16 RGB16", PixelFormat::RGB16_SRGB),
+            ("f32 RGBA", PixelFormat::RGBAF32_LINEAR),
         ];
         for (name, d) in formats {
             for (w, h) in [(64u32, 64u32), (1024, 1024), (4096, 4096)] {

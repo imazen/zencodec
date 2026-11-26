@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
 use zenpixels::{
-    ByteStorage, ByteStorageMut, ImageSpec, PixelBuf, PixelBufParts, PixelView, PixelViewMut,
+    ByteStorage, ByteStorageMut, PixelBuf, PixelBufParts, PixelFormat, PixelView, PixelViewMut,
 };
 
 /// A sink that collects every final row into one tightly packed image.
@@ -45,8 +45,8 @@ impl CollectSink {
     }
 
     /// Output descriptor, once `begin` has been called.
-    pub fn descriptor(&self) -> Option<ImageSpec> {
-        self.data.as_ref().map(|parts| parts.spec.clone())
+    pub fn descriptor(&self) -> Option<PixelFormat> {
+        self.data.as_ref().map(|parts| parts.format.clone())
     }
 
     /// Rows written so far (a row written twice counts twice).
@@ -74,7 +74,7 @@ impl CollectSink {
             parts.width,
             parts.height,
             parts.stride,
-            &parts.spec,
+            &parts.format,
         )
         .ok()?;
         Some(match (&self.metadata, self.finished) {
@@ -106,7 +106,10 @@ impl core::fmt::Debug for CollectSink {
         f.debug_struct("CollectSink")
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("layout", &self.data.as_ref().map(|parts| parts.spec.layout))
+            .field(
+                "layout",
+                &self.data.as_ref().map(|parts| parts.format.layout),
+            )
             .field("rows_written", &self.rows_written)
             .field("finished", &self.finished)
             .finish_non_exhaustive()
@@ -114,7 +117,7 @@ impl core::fmt::Debug for CollectSink {
 }
 
 impl DecodeRowSink for CollectSink {
-    fn begin(&mut self, width: u32, height: u32, descriptor: ImageSpec) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelFormat) -> Result<(), SinkError> {
         if self.data.is_some() {
             return Err("CollectSink: begin called twice".into());
         }
@@ -139,7 +142,7 @@ impl DecodeRowSink for CollectSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.provide_buffer_with_metadata(
             BatchMeta::final_rows(y),
@@ -155,7 +158,7 @@ impl DecodeRowSink for CollectSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if !meta.is_final {
@@ -168,10 +171,10 @@ impl DecodeRowSink for CollectSink {
         let Some(parts) = self.data.as_mut() else {
             return Err("CollectSink: rows before begin".into());
         };
-        if width != self.width || descriptor != parts.spec {
+        if width != self.width || descriptor != parts.format {
             return Err(format!(
                 "CollectSink: strip {width}x{height} {:?} does not match image {}x{} {:?}",
-                descriptor.layout, self.width, self.height, parts.spec.layout
+                descriptor.layout, self.width, self.height, parts.format.layout
             )
             .into());
         }
@@ -190,7 +193,7 @@ impl DecodeRowSink for CollectSink {
             width,
             height,
             parts.stride,
-            &parts.spec,
+            &parts.format,
         )?;
         if height != 0 {
             if let Some(prior) = &mut self.metadata {
@@ -241,12 +244,12 @@ mod tests {
     #[test]
     fn completed_pixels_cannot_be_reopened_for_writing() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 1, ImageSpec::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
+        sink.begin(1, 1, PixelFormat::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
                 .is_err()
         );
     }
@@ -254,22 +257,22 @@ mod tests {
     #[test]
     fn completion_requires_unique_coverage_and_closes_writes() {
         let mut sink = CollectSink::new();
-        sink.begin(1, 65, ImageSpec::GRAY8_SRGB).unwrap();
+        sink.begin(1, 65, PixelFormat::GRAY8_SRGB).unwrap();
         for _ in 0..65 {
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
                 .unwrap();
         }
         assert_eq!(sink.rows_written(), 65);
         assert!(sink.finish().is_err());
         assert!(!sink.finished());
         // Out-of-order and overlapping delivery remain valid.
-        sink.provide_next_buffer(32, 33, 1, ImageSpec::GRAY8_SRGB)
+        sink.provide_next_buffer(32, 33, 1, PixelFormat::GRAY8_SRGB)
             .unwrap();
-        sink.provide_next_buffer(1, 32, 1, ImageSpec::GRAY8_SRGB)
+        sink.provide_next_buffer(1, 32, 1, PixelFormat::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, ImageSpec::GRAY8_SRGB)
+            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
                 .is_err()
         );
         assert!(sink.into_buffer().is_some());
@@ -278,9 +281,9 @@ mod tests {
     #[test]
     fn finished_storage_moves_without_copy_for_integer_and_float_rows() {
         for descriptor in [
-            ImageSpec::RGB8_SRGB,
-            ImageSpec::RGB16_SRGB,
-            ImageSpec::RGBAF32_LINEAR,
+            PixelFormat::RGB8_SRGB,
+            PixelFormat::RGB16_SRGB,
+            PixelFormat::RGBAF32_LINEAR,
         ] {
             let mut sink = CollectSink::new();
             sink.begin(3, 2, descriptor.clone()).unwrap();
@@ -294,7 +297,7 @@ mod tests {
             sink.finish().unwrap();
             let buffer = sink.into_buffer().unwrap();
             assert_eq!(buffer.as_view().as_strided_bytes().as_ptr(), original);
-            assert_eq!(buffer.spec().clone(), descriptor);
+            assert_eq!(buffer.format().clone(), descriptor);
             for y in 0..2 {
                 assert!(buffer.as_view().row(y).iter().all(|b| *b == 37 + y as u8));
             }
@@ -305,8 +308,8 @@ mod tests {
     fn unfinished_collectors_do_not_yield_owned_completion() {
         assert!(CollectSink::new().into_buffer().is_none());
         let mut sink = CollectSink::new();
-        sink.begin(2, 1, ImageSpec::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 2, ImageSpec::GRAY8_SRGB)
+        sink.begin(2, 1, PixelFormat::GRAY8_SRGB).unwrap();
+        sink.provide_next_buffer(0, 1, 2, PixelFormat::GRAY8_SRGB)
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[17, 23]);
@@ -319,16 +322,16 @@ mod tests {
         // On 64-bit this fits usize but exceeds Vec's isize capacity limit;
         // on 32-bit the multiplication itself must refuse. Neither allocates.
         assert!(
-            sink.begin(u32::MAX, u32::MAX, ImageSpec::GRAY8_SRGB)
+            sink.begin(u32::MAX, u32::MAX, PixelFormat::GRAY8_SRGB)
                 .is_err()
         );
         assert_eq!(sink.descriptor(), None);
         assert_eq!((sink.width(), sink.height()), (0, 0));
         assert!(sink.bytes().is_empty());
         assert!(!sink.finished());
-        sink.begin(3, 2, ImageSpec::GRAY8_SRGB).unwrap();
+        sink.begin(3, 2, PixelFormat::GRAY8_SRGB).unwrap();
         for y in 0..2 {
-            sink.provide_next_buffer(y, 1, 3, ImageSpec::GRAY8_SRGB)
+            sink.provide_next_buffer(y, 1, 3, PixelFormat::GRAY8_SRGB)
                 .unwrap()
                 .row_mut(0)
                 .copy_from_slice(&[1 + y as u8, 3, 5]);
@@ -343,7 +346,7 @@ mod tests {
     fn collect_sink_refuses_geometry_overflow() {
         let mut sink = CollectSink::new();
         assert!(
-            sink.begin(u32::MAX, u32::MAX, ImageSpec::RGBAF32_LINEAR)
+            sink.begin(u32::MAX, u32::MAX, PixelFormat::RGBAF32_LINEAR)
                 .is_err()
         );
         assert!(sink.bytes().is_empty());
@@ -359,7 +362,7 @@ mod metadata_tests {
 
     #[test]
     fn collected_strip_facts_cover_both_grids_and_keep_original_provenance() {
-        let spec = ImageSpec::GRAY16_SRGB;
+        let spec = PixelFormat::GRAY16_SRGB;
         let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
         let hdr = HdrMetadata {
             cll: Some(zencodec::ContentLightLevel::new(1111, 227)),

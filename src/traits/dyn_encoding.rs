@@ -26,7 +26,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 use super::BoxedError;
 use super::encoder::{AnimationFrameEncoder, Encoder};
@@ -76,7 +76,7 @@ pub trait DynEncoder: Send {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         let _ = (width, height, descriptor);
         Err(Box::new(crate::UnsupportedOperation::RowLevelEncode))
@@ -106,7 +106,7 @@ pub trait DynEncoder: Send {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         access: crate::output_patch::OutputAccess,
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         let _ = access;
@@ -176,7 +176,7 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         &mut self,
         declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, BoxedError> {
-        declaration.validate_spec()?;
+        declaration.validate_format()?;
         declaration.validate_exact_depth()?;
         self.0
             .begin_declared(declaration)
@@ -187,7 +187,7 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         access: crate::output_patch::OutputAccess,
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         self.0
@@ -233,7 +233,7 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         self.0
             .begin(width, height, descriptor)
@@ -295,7 +295,7 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<crate::encode::AnimationOutputTiming, BoxedError> {
         let _ = (width, height, descriptor, frame_count);
@@ -389,7 +389,7 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         width: u32,
         height: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<crate::encode::AnimationOutputTiming, BoxedError> {
         self.0
@@ -640,7 +640,7 @@ where
         &self,
         declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, BoxedError> {
-        declaration.validate_spec()?;
+        declaration.validate_format()?;
         declaration.validate_exact_depth()?;
         let Some(job) = self.0.as_ref() else {
             return Err("EncodeJobShim: job already consumed (double take)".into());
@@ -778,7 +778,7 @@ pub trait DynEncoderConfig: Send + Sync {
     fn format(&self) -> ImageFormat;
 
     /// Pixel formats this encoder accepts natively.
-    fn supported_descriptors(&self) -> &'static [ImageSpec];
+    fn supported_descriptors(&self) -> &'static [PixelFormat];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static EncodeCapabilities;
@@ -851,7 +851,7 @@ where
         C::format()
     }
 
-    fn supported_descriptors(&self) -> &'static [ImageSpec] {
+    fn supported_descriptors(&self) -> &'static [PixelFormat] {
         C::supported_descriptors()
     }
 
@@ -975,7 +975,7 @@ mod begin_dispatch_tests {
                 error.downcast_ref::<UnsupportedOperation>(),
                 Some(&UnsupportedOperation::PullEncode)
             );
-            let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
+            let pixels = zenpixels::PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
             assert!(erased.encode(pixels.as_view()).is_ok());
         }
     }
@@ -983,23 +983,23 @@ mod begin_dispatch_tests {
     #[test]
     fn direct_dyn_declared_start_refuses_without_losing_one_shot() {
         let mut encoder: Box<dyn DynEncoder> = Box::new(OneShot);
-        let declaration = crate::encode::EncodeDeclaration::new(1, 1, ImageSpec::RGB8_SRGB);
+        let declaration = crate::encode::EncodeDeclaration::new(1, 1, PixelFormat::RGB8_SRGB);
         let error = encoder.begin_declared(&declaration).unwrap_err();
         assert_eq!(
             error.downcast_ref::<UnsupportedOperation>(),
             Some(&UnsupportedOperation::EncodePlanning)
         );
         assert!(encoder.pending_output().is_empty());
-        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
+        let pixels = zenpixels::PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
         assert!(encoder.encode(pixels.as_view()).is_ok());
     }
 
     #[test]
     fn default_begin_refuses_rows_for_typed_shim_and_direct_dyn_encoders() {
-        let pixels = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
+        let pixels = zenpixels::PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
         let mut typed = OneShot;
         assert_eq!(
-            Encoder::begin(&mut typed, 1, 1, ImageSpec::RGB8_SRGB),
+            Encoder::begin(&mut typed, 1, 1, PixelFormat::RGB8_SRGB),
             Err(UnsupportedOperation::RowLevelEncode)
         );
         assert!(Encoder::encode(typed, pixels.as_view()).is_ok());
@@ -1008,7 +1008,7 @@ mod begin_dispatch_tests {
             [Box::new(EncoderShim(OneShot)), Box::new(OneShot)];
         for mut encoder in encoders {
             let error = encoder
-                .begin(1, 1, ImageSpec::RGB8_SRGB)
+                .begin(1, 1, PixelFormat::RGB8_SRGB)
                 .expect_err("one-shot default must refuse before accepting any rows");
             assert_eq!(
                 error.downcast_ref::<UnsupportedOperation>(),
@@ -1088,7 +1088,7 @@ mod timing_dispatch_tests {
 
     #[test]
     fn shim_preserves_actual_timing_errors_and_accepted_frame_sequence() {
-        let buffer = zenpixels::PixelBuf::new(1, 1, ImageSpec::RGB8_SRGB).unwrap();
+        let buffer = zenpixels::PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
         let mut generic = Timed::new();
         let mut erased: Box<dyn DynAnimationFrameEncoder> =
             Box::new(AnimationFrameEncoderShim(Timed::new()));
@@ -1145,7 +1145,7 @@ mod negotiated_output_tests {
             &mut self,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
             access: OutputAccess,
         ) -> Result<crate::encode::OutputTiming, Self::Error> {
             if access != OutputAccess::SeekBack {
@@ -1172,12 +1172,12 @@ mod negotiated_output_tests {
         let mut encoder: Box<dyn DynEncoder> = Box::new(EncoderShim(Patching(false)));
         assert!(
             encoder
-                .begin_output(1, 1, ImageSpec::RGB8_SRGB, OutputAccess::Forward)
+                .begin_output(1, 1, PixelFormat::RGB8_SRGB, OutputAccess::Forward)
                 .is_err()
         );
         assert!(
             encoder
-                .begin_output(1, 1, ImageSpec::RGB8_SRGB, OutputAccess::SeekBack)
+                .begin_output(1, 1, PixelFormat::RGB8_SRGB, OutputAccess::SeekBack)
                 .unwrap()
                 .patches_at_finish()
         );
@@ -1215,8 +1215,8 @@ mod pull_dispatch_tests {
             if self.done {
                 return Ok(PullProgress::Done);
             }
-            let view =
-                PixelViewMut::new(&mut self.pixels, 2, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap();
+            let view = PixelViewMut::new(&mut self.pixels, 2, 2, 9, &zenpixels::formats::RGB8_SRGB)
+                .unwrap();
             rows.fill(
                 RowDemand::new(2, 3, view)
                     .with_final_pass(true)
@@ -1386,7 +1386,7 @@ mod declared_encode_tests {
             &mut self,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
             _: crate::output_patch::OutputAccess,
         ) -> Result<OutputTiming, Self::Error> {
             panic!("complete declaration must not be lowered to legacy startup")
@@ -1397,7 +1397,7 @@ mod declared_encode_tests {
     fn erased_preflight_retains_job_color_access_and_native_error() {
         let starts = Arc::new(AtomicUsize::new(0));
         let job: Box<dyn DynEncodeJob> = Box::new(EncodeJobShim(Some(Job(starts.clone()))));
-        let declaration = EncodeDeclaration::new(16, 32, ImageSpec::RGB8_SRGB)
+        let declaration = EncodeDeclaration::new(16, 32, PixelFormat::RGB8_SRGB)
             .with_access(crate::output_patch::OutputAccess::SeekBack);
         let error = job.plan_encode(&declaration).unwrap_err();
         assert_eq!(
@@ -1428,7 +1428,7 @@ mod declared_encode_tests {
             &mut self,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
             _: crate::output_patch::OutputAccess,
         ) -> Result<OutputTiming, Self::Error> {
             panic!("unsupported planning must refuse without startup")
@@ -1458,7 +1458,7 @@ mod declared_encode_tests {
 
     #[test]
     fn defaults_refuse_without_legacy_startup_even_without_color() {
-        let declaration = EncodeDeclaration::new(1, 1, ImageSpec::RGB8_SRGB);
+        let declaration = EncodeDeclaration::new(1, 1, PixelFormat::RGB8_SRGB);
         let error = LegacyJob.plan_encode(&declaration).unwrap_err();
         assert_eq!(
             error.downcast_ref::<UnsupportedOperation>(),

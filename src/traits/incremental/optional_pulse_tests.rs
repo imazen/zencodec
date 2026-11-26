@@ -90,7 +90,7 @@ impl DecodeRowSink for NoRows {
         _: u32,
         _: u32,
         _: u32,
-        _: zenpixels::ImageSpec,
+        _: zenpixels::PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, crate::decode::SinkError> {
         panic!("this protocol-only probe never publishes rows")
     }

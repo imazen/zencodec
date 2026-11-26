@@ -32,7 +32,7 @@ use zencodec::{
     CodecError, ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, SharedPulse,
     Unsupported, UnsupportedOperation,
 };
-use zenpixels::{ImageSpec, PixelBuf, PixelView};
+use zenpixels::{PixelBuf, PixelFormat, PixelView};
 
 use crate::reference::{
     Header, RefError, build_info, descriptor_for_bpp, encode_single, frame_pixel_len,
@@ -75,8 +75,8 @@ impl EncoderConfig for MinimalEncoderConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
         SUPPORTED
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -170,8 +170,8 @@ impl DecoderConfig for MinimalDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Pnm]
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB, ImageSpec::RGBA8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
         SUPPORTED
     }
     fn capabilities() -> &'static DecodeCapabilities {
@@ -216,7 +216,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<MinDec<'a>, At<CodecError>> {
         parse_header(&data)?;
         Ok(MinDec { data })
@@ -226,7 +226,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[ImageSpec],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, At<CodecError>> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, wrap_sink)
     }
@@ -234,7 +234,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn streaming_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
         Err(RefError::Unsupported(UnsupportedOperation::RowLevelDecode).into())
     }
@@ -242,7 +242,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     fn animation_frame_decoder(
         self,
         _data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
         Err(RefError::Unsupported(UnsupportedOperation::AnimationDecode).into())
     }

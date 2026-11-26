@@ -33,12 +33,12 @@ fn declaration_uses_paired_descriptor_rules_without_reading_samples() {
         (
             codec_spec(zenpixels::SampleLayout::RGB8),
             full,
-            ExactDepthError::SpecMismatch,
+            ExactDepthError::FormatMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::RGB16).with_range(SignalRange::Narrow),
             full,
-            ExactDepthError::SpecMismatch,
+            ExactDepthError::FormatMismatch,
         ),
         (
             codec_spec(zenpixels::SampleLayout::CMYK8),
@@ -82,7 +82,7 @@ fn structural_validation_is_deliberately_not_a_content_certificate() {
 
 #[test]
 fn independent_canonical_grids_classify_split_color_and_alpha() {
-    use zenpixels::{ImageSpec, PixelBuf, SampleLayout, SampleType, SignalRange};
+    use zenpixels::{PixelBuf, PixelFormat, SampleLayout, SampleType, SignalRange};
     let descriptor = |range| zencodec::helpers::codec_spec(SampleLayout::GRAYA16).with_range(range);
     let quantize = |code: u64, bits: u8| -> u16 {
         let steps = (1u64 << bits) - 1;
@@ -137,7 +137,7 @@ fn independent_canonical_grids_classify_split_color_and_alpha() {
         }
     }
     for value in 0..=u8::MAX {
-        let spec = ImageSpec::GRAY8_SRGB;
+        let spec = PixelFormat::GRAY8_SRGB;
         let pixel = PixelBuf::from_typed(vec![value], 1, 1, spec).unwrap();
         for bits in 1..=8 {
             let steps = (1u32 << bits) - 1;

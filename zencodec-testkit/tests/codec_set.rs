@@ -21,7 +21,7 @@ use zencodec_testkit::reference::RefEncodeJob;
 use zencodec_testkit::{
     RefError, ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 // ===========================================================================
 // Helpers
@@ -33,7 +33,7 @@ fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelView<'_> {
         width,
         height,
         width as usize * 3,
-        &zenpixels::specs::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )
     .expect("valid pixel slice")
 }
@@ -276,8 +276,8 @@ impl EncoderConfig for Rgb8OnlyEncoder {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
 
@@ -290,7 +290,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
 fn transcode_refuses_implicit_precision_loss() {
     let samples = [0u8; 24];
     let pixels =
-        PixelView::new(&samples, W, H, 12, &zenpixels::specs::RGB16_SRGB).expect("16-bit pixels");
+        PixelView::new(&samples, W, H, 12, &zenpixels::formats::RGB16_SRGB).expect("16-bit pixels");
     let source = ReferenceEncoderConfig::new()
         .encode(pixels)
         .expect("encode 16-bit source");
@@ -307,7 +307,7 @@ fn transcode_refuses_implicit_precision_loss() {
             ColorEmitPolicy::Verbatim,
         ),
         Err(CodecSetError::TranscodeRequiresExplicitHandling(
-            TranscodeBarrier::ImageSpec
+            TranscodeBarrier::PixelFormat
         ))
     ));
 }
@@ -539,7 +539,7 @@ fn one_shot_trait_methods_work_directly() {
 #[test]
 fn estimate_dispatches_to_the_registered_codec() {
     let set = reference_set();
-    let image = ImageCharacteristics::new(W, H, ImageSpec::RGB8_SRGB);
+    let image = ImageCharacteristics::new(W, H, PixelFormat::RGB8_SRGB);
     let compute = ComputeEnvironment::conservative();
 
     // Registered format → forwards to the codec's estimator and succeeds

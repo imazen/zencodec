@@ -13,11 +13,11 @@ use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineContext, CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveError, DriveOptions, drive_from_read_at, drive_from_slice};
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 const W: u32 = 4;
 const H: u32 = 4;
-const RGBA: ImageSpec = ImageSpec::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 
 /// MiniTile layout (128 bytes):
 /// - 0..16   header: "MTIL", width, height, index_offset (all u32 LE)
@@ -81,21 +81,21 @@ fn minitile_decoder() -> Dec {
             ctx.read_many_at(&mut reqs).await?;
         }
         let stride = w as usize * 4;
-        let s0 = PixelView::new_with_spec_cow(
+        let s0 = PixelView::new_with_format_cow(
             &tile0,
             w,
             2,
             stride,
-            zenpixels::SpecCow::from_owned(RGBA),
+            zenpixels::FormatCow::from_owned(RGBA),
         )
         .unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &s0).await?;
-        let s1 = PixelView::new_with_spec_cow(
+        let s1 = PixelView::new_with_format_cow(
             &tile1,
             w,
             2,
             stride,
-            zenpixels::SpecCow::from_owned(RGBA),
+            zenpixels::FormatCow::from_owned(RGBA),
         )
         .unwrap();
         ctx.write_rows(BatchMeta::final_rows(2), &s1).await?;
@@ -114,8 +114,9 @@ fn sequential_decoder() -> Dec {
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         let mut row = [0u8; 8];
         ctx.read_exact(&mut row).await?;
-        let s = PixelView::new_with_spec_cow(&row, 2, 1, 8, zenpixels::SpecCow::from_owned(RGBA))
-            .unwrap();
+        let s =
+            PixelView::new_with_format_cow(&row, 2, 1, 8, zenpixels::FormatCow::from_owned(RGBA))
+                .unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
         Ok(OutputInfo::full_decode(2, 1, RGBA))
     })
@@ -342,8 +343,9 @@ fn input_cap_bounds_memory() {
             ctx.read_exact(&mut b).await?;
             ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
             ctx.set_output_descriptor(RGBA);
-            let s = PixelView::new_with_spec_cow(&b, 2, 1, 8, zenpixels::SpecCow::from_owned(RGBA))
-                .unwrap();
+            let s =
+                PixelView::new_with_format_cow(&b, 2, 1, 8, zenpixels::FormatCow::from_owned(RGBA))
+                    .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
             Ok(OutputInfo::full_decode(2, 1, RGBA))
         })
@@ -422,8 +424,14 @@ fn gap_bytes_between_ranges_are_not_retained() {
             let px = [0u8; 4];
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelView::new_with_spec_cow(&px, 1, 1, 4, zenpixels::SpecCow::from_owned(RGBA))
-                    .unwrap(),
+                &PixelView::new_with_format_cow(
+                    &px,
+                    1,
+                    1,
+                    4,
+                    zenpixels::FormatCow::from_owned(RGBA),
+                )
+                .unwrap(),
             )
             .await?;
             Ok(OutputInfo::full_decode(1, 1, RGBA))
@@ -530,7 +538,7 @@ impl DecodeRowSink for PassSink {
         y: u32,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.provide_pass_buffer(BatchMeta::final_rows(y), height, width, descriptor)
     }
@@ -542,7 +550,7 @@ impl DecodeRowSink for PassSink {
         meta: BatchMeta,
         height: u32,
         width: u32,
-        descriptor: ImageSpec,
+        descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if let Some(last) = self.passes.last_mut() {
             last.1 = self.scratch.clone();
@@ -550,12 +558,12 @@ impl DecodeRowSink for PassSink {
         let stride = width as usize * descriptor.layout.bytes_per_pixel();
         self.scratch = vec![0u8; stride * height as usize];
         self.passes.push((meta, Vec::new()));
-        PixelViewMut::new_with_spec_cow(
+        PixelViewMut::new_with_format_cow(
             &mut self.scratch,
             width,
             height,
             stride,
-            zenpixels::SpecCow::from_owned(descriptor),
+            zenpixels::FormatCow::from_owned(descriptor),
         )
         .map_err(|e| e.to_string().into())
     }
@@ -578,19 +586,20 @@ fn provisional_rows_reach_only_a_sink_that_accepts_them() {
         let coarse = [128u8; 4];
         let fine = [200u8; 4];
         if ctx.accepts_provisional() {
-            let s = PixelView::new_with_spec_cow(
+            let s = PixelView::new_with_format_cow(
                 &coarse,
                 1,
                 1,
                 4,
-                zenpixels::SpecCow::from_owned(RGBA),
+                zenpixels::FormatCow::from_owned(RGBA),
             )
             .unwrap();
             ctx.write_rows(BatchMeta::new(0, false).with_pass(0), &s)
                 .await?;
         }
-        let s = PixelView::new_with_spec_cow(&fine, 1, 1, 4, zenpixels::SpecCow::from_owned(RGBA))
-            .unwrap();
+        let s =
+            PixelView::new_with_format_cow(&fine, 1, 1, 4, zenpixels::FormatCow::from_owned(RGBA))
+                .unwrap();
         ctx.write_rows(BatchMeta::new(0, true).with_pass(1), &s)
             .await?;
         Ok(OutputInfo::full_decode(1, 1, RGBA))
@@ -618,7 +627,7 @@ fn rows_before_the_header_are_an_error() {
         let px = [0u8; 4];
         ctx.write_rows(
             BatchMeta::final_rows(0),
-            &PixelView::new_with_spec_cow(&px, 1, 1, 4, zenpixels::SpecCow::from_owned(RGBA))
+            &PixelView::new_with_format_cow(&px, 1, 1, 4, zenpixels::FormatCow::from_owned(RGBA))
                 .unwrap(),
         )
         .await?;
@@ -642,11 +651,11 @@ fn len_request_is_served_by_drivers() {
         let mut tail = [0u8; 2];
         ctx.read_exact_at(len - 2, &mut tail).await?;
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(ImageSpec::RGB8_SRGB);
+        ctx.set_output_descriptor(PixelFormat::RGB8_SRGB);
         let px = [tail[0], tail[1], 0];
-        let s = PixelView::new(&px, 1, 1, 3, &zenpixels::specs::RGB8_SRGB).unwrap();
+        let s = PixelView::new(&px, 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
-        Ok(OutputInfo::full_decode(1, 1, ImageSpec::RGB8_SRGB))
+        Ok(OutputInfo::full_decode(1, 1, PixelFormat::RGB8_SRGB))
     });
     let data = [0u8, 0, 0, 0, 0, 42, 43];
     let mut src = CountingSource {
@@ -686,9 +695,14 @@ fn rows_deposited_in_the_final_poll_are_delivered() {
             ctx.set_output_descriptor(RGBA);
             ctx.announce(MetadataUpdate::HeaderReady).await?;
             let row = [1u8, 2, 3, 4, 5, 6, 7, 8];
-            let s =
-                PixelView::new_with_spec_cow(&row, 2, 1, 8, zenpixels::SpecCow::from_owned(RGBA))
-                    .unwrap();
+            let s = PixelView::new_with_format_cow(
+                &row,
+                2,
+                1,
+                8,
+                zenpixels::FormatCow::from_owned(RGBA),
+            )
+            .unwrap();
             {
                 let fut = ctx.write_rows(BatchMeta::final_rows(0), &s);
                 let mut fut = core::pin::pin!(fut);

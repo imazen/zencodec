@@ -12,9 +12,9 @@ use zencodec::decode::{
 use zencodec::source::AccessPattern;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{BoxedCoroutineDecoder, CoroutineDecoder, CoroutineError};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
-pub const DESC: ImageSpec = ImageSpec::RGBA8_SRGB;
+pub const DESC: PixelFormat = PixelFormat::RGBA8_SRGB;
 pub const HEADER: usize = 16;
 
 /// `"SYN1"`, width, height (u32 LE), 4 bytes pad, then raw RGBA8 rows.
@@ -180,7 +180,7 @@ impl IncrementalDecode for HandWritten {
     fn info(&self) -> Option<&ImageInfo> {
         self.info.as_ref()
     }
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -209,12 +209,12 @@ pub fn coroutine_sequential(strip_rows: u32) -> Coro {
                 let rows = (h - y).min(strip_rows);
                 let n = rows as usize * row;
                 ctx.read_exact(&mut strip[..n]).await?;
-                let s = PixelView::new_with_spec_cow(
+                let s = PixelView::new_with_format_cow(
                     &strip[..n],
                     w,
                     rows,
                     row,
-                    zenpixels::SpecCow::from_owned(DESC),
+                    zenpixels::FormatCow::from_owned(DESC),
                 )
                 .unwrap();
                 ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
@@ -245,12 +245,12 @@ pub fn coroutine_ranges(strip_rows: u32) -> Coro {
                 let n = rows as usize * row;
                 let at = HEADER as u64 + y as u64 * row as u64;
                 ctx.read_exact_at(at, &mut strip[..n]).await?;
-                let s = PixelView::new_with_spec_cow(
+                let s = PixelView::new_with_format_cow(
                     &strip[..n],
                     w,
                     rows,
                     row,
-                    zenpixels::SpecCow::from_owned(DESC),
+                    zenpixels::FormatCow::from_owned(DESC),
                 )
                 .unwrap();
                 ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
@@ -279,7 +279,7 @@ pub fn coroutine_controlled(strip_rows: u32, input_cap: usize, admitted: bool) -
                 let rows = (h - y).min(strip_rows);
                 let n = rows as usize * row;
                 ctx.read_exact(&mut strip[..n]).await?;
-                ctx.write_rows(BatchMeta::final_rows(y), &PixelView::new_with_spec_cow(&strip[..n], w, rows, row, zenpixels::SpecCow::from_owned(DESC)).unwrap()).await?;
+                ctx.write_rows(BatchMeta::final_rows(y), &PixelView::new_with_format_cow(&strip[..n], w, rows, row, zenpixels::FormatCow::from_owned(DESC)).unwrap()).await?;
                 y += rows;
             }
             Ok(OutputInfo::full_decode(w, h, DESC))

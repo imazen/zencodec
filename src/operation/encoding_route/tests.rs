@@ -9,10 +9,10 @@ use crate::{
 };
 use alloc::{sync::Arc, vec::Vec};
 use core::convert::Infallible;
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 fn declaration() -> EncodeDeclaration {
-    EncodeDeclaration::new(7, 9, ImageSpec::RGB8_SRGB)
+    EncodeDeclaration::new(7, 9, PixelFormat::RGB8_SRGB)
 }
 fn job_evidence() -> EncodeEvidence {
     EncodeEvidence::new(EncodeOffer {
@@ -552,7 +552,7 @@ fn discovery_may_continue_but_final_adoption_cannot_bypass_replay_obligations() 
             let boundary = DecodeBoundary::new(InterpretationFacts::new(
                 7,
                 9,
-                Some(ImageSpec::RGB8_SRGB),
+                Some(PixelFormat::RGB8_SRGB),
                 state,
             ))
             .unwrap();
@@ -789,7 +789,7 @@ fn invalid_shared_plans_keep_typed_causes_including_with_no_offers() {
     invalid.timing = OutputTiming::streaming(0);
     let cases = [
         (
-            EncodeDeclaration::new(0, 9, ImageSpec::RGB8_SRGB),
+            EncodeDeclaration::new(0, 9, PixelFormat::RGB8_SRGB),
             plan(Some(1)),
             EncodePlanError::Dimensions,
         ),

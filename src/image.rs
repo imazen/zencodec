@@ -494,7 +494,7 @@ impl Samples<'_> {
     /// Storage sample type, not original precision or code depth.
     pub fn channel_type(&self) -> SampleType {
         match self {
-            Self::Pixels(p) => p.spec().layout.sample,
+            Self::Pixels(p) => p.format().layout.sample,
             Self::Values(p) => p.channel,
             Self::Codes(p) => p.encoding().storage(),
             Self::Float { .. } => SampleType::F32,
@@ -556,7 +556,7 @@ pub trait MappedImage {
     fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
 }
 pub(crate) struct SampleFacts {
-    pub packed: Option<zenpixels::ImageSpec>,
+    pub packed: Option<zenpixels::PixelFormat>,
     pub planes: usize,
     pub auxiliaries: usize,
     pub applied_spot_colors: usize,
@@ -935,7 +935,7 @@ struct PackedMap<'a>(&'a Packed);
 impl ImageStorage for Packed {
     fn facts(&self) -> SampleFacts {
         SampleFacts {
-            packed: Some(self.pixels.spec().clone()),
+            packed: Some(self.pixels.format().clone()),
             planes: 1 + self.extras.len(),
             auxiliaries: self.extras.len(),
             applied_spot_colors: self

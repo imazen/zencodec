@@ -19,7 +19,7 @@ use zencodec_testkit::{
     ReferenceEncoderConfig, TestImage,
     reference::{RefEnc, RefEncodeJob, RefError},
 };
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 #[derive(Default)]
 struct Counts {
@@ -42,8 +42,8 @@ impl EncoderConfig for Control {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
-        static SUPPORTED: &[ImageSpec] = &[ImageSpec::RGB8_SRGB];
+    fn supported_descriptors() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
     fn with_fidelity(mut self, target: Fidelity) -> Self {
@@ -245,7 +245,7 @@ impl EncoderConfig for ThreadAffine {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         Control::supported_descriptors()
     }
     fn job(self) -> Self::Job {
@@ -335,7 +335,7 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
                 };
                 assert_eq!(
                     (facts.width, facts.height, facts.descriptor),
-                    (3, 2, ImageSpec::RGB8_SRGB)
+                    (3, 2, PixelFormat::RGB8_SRGB)
                 );
                 assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
                 assert_eq!(counts.made.load(Ordering::SeqCst), 2);

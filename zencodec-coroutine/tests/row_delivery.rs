@@ -3,9 +3,9 @@ use std::{future::Future, num::NonZeroU32, task::Poll};
 use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo, NoPulse};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
-use zenpixels::{ImageSpec, PixelView, PixelViewMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
-const DESC: ImageSpec = ImageSpec::RGB8_SRGB;
+const DESC: PixelFormat = PixelFormat::RGB8_SRGB;
 const HEIGHT: u32 = 129;
 
 struct OneSlot {
@@ -30,7 +30,7 @@ impl OneSlot {
         meta: BatchMeta,
         rows: u32,
         width: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if self.pending {
             return Err("the consumer has not drained its only slot".into());
@@ -39,12 +39,12 @@ impl OneSlot {
         self.pending = true;
         self.meta = Some(meta);
         self.rows = rows;
-        Ok(PixelViewMut::new_with_spec_cow(
+        Ok(PixelViewMut::new_with_format_cow(
             &mut self.bytes,
             width,
             rows,
             12,
-            zenpixels::SpecCow::from_owned(desc),
+            zenpixels::FormatCow::from_owned(desc),
         )?)
     }
 }
@@ -60,7 +60,7 @@ impl DecodeRowSink for OneSlot {
         y: u32,
         rows: u32,
         width: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.loan(BatchMeta::final_rows(y), rows, width, desc)
     }
@@ -69,7 +69,7 @@ impl DecodeRowSink for OneSlot {
         meta: BatchMeta,
         rows: u32,
         width: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.loan(meta, rows, width, desc)
     }
@@ -94,12 +94,12 @@ fn decoder(
             for y in 0..HEIGHT as usize {
                 bytes[y * 9..y * 9 + 6].fill(y as u8);
             }
-            let pixels = PixelView::new_with_spec_cow(
+            let pixels = PixelView::new_with_format_cow(
                 &bytes,
                 2,
                 HEIGHT,
                 9,
-                zenpixels::SpecCow::from_owned(DESC),
+                zenpixels::FormatCow::from_owned(DESC),
             )
             .unwrap();
             let meta = if provisional {
@@ -223,7 +223,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             _: u32,
             _: u32,
             _: u32,
-            _: ImageSpec,
+            _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             Err("delivery lost explicit row metadata".into())
         }
@@ -232,17 +232,17 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             meta: BatchMeta,
             height: u32,
             width: u32,
-            desc: ImageSpec,
+            desc: PixelFormat,
             facts: &RowMetadata,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             self.bytes.0.fill(0xD6);
             self.metas.push((meta, facts.clone()));
-            Ok(PixelViewMut::new_with_spec_cow(
+            Ok(PixelViewMut::new_with_format_cow(
                 &mut self.bytes.0,
                 width,
                 height,
                 16,
-                zenpixels::SpecCow::from_owned(desc),
+                zenpixels::FormatCow::from_owned(desc),
             )?
             .with_hdr(facts.hdr))
         }
@@ -261,7 +261,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         } else {
             let words = [2114u16, 65535, 4228, 0];
             (
-                PixelBuf::from_typed(words.to_vec(), 2, 2, ImageSpec::GRAY16_SRGB).unwrap(),
+                PixelBuf::from_typed(words.to_vec(), 2, 2, PixelFormat::GRAY16_SRGB).unwrap(),
                 words
                     .into_iter()
                     .flat_map(u16::to_ne_bytes)
@@ -290,12 +290,12 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         let buffer = buffer.with_hdr(hdr).with_origin(origin.clone());
         let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Png));
-            ctx.set_output_descriptor(buffer.spec().clone());
+            ctx.set_output_descriptor(buffer.format().clone());
             ctx.write_rows(BatchMeta::new(0, false).with_pass(2), &buffer.as_view())
                 .await?;
             ctx.write_rows(BatchMeta::final_rows(0), &buffer.as_view())
                 .await?;
-            Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, buffer.spec().clone()))
+            Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, buffer.format().clone()))
         });
         let mut sink = Sink {
             bytes: Aligned([0; 64]),

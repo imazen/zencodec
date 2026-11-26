@@ -1,7 +1,8 @@
 //! Bridges between codec declarations and zenpixels' algebraic image spec.
 
 use zenpixels::{
-    AlphaMode, ChannelOrder, ColorSpace, ImageSpec, Primaries, SampleLayout, SignalRange, Transfer,
+    AlphaMode, ChannelOrder, ColorSpace, PixelFormat, Primaries, SampleLayout, SignalRange,
+    Transfer,
 };
 
 /// Declare a physical layout before transfer information is available.
@@ -9,7 +10,7 @@ use zenpixels::{
 /// RGB describes BT.709 primaries and unknown transfer. Gray has no primaries.
 /// The layout determines alpha and padding. Other channel families retain
 /// their native interpretation where layout alone determines it.
-pub const fn codec_spec(layout: SampleLayout) -> ImageSpec {
+pub const fn codec_spec(layout: SampleLayout) -> PixelFormat {
     let order = layout.order;
     let alpha = if order.has_padding_slot() {
         AlphaMode::Undefined
@@ -50,24 +51,24 @@ pub const fn codec_spec(layout: SampleLayout) -> ImageSpec {
             alpha,
         }
     };
-    ImageSpec::new(layout, color)
+    PixelFormat::new(layout, color)
 }
 
 #[cfg(test)]
-pub(crate) fn signal_range(spec: &ImageSpec) -> SignalRange {
+pub(crate) fn signal_range(spec: &PixelFormat) -> SignalRange {
     match spec.color {
         ColorSpace::Rgb { range, .. } | ColorSpace::Gray { range, .. } => range,
         _ => SignalRange::Full,
     }
 }
 
-pub(crate) fn has_alpha(spec: &ImageSpec) -> bool {
+pub(crate) fn has_alpha(spec: &PixelFormat) -> bool {
     spec.layout.order.has_alpha_slot()
 }
 
 // Copy interpretation into a diagnostic without retaining profile bytes.
 // A class-valid ICC remains in the actual operation's spec.
-pub(crate) fn redacted_spec(spec: &ImageSpec) -> ImageSpec {
+pub(crate) fn redacted_spec(spec: &PixelFormat) -> PixelFormat {
     let mut public = spec.clone();
     match &mut public.color {
         ColorSpace::Icc { alpha, .. } => {

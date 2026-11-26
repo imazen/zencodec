@@ -6,13 +6,13 @@ use zencodec::{
     operation::{DecodeRequest, EncodeRequest, OperationError},
 };
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 const STRIDED: [u8; 18] = [
     1, 2, 3, 4, 5, 6, 99, 98, 97, 7, 8, 9, 10, 11, 12, 96, 95, 94,
 ];
 fn pixels() -> PixelView<'static> {
-    PixelView::new(&STRIDED, 2, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap()
+    PixelView::new(&STRIDED, 2, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap()
 }
 fn codecs() -> CodecSet {
     CodecSet::new()
@@ -24,7 +24,7 @@ fn codecs() -> CodecSet {
 fn stored_requests_roundtrip_strided_pixels_and_leave_templates_reusable() {
     let codecs = codecs();
     let encode = EncodeRequest::new(ImageFormat::Pnm).with_fidelity(Fidelity::Lossless);
-    let decode = DecodeRequest::new().with_output(ImageSpec::RGB8_SRGB);
+    let decode = DecodeRequest::new().with_output(PixelFormat::RGB8_SRGB);
     let baseline = codecs.encode(ImageFormat::Pnm, pixels()).unwrap();
     for _ in 0..3 {
         let output = encode.encode(&codecs, pixels()).unwrap();
@@ -40,19 +40,19 @@ fn required_output_rejects_a_native_fallback_but_preferences_allow_it() {
     let codecs = codecs();
     let encoded = codecs.encode(ImageFormat::Pnm, pixels()).unwrap();
     let error = DecodeRequest::new()
-        .with_output(ImageSpec::RGBA8_SRGB)
+        .with_output(PixelFormat::RGBA8_SRGB)
         .decode(&codecs, encoded.data())
         .unwrap_err();
     assert!(matches!(
         zencodec::find_cause::<OperationError>(&error),
         Some(OperationError::OutputDescriptor { requested, actual })
-            if requested.as_ref() == &ImageSpec::RGBA8_SRGB && actual.as_ref() == &ImageSpec::RGB8_SRGB
+            if requested.as_ref() == &PixelFormat::RGBA8_SRGB && actual.as_ref() == &PixelFormat::RGB8_SRGB
     ));
     let decoded = DecodeRequest::new()
-        .preferring_output(vec![ImageSpec::RGBA8_SRGB])
+        .preferring_output(vec![PixelFormat::RGBA8_SRGB])
         .decode(&codecs, encoded.data())
         .unwrap();
-    assert_eq!(decoded.pixels().spec().clone(), ImageSpec::RGB8_SRGB);
+    assert_eq!(decoded.pixels().format().clone(), PixelFormat::RGB8_SRGB);
     assert_eq!(decoded.pixels().row(1), &[7, 8, 9, 10, 11, 12]);
 }
 

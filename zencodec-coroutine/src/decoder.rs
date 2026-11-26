@@ -15,7 +15,7 @@ use zencodec::decode::{
     OutputInfo, Progress, SinkError, StepError,
 };
 use zencodec::source::AccessPattern;
-use zenpixels::ImageSpec;
+use zenpixels::PixelFormat;
 
 use crate::context::{CoroutineContext, CoroutineError, Shared, SharedCell};
 
@@ -505,7 +505,7 @@ where
         details
     }
 
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         self.shared.lock().descriptor.clone()
     }
 
@@ -631,7 +631,7 @@ fn copy_rows(
     )?;
     if destination.width() != rows.width
         || destination.rows() != count
-        || destination.spec() != &rows.descriptor
+        || destination.format() != &rows.descriptor
     {
         return Err("sink returned a buffer with a different geometry or descriptor".into());
     }

@@ -10,7 +10,7 @@ use zencodec::{
         SourcePrecision, ValueSlice, Values,
     },
 };
-use zenpixels::{ImageSpec, Orientation, PixelBuf, PixelView, SampleType};
+use zenpixels::{Orientation, PixelBuf, PixelFormat, PixelView, SampleType};
 
 struct Extra {
     bytes: [u8; 6],
@@ -37,7 +37,7 @@ struct Owner {
 }
 impl PackedImageOwner for Owner {
     fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
-        Ok(PixelView::new(&[3; 18], 2, 2, 9, &zenpixels::specs::RGB8_SRGB).unwrap())
+        Ok(PixelView::new(&[3; 18], 2, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap())
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
         self.extra.auxiliary(index)
@@ -107,7 +107,7 @@ fn matching_dimensions_and_source_reduction_never_infer_registration() {
             Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8).unwrap();
         assert_eq!(values.grid(), AuxiliaryGrid::Unknown);
         assert_eq!(values.as_slice().grid(), AuxiliaryGrid::Unknown);
-        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, ImageSpec::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, PixelFormat::RGB8_SRGB).unwrap();
         let image = ImageOutput::packed(pixels, vec![(role(), values)], interpretation()).unwrap();
         assert_eq!(grid(&image), AuxiliaryGrid::Unknown);
     }
@@ -122,7 +122,7 @@ fn known_registration_checks_shape_for_owned_and_native_planes_without_copying()
         let values = Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8)
             .unwrap()
             .with_grid(AuxiliaryGrid::ColorSamples);
-        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, ImageSpec::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, PixelFormat::RGB8_SRGB).unwrap();
         let owned = ImageOutput::packed(pixels, vec![(role(), values)], interpretation());
         if width == 1 {
             for result in [native, owned] {
@@ -186,10 +186,10 @@ fn registration_is_frozen_through_clones_and_both_color_replacement_owners() {
 fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
     use zencodec::gainmap::{DecodedGainMap, GainMapInfo, GainMapIngestError, GainMapParams};
     use zenpixels::{
-        AlphaMode, BitPacking, ColorSpace, DualLayerHdrBuf, ImageSpec, Orientation, PixelBuf,
+        AlphaMode, BitPacking, ColorSpace, DualLayerHdrBuf, Orientation, PixelBuf, PixelFormat,
         SampleLayout,
     };
-    let spec = ImageSpec::new(
+    let spec = PixelFormat::new(
         SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 10 }),
         ColorSpace::Untagged {
             channels: 1,
@@ -227,7 +227,7 @@ fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
         .to_color_space(AlphaMode::None)
         .unwrap();
     let pair = DualLayerHdrBuf::new_with_alternate_color(
-        PixelBuf::new(3, 2, ImageSpec::RGB8_SRGB).unwrap(),
+        PixelBuf::new(3, 2, PixelFormat::RGB8_SRGB).unwrap(),
         map.pixels,
         map.metadata.params.exact_metadata().unwrap(),
         alternate.clone(),
@@ -246,12 +246,12 @@ fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
     assert!(zenpixels::GainMapMetadata::try_symmetric(2.0).is_some());
     assert!(zenpixels::GainMapMetadata::try_symmetric(f32::NAN).is_none());
 
-    let rgba = PixelBuf::new(2, 1, ImageSpec::RGBA8_SRGB).unwrap();
+    let rgba = PixelBuf::new(2, 1, PixelFormat::RGBA8_SRGB).unwrap();
     assert!(matches!(
         DecodedGainMap::try_new(rgba, stale.clone()),
         Err(GainMapIngestError::Layout)
     ));
-    let unsupported = ImageSpec::new(
+    let unsupported = PixelFormat::new(
         SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 9 }),
         spec.color,
     );

@@ -13,7 +13,7 @@ use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
-use zenpixels::{ImageSpec, PixelView};
+use zenpixels::{PixelFormat, PixelView};
 
 mod binding;
 mod collection;
@@ -136,9 +136,9 @@ pub enum OperationError {
     /// The decoder could not produce the required descriptor without conversion.
     OutputDescriptor {
         /// Required output interpretation and layout.
-        requested: Box<ImageSpec>,
+        requested: Box<PixelFormat>,
         /// The decoder's actual output interpretation and layout.
-        actual: Box<ImageSpec>,
+        actual: Box<PixelFormat>,
     },
 }
 
@@ -198,8 +198,8 @@ impl core::error::Error for OperationError {
 enum Output {
     #[default]
     Native,
-    Prefer(Vec<ImageSpec>),
-    Require(ImageSpec),
+    Prefer(Vec<PixelFormat>),
+    Require(PixelFormat),
 }
 
 /// Reusable requirements for decoding one image into owned pixels.
@@ -246,14 +246,14 @@ impl DecodeRequest {
     /// For controlled execution,
     /// [`Self::start_controlled`] checks the final interpretation before sink
     /// effects; this is not a bound on native decoding workspace.
-    pub fn with_output(mut self, descriptor: ImageSpec) -> Self {
+    pub fn with_output(mut self, descriptor: PixelFormat) -> Self {
         self.output = Output::Require(descriptor);
         self
     }
 
     /// Prefer these descriptors in order, permitting the decoder's native
     /// fallback. Inspect the returned pixels for the selected descriptor.
-    pub fn preferring_output(mut self, descriptors: impl Into<Vec<ImageSpec>>) -> Self {
+    pub fn preferring_output(mut self, descriptors: impl Into<Vec<PixelFormat>>) -> Self {
         self.output = Output::Prefer(descriptors.into());
         self
     }
@@ -661,7 +661,7 @@ impl EncodeRequest {
         let facts = EncodeFacts {
             width: pixels.width(),
             height: pixels.rows(),
-            descriptor: pixels.spec().clone(),
+            descriptor: pixels.format().clone(),
         };
         let (selected, record) = policy::choose_encode(
             facts,
@@ -700,7 +700,7 @@ mod descriptor_diagnostics {
     #[test]
     fn descriptor_refusal_preserves_live_value_and_redacts_opaque_bytes() {
         let marker: alloc::sync::Arc<[u8]> = alloc::vec![239u8; 231].into();
-        let request = ImageSpec::new(
+        let request = PixelFormat::new(
             SampleLayout::RGB8,
             ColorSpace::Icc {
                 profile: marker.clone(),
@@ -711,7 +711,7 @@ mod descriptor_diagnostics {
         );
         let failure = OperationError::OutputDescriptor {
             requested: Box::new(request),
-            actual: Box::new(ImageSpec::RGB8_SRGB),
+            actual: Box::new(PixelFormat::RGB8_SRGB),
         };
         for diagnostic in [alloc::format!("{failure}"), alloc::format!("{failure:?}")] {
             assert!(!diagnostic.contains("239, 239"));

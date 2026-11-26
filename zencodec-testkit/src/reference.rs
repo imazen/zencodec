@@ -62,7 +62,7 @@ use zencodec::{
     ErrorCategory, ImageFormat, ImageFormatDefinition, ImageInfo, ImageSequence, MasteringDisplay,
     Metadata, Orientation, ResourceLimits, SharedPulse, UnsupportedOperation,
 };
-use zenpixels::{IccColorSpace, ImageSpec, PixelBuf, PixelView};
+use zenpixels::{IccColorSpace, PixelBuf, PixelFormat, PixelView};
 
 // ===========================================================================
 // Error
@@ -170,12 +170,12 @@ pub(crate) const MINIMAL_CODEC_NAME: &str = "zencodec-testkit/minimal";
 
 const MAGIC: &[u8; 4] = b"ZCR1";
 
-pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<ImageSpec, RefError> {
+pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<PixelFormat, RefError> {
     match bpp {
-        3 => Ok(ImageSpec::RGB8_SRGB),
-        4 => Ok(ImageSpec::RGBA8_SRGB),
-        6 => Ok(ImageSpec::RGB16_SRGB),
-        8 => Ok(ImageSpec::RGBA16_SRGB),
+        3 => Ok(PixelFormat::RGB8_SRGB),
+        4 => Ok(PixelFormat::RGBA8_SRGB),
+        6 => Ok(PixelFormat::RGB16_SRGB),
+        8 => Ok(PixelFormat::RGBA16_SRGB),
         b => Err(RefError::Invalid(format!("unsupported bpp {b}"))),
     }
 }
@@ -183,7 +183,7 @@ pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<ImageSpec, RefError> {
 /// The output descriptor for a parsed header: the layout from `bpp`, with the
 /// transfer function and primaries stamped from the file's CICP when it has
 /// one. This is what makes a PQ/HLG file decode to a PQ/HLG-labelled buffer.
-pub(crate) fn descriptor_for_header(h: &Header) -> Result<ImageSpec, RefError> {
+pub(crate) fn descriptor_for_header(h: &Header) -> Result<PixelFormat, RefError> {
     let layout = descriptor_for_bpp(h.bpp)?.layout;
     let info = build_info(h);
     let source = &info.source_color;
@@ -218,11 +218,11 @@ impl GainMapWire {
             .map_err(|error| RefError::Invalid(error.to_string()))?;
         let ps = gm.pixels.as_view();
         let channels = gm.channels();
-        let bytes_per_sample = ps.spec().layout.bytes_per_pixel() / channels.max(1) as usize;
+        let bytes_per_sample = ps.format().layout.bytes_per_pixel() / channels.max(1) as usize;
         if !matches!(channels, 1 | 3) || bytes_per_sample != 1 {
             return Err(RefError::Invalid(format!(
                 "gain map must be 8-bit with 1 or 3 channels, got {:?}",
-                ps.spec().clone()
+                ps.format().clone()
             )));
         }
         let mut pixels =
@@ -239,7 +239,7 @@ impl GainMapWire {
         Ok(Self { info, pixels })
     }
 
-    fn descriptor(&self) -> ImageSpec {
+    fn descriptor(&self) -> PixelFormat {
         crate::gain_map_spec(self.info.channels)
     }
 
@@ -778,7 +778,7 @@ pub(crate) fn encode_single(
     meta: &Metadata,
     gain_map: Option<&GainMapWire>,
 ) -> Result<Vec<u8>, RefError> {
-    let bpp = pixels.spec().clone().layout.bytes_per_pixel() as u8;
+    let bpp = pixels.format().clone().layout.bytes_per_pixel() as u8;
     let mut out = Vec::new();
     write_header(
         &mut out,
@@ -842,13 +842,13 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
 
 /// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
 /// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
-static DESCRIPTORS: [ImageSpec; 6] = [
-    ImageSpec::RGB8_SRGB,
-    ImageSpec::RGBA8_SRGB,
-    ImageSpec::RGB16_SRGB,
-    ImageSpec::RGBA16_SRGB,
-    ImageSpec::RGB16_BT2100_PQ,
-    ImageSpec::RGB16_BT2100_HLG_SCENE,
+static DESCRIPTORS: [PixelFormat; 6] = [
+    PixelFormat::RGB8_SRGB,
+    PixelFormat::RGBA8_SRGB,
+    PixelFormat::RGB16_SRGB,
+    PixelFormat::RGBA16_SRGB,
+    PixelFormat::RGB16_BT2100_PQ,
+    PixelFormat::RGB16_BT2100_HLG_SCENE,
 ];
 
 // ===========================================================================
@@ -873,7 +873,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         &DESCRIPTORS
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -1044,7 +1044,7 @@ pub struct RefEnc {
     out: OutputBuffer,
     width: Option<u32>,
     rows: u32,
-    desc: Option<ImageSpec>,
+    desc: Option<PixelFormat>,
     declared_height: Option<u32>,
 }
 
@@ -1075,7 +1075,7 @@ impl Encoder for RefEnc {
         &mut self,
         width: u32,
         height: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
     ) -> Result<OutputTiming, RefError> {
         if width == 0 || height == 0 {
             return Err(RefError::Invalid("zero size".into()));
@@ -1107,9 +1107,9 @@ impl Encoder for RefEnc {
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), RefError> {
         if self.width.is_none() {
             self.width = Some(rows.width());
-            self.desc = Some(rows.spec().clone());
+            self.desc = Some(rows.format().clone());
         }
-        if Some(rows.width()) != self.width || Some(rows.spec().clone()) != self.desc {
+        if Some(rows.width()) != self.width || Some(rows.format().clone()) != self.desc {
             return Err(RefError::Invalid(
                 "push_rows: width or format changed".into(),
             ));
@@ -1180,7 +1180,7 @@ pub struct RefAnimEnc {
     timing: zencodec::animation::TimingQuantizer,
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
-    frames: Vec<(Vec<u8>, u32, u32, u32, ImageSpec)>, // bytes, w, h, dur, desc
+    frames: Vec<(Vec<u8>, u32, u32, u32, PixelFormat)>, // bytes, w, h, dur, desc
     streaming: Option<RefAnimStream>,
 }
 
@@ -1188,7 +1188,7 @@ pub struct RefAnimEnc {
 struct RefAnimStream {
     width: u32,
     height: u32,
-    desc: ImageSpec,
+    desc: PixelFormat,
     frame_count: u32,
     pushed: u32,
     out: OutputBuffer,
@@ -1210,7 +1210,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         if let Some(s) = stop {
             s.check()?;
         }
-        let (w, h, desc) = (pixels.width(), pixels.rows(), pixels.spec().clone());
+        let (w, h, desc) = (pixels.width(), pixels.rows(), pixels.format().clone());
         if let Some(st) = &mut self.streaming {
             if (w, h, desc) != (st.width, st.height, st.desc.clone()) {
                 return Err(RefError::Unsupported(UnsupportedOperation::PixelFormat));
@@ -1241,7 +1241,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         &mut self,
         width: u32,
         height: u32,
-        desc: ImageSpec,
+        desc: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, RefError> {
         if !DESCRIPTORS.contains(&desc) {
@@ -1380,7 +1380,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Pnm]
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         &DESCRIPTORS
     }
     fn capabilities() -> &'static DecodeCapabilities {
@@ -1444,7 +1444,7 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         ZCR_FORMATS
     }
-    fn supported_descriptors() -> &'static [ImageSpec] {
+    fn supported_descriptors() -> &'static [PixelFormat] {
         ReferenceDecoderConfig::supported_descriptors()
     }
     fn capabilities() -> &'static DecodeCapabilities {
@@ -1524,7 +1524,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<RefDec<'a>, RefError> {
         parse_header(&data)?; // validate eagerly
         Ok(RefDec {
@@ -1537,7 +1537,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[ImageSpec],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, RefError> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, RefError::Sink)
     }
@@ -1545,7 +1545,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     fn streaming_decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<RefStreamDec<'a>, RefError> {
         let h = parse_header(&data)?;
         let info = build_info(&h);
@@ -1565,7 +1565,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
 
     fn dyn_incremental_decoder(
         self,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<Box<zencodec::decode::DynIncrementalDecoder>, zencodec::decode::BoxedError> {
         Ok(zencodec::decode::erase_incremental(RefIncDec::new(
             self.limits,
@@ -1580,7 +1580,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         self,
         source: &mut dyn DynReadAt,
         sink: &mut dyn DecodeRowSink,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<OutputInfo, zencodec::decode::BoxedError> {
         // Short reads find the end; `len()` is never needed, so a source
         // over a stream is not consumed to learn its length.
@@ -1647,7 +1647,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     fn animation_frame_decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[ImageSpec],
+        _preferred: &[PixelFormat],
     ) -> Result<RefAnimDec, RefError> {
         let h = parse_header(&data)?;
         let mut info = build_info(&h);
@@ -1698,7 +1698,7 @@ pub struct RefDec<'a> {
 impl Decode for RefDec<'_> {
     type Error = RefError;
 
-    fn prepare_output(&mut self) -> Result<Option<ImageSpec>, RefError> {
+    fn prepare_output(&mut self) -> Result<Option<PixelFormat>, RefError> {
         Ok(Some(descriptor_for_header(&parse_header(&self.data)?)?))
     }
 
@@ -1739,7 +1739,7 @@ pub struct RefStreamDec<'a> {
     width: u32,
     height: u32,
     bpp: u8,
-    desc: ImageSpec,
+    desc: PixelFormat,
     pixels_offset: usize,
     next_row: u32,
 }
@@ -1785,7 +1785,7 @@ impl StreamingDecode for RefStreamDec<'_> {
 /// like the one-shot path.
 pub struct RefIncDec {
     limits: ResourceLimits,
-    header: Option<(Header, ImageSpec, ImageInfo)>,
+    header: Option<(Header, PixelFormat, ImageInfo)>,
     /// Bytes of prefix asked for while the header does not parse yet.
     header_want: usize,
     next_row: u32,
@@ -1904,7 +1904,7 @@ impl IncrementalDecode for RefIncDec {
         self.header.as_ref().map(|(_, _, info)| info)
     }
 
-    fn output_descriptor(&self) -> Option<ImageSpec> {
+    fn output_descriptor(&self) -> Option<PixelFormat> {
         self.header.as_ref().map(|(_, desc, _)| desc.clone())
     }
 
@@ -1922,7 +1922,7 @@ pub struct RefAnimDec {
     height: u32,
     frame_count: u32,
     bpp: u8,
-    desc: ImageSpec,
+    desc: PixelFormat,
     frames_offset: usize,
     next_frame: u32,
     applied: Orientation,

@@ -233,7 +233,8 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
         Presentation::default(),
     );
     let mut bytes = [99u8; 2];
-    let mut canvas = PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::specs::GRAY8_SRGB).unwrap();
+    let mut canvas =
+        PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::formats::GRAY8_SRGB).unwrap();
     assert!(Gray8::default().render(&frame, &mut canvas).is_err());
     assert_eq!(bytes, [99, 99]);
 }
@@ -282,7 +283,7 @@ fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
         );
         let mut bytes = [99; 2];
         let mut canvas =
-            PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::specs::GRAY8_SRGB).unwrap();
+            PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::formats::GRAY8_SRGB).unwrap();
         assert_eq!(
             Gray8::default().render(&frame, &mut canvas).is_ok(),
             success
