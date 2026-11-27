@@ -9,7 +9,7 @@ use crate::{Cicp, encode::OutputTiming, output_patch::OutputAccess};
 
 /// Input interpretation and destination access, declared before native startup.
 ///
-/// The descriptor describes the samples actually supplied. Descriptive job metadata
+/// The pixel format describes the samples actually supplied. Descriptive job metadata
 /// must not override it. A codec must refuse contradictions it cannot resolve
 /// without changing the requested interpretation or encoding configuration.
 #[derive(Clone, PartialEq)]
@@ -19,8 +19,8 @@ pub struct EncodeDeclaration {
     pub width: u32,
     /// Full image height.
     pub height: u32,
-    /// Descriptor of the samples supplied to the encoder.
-    pub descriptor: PixelFormat,
+    /// Pixel format of the samples supplied to the encoder.
+    pub pixel_format: PixelFormat,
     /// Actual destination access; it does not authorize a quality change.
     pub access: OutputAccess,
     /// Optional assertion about the current canonical sample grids.
@@ -30,7 +30,7 @@ pub struct EncodeDeclaration {
     /// This is not a codec fidelity or whole-input preflight certificate.
     pub exact_depth: Option<ExactDepth>,
     /// Optional native sample facts and source provenance. The current meaning
-    /// is in `descriptor`. Exact-depth declarations are stored separately.
+    /// is in `pixel_format`. Exact-depth declarations are stored separately.
     pub pixel_metadata: Option<crate::decode::RowMetadata>,
 }
 
@@ -39,7 +39,7 @@ impl fmt::Debug for EncodeDeclaration {
         f.debug_struct("EncodeDeclaration")
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("layout", &self.descriptor.layout)
+            .field("layout", &self.pixel_format.layout)
             .field("access", &self.access)
             .field("exact_depth", &self.exact_depth)
             .finish()
@@ -47,12 +47,12 @@ impl fmt::Debug for EncodeDeclaration {
 }
 
 impl EncodeDeclaration {
-    /// Declare a forward destination and descriptor-only interpretation.
-    pub const fn new(width: u32, height: u32, descriptor: PixelFormat) -> Self {
+    /// Declare a forward destination and pixel-format-only interpretation.
+    pub const fn new(width: u32, height: u32, pixel_format: PixelFormat) -> Self {
         Self {
             width,
             height,
-            descriptor,
+            pixel_format,
             access: OutputAccess::Forward,
             exact_depth: None,
             pixel_metadata: None,
@@ -61,7 +61,7 @@ impl EncodeDeclaration {
 
     /// Bind the current pixel interpretation before any output header is made.
     pub fn with_color(mut self, color: ColorSpace) -> Self {
-        self.descriptor.color = color;
+        self.pixel_format.color = color;
         self
     }
 
@@ -90,14 +90,14 @@ impl EncodeDeclaration {
 
     /// Validate the layout, color model, alpha, range and any active ICC before startup.
     pub fn validate_format(&self) -> Result<(), whereat::At<zenpixels::ColorError>> {
-        self.descriptor.validate()
+        self.pixel_format.validate()
     }
 
     /// Validate the claim's storage, range and supported layout, without reading
     /// source samples. Success does not establish that actual samples comply.
     pub fn validate_exact_depth(&self) -> Result<(), ExactDepthError> {
         if let Some(exact) = self.exact_depth {
-            exact.validate_format(&self.descriptor)?;
+            exact.validate_format(&self.pixel_format)?;
         }
         Ok(())
     }

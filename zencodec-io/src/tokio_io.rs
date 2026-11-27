@@ -1345,15 +1345,13 @@ impl DecodeRowSink for ChannelRowSink {
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: zencodec::decode::RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.strip(
-            BatchMeta::final_rows(y),
-            height,
-            width,
+            BatchMeta::final_rows(strip.y),
+            strip.height,
+            strip.width,
             descriptor,
             &Default::default(),
         )
@@ -1366,22 +1364,26 @@ impl DecodeRowSink for ChannelRowSink {
     fn provide_pass_buffer(
         &mut self,
         meta: BatchMeta,
-        height: u32,
-        width: u32,
+        size: zencodec::decode::StripDimensions,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.strip(meta, height, width, descriptor, &Default::default())
+        self.strip(
+            meta,
+            size.height,
+            size.width,
+            descriptor,
+            &Default::default(),
+        )
     }
 
     fn provide_buffer_with_metadata(
         &mut self,
         meta: BatchMeta,
-        height: u32,
-        width: u32,
+        size: zencodec::decode::StripDimensions,
         descriptor: PixelFormat,
         metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.strip(meta, height, width, descriptor, metadata)
+        self.strip(meta, size.height, size.width, descriptor, metadata)
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {

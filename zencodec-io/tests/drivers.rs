@@ -10,7 +10,7 @@ use std::io::Cursor;
 
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, SinkError, StepError,
+    OutputInfo, Progress, RowStrip, SinkError, StepError,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -67,7 +67,7 @@ fn minitile_decoder() -> Dec {
         let h = u32::from_le_bytes(header[8..12].try_into().unwrap());
         let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
         ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         let mut index = [0u8; 16];
         ctx.read_exact_at(index_at, &mut index).await?;
@@ -124,7 +124,7 @@ fn sequential_decoder() -> Dec {
         assert_eq!(&magic[..4], b"SEQ1");
         let rows = u32::from_le_bytes(magic[4..8].try_into().unwrap());
         ctx.set_info(ImageInfo::new(2, rows, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         for y in 0..rows {
             let mut row = [0u8; 8];
@@ -213,15 +213,13 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             if self.first_row_seen.is_none() {
                 self.first_row_seen = Some(self.bytes_read.get());
             }
-            self.inner.provide_next_buffer(y, height, width, descriptor)
+            self.inner.provide_next_buffer(strip, descriptor)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
             self.inner.finish()
@@ -493,7 +491,7 @@ impl IncrementalDecode for Trickle {
                 sink.begin(1, 1, RGBA).map_err(StepError::Sink)?;
                 self.begun = true;
                 let mut dst = sink
-                    .provide_next_buffer(0, 1, 1, RGBA)
+                    .provide_next_buffer(RowStrip::new(0, 1, 1), RGBA)
                     .map_err(StepError::Sink)?;
                 dst.row_mut(0).copy_from_slice(&[1, 2, 3, 4]);
                 return Ok(Progress::new(
@@ -530,7 +528,7 @@ impl IncrementalDecode for Trickle {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -613,7 +611,7 @@ impl IncrementalDecode for Bad {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         None
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -890,8 +888,8 @@ impl<D: IncrementalDecode> IncrementalDecode for RetainedControl<D> {
     fn info(&self) -> Option<&ImageInfo> {
         self.decoder.info()
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
-        self.decoder.output_descriptor()
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.decoder.output_pixel_format()
     }
     fn access_pattern(&self) -> AccessPattern {
         self.decoder.access_pattern()
@@ -930,7 +928,7 @@ fn no_per_call_control_during_resume_keeps_a_retained_stop_terminal() {
     let native =
         CoroutineDecoder::controlled(32, AccessPattern::RandomAccess, |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             ctx.interpretation(InterpretationFacts::new(
                 2,
                 1,
@@ -1307,14 +1305,12 @@ mod tokio_drivers {
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             self.names
                 .push(std::thread::current().name().map(String::from));
-            self.inner.provide_next_buffer(y, height, width, descriptor)
+            self.inner.provide_next_buffer(strip, descriptor)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
             self.inner.finish()
@@ -1396,17 +1392,15 @@ mod tokio_drivers {
             }
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
+                strip: RowStrip,
                 descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                if self.inner.rows_written() + height as u64 >= self.at
+                if self.inner.rows_written() + strip.height as u64 >= self.at
                     && let Some(tx) = self.tx.take()
                 {
                     let _ = tx.send(());
                 }
-                self.inner.provide_next_buffer(y, height, width, descriptor)
+                self.inner.provide_next_buffer(strip, descriptor)
             }
             fn finish(&mut self) -> Result<(), SinkError> {
                 self.inner.finish()
@@ -1618,12 +1612,10 @@ mod tokio_drivers {
         impl DecodeRowSink for DropFlag {
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
+                strip: RowStrip,
                 descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                self.1.provide_next_buffer(y, height, width, descriptor)
+                self.1.provide_next_buffer(strip, descriptor)
             }
         }
         struct Hung;
@@ -1673,15 +1665,13 @@ mod tokio_drivers {
             }
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
+                strip: RowStrip,
                 descriptor: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                if y == 1 {
+                if strip.y == 1 {
                     self.pulse.cancel();
                 }
-                self.inner.provide_next_buffer(y, height, width, descriptor)
+                self.inner.provide_next_buffer(strip, descriptor)
             }
         }
         let pulse = RecordingPulse::default();
@@ -1895,7 +1885,7 @@ mod tokio_drivers {
         src.read_many_at(&mut [(f(0) as u64, &mut t0[..]), (f(2) as u64, &mut t1[..])])?;
         sink.begin(W, H, RGBA)?;
         for (y, tile) in [(0u32, &t0), (2, &t1)] {
-            let mut dst = sink.provide_next_buffer(y, 2, W, RGBA)?;
+            let mut dst = sink.provide_next_buffer(RowStrip::new(y, W, 2), RGBA)?;
             for r in 0..2 {
                 dst.row_mut(r)
                     .copy_from_slice(&tile[r as usize * 16..r as usize * 16 + 16]);
@@ -2103,7 +2093,7 @@ impl IncrementalDecode for Greedy {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         None
     }
     fn access_pattern(&self) -> AccessPattern {

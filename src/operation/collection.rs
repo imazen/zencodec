@@ -131,7 +131,6 @@ pub struct CheckedCollection<C, R> {
     collection: Option<C>,
     view: Composition,
     resolver: R,
-    preset: PolicySet,
     pulse: SharedPulse,
     report: OperationReport,
     observed_stop: Option<StopReason>,
@@ -177,21 +176,12 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
                 view: collection.view(),
                 collection: Some(collection),
                 resolver,
-                preset: PolicySet::new(),
                 pulse,
                 report,
                 observed_stop: None,
             })
         };
         run().map_err(At::wrap)
-    }
-    /// Configure the preset used when the callback returns `Decision::UsePreset`.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
-        self
     }
     /// The operation's bounded decision history across selected outputs.
     pub fn report(&self) -> &OperationReport {
@@ -207,7 +197,6 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         operation: impl FnOnce(
             &mut C,
             &mut R,
-            PolicySet,
             &SharedPulse,
             &mut OperationReport,
         ) -> Result<T, CollectionOperationError>,
@@ -232,8 +221,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
             .resolver
             .requirements()
             .unwrap_or_default()
-            .check_workspace(None)
-            .and_then(|()| self.preset.check_workspace(None));
+            .check_workspace(None);
         if let Err(cause) = admission {
             self.collection = Some(collection);
             return Err(At::wrap(failure(
@@ -245,7 +233,6 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         let result = operation(
             &mut collection,
             &mut self.resolver,
-            self.preset,
             &self.pulse,
             &mut self.report,
         );
@@ -267,14 +254,14 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
     }
     /// Begin top-level discovery, checking the shared operation pulse token.
     pub fn images(&mut self) -> Result<C::Cursor, At<CollectionOperationError>> {
-        self.run(|c, _, _, _, report| {
+        self.run(|c, _, _, report| {
             c.images()
                 .map_err(|e| failure(CollectionStage::Discovery, report, e))
         })
     }
     /// Begin child discovery. Unsupported containment returns an error.
     pub fn children(&mut self, image: &ImageId) -> Result<C::Cursor, At<CollectionOperationError>> {
-        self.run(|c, _, _, _, report| {
+        self.run(|c, _, _, report| {
             c.children(image)
                 .map_err(|e| failure(CollectionStage::Discovery, report, e))
         })
@@ -284,7 +271,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         &mut self,
         cursor: &mut C::Cursor,
     ) -> Result<Option<ImageId>, At<CollectionOperationError>> {
-        self.run(|c, _, _, _, report| {
+        self.run(|c, _, _, report| {
             c.next(cursor)
                 .map_err(|e| failure(CollectionStage::Discovery, report, e))
         })
@@ -296,7 +283,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         &mut self,
         image: &ImageId,
     ) -> Result<ImageDescription, At<CollectionOperationError>> {
-        self.run(|c, _, _, _, report| {
+        self.run(|c, _, _, report| {
             let description = c
                 .describe(image)
                 .map_err(|e| failure(CollectionStage::Describe, report, e))?;
@@ -334,7 +321,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
         transform: impl FnOnce(ImageOutput, &dyn crate::Pulse) -> Result<ImageOutput, E>,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
         let view = self.view;
-        self.run(|c, resolver, preset, pulse, report| {
+        self.run(|c, resolver, pulse, report| {
             let check_view = |actual| {
                 if actual == view {
                     Ok(())
@@ -361,7 +348,7 @@ impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
             let image = transform(image, pulse)
                 .map_err(|e| failure(CollectionStage::Transform, report, e))?;
             check(pulse, report)?;
-            match resolve_image(image, resolver, preset, Some(pulse)) {
+            match resolve_image(image, resolver, PolicySet::new(), Some(pulse)) {
                 Ok(output) => {
                     for record in output.report().decisions() {
                         report.record(record.clone());

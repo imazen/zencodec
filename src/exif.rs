@@ -835,10 +835,6 @@ impl<'a> Exif<'a> {
     /// attribution tags must have valid types/counts and directory placement.
     /// Unknown Interop entries and opaque MakerNotes are dropped on every tree
     /// rewrite; use [`retain`] with `KEEP_ALL` for byte-exact preservation.
-    #[deprecated(
-        since = "0.1.27",
-        note = "compatibility writer; use zenmeta::exif::filter"
-    )]
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
         let keep = |e: &&Entry<'a>, exif_directory: bool| match e.tag {
             // Offset-bearing structural tags whose value is a file offset, dropped
@@ -1035,10 +1031,6 @@ impl<'a> Exif<'a> {
 
     /// Serialize to a valid TIFF, recomputing every offset. Preserves the
     /// source byte order and `Exif\0\0` framing.
-    #[deprecated(
-        since = "0.1.27",
-        note = "compatibility writer; use zenmeta::exif::serialize"
-    )]
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.serialized_len());
         if self.had_prefix {
@@ -1717,10 +1709,6 @@ impl ExifPolicy {
 /// - **Oversize (> 4 GiB) under a stripping policy → `None` (fail-safe).** Such a
 ///   blob can't be safely rewritten (offsets are `u32`), so it is dropped rather
 ///   than passed through unfiltered — same reasoning as the unparseable case.
-#[deprecated(
-    since = "0.1.27",
-    note = "compatibility writer; use zenmeta::exif::retain"
-)]
 pub fn retain<'a>(src: &'a [u8], policy: &ExifPolicy) -> Option<Cow<'a, [u8]>> {
     retain_reconciled(src, policy, None)
 }

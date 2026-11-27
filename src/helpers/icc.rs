@@ -3,36 +3,8 @@
 use crate::decode::SourceColor;
 use crate::info::AuthoritativeColor;
 use zenpixels::{
-    Cicp, ColorSpace, IccColorSpace, PixelFormat, Primaries, RenderingIntent, SampleLayout,
-    Transfer,
+    ColorSpace, IccColorSpace, PixelFormat, Primaries, RenderingIntent, SampleLayout, Transfer,
 };
-
-/// Derive the current image spec for decoded, full-range samples.
-///
-/// Use [`descriptor_for_decoded_pixels_v2`] to supply a complete current color
-/// space when the codec applies color correction.
-#[deprecated(since = "0.1.17", note = "use descriptor_for_decoded_pixels_v2")]
-#[allow(deprecated)]
-pub fn descriptor_for_decoded_pixels(
-    layout: SampleLayout,
-    source_color: &SourceColor,
-    corrected_to: Option<&Cicp>,
-    _tolerance: IccMatchTolerance,
-) -> PixelFormat {
-    let base = super::codec_spec(layout);
-    let corrected = corrected_to.map(|cicp| {
-        base.clone()
-            .with_primaries(
-                Primaries::from_cicp(cicp.color_primaries).unwrap_or(Primaries::Unknown),
-            )
-            .with_transfer(
-                Transfer::from_cicp(cicp.transfer_characteristics).unwrap_or(Transfer::Unknown),
-            )
-            .color
-    });
-    descriptor_for_decoded_pixels_v2(layout, source_color, corrected.as_ref())
-        .unwrap_or_else(|_| super::codec_spec(layout))
-}
 
 /// Describe decoded, full-range samples and their current color meaning.
 ///
@@ -44,7 +16,7 @@ pub fn descriptor_for_decoded_pixels(
 ///
 /// An untagged source uses the conventional sRGB transfer. A present but
 /// unknown source color stays unknown.
-pub fn descriptor_for_decoded_pixels_v2(
+pub fn pixel_format_for_decoded_pixels(
     layout: SampleLayout,
     source_color: &SourceColor,
     corrected_to: Option<&ColorSpace>,
@@ -153,73 +125,37 @@ fn describe_color(color: &ColorSpace) -> (Primaries, Transfer) {
     }
 }
 
-// ── Deprecated shims (scheduled for removal in next minor release) ─────────
-
-/// Maximum u16 TRC error tolerance for ICC profile identification.
-///
-/// **Deprecated placebo.** `zenpixels::icc::IccIdentification::from_icc` uses its
-/// `Intent` tolerance internally; all variants here collapse to that.
-/// At 8-bit and 10-bit output the distinction is invisible (the worst
-/// case shifts a u8 by ≤0.22 of a step). Callers computing perceptual
-/// metrics at 14-bit+ precision should identify profiles via a full CMS.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[must_use]
-#[deprecated(
-    since = "0.1.16",
-    note = "zenpixels::icc::IccIdentification::from_icc uses Intent tolerance; sub-Intent variants are placebo"
-)]
-pub enum IccMatchTolerance {
-    /// ±1 u16 max — parametric v4 profiles only.
-    Exact = 1,
-    /// ±3 u16 max — includes v2-magic parametric approximations.
-    Precise = 3,
-    /// ±13 u16 max — includes v2-micro LUT profiles and iPhone P3.
-    Approximate = 13,
-    /// ±56 u16 max — honors encoder intent (e.g., sRGB-v2-nano, Facebook sRGB).
-    Intent = 56,
-}
-
-/// Identify a well-known ICC profile by normalized hash lookup.
-///
-/// Delegates to [`zenpixels::icc::IccIdentification::from_icc`]. The `tolerance`
-/// argument is accepted for backwards compatibility but ignored — see
-/// [`IccMatchTolerance`] for the rationale.
-#[deprecated(
-    since = "0.1.16",
-    note = "use zenpixels::icc::IccIdentification::from_icc — returns richer IccIdentification with valid_use"
-)]
-#[allow(deprecated)]
-pub fn identify_well_known_icc(
-    icc_bytes: &[u8],
-    _tolerance: IccMatchTolerance,
-) -> Option<(Primaries, Transfer)> {
-    let id = zenpixels::icc::IccIdentification::from_icc(icc_bytes)?;
-    Some((id.primaries, id.transfer))
-}
-
-/// Check if an ICC profile is a known sRGB profile.
-#[deprecated(
-    since = "0.1.16",
-    note = "use zenpixels::icc::IccIdentification::is_common_srgb"
-)]
-pub fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
-    zenpixels::icc::IccIdentification::is_common_srgb(icc_bytes)
-}
-
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
     use alloc::sync::Arc;
     use zenpixels::{AlphaMode, Cicp, Primaries, SignalRange, Transfer};
+
+    fn resolve_for_test(
+        layout: SampleLayout,
+        source_color: &SourceColor,
+        corrected_to: Option<&Cicp>,
+    ) -> PixelFormat {
+        let base = super::super::codec_spec(layout);
+        let corrected = corrected_to.map(|cicp| {
+            base.clone()
+                .with_primaries(
+                    Primaries::from_cicp(cicp.color_primaries).unwrap_or(Primaries::Unknown),
+                )
+                .with_transfer(
+                    Transfer::from_cicp(cicp.transfer_characteristics).unwrap_or(Transfer::Unknown),
+                )
+                .color
+        });
+        pixel_format_for_decoded_pixels(layout, source_color, corrected.as_ref()).unwrap()
+    }
 
     // ── Priority 4: no metadata → sRGB assumption ──────────────────────
 
     #[test]
     fn no_metadata_assumes_srgb() {
         let sc = SourceColor::default();
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
     }
@@ -227,12 +163,7 @@ mod tests {
     #[test]
     fn no_metadata_gray_assumes_srgb() {
         let sc = SourceColor::default();
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::GRAY8,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::GRAY8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
         assert_eq!(desc.layout, SampleLayout::GRAY8);
@@ -241,12 +172,7 @@ mod tests {
     #[test]
     fn no_metadata_rgba_assumes_srgb() {
         let sc = SourceColor::default();
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGBA8,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGBA8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
         assert_eq!(desc.layout, SampleLayout::RGBA8);
@@ -256,12 +182,7 @@ mod tests {
     #[test]
     fn no_metadata_f32_assumes_srgb() {
         let sc = SourceColor::default();
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGBF32,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGBF32, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
         assert_eq!(desc.layout, SampleLayout::RGBF32);
@@ -272,8 +193,7 @@ mod tests {
     #[test]
     fn cicp_srgb_sets_srgb_descriptor() {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
     }
@@ -281,8 +201,7 @@ mod tests {
     #[test]
     fn cicp_p3_sets_descriptor() {
         let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::DisplayP3);
     }
@@ -290,12 +209,7 @@ mod tests {
     #[test]
     fn cicp_pq_sets_descriptor() {
         let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGBAF32,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGBAF32, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Pq);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt2020);
     }
@@ -303,12 +217,7 @@ mod tests {
     #[test]
     fn cicp_hlg_sets_descriptor() {
         let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGBF32,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGBF32, &sc, None);
         assert_eq!(
             describe_color(&desc.color).1,
             Transfer::Hlg(zenpixels::HlgMode::Scene)
@@ -325,7 +234,7 @@ mod tests {
             .with_cicp(Cicp::DISPLAY_P3)
             .with_icc_profile(fake_icc)
             .with_color_authority(crate::ColorAuthority::Cicp);
-        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None).unwrap();
+        let desc = pixel_format_for_decoded_pixels(SampleLayout::RGB8, &sc, None).unwrap();
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::DisplayP3);
     }
@@ -341,7 +250,7 @@ mod tests {
             .with_cicp(Cicp::DISPLAY_P3)
             .with_icc_profile(fake_icc)
             .with_color_authority(crate::ColorAuthority::Icc);
-        let desc = descriptor_for_decoded_pixels_v2(SampleLayout::RGB8, &sc, None).unwrap();
+        let desc = pixel_format_for_decoded_pixels(SampleLayout::RGB8, &sc, None).unwrap();
         assert_eq!(describe_color(&desc.color).1, Transfer::Unknown);
         assert_eq!(describe_color(&desc.color).0, Primaries::Unknown);
     }
@@ -356,7 +265,7 @@ mod tests {
             SampleLayout::RGBF32,
             SampleLayout::BGRA8,
         ] {
-            let desc = descriptor_for_decoded_pixels(fmt, &sc, None, IccMatchTolerance::Intent);
+            let desc = resolve_for_test(fmt, &sc, None);
             assert_eq!(desc.layout, fmt, "format mismatch for {fmt:?}");
         }
     }
@@ -367,8 +276,7 @@ mod tests {
     fn unknown_icc_yields_unknown_descriptor() {
         let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(fake_icc);
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Unknown);
         assert_eq!(describe_color(&desc.color).0, Primaries::Unknown);
     }
@@ -378,18 +286,12 @@ mod tests {
         let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![99u8; 128].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(fake_icc);
 
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGBA8,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGBA8, &sc, None);
         assert_eq!(desc.layout, SampleLayout::RGBA8);
         assert_eq!(desc.color.alpha(), AlphaMode::Straight);
         assert_eq!(crate::helpers::signal_range(&desc), SignalRange::Full);
 
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(desc.layout, SampleLayout::RGB8);
         assert!(desc.color.alpha() == AlphaMode::None);
     }
@@ -398,12 +300,7 @@ mod tests {
     fn unknown_icc_gray_preserves_format() {
         let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![42u8; 96].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(fake_icc);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::GRAY8,
-            &sc,
-            None,
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::GRAY8, &sc, None);
         assert_eq!(desc.layout, SampleLayout::GRAY8);
         assert_eq!(describe_color(&desc.color).1, Transfer::Unknown);
         assert_eq!(resolve_color(&sc, None).0, Primaries::Unknown);
@@ -420,8 +317,7 @@ mod tests {
     fn empty_icc_yields_unknown() {
         let empty_icc: Arc<[u8]> = Arc::from(alloc::vec![].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(empty_icc);
-        let desc =
-            descriptor_for_decoded_pixels(SampleLayout::RGB8, &sc, None, IccMatchTolerance::Intent);
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, None);
         assert_eq!(describe_color(&desc.color).1, Transfer::Unknown);
         assert_eq!(describe_color(&desc.color).0, Primaries::Unknown);
     }
@@ -431,12 +327,7 @@ mod tests {
     #[test]
     fn corrected_to_overrides_source_cicp() {
         let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGB8,
-            &sc,
-            Some(&Cicp::SRGB),
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, Some(&Cicp::SRGB));
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
     }
@@ -445,12 +336,7 @@ mod tests {
     fn corrected_to_overrides_unknown_icc() {
         let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(fake_icc);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGB8,
-            &sc,
-            Some(&Cicp::SRGB),
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, Some(&Cicp::SRGB));
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
     }
@@ -458,12 +344,7 @@ mod tests {
     #[test]
     fn corrected_to_overrides_no_metadata() {
         let sc = SourceColor::default();
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGB8,
-            &sc,
-            Some(&Cicp::SRGB),
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, Some(&Cicp::SRGB));
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::Bt709);
     }
@@ -471,12 +352,7 @@ mod tests {
     #[test]
     fn corrected_to_p3_target() {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::RGB8,
-            &sc,
-            Some(&Cicp::DISPLAY_P3),
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::RGB8, &sc, Some(&Cicp::DISPLAY_P3));
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
         assert_eq!(describe_color(&desc.color).0, Primaries::DisplayP3);
     }
@@ -484,44 +360,9 @@ mod tests {
     #[test]
     fn corrected_to_preserves_format() {
         let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
-        let desc = descriptor_for_decoded_pixels(
-            SampleLayout::BGRA8,
-            &sc,
-            Some(&Cicp::SRGB),
-            IccMatchTolerance::Intent,
-        );
+        let desc = resolve_for_test(SampleLayout::BGRA8, &sc, Some(&Cicp::SRGB));
         assert_eq!(desc.layout, SampleLayout::BGRA8);
         assert_eq!(describe_color(&desc.color).1, Transfer::Srgb);
-    }
-
-    // ── Deprecated shim sanity ─────────────────────────────────────────
-
-    #[test]
-    fn identify_rejects_empty() {
-        assert!(identify_well_known_icc(&[], IccMatchTolerance::Intent).is_none());
-        assert!(!icc_profile_is_srgb(&[]));
-    }
-
-    #[test]
-    fn identify_rejects_garbage() {
-        assert!(identify_well_known_icc(&[0u8; 100], IccMatchTolerance::Intent).is_none());
-    }
-
-    #[test]
-    fn identify_rejects_short() {
-        assert!(identify_well_known_icc(&[1, 2, 3, 4], IccMatchTolerance::Intent).is_none());
-    }
-
-    #[test]
-    fn icc_profile_is_srgb_compat() {
-        assert!(!icc_profile_is_srgb(&[0u8; 100]));
-    }
-
-    #[test]
-    fn tolerance_ordering() {
-        assert!(IccMatchTolerance::Exact < IccMatchTolerance::Precise);
-        assert!(IccMatchTolerance::Precise < IccMatchTolerance::Approximate);
-        assert!(IccMatchTolerance::Approximate < IccMatchTolerance::Intent);
     }
 
     // ── Per-format decode scenarios (table-driven) ──────────────────
@@ -740,12 +581,7 @@ mod tests {
         ];
 
         for &(name, fmt, ref sc, ref corrected, exp_tf, exp_cp) in cases {
-            let desc = descriptor_for_decoded_pixels(
-                fmt,
-                sc,
-                corrected.as_ref(),
-                IccMatchTolerance::Intent,
-            );
+            let desc = resolve_for_test(fmt, sc, corrected.as_ref());
             assert_eq!(describe_color(&desc.color).1, exp_tf, "{name}: transfer");
             assert_eq!(describe_color(&desc.color).0, exp_cp, "{name}: primaries");
             assert_eq!(desc.layout, fmt, "{name}: format");
@@ -767,12 +603,7 @@ mod tests {
             (SourceColor::default(), Some(&Cicp::SRGB)),
         ];
         for (sc, corrected) in cases {
-            let desc = descriptor_for_decoded_pixels(
-                SampleLayout::RGB8,
-                sc,
-                *corrected,
-                IccMatchTolerance::Intent,
-            );
+            let desc = resolve_for_test(SampleLayout::RGB8, sc, *corrected);
             assert_eq!(
                 crate::helpers::signal_range(&desc),
                 SignalRange::Full,
@@ -785,7 +616,7 @@ mod tests {
 #[cfg(test)]
 mod checked_class_tests {
     use super::*;
-    use zenpixels::{AlphaMode, SignalRange};
+    use zenpixels::{AlphaMode, Cicp, SignalRange};
     use zenpixels_convert::icc_profiles::SynthesizedIcc;
 
     #[test]
@@ -802,7 +633,7 @@ mod checked_class_tests {
             (gray, SampleLayout::GRAYA8, SampleLayout::RGBA8, 1),
         ] {
             let source = SourceColor::default().with_icc_profile(profile.as_ref());
-            let correct = descriptor_for_decoded_pixels_v2(valid, &source, None).unwrap();
+            let correct = pixel_format_for_decoded_pixels(valid, &source, None).unwrap();
             assert_eq!(correct.layout, valid);
             let ColorSpace::Icc {
                 profile: actual,
@@ -817,7 +648,7 @@ mod checked_class_tests {
             assert_eq!(count, channels);
             assert_eq!(alpha, AlphaMode::Straight);
             assert_eq!(intent, RenderingIntent::RelativeColorimetric);
-            assert!(descriptor_for_decoded_pixels_v2(invalid, &source, None).is_err());
+            assert!(pixel_format_for_decoded_pixels(invalid, &source, None).is_err());
         }
         let wrong = ColorSpace::Gray {
             transfer: Transfer::Pq,
@@ -826,14 +657,14 @@ mod checked_class_tests {
             white: None,
         };
         assert!(
-            descriptor_for_decoded_pixels_v2(
+            pixel_format_for_decoded_pixels(
                 SampleLayout::RGBA8,
                 &SourceColor::default(),
                 Some(&wrong)
             )
             .is_err()
         );
-        let correct = descriptor_for_decoded_pixels_v2(
+        let correct = pixel_format_for_decoded_pixels(
             SampleLayout::GRAYA8,
             &SourceColor::default(),
             Some(&wrong),

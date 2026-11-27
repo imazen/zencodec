@@ -251,56 +251,6 @@ fn frame() -> zencodec::frame::Frame {
     )
 }
 
-#[test]
-fn changing_the_legacy_policy_after_input_cannot_publish_or_accept_more_input() {
-    for (push_again, preset) in [false, true].into_iter().flat_map(|push_again| {
-        [
-            PolicySet::new(),
-            PolicySet::new().require_output_schedule(OutputSchedule::Live),
-        ]
-        .map(|preset| (push_again, preset))
-    }) {
-        let mut bytes = Vec::new();
-        let encoder = ToyEncoder::new(1, 1, TimeBase::new(1, 1000).unwrap(), 1, 1);
-        let mut operation = StagedEncode::new(
-            encoder,
-            HeaderOnlyMux(vec![], None),
-            Forward(&mut bytes),
-            PolicySet::new(),
-            StorageBudget::new(1024, 16),
-            Some(&NoPulse),
-        )
-        .unwrap();
-        operation.push(frame(), Some(&NoPulse)).unwrap();
-        #[allow(
-            deprecated,
-            reason = "Legacy setter must not bypass an admitted operation"
-        )]
-        let mut operation = operation.with_policy_set(preset);
-        if push_again {
-            let error = operation.push(frame(), Some(&NoPulse)).unwrap_err();
-            assert_eq!(error.error().stage, zencodec_media::staged::Stage::Policy);
-            assert_eq!(error.error().emitted, 0);
-            assert_eq!(
-                zencodec::find_cause::<zencodec_media::staged::Refusal>(&error),
-                Some(&zencodec_media::staged::Refusal::PolicyChangedAfterInput)
-            );
-            assert!(operation.is_failed());
-        }
-        let error = operation.finish(Some(&NoPulse)).unwrap_err();
-        assert_eq!(error.error().emitted, 0);
-        assert_eq!(
-            zencodec::find_cause::<zencodec_media::staged::Refusal>(&error),
-            Some(&if push_again {
-                zencodec_media::staged::Refusal::Terminal
-            } else {
-                zencodec_media::staged::Refusal::PolicyChangedAfterInput
-            })
-        );
-        assert!(bytes.is_empty());
-    }
-}
-
 struct ObservedMux<'a> {
     begins: &'a Cell<usize>,
     inner: HeaderOnlyMux,

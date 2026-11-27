@@ -231,7 +231,6 @@ pub struct Options {
     storage: StorageBudget,
     max_output_bytes: u64,
     batch_rows: NonZeroU32,
-    preset: PolicySet,
     disk: Option<Disk>,
     raw_disk: Option<planned::RawDisk>,
 }
@@ -243,7 +242,6 @@ impl Options {
             storage,
             max_output_bytes,
             batch_rows: NonZeroU32::new(16).unwrap(),
-            preset: PolicySet::new(),
             disk: None,
             raw_disk: None,
         }
@@ -298,14 +296,6 @@ impl Options {
     /// and follow the native encoder's requests; this does not bound their size.
     pub fn with_batch_rows(mut self, rows: NonZeroU32) -> Self {
         self.batch_rows = rows;
-        self
-    }
-    /// Built-in policy used when the supplied callback returns UsePreset.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
         self
     }
 }
@@ -731,7 +721,7 @@ impl<E: Encoder> RowStartup for LegacyStartup<E> {
         let timing = self.0.begin_output(
             declaration.width,
             declaration.height,
-            declaration.descriptor.clone(),
+            declaration.pixel_format.clone(),
             declaration.access,
         )?;
         Ok(EncodePlan::rows(timing))
@@ -824,14 +814,12 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     let mut patched_bytes = 0;
     let mut report = OperationReport::default();
     let bound_requirements = resolver.requirements();
-    let entry_requirements = options.preset;
     let run = || -> Result<OutputSchedule, Cause> {
         check(control)?;
         // This adapter has no qualified native preparation/workspace bound.
         // Refuse before asking the job to prepare any state. These checks do
         // not discharge the unchanged requirements at final route selection.
         boundary = Stage::Policy;
-        entry_requirements.check_workspace(None)?;
         if let Some(required) = bound_requirements {
             required.check_workspace(None)?;
         }
@@ -888,7 +876,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             OutputScheduleFacts::new(timing, mechanism),
             offers,
             &mut resolver,
-            options.preset,
+            PolicySet::new(),
             pulse,
         ) {
             Ok(selected) => selected,

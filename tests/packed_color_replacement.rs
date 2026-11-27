@@ -10,11 +10,11 @@ use zencodec::{
     frame::MapError,
     image::{
         Auxiliary, AuxiliaryImageOwner, AuxiliaryKind, ImageGeometry, ImageInterpretation,
-        ImageOutput, Meaning, OutputError, PackedImageOwner, Rect, Samples, SourcePrecision,
+        ImageOutput, Meaning, OutputError, PackedImageOwner, Rect, Samples, SourceSampleFormat,
         ValueSlice,
     },
     operation::{
-        Decision, Decline, ImageFacts, PolicySet, PublicationOffer, Question, resolve_image,
+        Decision, Decline, ImageSummary, PolicySet, PublicationOffer, Question, resolve_image,
     },
     storage::{SharedStorage, StorageBudget},
 };
@@ -97,7 +97,7 @@ fn image_from(owner: impl PackedImageOwner + 'static, extras: bool) -> ImageOutp
         vec![Auxiliary {
             kind: AuxiliaryKind::Depth,
             name: "source depth".to_owned(),
-            source_precision: SourcePrecision::Integer {
+            source_sample_format: SourceSampleFormat::Integer {
                 bits: 7,
                 signed: false,
             },
@@ -213,7 +213,7 @@ fn separate_auxiliary_releases_old_color_but_respects_original_clones_and_repeat
     let last = first.replace_packed_color(color).unwrap();
     assert_eq!(charges(&pool), (24, 2));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
-    let facts = ImageFacts::new(&last);
+    let facts = ImageSummary::new(&last);
     assert_eq!((facts.planes, facts.auxiliaries), (2, 1));
     {
         let mapped = last.map().unwrap();
@@ -346,7 +346,7 @@ fn packed_color_replacement_retains_auxiliary_addresses_and_flattens_repeated_re
     assert_eq!(charges(&pool), (60, 4));
     let last = first.replace_packed_color(color).unwrap();
     assert_eq!(charges(&pool), (42, 3)); // intermediate color is gone
-    let facts = ImageFacts::new(&last);
+    let facts = ImageSummary::new(&last);
     assert_eq!((facts.planes, facts.auxiliaries), (2, 1));
     {
         let map = last.map().unwrap();

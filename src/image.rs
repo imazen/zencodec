@@ -22,8 +22,8 @@ mod owner;
 pub use owner::{AuxiliaryImageOwner, PackedImageOwner};
 mod replace;
 
-/// A rectangle in the selected image's stored coordinates, before orientation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A rectangle in stored coordinates, before orientation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Rect {
     /// Horizontal origin.
     pub x: u32,
@@ -33,6 +33,18 @@ pub struct Rect {
     pub width: u32,
     /// Height in rows.
     pub height: u32,
+}
+
+impl Rect {
+    /// Construct a rectangle at `(x, y)` with `width` and `height`.
+    pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
 }
 
 /// Position of returned samples within the selected image's stored canvas.
@@ -131,9 +143,9 @@ pub enum AuxiliaryKind {
     Unknown(u32),
 }
 
-/// Original source precision, independent of emitted storage precision.
+/// Original source sample format, independent of emitted storage precision.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SourcePrecision {
+pub enum SourceSampleFormat {
     /// Original integer sample precision; emitted storage may be floating point.
     Integer {
         /// Number of source bits.
@@ -158,7 +170,7 @@ pub struct Auxiliary {
     /// Unfiltered source name. May contain private data; not a safe log label.
     pub name: String,
     /// Source facts, not the representation/geometry of the returned plane.
-    pub source_precision: SourcePrecision,
+    pub source_sample_format: SourceSampleFormat,
     /// Source power-of-two reduction; emitted dimensions are independently mapped.
     pub source_dim_shift: u32,
 }
@@ -329,7 +341,7 @@ pub enum Samples<'a> {
     /// Strided auxiliary scalar values.
     Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
-    Codes(CodePlane<'a>),
+    Codes(ComponentCodePlane<'a>),
     /// Floating component samples with their explicit value mapping.
     Float {
         /// Native-endian strided samples.
@@ -338,17 +350,17 @@ pub enum Samples<'a> {
         encoding: FloatEncoding,
     },
 }
-/// A mapped native plane with the code encoding its words carry. Built on
+/// A mapped native component plane with the code encoding its words carry. Built on
 /// [`crate::plane::AnyPlane`]; the storage type is checked against the
 /// encoding at construction.
 #[derive(Clone, Copy, Debug)]
-pub struct CodePlane<'a> {
+pub struct ComponentCodePlane<'a> {
     plane: AnyPlane<'a>,
     encoding: SampleEncoding,
     components: usize,
 }
 
-impl<'a> CodePlane<'a> {
+impl<'a> ComponentCodePlane<'a> {
     /// Codes of `encoding` stored in `plane`.
     ///
     /// # Errors
@@ -1082,7 +1094,7 @@ impl MappedImage for ComponentMap<'_> {
         }
         let samples = match (samples, expected_encoding) {
             (plane, PlaneEncoding::Code(encoding)) => Samples::Codes({
-                let mut codes = CodePlane::new(plane, encoding).map_err(|_| mismatch())?;
+                let mut codes = ComponentCodePlane::new(plane, encoding).map_err(|_| mismatch())?;
                 codes.components = spec.role().components();
                 codes
             }),

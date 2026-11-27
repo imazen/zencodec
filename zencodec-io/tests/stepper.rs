@@ -189,12 +189,10 @@ mod async_cursor {
                 }
                 fn provide_next_buffer(
                     &mut self,
-                    y: u32,
-                    h: u32,
-                    w: u32,
+                    strip: zencodec::decode::RowStrip,
                     d: PixelFormat,
                 ) -> Result<PixelViewMut<'_>, SinkError> {
-                    self.0.as_mut().unwrap().provide_next_buffer(y, h, w, d)
+                    self.0.as_mut().unwrap().provide_next_buffer(strip, d)
                 }
                 fn finish(&mut self) -> Result<(), SinkError> {
                     self.0.as_mut().unwrap().finish()
@@ -208,7 +206,7 @@ mod async_cursor {
                     let mut header = [0];
                     ctx.read_exact_at(0, &mut header).await?;
                     ctx.set_info(zencodec::ImageInfo::new(2, 2, zencodec::ImageFormat::Qoi));
-                    ctx.set_output_descriptor(d.clone());
+                    ctx.set_output_pixel_format(d.clone());
                     ctx.interpretation(InterpretationFacts::new(
                         2,
                         2,

@@ -159,7 +159,7 @@ where
         self.info.as_ref()
     }
 
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         self.decoded.as_ref().map(|o| o.native_format.clone())
     }
 }

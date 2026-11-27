@@ -4,7 +4,7 @@
 
 use zenbench::prelude::*;
 use zencodec::AnimationFrame;
-use zencodec::decode::DecodeRowSink;
+use zencodec::decode::{DecodeRowSink, RowStrip};
 use zencodec_io::CollectSink;
 use zenpixels::{PixelBuf, PixelFormat};
 
@@ -16,7 +16,9 @@ fn collect(w: u32, h: u32, d: PixelFormat, fill: u8) -> PixelBuf {
     let mut y = 0;
     while y < h {
         let n = STRIP.min(h - y);
-        let mut strip = sink.provide_next_buffer(y, n, w, d.clone()).unwrap();
+        let mut strip = sink
+            .provide_next_buffer(RowStrip::new(y, w, n), d.clone())
+            .unwrap();
         for row in 0..n {
             strip.row_mut(row).fill(fill);
         }

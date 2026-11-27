@@ -86,11 +86,7 @@ pub use window::ProtocolViolation;
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};
 #[cfg(feature = "std")]
-// Retain the deprecated convenience for existing callers.
-#[allow(deprecated)]
-pub use encode_write::{
-    EncodeWriteError, EncodeWriteReport, encode_to_writer, write_pending, write_pending_animation,
-};
+pub use encode_write::{write_pending, write_pending_animation};
 #[cfg(feature = "std")]
 pub use file::FileReadAt;
 #[cfg(feature = "std")]

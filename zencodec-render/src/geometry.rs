@@ -12,10 +12,10 @@ use zencodec::{
     storage::{SharedStorage, StorageBudget, StorageError},
 };
 use zenpixels::{
-    ChannelLayout, ColorContext, Orientation, PixelDescriptor, PixelSlice, PixelSliceMut,
-    TransferFunction,
+    ChannelOrder, ColorOrigin, FormatCow, HdrMetadata, Orientation, PixelFormat, PixelRect,
+    PixelView, PixelViewMut, SampleLayout,
 };
-use zenpixels_convert::PixelSliceConvertExt;
+use zenpixels_convert::apply_orientation_into;
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -65,27 +65,29 @@ struct Plane {
     width: u32,
     rows: u32,
     stride: usize,
-    descriptor: PixelDescriptor,
-    context: Option<Arc<ColorContext>>,
+    format: PixelFormat,
+    origin: Option<ColorOrigin>,
+    hdr: HdrMetadata,
 }
 impl Plane {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
-        let pixels = PixelSlice::new(
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
+        let mut pixels = PixelView::new_with_format_cow(
             bytemuck::cast_slice(self.data.as_slice()),
             self.width,
             self.rows,
             self.stride,
-            self.descriptor,
+            FormatCow::Borrowed(&self.format),
         )
         .map_err(|error| {
             At::wrap(OutputError::Mapping(zencodec::frame::MapError::Backend(
                 Box::new(error),
             )))
-        })?;
-        Ok(match &self.context {
-            Some(context) => pixels.with_color_context(context.clone()),
-            None => pixels,
-        })
+        })?
+        .with_hdr(self.hdr);
+        if let Some(origin) = &self.origin {
+            pixels = pixels.with_origin(origin);
+        }
+        Ok(pixels)
     }
 }
 struct Extras(Vec<Plane>);
@@ -99,7 +101,7 @@ impl AuxiliaryImageOwner for Extras {
                     plane.width,
                     plane.rows,
                     plane.stride,
-                    plane.descriptor.channel_type(),
+                    plane.format.layout.sample,
                 )
                 .map(|values| values.with_grid(AuxiliaryGrid::ColorSamples))
             })
@@ -111,7 +113,7 @@ struct Projected {
     extras: Arc<Extras>,
 }
 impl PackedImageOwner for Projected {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         self.color.pixels()
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
@@ -173,12 +175,11 @@ pub fn project(
     // Inverse-map opposite corners of a validated rectangle. D4 transforms
     // preserve rectangular support; this borrows only the needed stored rows.
     let inverse = orientation.inverse();
-    let (ax, ay) = inverse.forward_map(region.x, region.y, canvas_width, canvas_height);
-    let (bx, by) = inverse.forward_map(
-        region.x + region.width - 1,
-        region.y + region.height - 1,
-        canvas_width,
-        canvas_height,
+    let (ax, ay) =
+        inverse.map_pixel_coordinates((region.x, region.y), (canvas_width, canvas_height));
+    let (bx, by) = inverse.map_pixel_coordinates(
+        (region.x + region.width - 1, region.y + region.height - 1),
+        (canvas_width, canvas_height),
     );
     let required = Rect {
         x: ax.min(bx),
@@ -222,19 +223,15 @@ pub fn project(
                 // Internal byte-permutation view only: the existing orientation
                 // kernel moves whole scalar values and does no color arithmetic.
                 // The returned owner exposes Values, never grayscale pixels.
-                let descriptor = PixelDescriptor::new(
-                    channel,
-                    ChannelLayout::Gray,
-                    None,
-                    TransferFunction::Unknown,
-                );
+                let format =
+                    zencodec::helpers::codec_spec(SampleLayout::new(channel, ChannelOrder::Gray));
                 (
-                    PixelSlice::new(
+                    PixelView::new_with_format_cow(
                         values.as_strided_bytes(),
                         available.width,
                         available.height,
                         stride,
-                        descriptor,
+                        FormatCow::from_owned(format),
                     )?,
                     Some(role.clone()),
                 )
@@ -252,43 +249,44 @@ pub fn project(
     roles.try_reserve_exact(views.len() - 1)?;
     for (pixels, auxiliary) in views {
         check(pulse)?;
-        let descriptor = pixels.descriptor();
+        let format = pixels.format().clone();
         // Deliberately padded output exercises the same strided kernel contract
         // for color and every auxiliary sample width, including 64-bit scalars.
-        // PixelSlice requires a whole-pixel stride as well as scalar alignment.
+        // PixelViewMut requires a whole-pixel stride as well as scalar alignment.
         // Round the pixel count to the next multiple of eight: every row is
         // also u64-aligned without splitting RGB or 16-byte pixels in padding.
         let stride = (region.width as usize)
             .checked_add(8)
             .map(|n| n & !7)
-            .and_then(|n| n.checked_mul(descriptor.bytes_per_pixel()))
+            .and_then(|n| n.checked_mul(format.layout.bytes_per_pixel()))
             .ok_or(StorageError::SizeOverflow)?;
         let bytes = stride
             .checked_mul(region.height as usize)
             .ok_or(StorageError::SizeOverflow)?;
         let mut data = storage.filled(bytes / 8, 0xa5a5_a5a5_a5a5_a5a5u64)?;
-        let dst = PixelSliceMut::new(
+        let mut dst = PixelViewMut::new_with_format_cow(
             bytemuck::cast_slice_mut(data.as_mut_slice()),
             region.width,
             region.height,
             stride,
-            descriptor,
+            FormatCow::Borrowed(&format),
         )?;
-        let selected = pixels.crop_view(
-            required.x - available.x,
-            required.y - available.y,
-            required.width,
-            required.height,
-        );
-        selected.oriented_into(orientation, dst)?;
+        let selected = pixels.crop(PixelRect {
+            x: required.x - available.x,
+            y: required.y - available.y,
+            width: required.width,
+            height: required.height,
+        })?;
+        apply_orientation_into(&selected, orientation, &mut dst)?;
         check(pulse)?;
         planes.push(Plane {
             data: data.freeze(),
             width: region.width,
             rows: region.height,
             stride,
-            descriptor,
-            context: pixels.color_context().cloned(),
+            format,
+            origin: pixels.origin().cloned(),
+            hdr: pixels.hdr(),
         });
         if let Some(role) = auxiliary {
             roles.push(role);

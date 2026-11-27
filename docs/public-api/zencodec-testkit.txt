@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 130 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 5 lines (5 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 135 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 7 lines (7 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 3
-#   pub types (struct/enum/trait/alias)        26
-#   pub consts/statics                          2
+#   pub types (struct/enum/trait/alias)        27
+#   pub consts/statics                          3
 #   free functions                             43
 #   inherent methods                            8
-#   struct fields                              13
+#   struct fields                              15
 #   enum variants                              16
-#   trait roster entries (type × trait)        46
-#   auto-trait-complete types                  16
+#   trait roster entries (type × trait)        52
+#   auto-trait-complete types                  17
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                           82
+#   (root)                           86
 #   pulse                             9
 #   reference                        20
 
-## items (106 lines)
+## items (110 lines)
 
 pub mod zencodec_testkit
 pub mod pulse
@@ -67,6 +67,10 @@ pub RefError::Invalid(alloc::string::String)
 pub RefError::Limit(zencodec::limits::LimitExceeded)
 pub RefError::Sink(zencodec::sink::SinkError)
 pub RefError::Unsupported(zencodec::capabilities::UnsupportedOperation)
+pub struct ColorSignalPresence
+pub ColorSignalPresence::has_cicp: bool
+pub ColorSignalPresence::has_icc: bool
+pub const fn ColorSignalPresence::from_source_color(&zencodec::info::SourceColor) -> Self
 pub struct DisplayFrameCase<'a>
 pub DisplayFrameCase::pixels: zenpixels::buffer::PixelView<'a>
 pub DisplayFrameCase::timing: zencodec::cost::FrameCompletion
@@ -132,11 +136,12 @@ pub fn check_seekable_capability_honesty<D: zencodec::traits::decoding::DecoderC
 pub fn check_source_color_authority(zencodec::format::ImageFormat, &zencodec::info::SourceColor) -> Conformance
 pub fn check_source_color_fixture(&zencodec::info::SourceColor, core::option::Option<zenpixels::cicp::Cicp>, core::option::Option<&[u8]>, zencodec::info::ColorAuthority) -> Conformance
 pub fn check_streaming_output_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
-pub fn expected_color_authority(zencodec::format::ImageFormat, bool, bool) -> core::option::Option<zencodec::info::ColorAuthority>
+pub fn expected_color_authority(zencodec::format::ImageFormat, ColorSignalPresence) -> core::option::Option<zencodec::info::ColorAuthority>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (18 types)
+## trait impls (19 types)
 
+ColorSignalPresence: Clone, Copy, Debug, Eq, Hash, PartialEq
 ExpectedError: Clone, Copy, Debug, Eq, PartialEq
 Failure: Clone, Debug, Display, Error
 pulse::Case: Clone, Copy, Debug, Eq, PartialEq
@@ -158,7 +163,7 @@ whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 
 ## auto traits
 
-16 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+17 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 TestImage: !RefUnwindSafe !UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe

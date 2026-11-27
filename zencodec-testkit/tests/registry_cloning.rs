@@ -4,7 +4,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 use zencodec::{
-    CodecSet, ImageFormat, decode::DecoderConfig, encode::EncoderConfig, operation::DecodeRequest,
+    CodecSet, ImageFormat, decode::DecoderConfig, encode::EncoderConfig, operation::DecodeOptions,
     storage::StorageBudget,
 };
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
@@ -23,8 +23,8 @@ impl DecoderConfig for CountedDecoder {
     fn formats() -> &'static [ImageFormat] {
         ReferenceZcrDecoderConfig::formats()
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        ReferenceZcrDecoderConfig::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        ReferenceZcrDecoderConfig::supported_pixel_formats()
     }
     fn job<'a>(self) -> Self::Job<'a> {
         ReferenceZcrDecoderConfig.job()
@@ -43,8 +43,8 @@ impl EncoderConfig for CountedEncoder {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        ReferenceEncoderConfig::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        ReferenceEncoderConfig::supported_pixel_formats()
     }
     fn job(self) -> Self::Job {
         ReferenceEncoderConfig::new().job()
@@ -67,7 +67,7 @@ fn registry_clone_and_controlled_start_do_not_clone_unselected_templates() {
     assert_eq!(encodes.load(Ordering::SeqCst), 0);
     // Unsupported controlled execution still selects only one native template.
     assert!(
-        DecodeRequest::new()
+        DecodeOptions::new()
             .with_format(CountedDecoder::formats()[0])
             .start_controlled(&copy, StorageBudget::new(4096, 4))
             .is_err()

@@ -207,11 +207,11 @@ fn encoder_encode_from_pull_model() {
 }
 
 // =========================================================================
-// 3. encode_srgba8 default implementation
+// 3. encode_in_place default implementation
 // =========================================================================
 
 #[test]
-fn encoder_encode_srgba8_opaque() {
+fn encoder_encode_in_place_opaque() {
     let config = MockEncoderConfig::new();
     let job = config.job();
     let enc = job.encoder().unwrap();
@@ -224,19 +224,25 @@ fn encoder_encode_srgba8_opaque() {
         data[i + 3] = 255; // A
     }
 
-    let output = enc.encode_srgba8(&mut data, true, 4, 2, 4).unwrap();
+    let view =
+        zenpixels::PixelViewMut::new(&mut data, 4, 2, 4 * 4, &zenpixels::formats::RGBA8_SRGB)
+            .unwrap();
+    let output = enc.encode_in_place(view).unwrap();
     assert!(!output.is_empty());
     assert_eq!(output.format(), ImageFormat::Pnm);
 }
 
 #[test]
-fn encoder_encode_srgba8_with_alpha() {
+fn encoder_encode_in_place_with_alpha() {
     let config = MockEncoderConfig::new();
     let job = config.job();
     let enc = job.encoder().unwrap();
 
     let mut data = vec![128u8; 2 * 2 * 4]; // 2x2 RGBA8
-    let output = enc.encode_srgba8(&mut data, false, 2, 2, 2).unwrap();
+    let view =
+        zenpixels::PixelViewMut::new(&mut data, 2, 2, 2 * 4, &zenpixels::formats::RGBA8_SRGB)
+            .unwrap();
+    let output = enc.encode_in_place(view).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -281,7 +287,10 @@ fn animation_encode_decode_roundtrip() {
     // Frame 0
     let f0 = dec.render_next_frame(None).unwrap().unwrap();
     assert_eq!(f0.frame_index(), 0);
-    assert_eq!(f0.duration_ms(), 100);
+    assert_eq!(
+        f0.duration(),
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
     assert_eq!(f0.pixels().width(), 4);
     assert_eq!(f0.pixels().height(), 4);
     // Verify pixel data matches
@@ -292,7 +301,10 @@ fn animation_encode_decode_roundtrip() {
     // Frame 1
     let f1 = dec.render_next_frame(None).unwrap().unwrap();
     assert_eq!(f1.frame_index(), 1);
-    assert_eq!(f1.duration_ms(), 200);
+    assert_eq!(
+        f1.duration(),
+        zencodec::animation::FrameDuration::from_millis(200)
+    );
 
     // No more frames
     assert!(dec.render_next_frame(None).unwrap().is_none());
@@ -311,12 +323,18 @@ fn animation_render_next_frame_owned() {
 
     let owned = dec.render_next_frame_owned(None).unwrap().unwrap();
     assert_eq!(owned.frame_index(), 0);
-    assert_eq!(owned.duration_ms(), 50);
+    assert_eq!(
+        owned.duration(),
+        zencodec::animation::FrameDuration::from_millis(50)
+    );
     assert_eq!(owned.pixels().width(), 2);
 
     // Can use OwnedAnimationFrame independently
     let borrowed = owned.as_animation_frame();
-    assert_eq!(borrowed.duration_ms(), 50);
+    assert_eq!(
+        borrowed.duration(),
+        zencodec::animation::FrameDuration::from_millis(50)
+    );
 
     let recovered = owned.into_buffer();
     assert_eq!(recovered.width(), 2);
@@ -351,11 +369,10 @@ fn animation_render_to_sink() {
         }
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let (height, width) = (strip.height, strip.width);
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -438,10 +455,10 @@ fn dyn_decode_job_set_methods() {
 
     // Exercise all set_ methods
     job.set_limits(ResourceLimits::none().with_max_pixels(1_000_000));
-    job.set_crop_hint(0, 0, 4, 2);
+    job.set_crop_hint(zencodec::Rect::new(0, 0, 4, 2));
     job.set_orientation(OrientationHint::Correct);
     job.set_start_frame_index(0);
-    job.set_policy(DecodePolicy::permissive());
+    job.try_set_policy(DecodePolicy::permissive()).unwrap();
 
     let info = job.probe(data.as_ref()).unwrap();
     assert_eq!(info.width, 4);
@@ -475,11 +492,10 @@ fn dyn_decode_push_decode() {
     impl zencodec::decode::DecodeRowSink for TestSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let (height, width) = (strip.height, strip.width);
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -545,7 +561,10 @@ fn dyn_decode_animation_frame() {
 
     let frame = dec.render_next_frame_owned(None).unwrap().unwrap();
     assert_eq!(frame.frame_index(), 0);
-    assert_eq!(frame.duration_ms(), 100);
+    assert_eq!(
+        frame.duration(),
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
 
     assert!(dec.render_next_frame_owned(None).unwrap().is_none());
 }
@@ -568,8 +587,9 @@ fn dyn_encode_job_set_methods() {
 
     let mut job = dyn_config.dyn_job();
     job.set_limits(ResourceLimits::none());
-    job.set_policy(EncodePolicy::preserve_all());
-    job.set_metadata_policy(meta, MetadataPolicy::PreserveExact);
+    job.try_set_policy(EncodePolicy::preserve_all()).unwrap();
+    job.try_set_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .unwrap();
     job.set_canvas_size(4, 4);
     job.set_loop_count(Some(0));
 
@@ -643,7 +663,7 @@ fn dyn_encode_encode_from() {
 }
 
 #[test]
-fn dyn_encode_srgba8() {
+fn dyn_encode_in_place() {
     let config = MockEncoderConfig::new();
     let dyn_config: &dyn DynEncoderConfig = &config;
 
@@ -651,7 +671,10 @@ fn dyn_encode_srgba8() {
     let enc = job.into_encoder().unwrap();
 
     let mut data = vec![128u8; 2 * 2 * 4];
-    let output = enc.encode_srgba8(&mut data, false, 2, 2, 2).unwrap();
+    let view =
+        zenpixels::PixelViewMut::new(&mut data, 2, 2, 2 * 4, &zenpixels::formats::RGBA8_SRGB)
+            .unwrap();
+    let output = enc.encode_in_place(view).unwrap();
     assert!(!output.is_empty());
 }
 
@@ -740,7 +763,10 @@ fn decode_policy_on_job() {
     let data = encode_single_frame(&buf);
 
     let config = MockDecoderConfig;
-    let job = config.job().with_policy(DecodePolicy::strict());
+    let job = config
+        .job()
+        .try_with_policy(DecodePolicy::untrusted_minimal())
+        .unwrap();
     let dec = job.decoder(Cow::Borrowed(&data), &[]).unwrap();
     let result = dec.decode().unwrap();
     assert_eq!(result.width(), 2);
@@ -749,7 +775,10 @@ fn decode_policy_on_job() {
 #[test]
 fn encode_policy_on_job() {
     let config = MockEncoderConfig::new();
-    let job = config.job().with_policy(EncodePolicy::strip_all());
+    let job = config
+        .job()
+        .try_with_policy(EncodePolicy::strip_all())
+        .unwrap();
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     let output = enc.encode(buf.as_view()).unwrap();
@@ -780,24 +809,22 @@ fn metadata_roundtrip_via_encode_job() {
     let config = MockEncoderConfig::new();
     let job = config
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact);
+        .try_with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .unwrap();
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     let _output = enc.encode(buf.as_view()).unwrap();
     // Mock doesn't embed metadata, but we verified the path compiles and runs
 }
 
-/// `with_metadata` / `set_metadata` are deprecated (they embed without an
-/// explicit retention policy), but deprecation is a compile-time nudge, not
-/// removal — the path must keep working for callers who opt in with
-/// `#[allow(deprecated)]`. This guards against accidentally deleting it.
+/// `with_unfiltered_metadata` / `set_unfiltered_metadata` embed raw metadata
+/// without running a policy filter.
 #[test]
-#[allow(deprecated)]
-fn deprecated_with_metadata_still_works() {
+fn unfiltered_metadata_works() {
     let meta = Metadata::none().with_exif(vec![1, 2, 3, 4]);
 
     let config = MockEncoderConfig::new();
-    let job = config.clone().job().with_metadata(meta.clone());
+    let job = config.clone().job().with_unfiltered_metadata(meta.clone());
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
@@ -805,16 +832,14 @@ fn deprecated_with_metadata_still_works() {
     let dyn_config: &dyn DynEncoderConfig = &config;
     let mut job = dyn_config.dyn_job();
     job.set_canvas_size(2, 2);
-    job.set_metadata(meta);
+    job.set_unfiltered_metadata(meta);
     let enc = job.into_encoder().unwrap();
     assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
 }
 
-/// `with_metadata_policy` filters the record *before* the codec sees it: a
+/// `try_with_metadata_policy` filters the record *before* the codec sees it: a
 /// discard policy must yield empty metadata, `PreserveExact` must pass bytes
-/// through untouched. Asserts on `Metadata::filtered` directly (the exact
-/// transform `with_metadata_policy` applies), since the mock doesn't surface
-/// what it received.
+/// through untouched.
 #[test]
 fn metadata_policy_filters_before_codec() {
     let meta = Metadata::none()
@@ -835,7 +860,8 @@ fn metadata_policy_filters_before_codec() {
     // The job builder accepts the policy and runs end to end.
     let job = MockEncoderConfig::new()
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::Web);
+        .try_with_metadata_policy(meta, MetadataPolicy::Web)
+        .unwrap();
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     assert!(!enc.encode(buf.as_view()).unwrap().is_empty());
@@ -898,7 +924,7 @@ fn decode_output_into_buffer() {
     let output = DecodeOutput::new(buf, info);
 
     assert!(output.has_alpha());
-    assert_eq!(output.descriptor(), PixelFormat::RGBA8_SRGB);
+    assert_eq!(output.pixel_format(), &PixelFormat::RGBA8_SRGB);
     assert_eq!(output.format(), ImageFormat::Avif);
 
     let recovered = output.into_buffer();
@@ -1492,7 +1518,7 @@ fn capabilities_debug_has_all_fields() {
 
 #[test]
 fn decode_policy_all_resolvers() {
-    let p = DecodePolicy::strict();
+    let p = DecodePolicy::untrusted_minimal();
     assert!(!p.resolve_icc(true));
     assert!(!p.resolve_exif(true));
     assert!(!p.resolve_xmp(true));
@@ -1611,7 +1637,7 @@ fn rgba8_roundtrip() {
     let result = dec.decode().unwrap();
 
     assert!(result.has_alpha());
-    assert_eq!(result.descriptor(), PixelFormat::RGBA8_SRGB);
+    assert_eq!(result.pixel_format(), &PixelFormat::RGBA8_SRGB);
     assert_eq!(result.width(), 4);
     assert_eq!(result.height(), 4);
 
@@ -1641,11 +1667,17 @@ fn animation_start_frame_index() {
     // Should start at frame 1
     let frame = dec.render_next_frame(None).unwrap().unwrap();
     assert_eq!(frame.frame_index(), 1);
-    assert_eq!(frame.duration_ms(), 200);
+    assert_eq!(
+        frame.duration(),
+        zencodec::animation::FrameDuration::from_millis(200)
+    );
 
     let frame = dec.render_next_frame(None).unwrap().unwrap();
     assert_eq!(frame.frame_index(), 2);
-    assert_eq!(frame.duration_ms(), 300);
+    assert_eq!(
+        frame.duration(),
+        zencodec::animation::FrameDuration::from_millis(300)
+    );
 
     assert!(dec.render_next_frame(None).unwrap().is_none());
 }
@@ -1673,11 +1705,10 @@ fn dyn_animation_frame_decoder_render_to_sink() {
     impl zencodec::decode::DecodeRowSink for SimpleSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let (height, width) = (strip.height, strip.width);
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -1771,9 +1802,7 @@ fn push_decoder_sink_error_propagates() {
         }
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            _h: u32,
-            _w: u32,
+            _strip: zencodec::decode::RowStrip,
             _d: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
             unreachable!()
@@ -1799,11 +1828,10 @@ fn push_decoder_sink_finish_error_propagates() {
     impl zencodec::decode::DecodeRowSink for FailFinishSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+            let (height, width) = (strip.height, strip.width);
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -2027,7 +2055,10 @@ fn downcast_dyn_animation_frame_decoder_as_any() {
 
     // Still usable through dyn after as_any inspection
     let frame = dec.render_next_frame_owned(None).unwrap().unwrap();
-    assert_eq!(frame.duration_ms(), 100);
+    assert_eq!(
+        frame.duration(),
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
 }
 
 #[test]
@@ -2052,7 +2083,10 @@ fn downcast_dyn_animation_frame_decoder_into_any() {
     // Use the concrete decoder directly
     assert_eq!(concrete.frame_count(), Some(1));
     let frame = concrete.render_next_frame(None).unwrap().unwrap();
-    assert_eq!(frame.duration_ms(), 100);
+    assert_eq!(
+        frame.duration(),
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
 }
 
 #[test]
@@ -2309,17 +2343,18 @@ fn still_push_reports_the_actual_crop_and_transform() {
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            h: u32,
-            w: u32,
+            strip: zencodec::decode::RowStrip,
             spec: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
-            assert_eq!(y, 0);
-            assert_eq!(self.geometry, Some((w, h, spec.clone())));
+            assert_eq!(strip.y, 0);
+            assert_eq!(
+                self.geometry,
+                Some((strip.width, strip.height, spec.clone()))
+            );
             Ok(zenpixels::PixelViewMut::new_with_format_cow(
                 &mut self.data,
-                w,
-                h,
+                strip.width,
+                strip.height,
                 8,
                 zenpixels::FormatCow::from_owned(spec),
             )?)
@@ -2350,14 +2385,14 @@ fn still_push_reports_the_actual_crop_and_transform() {
                 let mut job = cfg.dyn_job();
                 job.set_orientation(hint);
                 if let Some([x, y, w, h]) = crop {
-                    job.set_crop_hint(x, y, w, h);
+                    job.set_crop_hint(zencodec::Rect::new(x, y, w, h));
                 }
                 job.push_decode(Cow::Borrowed(&encoded), &mut sink, &[])
                     .unwrap()
             } else {
                 let mut job = MockDecoderConfig.job().with_orientation(hint);
                 if let Some([x, y, w, h]) = crop {
-                    job = job.with_crop_hint(x, y, w, h);
+                    job = job.with_crop_hint(zencodec::Rect::new(x, y, w, h));
                 }
                 job.push_decoder(Cow::Borrowed(&encoded), &mut sink, &[])
                     .unwrap()
@@ -2398,17 +2433,15 @@ fn rational_animation_completion_and_erased_borrow_preserve_source_frame() {
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            rows: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             spec: PixelFormat,
         ) -> Result<zenpixels::PixelViewMut<'_>, SinkError> {
-            assert_eq!((y, rows, width), (0, 1, 2));
+            assert_eq!((strip.y, strip.height, strip.width), (0, 1, 2));
             self.calls.push("rows");
             Ok(zenpixels::PixelViewMut::new_with_format_cow(
                 &mut self.bytes,
-                width,
-                rows,
+                strip.width,
+                strip.height,
                 8,
                 zenpixels::FormatCow::from_owned(spec),
             )?)

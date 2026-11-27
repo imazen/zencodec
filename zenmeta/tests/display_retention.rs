@@ -18,9 +18,12 @@ fn source_xmp_is_dropped_but_render_fields_survive() {
 fn cannot_drop_luminance_or_invalid_gain_parameters() {
     let meta = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0).unwrap());
     let policy = MetadataPolicy::Custom(MetadataFields::KEEP_ALL.with_hdr(Retention::Discard));
-    assert!(
-        zenmeta::display::filter_for_gain_map(&meta, &GainMapParams::default(), &policy).is_err()
-    );
+    assert!(matches!(
+        zenmeta::display::filter_for_gain_map(&meta, &GainMapParams::default(), &policy),
+        Err(zenmeta::display::Error::RemovedSignal(
+            zenmeta::display::RenderSignal::HdrLuminance
+        ))
+    ));
     let mut params = GainMapParams::default();
     params.channels[0].gamma = f64::NAN;
     assert!(

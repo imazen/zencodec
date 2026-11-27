@@ -236,9 +236,6 @@ pub struct RewriteRequest<'a> {
     max_carriers: usize,
     pulse: Option<&'a dyn crate::Pulse>,
 }
-/// Legacy ambiguous name for a metadata rewrite request.
-#[deprecated(note = "use RewriteRequest")]
-pub type Request<'a> = RewriteRequest<'a>;
 
 impl<'a> RewriteRequest<'a> {
     /// Borrow encoded input. No parsing or allocation occurs yet.

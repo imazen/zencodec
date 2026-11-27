@@ -3,7 +3,7 @@
 use core::fmt;
 
 use zencodec::decode::{
-    ControlledIncrementalDecode, ControlledProgress, DecodeRowSink, Event, Fused,
+    ControlledIncrementalDecode, ControlledProgress, DecodeRowSink, Event, FusedIncrementalDecoder,
     IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
 };
 use zencodec::operation::{
@@ -54,9 +54,8 @@ impl<E: core::error::Error + 'static> core::error::Error for PolicyDecodeError<E
 /// adapter has no qualified native bound. Construction of the supplied decoder
 /// precedes this check and remains the caller/adapter's admission responsibility.
 pub struct PolicyDecoder<D, R> {
-    decoder: Option<Fused<D>>,
+    decoder: Option<FusedIncrementalDecoder<D>>,
     resolver: R,
-    preset: PolicySet,
     report: OperationReport,
     failed: bool,
 }
@@ -65,20 +64,11 @@ impl<D, R> PolicyDecoder<D, R> {
     /// when it returns `UsePreset`.
     pub fn new(decoder: D, resolver: R) -> Self {
         Self {
-            decoder: Some(Fused::new(decoder)),
+            decoder: Some(FusedIncrementalDecoder::new(decoder)),
             resolver,
-            preset: PolicySet::new(),
             report: OperationReport::default(),
             failed: false,
         }
-    }
-    /// Configure the built-in policy used for explicit delegation.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
-        self
     }
     /// Decisions made before success or failure. Available after a driver error.
     pub const fn report(&self) -> &OperationReport {
@@ -98,13 +88,13 @@ impl<D, R: OperationPolicy> PolicyDecoder<D, R> {
     /// configured workspace limit refuses with `Workspace(Unknown)` before the
     /// factory runs. Other requirements remain pending for their boundaries;
     /// success here does not certify metadata, fidelity or output scheduling.
-    /// Configure requirements on `policy` before this call, not with a later
-    /// legacy setter. Values evaluated before the closure is invoked (including
-    /// captured allocations) cannot be admitted by this method.
+    /// Configure requirements on `policy` before this call. Values evaluated
+    /// before the closure is invoked (including captured allocations) cannot
+    /// be admitted by this method.
     ///
     /// ```ignore
     /// let decoder = PolicyDecoder::try_new(
-    ///     || request.start_controlled(&codecs, storage),
+    ///     || options.start_controlled(&codecs, storage),
     ///     policy,
     ///     pulse,
     /// )?;
@@ -124,17 +114,6 @@ impl<D, R: OperationPolicy> PolicyDecoder<D, R> {
         let decoder = Self::from_admitted_factory(factory, policy).map_err(StepError::Codec)?;
         pulse.check()?;
         Ok(decoder)
-    }
-
-    /// Construct after workspace admission, without per-call cancellation.
-    #[deprecated(
-        note = "Use try_new(factory, policy, pulse); pass None when no per-call control is needed"
-    )]
-    pub fn try_from_factory<E>(
-        factory: impl FnOnce() -> Result<D, E>,
-        policy: R,
-    ) -> Result<Self, PolicyDecodeError<E>> {
-        Self::from_admitted_factory(factory, policy)
     }
 
     fn from_admitted_factory<E>(
@@ -170,13 +149,10 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         // this adapter to inspect the report. Only a successful step restores it.
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
         // Deferring metadata discovery must not defer a resource deadline. This
-        // adapter has no qualified native workspace evidence. Check both entry
-        // policies before even polling the native coroutine; a discovery step
+        // adapter has no qualified native workspace evidence. Check entry
+        // requirements before even polling the native coroutine; a discovery step
         // may already allocate. The taken owner drops on refusal or unwind.
-        for requirements in [Some(self.preset), self.resolver.requirements()]
-            .into_iter()
-            .flatten()
-        {
+        if let Some(requirements) = self.resolver.requirements() {
             requirements.check_workspace(None).map_err(|error| {
                 StepError::Codec(PolicyDecodeError::Requirements(
                     At::wrap(error).at_named("controlled decode workspace admission"),
@@ -191,7 +167,7 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
             ControlledProgress::Suspended { consumed, boundary } => {
                 let id = boundary.id();
                 let (action, record) =
-                    match resolve_boundary(boundary, &mut self.resolver, self.preset, pulse) {
+                    match resolve_boundary(boundary, &mut self.resolver, PolicySet::new(), pulse) {
                         Ok(answer) => answer,
                         Err(error) => {
                             self.report.record(error.error().record());
@@ -227,8 +203,8 @@ impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for P
         }
         self.decoder.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
-        self.decoder.as_ref().and_then(|d| d.output_descriptor())
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.decoder.as_ref().and_then(|d| d.output_pixel_format())
     }
     fn access_pattern(&self) -> AccessPattern {
         self.decoder

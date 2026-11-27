@@ -5,7 +5,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 
-use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
+use zencodec::decode::{
+    BatchMeta, DecodeRowSink, RowMetadata, RowStrip, SinkError, StripDimensions,
+};
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zenpixels::{
     ByteStorage, ByteStorageMut, PixelBuf, PixelFormat, PixelStorage, PixelView, PixelViewMut,
@@ -242,15 +244,12 @@ where
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.provide_buffer_with_metadata(
-            BatchMeta::final_rows(y),
-            height,
-            width,
+            BatchMeta::final_rows(strip.y),
+            StripDimensions::new(strip.width, strip.height),
             descriptor,
             &RowMetadata::default(),
         )
@@ -259,11 +258,11 @@ where
     fn provide_buffer_with_metadata(
         &mut self,
         meta: BatchMeta,
-        height: u32,
-        width: u32,
+        size: StripDimensions,
         descriptor: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
+        let StripDimensions { width, height } = size;
         let Some((expected_width, total_rows, spec)) = &self.declaration else {
             return Err("EncoderSink: rows before begin".into());
         };
@@ -380,27 +379,45 @@ mod tests {
         let alternate = spec.clone().with_primaries(Primaries::DisplayP3);
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() })
             .with_max_buffer_rows(core::num::NonZeroU32::MIN);
-        assert!(sink.provide_next_buffer(0, 1, 1, spec.clone()).is_err());
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(0, 1, 1), spec.clone())
+                .is_err()
+        );
         DecodeRowSink::begin(&mut sink, 1, 2, spec.clone()).unwrap();
         assert!(DecodeRowSink::begin(&mut sink, 1, 2, spec.clone()).is_err());
-        assert!(sink.provide_next_buffer(1, 1, 1, spec.clone()).is_err());
-        assert!(sink.provide_next_buffer(0, 2, 1, spec.clone()).is_err());
-        sink.provide_next_buffer(0, 1, 1, spec.clone())
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(1, 1, 1), spec.clone())
+                .is_err()
+        );
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(0, 1, 2), spec.clone())
+                .is_err()
+        );
+        sink.provide_next_buffer(RowStrip::new(0, 1, 1), spec.clone())
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[1, 2, 3]);
-        assert!(sink.provide_next_buffer(0, 1, 1, spec.clone()).is_err());
-        assert!(sink.provide_next_buffer(1, 1, 1, alternate).is_err());
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(0, 1, 1), spec.clone())
+                .is_err()
+        );
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(1, 1, 1), alternate)
+                .is_err()
+        );
         assert!(DecodeRowSink::finish(&mut sink).is_err());
         assert_eq!(sink.pending_output(), &[0xCC]);
-        sink.provide_next_buffer(1, 1, 1, spec.clone())
+        sink.provide_next_buffer(RowStrip::new(1, 1, 1), spec.clone())
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[4, 5, 6]);
         assert_eq!(sink.rows_pushed(), 1);
         DecodeRowSink::finish(&mut sink).unwrap();
         assert!(DecodeRowSink::finish(&mut sink).is_err());
-        assert!(sink.provide_next_buffer(2, 1, 1, spec).is_err());
+        assert!(
+            sink.provide_next_buffer(RowStrip::new(2, 1, 1), spec)
+                .is_err()
+        );
         assert_eq!(sink.finish().unwrap().data(), &[0xCC, 1, 2, 3, 4, 5, 6]);
     }
 
@@ -409,11 +426,11 @@ mod tests {
         let spec = PixelFormat::RGB8_SRGB;
         let mut sink = EncoderSink::new(Rows { bytes: Vec::new() });
         sink.begin(1, 2, spec.clone()).unwrap();
-        sink.provide_next_buffer(0, 1, 1, spec.clone())
+        sink.provide_next_buffer(RowStrip::new(0, 1, 1), spec.clone())
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[1, 2, 3]);
-        sink.provide_next_buffer(1, 1, 1, spec)
+        sink.provide_next_buffer(RowStrip::new(1, 1, 1), spec)
             .unwrap()
             .row_mut(0)
             .fill(0xFF);

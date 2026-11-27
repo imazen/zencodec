@@ -7,7 +7,7 @@
 use enough::StopReason;
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, SinkError, StepError,
+    OutputInfo, RowStrip, SinkError, StepError, StripDimensions,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -66,7 +66,7 @@ fn minitile_decoder() -> Dec {
         let h = u32::from_le_bytes(header[8..12].try_into().unwrap());
         let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
         ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
 
         let mut index = [0u8; 16];
@@ -110,7 +110,7 @@ fn sequential_decoder() -> Dec {
         ctx.read_exact(&mut magic).await?;
         assert_eq!(&magic, b"SEQ1");
         ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         let mut row = [0u8; 8];
         ctx.read_exact(&mut row).await?;
@@ -342,7 +342,7 @@ fn input_cap_bounds_memory() {
             let mut b = [0u8; 8];
             ctx.read_exact(&mut b).await?;
             ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             let s =
                 PixelView::new_with_format_cow(&b, 2, 1, 8, zenpixels::FormatCow::from_owned(RGBA))
                     .unwrap();
@@ -405,7 +405,7 @@ fn gap_bytes_between_ranges_are_not_retained() {
         AccessPattern::RandomAccess,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             let mut sum = 0u64;
             for i in 0..n {
                 let mut t = [0u8; 16];
@@ -535,12 +535,14 @@ struct PassSink {
 impl DecodeRowSink for PassSink {
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.provide_pass_buffer(BatchMeta::final_rows(y), height, width, descriptor)
+        self.provide_pass_buffer(
+            BatchMeta::final_rows(strip.y),
+            strip.dimensions(),
+            descriptor,
+        )
     }
     fn accepts_provisional(&self) -> bool {
         true
@@ -548,20 +550,19 @@ impl DecodeRowSink for PassSink {
     fn provide_pass_buffer(
         &mut self,
         meta: BatchMeta,
-        height: u32,
-        width: u32,
+        size: StripDimensions,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         if let Some(last) = self.passes.last_mut() {
             last.1 = self.scratch.clone();
         }
-        let stride = width as usize * descriptor.layout.bytes_per_pixel();
-        self.scratch = vec![0u8; stride * height as usize];
+        let stride = size.width as usize * descriptor.layout.bytes_per_pixel();
+        self.scratch = vec![0u8; stride * size.height as usize];
         self.passes.push((meta, Vec::new()));
         PixelViewMut::new_with_format_cow(
             &mut self.scratch,
-            width,
-            height,
+            size.width,
+            size.height,
             stride,
             zenpixels::FormatCow::from_owned(descriptor),
         )
@@ -579,7 +580,7 @@ impl DecodeRowSink for PassSink {
 fn provisional_rows_reach_only_a_sink_that_accepts_them() {
     let progressive = |mut ctx: CoroutineContext| async move {
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         // Announcing the header calls the sink's `begin`, which is when
         // `accepts_provisional` is read.
         ctx.announce(MetadataUpdate::HeaderReady).await?;
@@ -651,7 +652,7 @@ fn len_request_is_served_by_drivers() {
         let mut tail = [0u8; 2];
         ctx.read_exact_at(len - 2, &mut tail).await?;
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(PixelFormat::RGB8_SRGB);
+        ctx.set_output_pixel_format(PixelFormat::RGB8_SRGB);
         let px = [tail[0], tail[1], 0];
         let s = PixelView::new(&px, 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
@@ -692,7 +693,7 @@ fn rows_deposited_in_the_final_poll_are_delivered() {
     let mut dec: Dec =
         CoroutineDecoder::boxed_with_options(64, AccessPattern::Sequential, |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             ctx.announce(MetadataUpdate::HeaderReady).await?;
             let row = [1u8, 2, 3, 4, 5, 6, 7, 8];
             let s = PixelView::new_with_format_cow(

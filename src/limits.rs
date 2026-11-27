@@ -112,33 +112,6 @@
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ThreadingPolicy {
-    /// Equivalent to [`Sequential`](Self::Sequential).
-    #[deprecated(since = "0.1.19", note = "use ThreadingPolicy::Sequential")]
-    SingleThread,
-
-    /// Deprecated. Rayon codecs cannot reliably cap thread count from inside —
-    /// use `Sequential` or `Parallel` and control threads via `pool.install()`.
-    #[deprecated(since = "0.1.19", note = "use Sequential or Parallel")]
-    LimitOrSingle {
-        /// Maximum thread count before falling back to single-threaded.
-        max_threads: u16,
-    },
-
-    /// Deprecated. See [`LimitOrSingle`](Self::LimitOrSingle).
-    #[deprecated(since = "0.1.19", note = "use Sequential or Parallel")]
-    LimitOrAny {
-        /// Preferred maximum thread count (advisory, not enforced).
-        preferred_max_threads: u16,
-    },
-
-    /// Equivalent to [`Parallel`](Self::Parallel).
-    #[deprecated(since = "0.1.19", note = "use ThreadingPolicy::Parallel")]
-    Balanced,
-
-    /// Equivalent to [`Parallel`](Self::Parallel).
-    #[deprecated(since = "0.1.19", note = "use ThreadingPolicy::Parallel")]
-    Unlimited,
-
     /// No parallelism. Codecs must use sequential code paths (`iter()`,
     /// not `par_iter()`). Zero rayon overhead.
     ///
@@ -155,12 +128,10 @@ pub enum ThreadingPolicy {
     Parallel,
 }
 
-#[allow(deprecated)]
 impl ThreadingPolicy {
     /// Whether the codec should use parallel code paths.
     ///
-    /// Returns `false` for `Sequential` (and deprecated `SingleThread`,
-    /// `LimitOrSingle { max_threads: 1 }`). Returns `true` for everything else.
+    /// Returns `false` for `Sequential` and `true` for `Parallel`.
     ///
     /// **Rayon-based codecs** (zenjpeg, jxl-encoder, zenjxl-decoder, zenpng):
     /// use this to choose between `par_iter()` and `iter()`. Thread count
@@ -172,9 +143,8 @@ impl ThreadingPolicy {
     /// (`true` → codec's default thread count).
     pub fn is_parallel(self) -> bool {
         match self {
-            Self::Sequential | Self::SingleThread => false,
-            Self::LimitOrSingle { max_threads } if max_threads <= 1 => false,
-            _ => true,
+            Self::Sequential => false,
+            Self::Parallel => true,
         }
     }
 
@@ -182,12 +152,9 @@ impl ThreadingPolicy {
     /// codecs (rav1e/ravif, dav1d/rav1d, libwebp, etc.).
     ///
     /// Returns:
-    /// - `1` for [`Sequential`](Self::Sequential) (and deprecated
-    ///   [`SingleThread`](Self::SingleThread), `LimitOrSingle { max_threads: 1 }`).
-    /// - `0` for [`Parallel`](Self::Parallel) and every other variant, meaning
-    ///   "auto — let the library pick based on available parallelism." This is
-    ///   the safe default for the `#[non_exhaustive]` deprecated arms; the
-    ///   construction sites emit warnings and should be fixed there.
+    /// - `1` for [`Sequential`](Self::Sequential).
+    /// - `0` for [`Parallel`](Self::Parallel), meaning "auto — let the library
+    ///   pick based on available parallelism."
     ///
     /// This is the cross-codec shared helper for translating a
     /// [`ThreadingPolicy`] to the integer thread count that native-threaded
@@ -204,9 +171,8 @@ impl ThreadingPolicy {
     /// ```
     pub fn resolve_thread_count(self) -> u32 {
         match self {
-            Self::Sequential | Self::SingleThread => 1,
-            Self::LimitOrSingle { max_threads } if max_threads <= 1 => 1,
-            _ => 0,
+            Self::Sequential => 1,
+            Self::Parallel => 0,
         }
     }
 }
@@ -902,31 +868,6 @@ mod tests {
         assert!(limits.threading().is_parallel());
     }
 
-    #[allow(deprecated)]
-    #[test]
-    fn threading_policy_legacy_single_thread() {
-        let limits = ResourceLimits::none().with_threading(ThreadingPolicy::SingleThread);
-        assert!(limits.has_any());
-        assert!(!limits.threading().is_parallel());
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn threading_policy_legacy_limit_or_single() {
-        let limits = ResourceLimits::none()
-            .with_threading(ThreadingPolicy::LimitOrSingle { max_threads: 4 });
-        assert!(limits.has_any());
-        assert!(limits.threading().is_parallel());
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn threading_policy_legacy_limit_or_single_1() {
-        let limits = ResourceLimits::none()
-            .with_threading(ThreadingPolicy::LimitOrSingle { max_threads: 1 });
-        assert!(!limits.threading().is_parallel());
-    }
-
     #[test]
     fn resolve_thread_count_sequential_is_1() {
         assert_eq!(ThreadingPolicy::Sequential.resolve_thread_count(), 1);
@@ -935,48 +876,6 @@ mod tests {
     #[test]
     fn resolve_thread_count_parallel_is_0() {
         assert_eq!(ThreadingPolicy::Parallel.resolve_thread_count(), 0);
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn resolve_thread_count_legacy_arms_default_auto() {
-        // SingleThread → 1 (alias for Sequential)
-        assert_eq!(ThreadingPolicy::SingleThread.resolve_thread_count(), 1);
-        // LimitOrSingle { 1 } → 1 (effective single-thread)
-        assert_eq!(
-            ThreadingPolicy::LimitOrSingle { max_threads: 1 }.resolve_thread_count(),
-            1
-        );
-        // LimitOrSingle { >1 } → 0 (auto)
-        assert_eq!(
-            ThreadingPolicy::LimitOrSingle { max_threads: 8 }.resolve_thread_count(),
-            0
-        );
-        // LimitOrAny → 0 (auto)
-        assert_eq!(
-            ThreadingPolicy::LimitOrAny {
-                preferred_max_threads: 16
-            }
-            .resolve_thread_count(),
-            0
-        );
-        // Balanced / Unlimited → 0 (auto)
-        assert_eq!(ThreadingPolicy::Balanced.resolve_thread_count(), 0);
-        assert_eq!(ThreadingPolicy::Unlimited.resolve_thread_count(), 0);
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn threading_policy_legacy_balanced() {
-        let limits = ResourceLimits::none().with_threading(ThreadingPolicy::Balanced);
-        assert!(limits.has_any());
-        assert!(limits.threading().is_parallel());
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn threading_policy_legacy_unlimited() {
-        assert!(ThreadingPolicy::Unlimited.is_parallel());
     }
 
     // --- Validation tests ---

@@ -44,7 +44,7 @@ pub struct OutputInfo {
     /// Pixel format the decoder will produce natively (for `decode()`).
     ///
     /// For `decode_into()`, use any format from
-    /// [`supported_descriptors()`](crate::decode::DecoderConfig::supported_descriptors) —
+    /// [`supported_pixel_formats()`](crate::decode::DecoderConfig::supported_pixel_formats) —
     /// this field tells you what the codec would pick if you let it choose.
     pub native_format: PixelFormat,
     /// Whether the output has an alpha channel.

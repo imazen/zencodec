@@ -3,7 +3,7 @@ use std::sync::Arc;
 use zencodec::{
     frame::{Frame, FrameGeometry, FrameInterpretation, FrameTiming, Presentation},
     image::{ImageOutput, OutputError, Row, Samples},
-    operation::ImageFacts,
+    operation::ImageSummary,
 };
 use zencodec::{
     plane::{FloatEncoding, PlanarLayout, Plane, PlaneEncoding, PlaneRole, PlaneSpec},
@@ -58,7 +58,7 @@ fn mixed_depth_alpha_keeps_native_words_and_no_false_uniform_depth() {
         ],
         ChromaSubsampling::Mono,
     );
-    assert_eq!(ImageFacts::new(&output).frame.unwrap().encoding, None);
+    assert_eq!(ImageSummary::new(&output).frame.unwrap().encoding, None);
     let mapped = output.map().unwrap();
     let luma = mapped.plane(0).unwrap().unwrap();
     let Samples::Codes(luma) = luma.samples else {
@@ -93,7 +93,7 @@ fn float_mapping_keeps_scale_offset_excursions_and_nan_bits_without_conversion()
         vec![PlaneSpec::new(PlaneRole::Luma, e)],
         ChromaSubsampling::Mono,
     );
-    assert!(ImageFacts::new(&output).frame.unwrap().encoding.is_none());
+    assert!(ImageSummary::new(&output).frame.unwrap().encoding.is_none());
     let mapped = output.map().unwrap();
     let sample = mapped.plane(0).unwrap().unwrap();
     assert_eq!(sample.samples.stride_bytes(), 16);
@@ -199,7 +199,7 @@ fn policy_facts_distinguish_mixed_depth_and_plane_order() {
             FrameGeometry::full(3, 2),
             PlanarLayout::new(specs, ChromaSubsampling::Mono, ChromaSiting::Unknown).unwrap(),
         );
-        zencodec::operation::FrameFacts::new(&interpretation, FrameTiming::default())
+        zencodec::operation::FrameSummary::new(&interpretation, FrameTiming::default())
     };
     assert_eq!(make(10, false).encoding, None);
     assert_eq!(make(12, false).encoding, None);
@@ -241,7 +241,7 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
 
 #[test]
 fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
-    use zencodec::frame::{ColorClaim, Crop};
+    use zencodec::frame::{ColorClaim, Rect};
     use zencodec_media::adapt::{Gray8, RenderFrame};
     use zenpixels::{Cicp, PixelViewMut};
     let encoding = code(SampleType::U8, 8, 0);
@@ -266,7 +266,7 @@ fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
     ] {
         let mut geometry = FrameGeometry::full(2, 1);
         if crop {
-            geometry.crop = Crop {
+            geometry.crop = Rect {
                 x: 1,
                 y: 0,
                 width: 1,

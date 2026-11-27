@@ -59,7 +59,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
         expanded = expanded
             .checked_add(6 + 12 * count)
             .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
-        req.packet(expanded)?;
+        req.check_metadata_budget(expanded)?;
         let mut external_values = BTreeSet::new();
         let (mut thumbnail_offset, mut thumbnail_size) = (None, None);
         entries = entries
@@ -106,7 +106,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
                     .checked_add(size)
                     .and_then(|n| n.checked_add(size & 1))
                     .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
-                req.packet(expanded)?;
+                req.check_metadata_budget(expanded)?;
             }
             if n == 1 && matches!(ty, 3 | 4) && matches!(tag, 0x0201 | 0x0202) {
                 let scalar = if ty == 3 {
@@ -153,7 +153,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
             expanded = expanded
                 .checked_add(size)
                 .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
-            req.packet(expanded)?;
+            req.check_metadata_budget(expanded)?;
         }
     }
     Ok(())

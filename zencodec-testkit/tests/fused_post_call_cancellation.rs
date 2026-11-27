@@ -103,7 +103,7 @@ fn setup(
     reason: StopReason,
     stop_in_resume: bool,
     fail: bool,
-) -> (Fused<Native>, StopOnly<'static>) {
+) -> (FusedIncrementalDecoder<Native>, StopOnly<'static>) {
     let pending = Arc::new(AtomicBool::new(false));
     let boundary = DecodeBoundary::new(InterpretationFacts::new(
         1,
@@ -113,7 +113,7 @@ fn setup(
     ))
     .unwrap();
     (
-        Fused::new(Native {
+        FusedIncrementalDecoder::new(Native {
             pending: pending.clone(),
             boundary,
             adopted: false,
@@ -138,7 +138,7 @@ fn expect_failure<T: core::fmt::Debug>(
         );
     }
 }
-fn terminal(decoder: &mut Fused<Native>, controlled: bool) {
+fn terminal(decoder: &mut FusedIncrementalDecoder<Native>, controlled: bool) {
     let calls = decoder.get_ref().calls;
     let mut sink = CollectSink::new();
     if controlled {

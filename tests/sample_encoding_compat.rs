@@ -1,6 +1,6 @@
 //! Canonical sample encoding crosses core mapping and conversion boundaries directly.
 use zencodec::frame::{AnyPlane, PlaneRef};
-use zencodec::image::CodePlane as NativePlane;
+use zencodec::image::ComponentCodePlane as NativePlane;
 use zencodec::sample::{CodePlane, SampleEncoding, SampleEncodingError};
 use zenpixels::SampleType;
 

@@ -87,9 +87,7 @@ struct NoRows;
 impl DecodeRowSink for NoRows {
     fn provide_next_buffer(
         &mut self,
-        _: u32,
-        _: u32,
-        _: u32,
+        _: crate::sink::RowStrip,
         _: zenpixels::PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, crate::decode::SinkError> {
         panic!("this protocol-only probe never publishes rows")
@@ -105,7 +103,7 @@ fn probe(observed: &Arc<Observed>) -> Probe {
 #[test]
 fn none_survives_fused_erasure_and_uses_retained_reporting() {
     let observed = Arc::new(Observed::default());
-    let mut decoder = erase_incremental(Fused::new(probe(&observed)));
+    let mut decoder = erase_incremental(FusedIncrementalDecoder::new(probe(&observed)));
     decoder.step(Input::empty(), &mut NoRows, None).unwrap();
     assert!(observed.saw_none.load(Ordering::SeqCst));
     assert_eq!(observed.native_calls.load(Ordering::SeqCst), 1);
@@ -122,7 +120,7 @@ fn some_keeps_progress_planning_sharing_and_original_stop_reason() {
     let retained = Arc::new(Observed::default());
     let observed = Arc::new(Observed::default());
     let pulse = Meter(observed.clone());
-    let mut decoder = erase_incremental(Fused::new(probe(&retained)));
+    let mut decoder = erase_incremental(FusedIncrementalDecoder::new(probe(&retained)));
     decoder
         .step(Input::empty(), &mut NoRows, Some(&pulse))
         .unwrap();
@@ -149,7 +147,7 @@ fn none_and_some_noop_cannot_disable_a_retained_stop() {
     for extra in [None, Some(&crate::NoPulse as &dyn Pulse)] {
         let observed = Arc::new(Observed::default());
         observed.stopped.store(true, Ordering::SeqCst);
-        let mut decoder = erase_incremental(Fused::new(probe(&observed)));
+        let mut decoder = erase_incremental(FusedIncrementalDecoder::new(probe(&observed)));
         assert!(matches!(
             decoder.step(Input::empty(), &mut NoRows, extra),
             Err(StepError::Cancelled(StopReason::TimedOut))

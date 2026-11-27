@@ -1,12 +1,9 @@
-//! Select stored-orientation representation without capability coordination.
-//! Metadata embedding in this compatibility example is best-effort; required
-//! retention additionally needs the checked metadata setter on a supporting codec.
+//! Select stored-orientation representation with checked metadata retention.
 use zencodec::encode::{EncodeJob, EncodeOrientation, EncodeOutput, Encoder};
 use zencodec::{Metadata, MetadataPolicy};
 use zenpixels::PixelView;
 
 // EXAMPLE: preserve_stored_orientation
-#[allow(deprecated)] // This control retains the legacy best-effort metadata behavior.
 pub fn preserve_stored<J: EncodeJob>(
     job: J,
     pixels: PixelView<'_>,
@@ -18,7 +15,7 @@ where
     // ANCHOR: preserve_stored_orientation
     let encoder = job
         .try_with_orientation_mode(EncodeOrientation::PreserveStored)?
-        .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(metadata, MetadataPolicy::PreserveExact)?
         .encoder()?;
     let output = encoder.encode(pixels)?;
     // END: preserve_stored_orientation

@@ -7,7 +7,7 @@
 
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, StepError,
+    OutputInfo, Progress, RowStrip, StepError,
 };
 use zencodec::source::AccessPattern;
 use zencodec::{ImageFormat, ImageInfo};
@@ -48,7 +48,9 @@ pub fn direct_decode(file: &[u8], strip_rows: u32, sink: &mut dyn DecodeRowSink)
     while y < h {
         let rows = (h - y).min(strip_rows);
         let start = HEADER + y as usize * row;
-        let mut dst = sink.provide_next_buffer(y, rows, w, DESC).unwrap();
+        let mut dst = sink
+            .provide_next_buffer(RowStrip::new(y, w, rows), DESC)
+            .unwrap();
         for r in 0..rows {
             let s = start + r as usize * row;
             dst.row_mut(r).copy_from_slice(&file[s..s + row]);
@@ -137,7 +139,7 @@ impl HandWritten {
         let at = HEADER as u64 + self.next_row as u64 * row as u64;
         if input.offset == at && input.bytes.len() >= len {
             let mut dst = sink
-                .provide_next_buffer(self.next_row, rows, w, DESC)
+                .provide_next_buffer(RowStrip::new(self.next_row, w, rows), DESC)
                 .map_err(StepError::Sink)?;
             for r in 0..rows as usize {
                 dst.row_mut(r as u32)
@@ -180,7 +182,7 @@ impl IncrementalDecode for HandWritten {
     fn info(&self) -> Option<&ImageInfo> {
         self.info.as_ref()
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -200,7 +202,7 @@ pub fn coroutine_sequential(strip_rows: u32) -> Coro {
             ctx.read_exact(&mut header).await?;
             let (w, h) = dims(&header);
             ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.announce(MetadataUpdate::HeaderReady).await?;
             let row = w as usize * 4;
             let mut strip = vec![0u8; row * strip_rows as usize];
@@ -235,7 +237,7 @@ pub fn coroutine_ranges(strip_rows: u32) -> Coro {
             ctx.read_exact_at(0, &mut header).await?;
             let (w, h) = dims(&header);
             ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.announce(MetadataUpdate::HeaderReady).await?;
             let row = w as usize * 4;
             let mut strip = vec![0u8; row * strip_rows as usize];
@@ -270,7 +272,7 @@ pub fn coroutine_controlled(strip_rows: u32, input_cap: usize, admitted: bool) -
             ctx.read_exact(&mut header).await?;
             let (w, h) = dims(&header);
             ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.interpretation(zencodec::decode::InterpretationFacts::new(w, h, Some(DESC), zencodec::decode::InterpretationState::Final)).await?;
             let row = w as usize * 4;
             let mut strip = vec![0u8; row * strip_rows as usize];

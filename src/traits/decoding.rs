@@ -6,7 +6,7 @@ use alloc::boxed::Box;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
-use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
+use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits};
 use zenpixels::PixelFormat;
 
 use super::BoxedError;
@@ -49,9 +49,9 @@ pub trait DecoderConfig: Clone + Send + Sync {
 
     /// Pixel formats this decoder can produce natively.
     ///
-    /// Every descriptor is a guarantee: the decoder can produce this format
+    /// Every pixel format is a guarantee: the decoder can produce this format
     /// without lossy conversion. Must not be empty.
-    fn supported_descriptors() -> &'static [PixelFormat];
+    fn supported_pixel_formats() -> &'static [PixelFormat];
 
     /// Decoder capabilities (metadata support, cancellation, etc.).
     ///
@@ -154,33 +154,12 @@ pub trait DecodeJob<'a>: Sized {
     /// across thread boundaries (e.g., in pipeline `Source` implementations).
     type AnimationFrameDec: AnimationFrameDecoder<Error = Self::Error> + Send + 'static;
 
-    /// Legacy cancellation-only adapter. Prefer the complete operation pulse.
-    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    fn with_stop(self, stop: StopToken) -> Self {
-        self.with_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(stop)))
-    }
-
     /// Retain progress, cancellation, phase planning and sharing for this job.
     /// Codecs must not erase this to a cancellation-only token.
     fn with_pulse(self, pulse: how_far::SharedPulse) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
-
-    /// Set decode security policy (controls metadata extraction, parsing strictness, etc.).
-    ///
-    /// # Note
-    ///
-    /// The default implementation is a no-op. This published setter is
-    /// best-effort; static capability flags do not confirm policy enforcement.
-    /// Use [`try_set_policy`](Self::try_set_policy) or
-    /// [`try_with_policy`](Self::try_with_policy) for a required policy.
-    #[deprecated(
-        note = "may silently ignore policy; use try_with_policy or a checked operation request"
-    )]
-    fn with_policy(self, _policy: crate::DecodePolicy) -> Self {
-        self
-    }
 
     /// Apply every specified policy field, or reject without changing this job.
     ///
@@ -264,7 +243,7 @@ pub trait DecodeJob<'a>: Sized {
     /// Hint: crop to this region in source coordinates.
     ///
     /// The decoder may adjust for block alignment (JPEG MCU boundaries).
-    fn with_crop_hint(self, _x: u32, _y: u32, _width: u32, _height: u32) -> Self {
+    fn with_crop_hint(self, _crop: crate::image::Rect) -> Self {
         self
     }
 
@@ -555,7 +534,7 @@ pub trait DecodeJob<'a>: Sized {
     /// [`erase_controlled`](crate::decode::erase_controlled) session. `storage`
     /// admits participating owned buffers; it is not a native-workspace bound.
     /// Preferred descriptors remain preferences. A required output is checked
-    /// before adoption by [`DecodeRequest`](crate::operation::DecodeRequest).
+    /// before adoption by [`DecodeOptions`](crate::operation::DecodeOptions).
     fn dyn_controlled_decoder(
         self,
         preferred: &[PixelFormat],

@@ -41,7 +41,7 @@ impl ControlledIncrementalDecode for ChangedCompletion {
         sink.begin(1, 1, PixelFormat::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         let _ = sink
-            .provide_next_buffer(0, 1, 1, PixelFormat::RGB8_SRGB)
+            .provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         sink.finish().map_err(StepError::Sink)?;
         // All sink calls match the adopted facts. Only the successful completion

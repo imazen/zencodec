@@ -55,7 +55,7 @@ impl EncodeJob for PullJob {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn plan_encode(&self, _: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
@@ -84,7 +84,7 @@ impl EncoderConfig for PullConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
@@ -115,7 +115,7 @@ impl Encoder for PullEncoder {
         let mut description = Description::new(
             declaration.width,
             declaration.height,
-            declaration.descriptor.clone(),
+            declaration.pixel_format.clone(),
         );
         description.exact_depth = declaration.exact_depth;
         self.description = Some(description);
@@ -541,8 +541,7 @@ fn native_one_pass_requires_no_snapshot_but_caps_and_exact_multi_pass_stay_stric
 }
 
 #[test]
-#[allow(deprecated)]
-fn bound_and_legacy_requirements_cannot_choose_different_halves_of_a_route() {
+fn conflicting_requirements_cannot_choose_different_halves_of_a_route() {
     for erased in [false, true] {
         let s = Setup::new();
         let failure = run(
@@ -550,9 +549,10 @@ fn bound_and_legacy_requirements_cannot_choose_different_halves_of_a_route() {
             PullJob::new(&s, 2, Some(2)),
             ReplaySource::new(&s, true),
             s.writer(),
-            PolicySet::new().require_exact_replay(true),
-            s.options()
-                .with_policy_set(PolicySet::new().allow_raw_memory_staging(false)),
+            PolicySet::new()
+                .require_exact_replay(true)
+                .allow_raw_memory_staging(false),
+            s.options(),
         )
         .unwrap_err();
         assert_requirement_refusal(&failure);

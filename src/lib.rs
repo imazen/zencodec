@@ -46,6 +46,7 @@ extern crate std;
 
 whereat::define_at_crate_info!();
 
+pub mod advanced;
 pub mod animation;
 mod capabilities;
 pub mod collection;
@@ -69,11 +70,6 @@ mod frame_storage;
 pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
-/// Lightweight ICC profile inspection (tag extraction, no full parse).
-// Kept `pub` — privatizing it removes `zencodec::icc` from the public API, a
-// breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
-// a future major; do not ship it in a patch/minor.
-pub mod icc;
 pub mod image;
 mod info;
 pub mod inventory;
@@ -116,8 +112,7 @@ pub use gainmap::{
     GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
     ISO_21496_1_PRIMARY_APP2_BODY, ISO_21496_1_URN, Iso21496Format,
 };
-#[allow(deprecated)]
-pub use icc::icc_extract_cicp;
+pub use image::Rect;
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
@@ -245,9 +240,6 @@ pub mod encode {
 /// Codec implementors implement the generic traits. Dispatch callers
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
-    #[allow(deprecated)]
-    pub use crate::traits::Request;
-
     pub use crate::traits::{
         BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
         DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
@@ -256,14 +248,14 @@ pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, ErasedError, Event,
-        Fused, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
-        StreamingDecode, erase_incremental,
+        FusedIncrementalDecoder, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress,
+        StepError, StreamingDecode, erase_incremental,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynIncrementalDecoder, DynStreamingDecoder, IncrementalDecoderShim,
+        DynIncrementalDecoder, DynStreamingDecoder, ErasedIncrementalDecoder,
     };
 
     // Types
@@ -271,7 +263,7 @@ pub mod decode {
     pub use crate::cost::{FrameCompletion, OutputInfo};
     pub use crate::output::{AnimationFrame, DecodeDetails, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
-    pub use crate::sink::{DecodeRowSink, RowMetadata, SinkError};
+    pub use crate::sink::{DecodeRowSink, RowMetadata, RowStrip, SinkError, StripDimensions};
     pub use crate::traits::ByteRange;
 
     pub use crate::negotiate::{

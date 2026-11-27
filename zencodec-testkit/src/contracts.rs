@@ -218,7 +218,6 @@ pub fn check_inventory_input_limit<D: DecoderConfig + 'static>(
 /// of treating a successful setter as proof of delivery. `metadata` is the
 /// unfiltered input. Color/fidelity observations remain codec-specific.
 #[allow(clippy::too_many_arguments)]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_encode_policy_admission<E, D>(
     enc: E,
     dec: D,
@@ -239,11 +238,11 @@ where
     let mut job = enc
         .clone()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.clone())
         .try_with_policy(initial)
         .map_err(|e| fail(CHECK, format!("initial: {e}")))?;
     let mut dynamic = enc.dyn_job();
-    dynamic.set_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact);
+    dynamic.set_unfiltered_metadata(metadata.clone());
     dynamic
         .try_set_policy(initial)
         .map_err(|e| fail(CHECK, format!("erased initial: {e}")))?;
@@ -263,7 +262,7 @@ where
     let builder = enc
         .clone()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.clone())
         .try_with_policy(initial)
         .map_err(|e| fail(CHECK, e.to_string()))?
         .try_with_policy(request);
@@ -274,7 +273,7 @@ where
         Ok(job) => job,
         Err(UnsupportedOperation::EncodePolicy) => enc
             .job()
-            .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(metadata)
             .try_with_policy(initial)
             .map_err(|e| fail(CHECK, e.to_string()))?,
         Err(e) => return Err(fail(CHECK, format!("wrong builder rejection: {e}"))),
@@ -725,13 +724,11 @@ impl zencodec::decode::DecodeRowSink for OrderSink {
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: zencodec::decode::RowStrip,
         descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
-        self.final_ys.push((y, height));
-        self.inner.provide_next_buffer(y, height, width, descriptor)
+        self.final_ys.push((strip.y, strip.height));
+        self.inner.provide_next_buffer(strip, descriptor)
     }
     fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
         self.inner.finish()
@@ -763,15 +760,13 @@ impl PassSink {
 impl zencodec::decode::DecodeRowSink for PassSink {
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: zencodec::decode::RowStrip,
         descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.ship();
         let (_, buf) = self.current.insert((
-            zencodec::decode::BatchMeta::final_rows(y),
-            zenpixels::PixelBuf::new(width, height, descriptor)?,
+            zencodec::decode::BatchMeta::final_rows(strip.y),
+            zenpixels::PixelBuf::new(strip.width, strip.height, descriptor)?,
         ));
         Ok(buf.as_view_mut())
     }
@@ -781,17 +776,17 @@ impl zencodec::decode::DecodeRowSink for PassSink {
     fn provide_pass_buffer(
         &mut self,
         meta: zencodec::decode::BatchMeta,
-        height: u32,
-        width: u32,
+        size: zencodec::decode::StripDimensions,
         descriptor: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         if meta.is_final {
             self.final_through_pass += 1;
         }
         self.ship();
-        let (_, buf) = self
-            .current
-            .insert((meta, zenpixels::PixelBuf::new(width, height, descriptor)?));
+        let (_, buf) = self.current.insert((
+            meta,
+            zenpixels::PixelBuf::new(size.width, size.height, descriptor)?,
+        ));
         Ok(buf.as_view_mut())
     }
     fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
@@ -814,9 +809,7 @@ impl zencodec::decode::DecodeRowSink for UntouchedSink {
 
     fn provide_next_buffer(
         &mut self,
-        _: u32,
-        _: u32,
-        _: u32,
+        _: zencodec::decode::RowStrip,
         _: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;
@@ -835,8 +828,7 @@ impl zencodec::decode::DecodeRowSink for UntouchedSink {
     fn provide_pass_buffer(
         &mut self,
         _: zencodec::decode::BatchMeta,
-        _: u32,
-        _: u32,
+        _: zencodec::decode::StripDimensions,
         _: PixelFormat,
     ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;

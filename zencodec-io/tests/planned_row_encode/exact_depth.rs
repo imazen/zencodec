@@ -27,13 +27,13 @@ impl EncodeJob for ClaimJob {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         assert_eq!(declaration.exact_depth, self.expected);
         if let Some((spec, metadata)) = &self.interpretation {
-            assert_eq!(&declaration.descriptor, spec);
+            assert_eq!(&declaration.pixel_format, spec);
             assert_eq!(declaration.pixel_metadata.as_ref(), Some(metadata));
         }
         self.inner.plan_encode(declaration)
@@ -57,7 +57,7 @@ impl EncoderConfig for ClaimConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[codec_spec(zenpixels::SampleLayout::RGB16)];
         SUPPORTED
     }
@@ -84,7 +84,7 @@ impl Encoder for ClaimEncoder {
     ) -> Result<EncodePlan, Self::Error> {
         assert_eq!(declaration.exact_depth, self.expected);
         if let Some((spec, metadata)) = &self.interpretation {
-            assert_eq!(&declaration.descriptor, spec);
+            assert_eq!(&declaration.pixel_format, spec);
             assert_eq!(declaration.pixel_metadata.as_ref(), Some(metadata));
         }
         self.inner.begin_declared(declaration)
@@ -737,7 +737,7 @@ impl EncodeJob for Unplanned {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn encoder(self) -> Result<Self::Enc, Self::Error> {
@@ -758,7 +758,7 @@ impl EncodeJob for PlannedButNoDeclaredStart {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn plan_encode(&self, _: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {

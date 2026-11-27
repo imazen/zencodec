@@ -45,14 +45,14 @@ impl EncodeJob for Job {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         event(&self.events, "plan");
-        if declaration.descriptor.layout.order.is_rgb_family() {
+        if declaration.pixel_format.layout.order.is_rgb_family() {
             assert!(matches!(
-                declaration.descriptor.color,
+                declaration.pixel_format.color,
                 ColorSpace::Rgb {
                     primaries: zenpixels::Primaries::DisplayP3,
                     ..
@@ -86,7 +86,7 @@ impl EncoderConfig for Config {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
@@ -152,9 +152,9 @@ impl Encoder for Enc {
             .check()
             .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "start");
-        if declaration.descriptor.layout.order.is_rgb_family() {
+        if declaration.pixel_format.layout.order.is_rgb_family() {
             assert!(matches!(
-                declaration.descriptor.color,
+                declaration.pixel_format.color,
                 ColorSpace::Rgb {
                     primaries: zenpixels::Primaries::DisplayP3,
                     ..
@@ -457,25 +457,14 @@ fn policy_precedes_construction_and_finish_precedes_destination_waits() {
 }
 
 #[test]
-#[allow(deprecated)] // Preserve coverage of legacy and bound requirement conjunction.
 fn strict_unknown_workspace_refuses_before_planning_or_any_effect() {
     use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
     for erased in [false, true] {
-        for (legacy, bound) in [
-            (None, Some(0)),
-            (Some(0), None),
-            (Some(u64::MAX), Some(0)),
-            (Some(0), Some(u64::MAX)),
-        ] {
+        for limit in [0, u64::MAX] {
             let s = Setup::new();
             let storage = StorageBudget::new(4096, 16);
-            let mut options = Options::new(storage.clone(), 4096);
-            if let Some(limit) = legacy {
-                options = options.with_policy_set(PolicySet::new().with_workspace_limit(limit));
-            }
-            let requirements = bound.map_or(PolicySet::new(), |limit| {
-                PolicySet::new().with_workspace_limit(limit)
-            });
+            let options = Options::new(storage.clone(), 4096);
+            let requirements = PolicySet::new().with_workspace_limit(limit);
             let error = run_job(
                 erased,
                 s.job(),

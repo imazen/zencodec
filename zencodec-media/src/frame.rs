@@ -9,8 +9,8 @@ use zencodec::plane::{AnyPlane, Plane, PlaneBuf, PlaneEncoding};
 use zencodec::sample::SampleEncoding;
 
 pub use zencodec::frame::{
-    ColorClaim, Crop, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError,
-    MappedPlanes, Picture, PlaneError, PlaneRole, Presentation,
+    ColorClaim, Frame, FrameGeometry, FrameInterpretation, FrameTiming, MapError, MappedPlanes,
+    Picture, PlaneError, PlaneRole, Presentation, Rect,
 };
 
 /// One owned plane in its native words. Plane geometry (width, height,

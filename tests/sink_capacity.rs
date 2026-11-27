@@ -1,5 +1,5 @@
 use core::num::NonZeroU32;
-use zencodec::decode::{BatchMeta, DecodeRowSink, SinkError};
+use zencodec::decode::{BatchMeta, DecodeRowSink, RowStrip, SinkError, StripDimensions};
 use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 struct Bounded {
@@ -24,12 +24,10 @@ impl DecodeRowSink for Bounded {
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        h: u32,
-        w: u32,
+        strip: RowStrip,
         d: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.provide_pass_buffer(BatchMeta::final_rows(y), h, w, d)
+        self.provide_pass_buffer(BatchMeta::final_rows(strip.y), strip.dimensions(), d)
     }
     fn accepts_provisional(&self) -> bool {
         true
@@ -37,19 +35,21 @@ impl DecodeRowSink for Bounded {
     fn provide_pass_buffer(
         &mut self,
         meta: BatchMeta,
-        h: u32,
-        w: u32,
+        size: StripDimensions,
         d: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        assert!(h <= self.cap.get(), "copy exceeded admitted row capacity");
+        assert!(
+            size.height <= self.cap.get(),
+            "copy exceeded admitted row capacity"
+        );
         if self.fail_at.is_some_and(|y| meta.y >= y) {
             return Err("deliberate sink failure".into());
         }
-        self.calls.push((meta, h));
+        self.calls.push((meta, size.height));
         PixelViewMut::new_with_format_cow(
             &mut self.bytes[meta.y as usize * 12..],
-            w,
-            h,
+            size.width,
+            size.height,
             12,
             zenpixels::FormatCow::from_owned(d),
         )

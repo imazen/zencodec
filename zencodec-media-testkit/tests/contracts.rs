@@ -347,7 +347,7 @@ fn packets_are_not_frames_and_show_existing_shares_storage() {
     );
     assert_eq!(frames[0].timing().packet_ordinal, None);
     assert_eq!(
-        zencodec::image::CodePlane::new(
+        zencodec::image::ComponentCodePlane::new(
             frames[2].map().unwrap().plane(0).unwrap(),
             frames[2]
                 .interpretation()
@@ -388,7 +388,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
     };
     drop(dec);
     assert_eq!(
-        zencodec::image::CodePlane::new(
+        zencodec::image::ComponentCodePlane::new(
             plane,
             first
                 .interpretation()
@@ -400,7 +400,7 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
         Some(9)
     );
     assert_eq!(
-        zencodec::image::CodePlane::new(
+        zencodec::image::ComponentCodePlane::new(
             second.map().unwrap().plane(0).unwrap(),
             second
                 .interpretation()
@@ -910,9 +910,8 @@ fn finish_preflight_supports_tail_patches_and_ordered_overlaps_and_rejects_overf
 }
 
 #[test]
-#[allow(deprecated)]
-fn deprecated_finish_helper_uses_the_same_transactional_validation() {
-    use zencodec_media::container::{MuxFinish, Patch, PatchError, apply_finish};
+fn finish_apply_to_uses_transactional_validation() {
+    use zencodec_media::container::{MuxFinish, Patch, PatchError};
     let mut output = b"keep".to_vec();
     let bad = MuxFinish::new(
         b"tail".to_vec(),
@@ -921,9 +920,11 @@ fn deprecated_finish_helper_uses_the_same_transactional_validation() {
             bytes: vec![0],
         }],
     );
-    assert_eq!(apply_finish(&mut output, bad), Err(PatchError::OutOfRange));
+    assert_eq!(bad.apply_to(&mut output), Err(PatchError::OutOfRange));
     assert_eq!(&output, b"keep");
-    apply_finish(&mut output, MuxFinish::new(b"tail".to_vec(), vec![])).unwrap();
+    MuxFinish::new(b"tail".to_vec(), vec![])
+        .apply_to(&mut output)
+        .unwrap();
     assert_eq!(&output, b"keeptail");
 }
 

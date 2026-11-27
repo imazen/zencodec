@@ -1,6 +1,6 @@
 //! Policy before executing a retained image conversion route.
 use super::{
-    DecisionContext, DecisionRecord, ImageFacts, OperationPolicy, PolicyFailure, PolicySet,
+    DecisionContext, DecisionRecord, ImageSummary, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
 use crate::sample::ChromaSiting;
@@ -76,7 +76,7 @@ pub fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
     pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let pulse = pulse.unwrap_or(&crate::NoPulse);
-    let facts = ImageFacts::new(image);
+    let facts = ImageSummary::new(image);
     policy::choose(
         offers,
         DecisionContext::ImageConversion(facts.clone()),

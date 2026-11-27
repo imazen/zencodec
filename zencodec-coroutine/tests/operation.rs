@@ -12,7 +12,7 @@ use zencodec::{
     At, CodecSet, ImageFormat, ImageFormatDefinition, ImageInfo, ResourceLimits, SharedPulse,
     UnsupportedOperation,
     decode::*,
-    operation::{Decision, DecodeRequest, OperationError, PolicySet, Question},
+    operation::{Decision, DecodeOptions, OperationError, PolicySet, Question},
     source::{AccessPattern, SliceReadAt},
     storage::StorageBudget,
 };
@@ -49,7 +49,7 @@ impl DecoderConfig for Config {
     fn formats() -> &'static [ImageFormat] {
         &[IMAGE]
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[RGBA];
         SUPPORTED
     }
@@ -75,9 +75,6 @@ impl<'a> DecodeJob<'a> for Config {
     fn with_limits(mut self, limits: ResourceLimits) -> Self {
         self.limits = limits;
         self
-    }
-    fn with_policy(self, _: DecodePolicy) -> Self {
-        panic!("checked path must not call the best-effort setter")
     }
     fn probe(&self, _: &[u8]) -> Result<ImageInfo, Self::Error> {
         Ok(ImageInfo::new(2, 2, IMAGE))
@@ -125,7 +122,7 @@ impl<'a> DecodeJob<'a> for Config {
                 ctx.read_exact_at(0, &mut magic).await?;
                 assert_eq!(magic, *b"CTL1");
                 ctx.set_info(ImageInfo::new(2, 2, IMAGE));
-                ctx.set_output_descriptor(RGBA);
+                ctx.set_output_pixel_format(RGBA);
                 ctx.interpretation(InterpretationFacts::new(
                     2,
                     2,
@@ -170,7 +167,7 @@ fn input() -> Vec<u8> {
 fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(RGBA);
+    let request = DecodeOptions::new().require_pixel_format(RGBA);
     for read_at in [false, true] {
         let storage = budget();
         let mut calls = 0;
@@ -179,7 +176,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
             let Question::Boundary { facts, .. } = q else {
                 panic!()
             };
-            assert_eq!(facts.descriptor, Some(RGBA));
+            assert_eq!(facts.pixel_format, Some(RGBA));
             assert_eq!(work.load(Ordering::SeqCst), before);
             calls += 1;
             Ok(Decision::UsePreset)
@@ -215,7 +212,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
 fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(PixelFormat::RGB8_SRGB);
+    let request = DecodeOptions::new().require_pixel_format(PixelFormat::RGB8_SRGB);
     let mut resolver = |_q: Question<'_>| -> Result<Decision, At<Infallible>> {
         panic!("an unmet requirement is not a policy choice")
     };
@@ -227,11 +224,11 @@ fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let error = drive_from_slice(&mut decoder, &input(), &mut sink, None, 7).unwrap_err();
     assert!(matches!(
         zencodec::find_cause::<OperationError>(&error),
-        Some(OperationError::OutputDescriptor { .. })
+        Some(OperationError::OutputPixelFormat { .. })
     ));
     assert!(sink.as_pixel_slice().is_none());
     assert_eq!(work.load(Ordering::SeqCst), 0);
-    let preferred = DecodeRequest::new().preferring_output(vec![PixelFormat::RGB8_SRGB]);
+    let preferred = DecodeOptions::new().prefer_pixel_formats(vec![PixelFormat::RGB8_SRGB]);
     let mut decoder = PolicyDecoder::new(
         preferred.start_controlled(&codecs, budget()).unwrap(),
         PolicySet::new(),
@@ -242,8 +239,9 @@ fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
 
 #[test]
 fn known_format_checks_inherited_policy_and_limits_without_reading_input() {
-    let codecs = codecs(Arc::new(AtomicUsize::new(0))).with_decode_policy(DecodePolicy::strict());
-    let request = DecodeRequest::new().with_format(IMAGE);
+    let codecs =
+        codecs(Arc::new(AtomicUsize::new(0))).with_decode_policy(DecodePolicy::untrusted_minimal());
+    let request = DecodeOptions::new().with_format(IMAGE);
     let error = match request.start_controlled(&codecs, budget()) {
         Err(e) => e,
         Ok(_) => panic!("unchecked policy"),
@@ -252,7 +250,7 @@ fn known_format_checks_inherited_policy_and_limits_without_reading_input() {
         zencodec::find_cause::<UnsupportedOperation>(&error),
         Some(&UnsupportedOperation::DecodePolicy)
     );
-    let request = request.with_policy(DecodePolicy::none());
+    let request = request.require_policy(DecodePolicy::none());
     let codecs = codecs.with_limits(ResourceLimits::none().with_max_pixels(3));
     let error = match request.start_controlled(&codecs, budget()) {
         Err(e) => e,

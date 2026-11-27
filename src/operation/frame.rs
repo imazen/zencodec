@@ -11,11 +11,11 @@ use crate::{
     frame::{ColorClaim, FrameGeometry, FrameInterpretation, FrameTiming},
 };
 
-/// Bounded facts about one native presentation, including every plane declaration.
+/// Bounded summary of one native presentation, including every plane declaration.
 /// This record contains no sample payloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct FrameFacts {
+pub struct FrameSummary {
     /// Coded, visible and render geometry, without an implicit crop or resize.
     pub geometry: FrameGeometry,
     /// Native chroma layout.
@@ -37,7 +37,7 @@ pub struct FrameFacts {
     /// Presentation timing and packet provenance captured by the native adapter.
     pub timing: FrameTiming,
 }
-impl FrameFacts {
+impl FrameSummary {
     /// Snapshot diagnostic fields from the actual retained frame.
     pub fn new(interpretation: &FrameInterpretation, timing: FrameTiming) -> Self {
         Self {
@@ -80,7 +80,7 @@ pub fn resolve_frame<R: OperationPolicy + ?Sized>(
     pulse: Option<&dyn crate::Pulse>,
 ) -> Result<DecisionRecord, At<PolicyFailure>> {
     let pulse = pulse.unwrap_or(&crate::NoPulse);
-    let facts = FrameFacts::new(interpretation, timing);
+    let facts = FrameSummary::new(interpretation, timing);
     let (_, record) = policy::choose(
         &[PublicationOffer::ReturnHeld],
         DecisionContext::Frame(facts),

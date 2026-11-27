@@ -80,7 +80,7 @@ impl fmt::Display for CoroutineError {
             ),
             Self::RowsBeforeHeader => write!(
                 f,
-                "coroutine wrote rows before set_info and set_output_descriptor"
+                "coroutine wrote rows before set_info and set_output_pixel_format"
             ),
         }
     }
@@ -468,13 +468,13 @@ impl CoroutineContext {
         drop(previous);
     }
 
-    /// Set the negotiated output descriptor.
-    pub fn set_output_descriptor(&mut self, descriptor: PixelFormat) {
+    /// Set the negotiated output pixel format.
+    pub fn set_output_pixel_format(&mut self, pixel_format: PixelFormat) {
         let mut shared = self.shared.lock();
-        if shared.adopted.is_some() && shared.descriptor.as_ref() != Some(&descriptor) {
+        if shared.adopted.is_some() && shared.descriptor.as_ref() != Some(&pixel_format) {
             shared.control_failure = Some(ControlError::FinalInterpretationChanged);
         }
-        shared.descriptor = Some(descriptor);
+        shared.descriptor = Some(pixel_format);
     }
 
     /// Suspend before work affected by these interpretation facts. Await this
@@ -542,7 +542,7 @@ impl Future for Interpret<'_> {
                     Err(ControlError::FinalInterpretationChanged.into())
                 });
             }
-            if facts.descriptor != shared.descriptor
+            if facts.pixel_format != shared.descriptor
                 || shared
                     .info
                     .as_ref()

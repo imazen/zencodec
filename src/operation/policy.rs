@@ -4,7 +4,7 @@ mod requirements;
 pub use requirements::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
 
 use super::{
-    FrameFacts, ImageFacts, MetadataTransfer, OperationPolicy, PublicationOffer, TranscodeOffer,
+    FrameSummary, ImageSummary, MetadataTransfer, OperationPolicy, PublicationOffer, TranscodeOffer,
 };
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::frame::{FrameInterpretation, FrameTiming};
@@ -170,13 +170,13 @@ pub enum DecisionContext {
     /// Actual byte availability and source ownership mechanism.
     OutputSchedule(super::OutputScheduleFacts),
     /// Held image before executing a selected conversion route.
-    ImageConversion(ImageFacts),
+    ImageConversion(ImageSummary),
     /// Held frame and output state before an encoding transition.
     FrameRoute(super::FrameRouteFacts),
     /// Selected native output before publication to the application.
-    Image(ImageFacts),
+    Image(ImageSummary),
     /// Native presentation before it reaches conversion or application output.
-    Frame(FrameFacts),
+    Frame(FrameSummary),
     /// Final interpretation for a coupled pixel-transcode route.
     Transcode(InterpretationFacts),
     /// Facts about the pixels awaiting an encoder configuration.
@@ -203,7 +203,7 @@ pub struct EncodeFacts {
     /// Image height.
     pub height: u32,
     /// Current sample interpretation and layout; no implicit conversion is offered.
-    pub descriptor: PixelFormat,
+    pub pixel_format: PixelFormat,
 }
 
 /// One situational decision. Each variant carries only its own typed offers.
@@ -236,7 +236,7 @@ pub enum Question<'a> {
         /// Exact input retained by the adapter throughout this decision.
         image: &'a crate::image::ImageOutput,
         /// Source interpretation and ownership facts, without payloads.
-        facts: &'a ImageFacts,
+        facts: &'a ImageSummary,
         /// Request-compatible retained conversion plans and their effects.
         choices: Choices<'a, super::ImageConversionOffer>,
     },
@@ -256,7 +256,7 @@ pub enum Question<'a> {
         /// The owned output remains held throughout the callback.
         image: &'a crate::image::ImageOutput,
         /// Borrowed diagnostic facts also copied into the bounded report.
-        facts: &'a ImageFacts,
+        facts: &'a ImageSummary,
         /// Prepared publication only; no transformation or privacy proof.
         choices: Choices<'a, PublicationOffer>,
     },
@@ -978,13 +978,13 @@ fn redact_context(mut context: DecisionContext) -> DecisionContext {
 
     match &mut context {
         DecisionContext::EncodeRoute(facts) => {
-            facts.pixels.descriptor = redacted_spec(&facts.pixels.descriptor);
+            facts.pixels.pixel_format = redacted_spec(&facts.pixels.pixel_format);
         }
         DecisionContext::Encode(facts) => {
-            facts.descriptor = redacted_spec(&facts.descriptor);
+            facts.pixel_format = redacted_spec(&facts.pixel_format);
         }
         DecisionContext::Boundary(facts) | DecisionContext::Transcode(facts) => {
-            facts.descriptor = facts.descriptor.as_ref().map(redacted_spec);
+            facts.pixel_format = facts.pixel_format.as_ref().map(redacted_spec);
         }
         DecisionContext::Image(facts) | DecisionContext::ImageConversion(facts) => {
             facts.packed = facts.packed.as_ref().map(redacted_spec);
@@ -1191,7 +1191,7 @@ mod tests {
         );
         let mut misleading = facts;
         misleading.state = InterpretationState::Final;
-        misleading.descriptor = Some(PixelFormat::RGB8_SRGB);
+        misleading.pixel_format = Some(PixelFormat::RGB8_SRGB);
         assert!(!BoundaryAction::AdoptInterpretation.permits(&misleading));
 
         let mut token = None;
@@ -1199,7 +1199,7 @@ mod tests {
             EncodeFacts {
                 width: 2,
                 height: 3,
-                descriptor: PixelFormat::RGB8_SRGB,
+                pixel_format: PixelFormat::RGB8_SRGB,
             },
             &[EncodeOffer {
                 format: ImageFormat::Jpeg,
@@ -1253,7 +1253,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: 2,
                     height: 3,
-                    descriptor: PixelFormat::RGB8_SRGB,
+                    pixel_format: PixelFormat::RGB8_SRGB,
                 }),
                 offered: 1,
                 admitted: 1,
@@ -1288,7 +1288,7 @@ mod tests {
                 context: DecisionContext::Encode(EncodeFacts {
                     width: question as u32,
                     height: 3,
-                    descriptor: PixelFormat::RGB8_SRGB,
+                    pixel_format: PixelFormat::RGB8_SRGB,
                 }),
                 offered: 1,
                 admitted: 1,

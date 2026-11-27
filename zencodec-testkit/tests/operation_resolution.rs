@@ -2,7 +2,7 @@
 use zencodec::{
     CodecSet, ImageFormat, Resolution, ResolutionError, ResolutionUnit,
     encode::{DynEncoderConfig, EncodeJob, Encoder, EncoderConfig},
-    operation::{Decision, EncodeRequest, OperationError, Question},
+    operation::{Decision, EncodeOptions, OperationError, Question},
 };
 use zencodec_testkit::ReferenceEncoderConfig;
 use zenpixels::PixelView;
@@ -63,7 +63,7 @@ fn unsupported_generic_and_erased_setters_refuse_without_damaging_jobs() {
 fn stored_resolution_rejects_before_callback_and_registered_templates_remain_reusable() {
     let codecs = CodecSet::new().with_send_encoder(ReferenceEncoderConfig::new());
     let baseline = codecs.encode(ImageFormat::Pnm, pixels()).unwrap();
-    let request = EncodeRequest::new(ImageFormat::Pnm).with_resolution(density(300.0));
+    let request = EncodeOptions::new(ImageFormat::Pnm).require_resolution(density(300.0));
     let mut calls = 0;
     let error = request
         .encode_with(&codecs, pixels(), &mut |_: Question<'_>| -> Result<
@@ -91,7 +91,7 @@ fn stored_resolution_rejects_before_callback_and_registered_templates_remain_reu
     );
 
     // An invalid request fails before even trying to find a registered encoder.
-    let invalid = EncodeRequest::new(ImageFormat::Png).with_resolution(density(0.0));
+    let invalid = EncodeOptions::new(ImageFormat::Png).require_resolution(density(0.0));
     for error in [
         invalid.prepare(&CodecSet::new()).unwrap_err(),
         invalid.prepare_send(&CodecSet::new()).unwrap_err(),

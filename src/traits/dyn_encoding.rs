@@ -21,7 +21,6 @@
 use alloc::boxed::Box;
 use core::any::Any;
 
-use crate::StopToken;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
@@ -52,18 +51,14 @@ pub trait DynEncoder: Send {
     /// Encode a complete image from type-erased pixels (consumes self).
     fn encode(self: Box<Self>, pixels: PixelView<'_>) -> Result<EncodeOutput, BoxedError>;
 
-    /// Encode from sRGB RGBA8 raw bytes (consumes self).
-    ///
-    /// The buffer is mutable — the encoder may modify it in-place for
-    /// format adaptation. See [`Encoder::encode_srgba8`] for details.
-    fn encode_srgba8(
+    /// Encode a complete image permitting destructive in-place buffer
+    /// modification (consumes self). See [`Encoder::encode_in_place`].
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
-    ) -> Result<EncodeOutput, BoxedError>;
+        pixels: PixelViewMut<'_>,
+    ) -> Result<EncodeOutput, BoxedError> {
+        self.encode(pixels.as_view())
+    }
 
     /// Push scanline rows incrementally.
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), BoxedError>;
@@ -210,16 +205,12 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         self.0.encode(pixels).map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
+        pixels: PixelViewMut<'_>,
     ) -> Result<EncodeOutput, BoxedError> {
         self.0
-            .encode_srgba8(data, make_opaque, width, height, stride_pixels)
+            .encode_in_place(pixels)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -470,23 +461,11 @@ pub trait DynEncodeJob {
         Err(Box::new(crate::UnsupportedOperation::EncodePlanning))
     }
 
-    /// Set cooperative cancellation token.
-    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    fn set_stop(&mut self, pulse: StopToken) {
-        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
-    }
-
     /// Retain all operation control capabilities through type erasure.
     fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
-
-    /// Legacy best-effort encode policy; unsupported fields may be ignored.
-    #[deprecated(
-        note = "may silently ignore policy; use try_set_policy or a checked operation request"
-    )]
-    fn set_policy(&mut self, policy: crate::EncodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
     ///
@@ -529,27 +508,10 @@ pub trait DynEncodeJob {
         Err(Box::new(crate::UnsupportedOperation::MetadataRetention))
     }
 
-    /// Filter metadata before configuring best-effort embedding; mirrors
-    /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy).
-    /// This does not prove that the codec retains every supplied field.
-    ///
-    /// Provided method: filters via [`Metadata::filtered`](crate::Metadata::filtered)
-    /// and routes through [`set_metadata`](Self::set_metadata). Has a default so
-    /// adding it is not a breaking change for downstream implementors; the blanket
-    /// impl overrides it to filter before the job is consumed.
-    #[deprecated(
-        note = "best-effort retention may omit supplied fields; use try_set_metadata_policy"
-    )]
-    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
-        #[allow(deprecated)]
-        self.set_metadata(meta.filtered(&policy));
-    }
-
-    /// Set metadata (ICC, EXIF, XMP) to embed, without a retention policy. Prefer
-    /// [`try_set_metadata_policy`](Self::try_set_metadata_policy) so retention is checked.
-    #[deprecated(note = "embeds metadata without an explicit retention policy; use \
-                try_set_metadata_policy(meta, policy)")]
-    fn set_metadata(&mut self, meta: Metadata);
+    /// Attach raw, unfiltered metadata for best-effort embedding without
+    /// policy checks. Prefer [`try_set_metadata_policy`](Self::try_set_metadata_policy)
+    /// whenever checked retention or PII stripping matters.
+    fn set_unfiltered_metadata(&mut self, meta: Metadata);
 
     /// Set animation canvas dimensions.
     fn set_canvas_size(&mut self, width: u32, height: u32);
@@ -656,12 +618,6 @@ where
         self.try_apply(|job| job.with_limits(limits));
     }
 
-    fn set_policy(&mut self, policy: crate::EncodePolicy) {
-        // Preserve the legacy setter behavior; checked callers use try_set_policy.
-        #[allow(deprecated)]
-        self.try_apply(|job| job.with_policy(policy));
-    }
-
     fn try_set_policy(&mut self, policy: crate::EncodePolicy) -> Result<(), BoxedError> {
         let Some(job) = self.0.as_mut() else {
             return Err("EncodeJobShim: job already consumed (double take)".into());
@@ -692,11 +648,6 @@ where
         job.try_set_metadata_policy(meta, policy)
     }
 
-    #[allow(deprecated)] // Preserve the deprecated best-effort forwarding contract.
-    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
-        self.try_apply(|job| job.with_metadata_policy(meta, policy));
-    }
-
     fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
         let Some(job) = self.0.as_mut() else {
             return Err("EncodeJobShim: job already consumed (double take)".into());
@@ -705,9 +656,8 @@ where
             .map_err(|error| Box::new(error) as BoxedError)
     }
 
-    #[allow(deprecated)]
-    fn set_metadata(&mut self, meta: Metadata) {
-        self.try_apply(|job| job.with_metadata(meta));
+    fn set_unfiltered_metadata(&mut self, meta: Metadata) {
+        self.try_apply(|job| job.with_unfiltered_metadata(meta));
     }
 
     fn set_canvas_size(&mut self, width: u32, height: u32) {
@@ -778,7 +728,7 @@ pub trait DynEncoderConfig: Send + Sync {
     fn format(&self) -> ImageFormat;
 
     /// Pixel formats this encoder accepts natively.
-    fn supported_descriptors(&self) -> &'static [PixelFormat];
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static EncodeCapabilities;
@@ -851,8 +801,8 @@ where
         C::format()
     }
 
-    fn supported_descriptors(&self) -> &'static [PixelFormat] {
-        C::supported_descriptors()
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
 
     fn capabilities(&self) -> &'static EncodeCapabilities {
@@ -919,16 +869,11 @@ mod begin_dispatch_tests {
             Encoder::encode(*self, pixels).map_err(Into::into)
         }
 
-        fn encode_srgba8(
+        fn encode_in_place(
             self: Box<Self>,
-            data: &mut [u8],
-            make_opaque: bool,
-            width: u32,
-            height: u32,
-            stride_pixels: u32,
+            pixels: PixelViewMut<'_>,
         ) -> Result<EncodeOutput, BoxedError> {
-            Encoder::encode_srgba8(*self, data, make_opaque, width, height, stride_pixels)
-                .map_err(Into::into)
+            Encoder::encode_in_place(*self, pixels).map_err(Into::into)
         }
 
         fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), BoxedError> {
@@ -1073,7 +1018,7 @@ mod timing_dispatch_tests {
             duration: FrameDuration,
             pulse: Option<&dyn crate::Pulse>,
         ) -> Result<FrameDuration, Self::Error> {
-            let mut next = self.quantizer;
+            let mut next = self.quantizer.clone();
             let encoded = next
                 .quantize(duration)
                 .map_err(|_| UnsupportedOperation::AnimationTiming)?;
@@ -1337,7 +1282,7 @@ mod declared_encode_tests {
         fn with_limits(self, _: ResourceLimits) -> Self {
             self
         }
-        fn with_metadata(self, _: Metadata) -> Self {
+        fn with_unfiltered_metadata(self, _: Metadata) -> Self {
             self
         }
         fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
@@ -1356,7 +1301,7 @@ mod declared_encode_tests {
 
     fn native_plan(declaration: &EncodeDeclaration) -> Result<EncodePlan, UnsupportedOperation> {
         let p3 = ColorSpace::DISPLAY_P3;
-        if declaration.descriptor.color != p3 {
+        if declaration.pixel_format.color != p3 {
             return Err(UnsupportedOperation::PixelFormat);
         }
         assert_eq!(
@@ -1445,7 +1390,7 @@ mod declared_encode_tests {
         fn with_limits(self, _: ResourceLimits) -> Self {
             self
         }
-        fn with_metadata(self, _: Metadata) -> Self {
+        fn with_unfiltered_metadata(self, _: Metadata) -> Self {
             self
         }
         fn encoder(self) -> Result<(), Self::Error> {

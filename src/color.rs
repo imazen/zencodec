@@ -526,7 +526,7 @@ mod tests {
         let mut source = src_cicp(Cicp::BT2100_PQ_RGB);
         source.diffuse_white = Some(DiffuseWhite::BT2408);
         let spec =
-            crate::helpers::descriptor_for_decoded_pixels_v2(SampleLayout::RGB16, &source, None)
+            crate::helpers::pixel_format_for_decoded_pixels(SampleLayout::RGB16, &source, None)
                 .unwrap();
         assert_eq!(spec.color.white(), Some(DiffuseWhite::BT2408));
         let plan = resolve_color_emit(&source, &spec.color, &caps_avif(), ColorEmitPolicy::Compact)
@@ -825,7 +825,7 @@ mod tests {
         let hlg = src_cicp(Cicp::BT2100_HLG_RGB);
         assert_eq!(
             SynthesizedIcc::for_cicp(Cicp::BT2100_HLG_RGB),
-            SynthesizedIcc::CmsUnsupported
+            SynthesizedIcc::Unsupported
         );
         assert_eq!(
             resolve_color_emit(

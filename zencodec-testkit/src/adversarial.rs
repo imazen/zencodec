@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn structural_prefixes_allow_complete_payload_before_a_large_trailer() {
         let image = TestImage::rgb8_gradient(3, 2);
-        let bytes = MinimalEncoderConfig::new()
+        let bytes = MinimalEncoderConfig::default()
             .encode(image.as_slice())
             .unwrap();
         let complete = bytes.data().len();
@@ -258,7 +258,7 @@ mod tests {
                 outcome: PrefixOutcome::Accept(image.as_slice()),
             },
         ];
-        check_decode_prefix_cases(MinimalDecoderConfig::new(), &trailing, &cases).unwrap();
+        check_decode_prefix_cases(MinimalDecoderConfig::default(), &trailing, &cases).unwrap();
         // No file-length heuristic: required payload loss is rejected even near EOF.
         let cases = [PrefixCase {
             end: complete - 1,
@@ -266,21 +266,23 @@ mod tests {
                 zencodec::ImageError::Malformed,
             ))),
         }];
-        check_decode_prefix_cases(MinimalDecoderConfig::new(), bytes.data(), &cases).unwrap();
+        check_decode_prefix_cases(MinimalDecoderConfig::default(), bytes.data(), &cases).unwrap();
         let wrong = TestImage::rgb8_gradient(4, 2);
         let cases = [PrefixCase {
             end: complete,
             outcome: PrefixOutcome::Accept(wrong.as_slice()),
         }];
         assert!(
-            check_decode_prefix_cases(MinimalDecoderConfig::new(), bytes.data(), &cases).is_err()
+            check_decode_prefix_cases(MinimalDecoderConfig::default(), bytes.data(), &cases)
+                .is_err()
         );
         let cases = [PrefixCase {
             end: complete - 1,
             outcome: PrefixOutcome::Accept(image.as_slice()),
         }];
         assert!(
-            check_decode_prefix_cases(MinimalDecoderConfig::new(), bytes.data(), &cases).is_err()
+            check_decode_prefix_cases(MinimalDecoderConfig::default(), bytes.data(), &cases)
+                .is_err()
         );
     }
 }
@@ -663,7 +665,7 @@ mod prefix_tests {
         let incomplete =
             ExpectedError::Category(ErrorCategory::Image(zencodec::ImageError::Malformed));
         check_decode_prefix_cases(
-            crate::MinimalDecoderConfig::new(),
+            crate::MinimalDecoderConfig::default(),
             &bytes,
             &[
                 PrefixCase {

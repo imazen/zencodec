@@ -12,7 +12,7 @@ use zencodec::ImageInfo;
 use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
     DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, SinkError, StepError,
+    OutputInfo, Progress, SinkError, StepError, StripDimensions,
 };
 use zencodec::source::AccessPattern;
 use zenpixels::PixelFormat;
@@ -505,7 +505,7 @@ where
         details
     }
 
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         self.shared.lock().descriptor.clone()
     }
 
@@ -565,7 +565,7 @@ where
                 return Err(StepError::Control(ControlError::InvalidReply));
             }
             let facts = boundary.facts();
-            if facts.descriptor != shared.descriptor
+            if facts.pixel_format != shared.descriptor
                 || shared
                     .info
                     .as_ref()
@@ -624,8 +624,7 @@ fn copy_rows(
     meta.y += offset;
     let mut destination = sink.provide_buffer_with_metadata(
         meta,
-        count,
-        rows.width,
+        StripDimensions::new(rows.width, count),
         rows.descriptor.clone(),
         &rows.metadata,
     )?;
@@ -699,7 +698,7 @@ where
                 && shared.adopted.as_ref().is_some_and(|facts| {
                     facts.width != info.width
                         || facts.height != info.height
-                        || facts.descriptor.as_ref() != Some(&info.native_format)
+                        || facts.pixel_format.as_ref() != Some(&info.native_format)
                 }))
         };
         if inconsistent {

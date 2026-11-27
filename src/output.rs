@@ -354,32 +354,29 @@ impl core::fmt::Debug for DecodeDetails {
 
 /// Output from a decode operation.
 ///
-/// Stores pixel data as a [`PixelBuf`] with embedded format descriptor.
-/// The descriptor carries the correct transfer function, color primaries,
-/// and signal range — no need to resolve from CICP separately.
+/// Stores pixel data as a [`PixelBuf`] with embedded format description,
+/// plus boxed non-pixel [`DecodeDetails`] (`ImageInfo`, source encoding
+/// details, and typed extensions) so `Result<DecodeOutput, E>` stays compact
+/// on the stack.
 #[non_exhaustive]
 pub struct DecodeOutput {
     pixels: PixelBuf,
-    info: ImageInfo,
-    source_encoding: Option<Box<dyn SourceEncodingDetails>>,
-    extensions: Extensions,
+    details: Box<DecodeDetails>,
 }
 
-// PixelBuf carries its active spec, HDR metadata, sample facts and source provenance.
+// Keep DecodeOutput compact on the stack by boxing DecodeDetails.
 #[cfg(target_pointer_width = "64")]
-const _: [(); 456] = [(); core::mem::size_of::<DecodeOutput>()];
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() <= 200);
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuf`].
     ///
-    /// The PixelBuf's descriptor should already have the correct transfer
+    /// The PixelBuf's format should already have the correct transfer
     /// function and color primaries set by the decoder.
     pub fn new(pixels: PixelBuf, info: ImageInfo) -> Self {
         Self {
             pixels,
-            info,
-            source_encoding: None,
-            extensions: Extensions::new(),
+            details: Box::new(DecodeDetails::new(info)),
         }
     }
 
@@ -401,20 +398,7 @@ impl DecodeOutput {
     /// assert_eq!(decoded.width(), 3);
     /// ```
     pub fn into_parts(self) -> (PixelBuf, DecodeDetails) {
-        let Self {
-            pixels,
-            info,
-            source_encoding,
-            extensions,
-        } = self;
-        (
-            pixels,
-            DecodeDetails {
-                info,
-                source_encoding,
-                extensions,
-            },
-        )
+        (self.pixels, *self.details)
     }
 
     /// Reassemble decoded pixels and their corresponding details.
@@ -423,16 +407,9 @@ impl DecodeOutput {
     /// geometry and interpretation consistent. It performs no conversion and
     /// does not update provenance after image processing.
     pub fn from_parts(pixels: PixelBuf, details: DecodeDetails) -> Self {
-        let DecodeDetails {
-            info,
-            source_encoding,
-            extensions,
-        } = details;
         Self {
             pixels,
-            info,
-            source_encoding,
-            extensions,
+            details: Box::new(details),
         }
     }
 
@@ -448,7 +425,7 @@ impl DecodeOutput {
         mut self,
         details: T,
     ) -> Self {
-        self.source_encoding = Some(Box::new(details));
+        self.details.source_encoding = Some(Box::new(details));
         self
     }
 
@@ -458,12 +435,12 @@ impl DecodeOutput {
     /// (via [`SourceEncodingDetails::source_generic_quality()`]) and
     /// codec-specific fields (via `codec_details::<T>()`).
     pub fn source_encoding_details(&self) -> Option<&dyn SourceEncodingDetails> {
-        self.source_encoding.as_deref()
+        self.details.source_encoding.as_deref()
     }
 
     /// Take source encoding details, consuming them from this output.
     pub fn take_source_encoding_details(&mut self) -> Option<Box<dyn SourceEncodingDetails>> {
-        self.source_encoding.take()
+        self.details.source_encoding.take()
     }
 
     /// Attach a typed extension value (e.g., JPEG gain maps, MPF data).
@@ -471,13 +448,13 @@ impl DecodeOutput {
     /// Multiple independently-typed values can be stored. Inserting a value of a type
     /// that already exists replaces the previous value.
     pub fn with_extras<T: Any + Send + Sync + 'static>(mut self, extras: T) -> Self {
-        self.extensions.insert(extras);
+        self.details.extensions.insert(extras);
         self
     }
 
     /// Borrow a typed extension value if present.
     pub fn extras<T: Any + Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extensions.get()
+        self.details.extensions.get()
     }
 
     /// Remove and return a typed extension value.
@@ -485,17 +462,17 @@ impl DecodeOutput {
     /// Returns `Some(T)` only when this is the sole `Arc` reference to the value.
     /// Returns `None` if the type is not present or other references exist.
     pub fn take_extras<T: Any + Send + Sync + 'static>(&mut self) -> Option<T> {
-        self.extensions.remove()
+        self.details.extensions.remove()
     }
 
     /// Access the full extension map.
     pub fn extensions(&self) -> &Extensions {
-        &self.extensions
+        &self.details.extensions
     }
 
     /// Mutable access to the full extension map.
     pub fn extensions_mut(&mut self) -> &mut Extensions {
-        &mut self.extensions
+        &mut self.details.extensions
     }
 
     /// Borrow the pixel data as a [`PixelView`].
@@ -515,7 +492,7 @@ impl DecodeOutput {
 
     /// Image info.
     pub fn info(&self) -> &ImageInfo {
-        &self.info
+        &self.details.info
     }
 
     /// Image width.
@@ -533,19 +510,19 @@ impl DecodeOutput {
         crate::helpers::has_alpha(self.pixels.format())
     }
 
-    /// Pixel format descriptor.
-    pub fn descriptor(&self) -> PixelFormat {
-        self.pixels.format().clone()
+    /// Active pixel format of the decoded buffer.
+    pub fn pixel_format(&self) -> &PixelFormat {
+        self.pixels.format()
     }
 
     /// Detected format.
     pub fn format(&self) -> ImageFormat {
-        self.info.format
+        self.details.info.format
     }
 
     /// Get embedded metadata for roundtrip encode.
     pub fn metadata(&self) -> Metadata {
-        self.info.metadata()
+        self.details.info.metadata()
     }
 }
 
@@ -553,8 +530,11 @@ impl core::fmt::Debug for DecodeOutput {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("DecodeOutput")
             .field("pixels", &self.pixels)
-            .field("format", &self.info.format)
-            .field("has_source_encoding", &self.source_encoding.is_some())
+            .field("format", &self.details.info.format)
+            .field(
+                "has_source_encoding",
+                &self.details.source_encoding.is_some(),
+            )
             .finish()
     }
 }
@@ -622,19 +602,6 @@ impl<'a> AnimationFrame<'a> {
     /// Borrow the composited pixel data.
     pub fn pixels(&self) -> &PixelView<'a> {
         &self.pixels
-    }
-
-    /// Legacy whole milliseconds: fractional milliseconds are truncated and
-    /// values beyond u32::MAX saturate. Use `duration()` for exact timing.
-    ///
-    /// Zero means platform-dependent minimum display time for most formats.
-    /// For JXL, zero-duration frames are compositing helpers and are never
-    /// yielded by [`AnimationFrameDecoder`](crate::decode::AnimationFrameDecoder).
-    #[deprecated(
-        note = "truncates fractional milliseconds and saturates large durations; use duration()"
-    )]
-    pub fn duration_ms(&self) -> u32 {
-        self.duration.legacy_millis()
     }
 
     /// Displayed frame index (0-based).
@@ -742,15 +709,6 @@ impl OwnedAnimationFrame {
     /// Take the pixel buffer, consuming this frame.
     pub fn into_buffer(self) -> PixelBuf {
         self.pixels
-    }
-
-    /// Legacy whole milliseconds: fractional milliseconds are truncated and
-    /// values beyond u32::MAX saturate. Use `duration()` for exact timing.
-    #[deprecated(
-        note = "truncates fractional milliseconds and saturates large durations; use duration()"
-    )]
-    pub fn duration_ms(&self) -> u32 {
-        self.duration.legacy_millis()
     }
 
     /// Displayed frame index (0-based).

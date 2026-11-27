@@ -3,11 +3,9 @@
 //! (honest) and against wrappers that misreport their timing (each must be
 //! caught).
 
-#![allow(deprecated)] // with_metadata delegates to the wrapped job
-
 use zencodec::encode::{
     AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
-    EncodePolicy, Encoder, EncoderConfig, OutputTiming,
+    Encoder, EncoderConfig, OutputTiming,
 };
 use zencodec::{ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation};
 use zencodec_testkit::reference::{
@@ -68,8 +66,8 @@ impl<const F: u8> EncoderConfig for Liar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        ReferenceEncoderConfig::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        ReferenceEncoderConfig::supported_pixel_formats()
     }
     fn capabilities() -> &'static EncodeCapabilities {
         if F == UNDECLARED {
@@ -93,11 +91,8 @@ impl<const F: u8> EncodeJob for LiarJob<F> {
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
     }
-    fn with_policy(self, policy: EncodePolicy) -> Self {
-        Self(self.0.with_policy(policy))
-    }
-    fn with_metadata(self, meta: Metadata) -> Self {
-        Self(self.0.with_metadata(meta))
+    fn with_unfiltered_metadata(self, meta: Metadata) -> Self {
+        Self(self.0.with_unfiltered_metadata(meta))
     }
     fn encoder(self) -> Result<LiarEnc<F>, RefError> {
         Ok(LiarEnc {
@@ -413,8 +408,8 @@ impl<const F: u8> EncoderConfig for AnimLiar<F> {
     fn format() -> ImageFormat {
         ReferenceEncoderConfig::format()
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        ReferenceEncoderConfig::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        ReferenceEncoderConfig::supported_pixel_formats()
     }
     fn capabilities() -> &'static EncodeCapabilities {
         ReferenceEncoderConfig::capabilities()
@@ -434,11 +429,8 @@ impl<const F: u8> EncodeJob for AnimLiarJob<F> {
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
     }
-    fn with_policy(self, policy: EncodePolicy) -> Self {
-        Self(self.0.with_policy(policy))
-    }
-    fn with_metadata(self, meta: Metadata) -> Self {
-        Self(self.0.with_metadata(meta))
+    fn with_unfiltered_metadata(self, meta: Metadata) -> Self {
+        Self(self.0.with_unfiltered_metadata(meta))
     }
     fn with_loop_count(self, count: Option<u32>) -> Self {
         Self(self.0.with_loop_count(count))

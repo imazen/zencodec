@@ -9,31 +9,29 @@
 
 ## summary
 #
-#   pub modules                                12
-#   pub types (struct/enum/trait/alias)        34
-#   pub consts/statics                         23
-#   free functions                             32
+#   pub modules                                11
+#   pub types (struct/enum/trait/alias)        36
+#   pub consts/statics                         25
+#   free functions                             29
 #   inherent methods                           97
-#   struct fields                              81
+#   struct fields                              92
 #   enum variants                              46
-#   trait roster entries (type × trait)        83
-#   auto-trait-complete types                  31
+#   trait roster entries (type × trait)        95
+#   auto-trait-complete types                  33
 #   auto-trait exceptions                       2
 #
 # per-module pub lines:
-#   (root)                            6
-#   apple                            30
+#   (root)                            8
+#   apple                            26
 #   audit                            24
 #   bplist                           11
-#   ifd                             175
+#   ifd                             185
 #   rewrite                          21
-#   xmp                              58
+#   xmp                              61
 
-## items (322 lines)
+## items (335 lines)
 
 pub mod apple
-pub mod apple::compatibility
-pub fn apple::compatibility::headroom_stops(&apple::AppleHdrInfo) -> core::option::Option<f64>
 pub mod apple::tags
 pub const apple::tags::HDR_GAIN: u16
 pub const apple::tags::HDR_HEADROOM: u16
@@ -58,8 +56,8 @@ pub fn apple::MakerNoteEntry<'a>::value(&self) -> &'a [u8]
 pub apple::MakerNoteEntryError::index: usize
 pub apple::MakerNoteEntryError::tag: core::option::Option<u16>
 pub fn apple::from_apple_headroom(&apple::AppleHdrInfo) -> core::option::Option<zencodec::gainmap::GainMapParams>
-pub fn apple::parse_apple_makernote(&[u8]) -> core::option::Option<apple::AppleHdrInfo> [also: apple::compatibility]
-pub fn apple::parse_exif_for_apple_hdr(&[u8]) -> core::option::Option<apple::AppleHdrInfo> [also: apple::compatibility]
+pub fn apple::parse_apple_makernote(&[u8]) -> core::option::Option<apple::AppleHdrInfo>
+pub fn apple::parse_exif_for_apple_hdr(&[u8]) -> core::option::Option<apple::AppleHdrInfo>
 pub mod audit
 #[non_exhaustive] pub enum audit::Change<'a>
 pub audit::Change::Added(&'a audit::Entry)
@@ -115,30 +113,14 @@ pub ifd::walk::Kind::Interop
 pub ifd::walk::Kind::MakerNote
 pub ifd::walk::Kind::Page(u32)
 pub ifd::walk::Kind::Sub
-pub enum ifd::walk::Loc
-pub ifd::walk::Loc::At(u64, u64)
-pub ifd::walk::Loc::Empty
-pub ifd::walk::Loc::Inline
-pub ifd::walk::Loc::Overflow
-pub ifd::walk::Loc::UnknownType
-pub struct ifd::walk::Cand
-pub ifd::walk::Cand::body: core::option::Option<core::ops::range::Range<u64>>
-pub ifd::walk::Cand::children: alloc::vec::Vec<ifd::walk::Cand>
-pub ifd::walk::Cand::detail: alloc::string::String
-pub ifd::walk::Cand::disp: zencodec::inventory::Disposition
-pub ifd::walk::Cand::gap: core::option::Option<(zencodec::inventory::Disposition, alloc::string::String)>
-pub ifd::walk::Cand::kind: zencodec::inventory::PartKind
-pub ifd::walk::Cand::label: core::option::Option<alloc::string::String>
-pub ifd::walk::Cand::range: core::ops::range::Range<u64>
-pub ifd::walk::Cand::tag: zencodec::inventory::PartTag
-pub fn ifd::walk::Cand::new(core::ops::range::Range<u64>, zencodec::inventory::PartKind, zencodec::inventory::PartTag, zencodec::inventory::Disposition, alloc::string::String) -> Self
-pub fn ifd::walk::Cand::note(&mut self, &str)
-pub struct ifd::walk::ChunkGeom
-pub ifd::walk::ChunkGeom::pad_per_row: u64
-pub ifd::walk::ChunkGeom::row: u64
-pub ifd::walk::ChunkGeom::rows: u64
-pub ifd::walk::ChunkGeom::rows_in: u64
-pub fn ifd::walk::ChunkGeom::read(&self) -> core::option::Option<u64>
+pub enum ifd::walk::ValueLocation
+pub ifd::walk::ValueLocation::Empty
+pub ifd::walk::ValueLocation::Inline
+pub ifd::walk::ValueLocation::OutOfLine
+pub ifd::walk::ValueLocation::OutOfLine::byte_len: u64
+pub ifd::walk::ValueLocation::OutOfLine::offset: u64
+pub ifd::walk::ValueLocation::SizeOverflow
+pub ifd::walk::ValueLocation::UnknownType
 pub struct ifd::walk::ChunkUse
 pub ifd::walk::ChunkUse::covered: bool
 pub ifd::walk::ChunkUse::note: core::option::Option<alloc::string::String>
@@ -147,12 +129,18 @@ pub ifd::walk::ChunkUse::tail: &'static str
 pub ifd::walk::ChunkUse::unknown: core::option::Option<&'static str>
 pub ifd::walk::ChunkUse::unread: core::option::Option<&'static str>
 pub ifd::walk::ChunkUse::used: core::option::Option<u64>
-pub ifd::walk::Entry::at: u64
+pub struct ifd::walk::DecodedChunkGeometry
+pub ifd::walk::DecodedChunkGeometry::active_rows: u64
+pub ifd::walk::DecodedChunkGeometry::declared_rows: u64
+pub ifd::walk::DecodedChunkGeometry::pad_per_row: u64
+pub ifd::walk::DecodedChunkGeometry::row_bytes: u64
+pub fn ifd::walk::DecodedChunkGeometry::active_bytes(&self) -> core::option::Option<u64>
 pub ifd::walk::Entry::count: u64
-pub ifd::walk::Entry::field: u64
+pub ifd::walk::Entry::field_type: u16
 pub ifd::walk::Entry::notes: alloc::vec::Vec<alloc::string::String>
+pub ifd::walk::Entry::offset: u64
 pub ifd::walk::Entry::tag: u16
-pub ifd::walk::Entry::typ: u16
+pub ifd::walk::Entry::value_field_offset: u64
 pub struct ifd::walk::ExtentRule
 pub ifd::walk::ExtentRule::counts: ifd::walk::Count
 pub ifd::walk::ExtentRule::fate: ifd::walk::Fate
@@ -160,22 +148,22 @@ pub ifd::walk::ExtentRule::kind: zencodec::inventory::PartKind
 pub ifd::walk::ExtentRule::offsets: u16
 pub ifd::walk::ExtentRule::what: &'static str
 pub struct ifd::walk::Fate
-pub ifd::walk::Fate::d: zencodec::inventory::Disposition
+pub ifd::walk::Fate::disposition: zencodec::inventory::Disposition
 pub ifd::walk::Fate::note: core::option::Option<alloc::borrow::Cow<'static, str>>
 pub fn ifd::walk::Fate::because(zencodec::inventory::Disposition, impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self
 pub fn ifd::walk::Fate::new(zencodec::inventory::Disposition) -> Self
 pub struct ifd::walk::Ifd
-pub ifd::walk::Ifd::at: u64
 pub ifd::walk::Ifd::depth: u8
 pub ifd::walk::Ifd::end: u64
 pub ifd::walk::Ifd::entries: alloc::vec::Vec<ifd::walk::Entry>
-pub ifd::walk::Ifd::first_unknown: core::option::Option<usize>
+pub ifd::walk::Ifd::first_unknown_type_entry: core::option::Option<usize>
 pub ifd::walk::Ifd::followed: bool
 pub ifd::walk::Ifd::kind: ifd::walk::Kind
-pub ifd::walk::Ifd::last: alloc::collections::btree::map::BTreeMap<u16, usize>
+pub ifd::walk::Ifd::last_entry_by_tag: alloc::collections::btree::map::BTreeMap<u16, usize>
 pub ifd::walk::Ifd::name: alloc::string::String
-pub ifd::walk::Ifd::next: u64
+pub ifd::walk::Ifd::next_ifd_offset: u64
 pub ifd::walk::Ifd::notes: alloc::vec::Vec<alloc::string::String>
+pub ifd::walk::Ifd::offset: u64
 pub ifd::walk::Ifd::parent: core::option::Option<(usize, usize)>
 pub ifd::walk::Ifd::problem: core::option::Option<alloc::string::String>
 pub ifd::walk::Ifd::roles: alloc::vec::Vec<(ifd::walk::Kind, bool)>
@@ -183,47 +171,69 @@ pub fn ifd::walk::Ifd::followed_as(&self, ifd::walk::Kind) -> bool
 pub fn ifd::walk::Ifd::holds_image(&self) -> bool
 pub fn ifd::walk::Ifd::is(&self, ifd::walk::Kind) -> bool
 pub fn ifd::walk::Ifd::page(&self) -> core::option::Option<u32>
+pub struct ifd::walk::IfdWalkConfig
+pub ifd::walk::IfdWalkConfig::base: u64
+pub ifd::walk::IfdWalkConfig::depth: u8
+pub ifd::walk::IfdWalkConfig::kind: ifd::walk::Kind
+pub ifd::walk::IfdWalkConfig::layout: ifd::walk::Layout
+pub ifd::walk::IfdWalkConfig::limit: u64
+pub ifd::walk::IfdWalkConfig::name: alloc::string::String
+pub ifd::walk::IfdWalkConfig::start_offset: u64
 pub struct ifd::walk::Layout
-pub ifd::walk::Layout::big: bool
-pub ifd::walk::Layout::le: bool
+pub ifd::walk::Layout::byte_order: zencodec::exif::ByteOrder
+pub ifd::walk::Layout::is_big_tiff: bool
 pub fn ifd::walk::Layout::count_len(self) -> u64
 pub fn ifd::walk::Layout::entry_len(self) -> u64
 pub fn ifd::walk::Layout::header_len(self) -> u64
 pub fn ifd::walk::Layout::inline_cap(self) -> u64
+pub const fn ifd::walk::Layout::is_little_endian(self) -> bool
+pub const fn ifd::walk::Layout::new(zencodec::exif::ByteOrder, bool) -> Self
 pub fn ifd::walk::Layout::offset(self, &[u8], u64) -> core::option::Option<u64>
 pub fn ifd::walk::Layout::u16(self, &[u8], u64) -> core::option::Option<u16>
 pub fn ifd::walk::Layout::u32(self, &[u8], u64) -> core::option::Option<u32>
 pub fn ifd::walk::Layout::u64(self, &[u8], u64) -> core::option::Option<u64>
+pub struct ifd::walk::PartCandidate
+pub ifd::walk::PartCandidate::body: core::option::Option<core::ops::range::Range<u64>>
+pub ifd::walk::PartCandidate::children: alloc::vec::Vec<ifd::walk::PartCandidate>
+pub ifd::walk::PartCandidate::detail: alloc::string::String
+pub ifd::walk::PartCandidate::disposition: zencodec::inventory::Disposition
+pub ifd::walk::PartCandidate::gap: core::option::Option<(zencodec::inventory::Disposition, alloc::string::String)>
+pub ifd::walk::PartCandidate::kind: zencodec::inventory::PartKind
+pub ifd::walk::PartCandidate::label: core::option::Option<alloc::string::String>
+pub ifd::walk::PartCandidate::range: core::ops::range::Range<u64>
+pub ifd::walk::PartCandidate::tag: zencodec::inventory::PartTag
+pub fn ifd::walk::PartCandidate::new(core::ops::range::Range<u64>, zencodec::inventory::PartKind, zencodec::inventory::PartTag, zencodec::inventory::Disposition, alloc::string::String) -> Self
+pub fn ifd::walk::PartCandidate::note(&mut self, &str)
 pub struct ifd::walk::Placed
-pub fn ifd::walk::Placed::insert(&mut self, ifd::walk::Cand)
-pub fn ifd::walk::Placed::into_sorted(self) -> alloc::vec::Vec<ifd::walk::Cand>
+pub fn ifd::walk::Placed::insert(&mut self, ifd::walk::PartCandidate)
+pub fn ifd::walk::Placed::into_sorted(self) -> alloc::vec::Vec<ifd::walk::PartCandidate>
 pub struct ifd::walk::Placement
 pub ifd::walk::Placement::budget_hit: bool
 pub ifd::walk::Placement::ifd0_ok: bool
 pub ifd::walk::Placement::logical_end: u64
-pub ifd::walk::Placement::parts: alloc::vec::Vec<ifd::walk::Cand>
+pub ifd::walk::Placement::parts: alloc::vec::Vec<ifd::walk::PartCandidate>
 pub struct ifd::walk::Walk<'a>
 pub ifd::walk::Walk::base: u64
 pub ifd::walk::Walk::budget_hit: bool
 pub ifd::walk::Walk::cancelled: bool
-pub ifd::walk::Walk::d: &'a [u8]
+pub ifd::walk::Walk::data: &'a [u8]
 pub ifd::walk::Walk::entries_left: u64
 pub ifd::walk::Walk::fatal: core::option::Option<alloc::string::String>
 pub ifd::walk::Walk::header: core::ops::range::Range<u64>
 pub ifd::walk::Walk::header_ext: core::option::Option<(core::ops::range::Range<u64>, zencodec::inventory::Disposition, alloc::string::String)>
 pub ifd::walk::Walk::header_ok: bool
 pub ifd::walk::Walk::ifds: alloc::vec::Vec<ifd::walk::Ifd>
-pub ifd::walk::Walk::lay: ifd::walk::Layout
+pub ifd::walk::Walk::layout: ifd::walk::Layout
 pub ifd::walk::Walk::magic: u16
 pub ifd::walk::Walk::pointer_reads: u64
-pub fn ifd::walk::Walk<'_>::abs(&self, u64) -> core::option::Option<u64>
-pub fn ifd::walk::Walk<'_>::bytes(&self, &ifd::walk::Entry) -> core::option::Option<&[u8]>
-pub fn ifd::walk::Walk<'_>::find<'i>(&self, &'i ifd::walk::Ifd, u16) -> core::option::Option<&'i ifd::walk::Entry>
+pub fn ifd::walk::Walk<'_>::absolute_offset(&self, u64) -> core::option::Option<u64>
+pub fn ifd::walk::Walk<'_>::entry_bytes(&self, &ifd::walk::Entry) -> core::option::Option<&[u8]>
+pub fn ifd::walk::Walk<'_>::entry_uints(&self, &ifd::walk::Entry, usize) -> alloc::vec::Vec<u64>
+pub fn ifd::walk::Walk<'_>::find_entry<'i>(&self, &'i ifd::walk::Ifd, u16) -> core::option::Option<&'i ifd::walk::Entry>
 pub fn ifd::walk::Walk<'_>::limit(&self) -> u64
-pub fn ifd::walk::Walk<'_>::loc(&self, &ifd::walk::Entry) -> ifd::walk::Loc
 pub fn ifd::walk::Walk<'_>::single_uint(&self, &ifd::walk::Entry) -> core::option::Option<u64>
 pub fn ifd::walk::Walk<'_>::take_scan(&self, u64) -> bool
-pub fn ifd::walk::Walk<'_>::uints(&self, &ifd::walk::Entry, usize) -> alloc::vec::Vec<u64>
+pub fn ifd::walk::Walk<'_>::value_location(&self, &ifd::walk::Entry) -> ifd::walk::ValueLocation
 pub const ifd::walk::BUDGET_GAP: &str
 pub const ifd::walk::EXIF_IFD: u16
 pub const ifd::walk::FREE_BYTE_COUNTS: u16
@@ -259,27 +269,27 @@ pub fn ifd::walk::Rules::rejects(&self, &ifd::walk::Walk<'_>, u64, ifd::walk::Ki
 pub fn ifd::walk::Rules::value(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, usize) -> ifd::walk::Fate
 pub fn ifd::walk::Rules::value_tail(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, usize) -> core::option::Option<(u64, ifd::walk::Fate)>
 pub fn ifd::walk::add_note(&mut alloc::vec::Vec<alloc::string::String>, alloc::string::String)
-pub fn ifd::walk::chunk_geometry(&ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, usize) -> core::option::Option<alloc::vec::Vec<ifd::walk::ChunkGeom>>
+pub fn ifd::walk::chunk_geometry(&ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, usize) -> core::option::Option<alloc::vec::Vec<ifd::walk::DecodedChunkGeometry>>
 pub fn ifd::walk::default_chunk_use(&ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, &[u64], &[u64]) -> alloc::vec::Vec<ifd::walk::ChunkUse>
-pub fn ifd::walk::emit(&mut zencodec::inventory::Inventory, core::option::Option<zencodec::inventory::PartId>, ifd::walk::Cand) -> core::result::Result<(), zencodec::inventory::InventoryError>
-pub fn ifd::walk::emit_top(&mut zencodec::inventory::Inventory, &[u8], alloc::vec::Vec<ifd::walk::Cand>, u64, (zencodec::inventory::Disposition, core::option::Option<alloc::string::String>)) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn ifd::walk::emit(&mut zencodec::inventory::Inventory, core::option::Option<zencodec::inventory::PartId>, ifd::walk::PartCandidate) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn ifd::walk::emit_top(&mut zencodec::inventory::Inventory, &[u8], alloc::vec::Vec<ifd::walk::PartCandidate>, u64, (zencodec::inventory::Disposition, core::option::Option<alloc::string::String>)) -> core::result::Result<(), zencodec::inventory::InventoryError>
 pub fn ifd::walk::get(&[u8], u64, u64) -> core::option::Option<&[u8]>
 pub fn ifd::walk::kind_name(ifd::walk::Kind) -> alloc::string::String
-pub fn ifd::walk::place(&mut ifd::walk::Walk<'_>, &dyn ifd::walk::Rules, alloc::vec::Vec<ifd::walk::Cand>) -> ifd::walk::Placement
+pub fn ifd::walk::place(&mut ifd::walk::Walk<'_>, &dyn ifd::walk::Rules, alloc::vec::Vec<ifd::walk::PartCandidate>) -> ifd::walk::Placement
 pub fn ifd::walk::push_note(&mut alloc::string::String, &str)
 pub fn ifd::walk::type_name(u16) -> alloc::borrow::Cow<'static, str>
 pub fn ifd::walk::type_size(u16) -> core::option::Option<u64>
 pub fn ifd::walk::union_fate(&ifd::walk::Ifd, impl core::ops::function::Fn(ifd::walk::Kind, bool) -> ifd::walk::Fate) -> ifd::walk::Fate
 pub fn ifd::walk::walk<'a>(&'a [u8], u64, u64, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
-pub fn ifd::walk::walk_ifd<'a>(&'a [u8], u64, u64, ifd::walk::Layout, u64, ifd::walk::Kind, alloc::string::String, u8, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
+pub fn ifd::walk::walk_ifd<'a>(&'a [u8], ifd::walk::IfdWalkConfig, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
 pub mod rewrite
 pub struct rewrite::Context<'a>
 pub fn rewrite::Context<'a>::check(&self) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::check_metadata_budget(&self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::decompress(&self, zencodec::metadata_rewrite::Compression, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::exif(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::icc(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
-pub fn rewrite::Context<'a>::packet(&self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::with_input(self, &'a [u8]) -> Self
 pub fn rewrite::Context<'a>::with_xmp_editing(self, bool) -> Self
@@ -325,6 +335,9 @@ pub xmp::gainmap::XmpError::LengthLimit::got: usize
 pub xmp::gainmap::XmpError::LengthLimit::max: usize
 pub xmp::gainmap::XmpError::NotUltraHdr
 pub xmp::gainmap::XmpError::ParametersAbsent
+pub struct xmp::gainmap::ParsedGainMapXmp
+pub xmp::gainmap::ParsedGainMapXmp::gain_map_byte_len: core::option::Option<usize>
+pub xmp::gainmap::ParsedGainMapXmp::params: zencodec::gainmap::GainMapParams
 pub const xmp::gainmap::CONTAINER_NAMESPACE: &str
 pub const xmp::gainmap::HDRGM_NAMESPACE: &str
 pub const xmp::gainmap::ITEM_NAMESPACE: &str
@@ -334,7 +347,7 @@ pub fn xmp::gainmap::generate_primary_xmp(usize) -> alloc::string::String
 pub fn xmp::gainmap::generate_primary_xmp_with_items(&[xmp::container::ContainerItem]) -> alloc::string::String
 pub fn xmp::gainmap::generate_xmp(&zencodec::gainmap::GainMapParams, usize) -> core::result::Result<alloc::string::String, xmp::gainmap::XmpError>
 pub fn xmp::gainmap::generate_xmp_with_items(&zencodec::gainmap::GainMapParams, &[xmp::container::ContainerItem]) -> core::result::Result<alloc::string::String, xmp::gainmap::XmpError>
-pub fn xmp::gainmap::parse_xmp(&str) -> core::result::Result<(zencodec::gainmap::GainMapParams, core::option::Option<usize>), xmp::gainmap::XmpError>
+pub fn xmp::gainmap::parse_xmp(&str) -> core::result::Result<xmp::gainmap::ParsedGainMapXmp, xmp::gainmap::XmpError>
 pub fn xmp::gainmap::parse_xmp_full(&str) -> (core::option::Option<zencodec::gainmap::GainMapParams>, alloc::vec::Vec<xmp::container::ContainerItem>)
 #[non_exhaustive] pub enum xmp::Error
 pub xmp::Error::Duplicate(alloc::string::String)
@@ -354,7 +367,7 @@ pub fn xmp::Property::name(&self) -> &str
 pub fn xmp::Property::namespace(&self) -> &str
 pub fn xmp::Property::value(&self) -> &str
 
-## trait impls (25 types)
+## trait impls (28 types)
 
 apple::AppleHdrInfo: Clone, Copy, Debug, Default, PartialEq
 apple::AppleMakerNote<'a>: Debug
@@ -365,13 +378,15 @@ audit::Entry: Clone, Debug, Eq, PartialEq
 audit::Finding: Clone, Debug, Eq, PartialEq
 audit::Report: Clone, Debug, Default, Eq, PartialEq
 bplist::PlistValue: Clone, Debug, PartialEq
-ifd::walk::ChunkGeom: Clone, Copy, Debug
 ifd::walk::ChunkUse: Clone, Debug, Default
+ifd::walk::DecodedChunkGeometry: Clone, Copy, Debug
 ifd::walk::Entry: Clone, Debug
 ifd::walk::Ifd: Debug
+ifd::walk::IfdWalkConfig: Clone, Debug
 ifd::walk::Kind: Clone, Copy, Debug, Eq, PartialEq
-ifd::walk::Layout: Clone, Copy, Debug
+ifd::walk::Layout: Clone, Copy, Debug, Eq, PartialEq
 ifd::walk::Placed: Default
+ifd::walk::ValueLocation: Clone, Copy, Debug, Eq, PartialEq
 rewrite::Context<'a>: Clone, Deref
 rewrite::PlanBuilder<'a>: Debug, Default
 xmp::Error: Clone, Debug, Display, Eq, Error, PartialEq
@@ -380,10 +395,11 @@ xmp::Packet<'a>: Debug
 xmp::Property: Clone, Debug, Eq, PartialEq
 xmp::container::ContainerItem: Clone, Debug, Eq, PartialEq
 xmp::container::ItemSemantic: Clone, Debug, Eq, PartialEq
+xmp::gainmap::ParsedGainMapXmp: Clone, Debug, PartialEq
 xmp::gainmap::XmpError: Debug, Display, Error
 
 ## auto traits
 
-31 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+33 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 ifd::walk::Walk<'a>: !Freeze !RefUnwindSafe !Sync
 rewrite::Context<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

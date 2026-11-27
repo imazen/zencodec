@@ -73,9 +73,9 @@ impl FrameDuration {
 /// Ties round upward. Zero is not clamped to a playback minimum. The fractional
 /// phase is retained as an exact rational, so repeated fractional frames do not
 /// drift. Arithmetic and destination-field overflow return an error without
-/// changing state. For a failed pixel encode, discard the advanced copy too:
-/// copy this value, quantize, submit the frame, then commit the copy on success.
-#[derive(Clone, Copy, Debug)]
+/// changing state. For a failed pixel encode, discard the advanced clone too:
+/// clone this value, quantize, submit the frame, then commit the clone on success.
+#[derive(Clone, Debug)]
 pub struct TimingQuantizer {
     clock: NonZeroU32,
     max_ticks: u64,

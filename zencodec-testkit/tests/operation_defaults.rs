@@ -4,7 +4,7 @@ use zencodec::{
     CodecSet, ColorEmitPolicy, ImageFormat, Metadata, ResourceLimits, SharedPulse,
     UnsupportedOperation,
     encode::{EncodeJob, EncodePolicy, EncoderConfig, Fidelity},
-    operation::EncodeRequest,
+    operation::EncodeOptions,
 };
 use zencodec_testkit::{
     ReferenceEncoderConfig,
@@ -24,7 +24,7 @@ impl EncoderConfig for Recorder {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
@@ -50,9 +50,8 @@ impl EncodeJob for Job {
         self.inner = self.inner.with_limits(limits);
         self
     }
-    #[allow(deprecated)]
-    fn with_metadata(mut self, metadata: Metadata) -> Self {
-        self.inner = self.inner.with_metadata(metadata);
+    fn with_unfiltered_metadata(mut self, metadata: Metadata) -> Self {
+        self.inner = self.inner.with_unfiltered_metadata(metadata);
         self
     }
     fn try_set_policy(&mut self, policy: EncodePolicy) -> Result<(), UnsupportedOperation> {
@@ -77,7 +76,7 @@ fn required_fields_win_for_local_and_transferable_jobs() {
     let set = CodecSet::new()
         .with_send_encoder(Recorder(seen.clone()))
         .with_encode_policy(inherited);
-    let request = EncodeRequest::new(ImageFormat::Pnm).with_policy_defaults(defaults);
+    let request = EncodeOptions::new(ImageFormat::Pnm).with_policy_defaults(defaults);
     request.prepare(&set).unwrap();
     request.prepare_send(&set.clone()).unwrap();
     let expected = EncodePolicy::preserve_all()
@@ -90,7 +89,7 @@ fn required_fields_win_for_local_and_transferable_jobs() {
     let explicit = EncodePolicy::none()
         .with_color(ColorEmitPolicy::Compact)
         .with_embed_exif(false);
-    let request = request.with_policy(explicit);
+    let request = request.require_policy(explicit);
     request.prepare(&set).unwrap();
     request.prepare_send(&set).unwrap();
     let expected = EncodePolicy::preserve_all()
@@ -104,7 +103,7 @@ fn required_fields_win_for_local_and_transferable_jobs() {
 fn absent_defaults_do_not_touch_a_backend_template() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let set = CodecSet::new().with_send_encoder(Recorder(seen.clone()));
-    let request = EncodeRequest::new(ImageFormat::Pnm).with_policy_defaults(EncodePolicy::none());
+    let request = EncodeOptions::new(ImageFormat::Pnm).with_policy_defaults(EncodePolicy::none());
     request.prepare(&set).unwrap();
     request.prepare_send(&set).unwrap();
     assert!(seen.lock().unwrap().is_empty());
@@ -113,8 +112,8 @@ fn absent_defaults_do_not_touch_a_backend_template() {
 #[test]
 fn unsupported_adapter_defaults_refuse_both_paths() {
     let set = CodecSet::new().with_send_encoder(ReferenceEncoderConfig::new());
-    let request = EncodeRequest::new(ImageFormat::Pnm)
-        .with_policy_defaults(EncodePolicy::none().with_color(ColorEmitPolicy::Verbatim));
+    let request = EncodeOptions::new(ImageFormat::Pnm)
+        .with_policy_defaults(EncodePolicy::none().with_color(ColorEmitPolicy::Compact));
     let errors = [
         request.prepare(&set).unwrap_err(),
         request.prepare_send(&set).unwrap_err(),

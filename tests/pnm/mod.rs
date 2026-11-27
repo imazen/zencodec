@@ -82,7 +82,7 @@ impl EncoderConfig for PnmEncoderConfig {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::GRAY8_SRGB];
         SUPPORTED
     }
@@ -115,7 +115,7 @@ impl EncodeJob for PnmEncodeJob {
         self
     }
 
-    fn with_metadata(mut self, meta: Metadata) -> Self {
+    fn with_unfiltered_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = Some(meta);
         self
     }
@@ -218,7 +218,7 @@ impl DecoderConfig for PnmDecoderConfig {
         &[ImageFormat::Pnm]
     }
 
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::GRAY8_SRGB];
         SUPPORTED
     }

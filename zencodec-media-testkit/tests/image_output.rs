@@ -232,7 +232,7 @@ fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
     assert_eq!(placement.visible(geometry).unwrap(), None);
     assert_eq!(image.interpretation().placement, Some(placement));
     assert_eq!(
-        zencodec::operation::ImageFacts::new(&image).placement,
+        zencodec::operation::ImageSummary::new(&image).placement,
         Some(placement)
     );
     image
@@ -575,7 +575,7 @@ fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
 fn converted_frame_adoption_separates_source_codes_and_releases_native_storage() {
     use zencodec::{
         image::PackedImageOwner,
-        operation::{Decision, ImageFacts, PolicySet, Question, resolve_image},
+        operation::{Decision, ImageSummary, PolicySet, Question, resolve_image},
         storage::StorageBudget,
     };
     use zenpixels::{Orientation, PixelFormat};
@@ -601,7 +601,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
         image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap(),
         address
     );
-    let facts = ImageFacts::new(&image);
+    let facts = ImageSummary::new(&image);
     assert!(facts.frame.is_none());
     assert_eq!(
         facts.source_frame.unwrap().encoding.unwrap().code_bits(),

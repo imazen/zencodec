@@ -9,19 +9,21 @@ types (metadata, limits, format detection, color emission) at the root.
 
 [Visual guide](https://imazen.github.io/zencodec/) — consumer, adapter, and implementor journeys, with tested examples and an interactive transport lab. [Guide source and checks](https://github.com/imazen/zencodec/blob/main/docs/SITE.md).
 
-## zenpixels 0.5 integration draft
+## zenpixels 0.5 and zencodec 0.3
 
-Import `ImageSpec`, `SampleLayout`, `PixelView`, `PixelViewMut`, and
-`PixelBuf` directly from zenpixels. An image spec describes both its memory
+Import `PixelFormat`, `SampleLayout`, `PixelView`, `PixelViewMut`, and
+`PixelBuf` directly from `zenpixels`. A `PixelFormat` describes both memory
 layout and current color. A decoded owner also carries source provenance
 through `DecodeOutput::buffer()`. Borrow with `PixelBuf::as_view()`.
 Use `PixelBuf::from_bytes` when adopting byte storage and propagate the
-constructor error. Advertise supported specs in an explicit static slice.
+constructor error. Advertise supported formats in an explicit static slice via
+`supported_pixel_formats()`.
 
 Native frame adapters keep chroma siting, code placement, float value mapping,
 and accounted plane owners through `zencodec::plane` and `zencodec::sample`.
-Use the root manifest's four pinned patches in the consuming workspace. The
-native-codec and standalone guide cohorts need separate dependency updates.
+Simple still-only codecs can implement [`zencodec::advanced::StillEncoder`] /
+[`zencodec::advanced::StillDecoder`] with [`StillEncoderConfig`] /
+[`StillDecoderConfig`] instead of writing the three-layer trait stack by hand.
 
 ## Quick start
 
@@ -93,7 +95,7 @@ use zencodec::{CodecSet, ImageFormat, ResourceLimits};
 
 static CODECS: LazyLock<CodecSet> = LazyLock::new(|| {
     CodecSet::new()
-        .with_limits(ResourceLimits::default())
+        .with_limits(ResourceLimits::for_untrusted_input())
         .with_decoder(zenjpeg::JpegDecoderConfig::new())
         .with_decoder(zenpng::PngDecoderConfig::new())
         .with_encoder(zenjpeg::JpegEncoderConfig::new().with_generic_quality(85.0))
@@ -160,8 +162,7 @@ the shared codec configuration stays unchanged. Pulse carries cancellation,
 progress and phase planning. Calls that only borrow the control accept
 `Option<&dyn Pulse>`: pass `None` unless you want additional per-call control.
 `None` never disables a job’s retained cancellation or mandatory limits. Jobs
-that retain controls use `SharedPulse`. The old `with_stop` method
-is a deprecated cancellation-only adapter.
+that retain controls use `SharedPulse`.
 
 ### Constructing `ResourceLimits`
 
@@ -470,11 +471,11 @@ setters. Read back what the codec resolved to with
 
 **Color management is not the codec's job.** Decoders return native pixels with ICC/CICP metadata. Encoders accept pixels as-is and embed the provided metadata. The caller handles CMS transforms.
 
-**Format negotiation over conversion.** Decoders take a ranked `&[PixelDescriptor]` preference list and pick the first they can produce without lossy conversion. Pass `&[]` for native format.
+**Format negotiation over conversion.** Decoders take a ranked `&[PixelFormat]` preference list and pick the first they can produce without lossy conversion. Pass `&[]` for native format.
 
 **Capabilities over try/catch.** Codecs declare their capabilities as const `EncodeCapabilities` / `DecodeCapabilities` structs. Check before calling instead of catching `UnsupportedOperation` errors.
 
-**Pixel types from `zenpixels`.** All pixel interchange types (`PixelSlice`, `PixelBuffer`, `PixelDescriptor`, etc.) are defined in the `zenpixels` crate. All zen\* crates depend on `zenpixels` directly.
+**Pixel types from `zenpixels`.** All pixel interchange types (`PixelView`, `PixelBuf`, `PixelFormat`, etc.) are defined in the `zenpixels` crate. All zen\* crates depend on `zenpixels` directly.
 
 ## Metadata Retention
 
@@ -521,10 +522,10 @@ container contains no PII. `ColorAndRotation` removes attribution but retains
 color signaling. `PreserveExact` requires the filtered record to survive, subject
 to the documented orientation reconciliation.
 
-Both `with_metadata` and the best-effort `with_metadata_policy` are deprecated.
-The latter filters before handing metadata to the codec but cannot guarantee
-output retention; its warning is a migration aid, not enforcement. The checked
-setter does not certify unreported or opaque data as PII-free. See
+For raw, policy-unchecked embedding, `with_unfiltered_metadata` /
+`set_unfiltered_metadata` bypass policy checks; prefer `try_with_metadata_policy` /
+`try_set_metadata_policy` whenever PII stripping or required retention matters.
+The checked setter does not certify unreported or opaque data as PII-free. See
 [metadata/transcoding policy](https://github.com/imazen/zencodec/blob/main/docs/policy-transcoding.md).
 
 To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).
@@ -539,7 +540,7 @@ to the color resolver before creating an output header.
 ```rust,ignore
 use zencodec::{ColorEmitPolicy, resolve_color_emit};
 
-let plan = resolve_color_emit(&source_color, &pixels.spec().color, &target_caps,
+let plan = resolve_color_emit(&source_color, &pixels.format().color, &target_caps,
                               ColorEmitPolicy::Balanced)?;
 ```
 
@@ -556,10 +557,11 @@ See [the color emission contract](docs/color-emit-model.md).
 | Module | Contents |
 |--------|----------|
 | `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `AnimationFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, `best_encode_format`, dyn dispatch traits (`DynEncoderConfig`, `DynEncodeJob`, `DynEncoder`, `DynAnimationFrameEncoder`) |
-| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, sans-I/O `IncrementalDecode` (`Input`, `InputRequest`, `Event`, `Progress`, `StepError`, `Fused`, `erase_incremental`, `DynIncrementalDecoder`), `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, sans-I/O `IncrementalDecode` (`Input`, `InputRequest`, `Event`, `Progress`, `StepError`, `FusedIncrementalDecoder`, `erase_incremental`, `DynIncrementalDecoder`), `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `RowStrip`, `StripDimensions`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::advanced` | Codec-authoring helpers: `StillEncoder`/`StillEncoderConfig`/`StillEncodeJob`/`StillEncodeExec`, `StillDecoder`/`StillDecoderConfig`/`StillDecodeJob`/`StillDecodeExec`, and re-exports of `helpers`, `plane`, `sample`, `frame`, `collection`, `storage` |
 | `zencodec::source` | `ReadAt` (random-access source: `read_at`, batched `read_many_at`, `as_slice`), object-safe `DynReadAt`, `SliceReadAt`, `ReadAtShim`, `SourceError`, `AccessPattern` |
 | `zencodec::estimate` | `ResourceEstimate` (predicted peak memory / wall + CPU time / core-scaling, all `Option`), `ComputeEnvironment` (cores, RAM, `SimdTier`), `ImageCharacteristics`, `SimdTier`, `ThreadingInformation` — codec-agnostic resource estimation, surfaced via `EncoderConfig::estimate_encode_resources` / `DecoderConfig::estimate_decode_resources` |
-| `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
+| `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (`AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
 | `zencodec::prelude` | One-import bundle of every encode/decode trait (generic + dyn) |

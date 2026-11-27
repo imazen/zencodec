@@ -127,16 +127,6 @@ impl ComputeEnvironment {
             .with_simd_tier(SimdTier::CurrentHost)
     }
 
-    /// A single-core environment with unknown RAM and unspecified SIMD tier.
-    #[must_use]
-    #[deprecated(
-        since = "0.1.27",
-        note = "make construction explicit: `conservative()` for the single-core baseline, or `host()` (std) to detect the running machine"
-    )]
-    pub fn new() -> Self {
-        Self::conservative()
-    }
-
     /// Number of CPU cores available to the operation (clamped to ≥ 1). On
     /// `std` callers typically pass `std::thread::available_parallelism()`.
     #[must_use]
@@ -233,7 +223,7 @@ impl ImageCharacteristics {
 
     /// The pixel format of the source/decoded buffer.
     #[must_use]
-    pub fn descriptor(&self) -> &PixelFormat {
+    pub fn pixel_format(&self) -> &PixelFormat {
         &self.descriptor
     }
 
@@ -249,10 +239,10 @@ impl ImageCharacteristics {
         self.width as u64 * self.height as u64
     }
 
-    /// Size of one frame's tightly-packed pixel buffer in bytes
-    /// (`pixels * bytes_per_pixel`).
+    /// Size of one uncompressed frame's tightly-packed pixel buffer in bytes
+    /// (`width * height * bytes_per_pixel`).
     #[must_use]
-    pub fn input_bytes(&self) -> u64 {
+    pub fn uncompressed_frame_bytes(&self) -> u64 {
         self.pixels() * self.descriptor.layout.bytes_per_pixel() as u64
     }
 }
@@ -386,10 +376,24 @@ impl ResourceEstimate {
         }
     }
 
+    /// Set the typical (≈ p50) estimated peak memory in bytes.
+    #[must_use]
+    pub fn with_peak_memory_bytes_est(mut self, bytes: u64) -> Self {
+        self.peak_memory_bytes_est = Some(bytes);
+        self
+    }
+
     /// Set the conservative upper-bound peak memory (bytes).
     #[must_use]
-    pub fn with_peak_max(mut self, max: u64) -> Self {
+    pub fn with_peak_memory_bytes_max(mut self, max: u64) -> Self {
         self.peak_memory_bytes_max = Some(max);
+        self
+    }
+
+    /// Set the predicted single-thread wall-clock time in milliseconds.
+    #[must_use]
+    pub fn with_wall_ms(mut self, wall_ms: u64) -> Self {
+        self.wall_ms = Some(wall_ms);
         self
     }
 
@@ -465,14 +469,14 @@ impl ResourceEstimate {
     #[must_use]
     pub fn conservative(image: &ImageCharacteristics) -> Self {
         let input = image
-            .input_bytes()
+            .uncompressed_frame_bytes()
             .saturating_mul(image.frame_count() as u64);
         let fixed: u64 = 16 << 20;
         let typical = fixed.saturating_add(input.saturating_mul(3));
         // ~50 Mpix/s placeholder throughput; codecs override with measured.
         let wall_ms = image.pixels().saturating_mul(image.frame_count() as u64) / 50_000;
         Self::new(typical, wall_ms)
-            .with_peak_max(fixed.saturating_add(input.saturating_mul(8)))
+            .with_peak_memory_bytes_max(fixed.saturating_add(input.saturating_mul(8)))
             .with_cpu_ms(wall_ms)
             .with_threading(ThreadingInformation::SERIAL)
     }
@@ -507,15 +511,6 @@ mod tests {
         );
     }
 
-    #[test]
-    #[allow(deprecated)]
-    fn deprecated_new_still_delegates_to_conservative() {
-        assert_eq!(
-            ComputeEnvironment::new(),
-            ComputeEnvironment::conservative()
-        );
-    }
-
     #[cfg(feature = "std")]
     #[test]
     fn host_detects_cores_and_current_simd() {
@@ -531,7 +526,7 @@ mod tests {
     fn image_characteristics_sizes() {
         let im = ImageCharacteristics::new(1024, 768, desc());
         assert_eq!(im.pixels(), 1024 * 768);
-        assert_eq!(im.input_bytes(), 1024 * 768 * 3);
+        assert_eq!(im.uncompressed_frame_bytes(), 1024 * 768 * 3);
         assert_eq!(im.with_frame_count(0).frame_count(), 1);
     }
 
@@ -568,7 +563,7 @@ mod tests {
     #[test]
     fn at_cores_scales_wall_to_the_knee_and_leaves_peak_and_cpu() {
         let base = ResourceEstimate::new(200, 1000)
-            .with_peak_max(400)
+            .with_peak_memory_bytes_max(400)
             .with_cpu_ms(1000)
             .with_threading(ThreadingInformation::parallel(8));
         // wall / effective_threads(4) = 1000 / 4

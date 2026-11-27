@@ -7,11 +7,8 @@ use zencodec::{Metadata, MetadataPolicy};
 
 /// Filter an extracted record and reconcile its EXIF orientation.
 ///
-/// The legacy implementation remains in zencodec until its next breaking
-/// release. Delegating keeps one implementation during that compatibility period.
 /// Gain-map callers use [`crate::display::filter_for_gain_map`] to validate the
 /// rendering dependency as well.
-#[allow(deprecated)]
 pub fn filter(metadata: &Metadata, policy: &MetadataPolicy) -> Metadata {
     metadata.filtered(policy)
 }

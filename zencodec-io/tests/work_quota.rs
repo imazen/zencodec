@@ -12,7 +12,7 @@ use std::sync::{
 };
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, StepError,
+    OutputInfo, Progress, RowStrip, StepError,
 };
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zencodec::{ImageFormat, ImageInfo};
@@ -54,7 +54,7 @@ impl IncrementalDecode for Burst {
             }
             n if n <= ROWS as usize => {
                 let row = n as u32 - 1;
-                sink.provide_next_buffer(row, 1, 1, RGBA)
+                sink.provide_next_buffer(RowStrip::new(row, 1, 1), RGBA)
                     .map_err(StepError::Sink)?
                     .row_mut(0)
                     .copy_from_slice(&[row as u8, 1, 2, 255]);
@@ -77,7 +77,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {

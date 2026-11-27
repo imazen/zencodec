@@ -67,7 +67,7 @@ impl DecoderConfig for LegacyConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Png]
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         &[]
     }
     fn job<'a>(self) -> Self::Job<'a> {

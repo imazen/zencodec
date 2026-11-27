@@ -57,21 +57,23 @@ impl DecodeRowSink for OneSlot {
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        rows: u32,
-        width: u32,
+        strip: RowStrip,
         desc: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.loan(BatchMeta::final_rows(y), rows, width, desc)
+        self.loan(
+            BatchMeta::final_rows(strip.y),
+            strip.height,
+            strip.width,
+            desc,
+        )
     }
     fn provide_pass_buffer(
         &mut self,
         meta: BatchMeta,
-        rows: u32,
-        width: u32,
+        size: StripDimensions,
         desc: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        self.loan(meta, rows, width, desc)
+        self.loan(meta, size.height, size.width, desc)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
         assert!(!self.pending);
@@ -89,7 +91,7 @@ fn decoder(
         zencodec::source::AccessPattern::RandomAccess,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, HEIGHT, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             let mut bytes = vec![0xdd; HEIGHT as usize * 9];
             for y in 0..HEIGHT as usize {
                 bytes[y * 9..y * 9 + 6].fill(y as u8);
@@ -220,9 +222,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         }
         fn provide_next_buffer(
             &mut self,
-            _: u32,
-            _: u32,
-            _: u32,
+            _: RowStrip,
             _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             Err("delivery lost explicit row metadata".into())
@@ -230,8 +230,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         fn provide_buffer_with_metadata(
             &mut self,
             meta: BatchMeta,
-            height: u32,
-            width: u32,
+            size: StripDimensions,
             desc: PixelFormat,
             facts: &RowMetadata,
         ) -> Result<PixelViewMut<'_>, SinkError> {
@@ -239,8 +238,8 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             self.metas.push((meta, facts.clone()));
             Ok(PixelViewMut::new_with_format_cow(
                 &mut self.bytes.0,
-                width,
-                height,
+                size.width,
+                size.height,
                 16,
                 zenpixels::FormatCow::from_owned(desc),
             )?
@@ -290,7 +289,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
         let buffer = buffer.with_hdr(hdr).with_origin(origin.clone());
         let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Png));
-            ctx.set_output_descriptor(buffer.format().clone());
+            ctx.set_output_pixel_format(buffer.format().clone());
             ctx.write_rows(BatchMeta::new(0, false).with_pass(2), &buffer.as_view())
                 .await?;
             ctx.write_rows(BatchMeta::final_rows(0), &buffer.as_view())

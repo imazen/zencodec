@@ -90,7 +90,7 @@ use whereat::At;
 use zencodec::CodecErrorExt;
 use zencodec::decode::{
     AnimationFrameDecoder, Decode, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig,
-    DynDecoderConfig, SinkError, StreamingDecode,
+    DynDecoderConfig, RowStrip, SinkError, StreamingDecode, StripDimensions,
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig, Fidelity};
 use zencodec::exif::Exif;
@@ -399,11 +399,10 @@ impl DecodeRowSink for CollectSink {
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
+        let RowStrip { y, width, height } = strip;
         if self.finished
             || self.desc.as_ref() != Some(&descriptor)
             || width != self.width
@@ -432,8 +431,7 @@ impl DecodeRowSink for CollectSink {
     fn provide_buffer_with_metadata(
         &mut self,
         meta: zencodec::decode::BatchMeta,
-        height: u32,
-        width: u32,
+        size: StripDimensions,
         descriptor: PixelFormat,
         metadata: &zencodec::decode::RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
@@ -446,7 +444,7 @@ impl DecodeRowSink for CollectSink {
             self.metadata = Some(metadata.clone());
         }
         Ok(self
-            .provide_next_buffer(meta.y, height, width, descriptor)?
+            .provide_next_buffer(size.at_row(meta.y), descriptor)?
             .with_hdr(metadata.hdr))
     }
 
@@ -499,7 +497,6 @@ impl CollectSink {
 // Encode / decode path runners (generic over codec config)
 // ===========================================================================
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_oneshot<E>(
     cfg: &E,
     img: &TestImage,
@@ -513,7 +510,7 @@ where
     let enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(meta, policy)
+        .with_unfiltered_metadata(meta.filtered(&policy))
         .encoder()
         .map_err(|e| e.to_string())?;
     Ok(enc
@@ -522,7 +519,6 @@ where
         .into_vec())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -531,7 +527,7 @@ where
     let mut enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()
         .map_err(|e| e.to_string())?;
     let strip = enc.preferred_strip_height().max(1);
@@ -673,7 +669,6 @@ where
 ///   zero-size refusal, `begin` with the real size on the same encoder
 ///   reports the same timing and streams the same file.
 /// - Every run reports the same timing.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -714,7 +709,7 @@ where
     let encoder = || {
         enc.clone()
             .job()
-            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(Metadata::none())
             .encoder()
             .map_err(|e| e.to_string())
     };
@@ -1091,7 +1086,6 @@ where
     Ok(())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_animation<E>(cfg: &E, frames: &[TestImage], meta: Metadata) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -1100,7 +1094,7 @@ where
     let mut a = cfg
         .clone()
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(meta)
         .with_loop_count(Some(0))
         .animation_frame_encoder()
         .map_err(|e| e.to_string())?;
@@ -1296,7 +1290,6 @@ where
 /// Skipped (returns `Ok`) when the encoder does not advertise animation.
 /// `begin` may decline with an [`UnsupportedOperation`]; any other error
 /// fails the check.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_animation_streaming_output_honesty<E, D>(
     enc: E,
     dec: D,
@@ -1321,7 +1314,7 @@ where
     let encoder = || {
         enc.clone()
             .job()
-            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(Metadata::none())
             .with_loop_count(Some(0))
             .animation_frame_encoder()
             .map_err(|e| e.to_string())
@@ -2226,7 +2219,6 @@ fn foreign_format<E: EncoderConfig>() -> ImageFormat {
 }
 
 /// Encode `img` with `gm` attached via `with_gain_map_pixels` (one-shot path).
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_with_gain_map<E>(cfg: &E, img: &TestImage, gm: DecodedGainMap) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -2235,7 +2227,7 @@ where
     let enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .with_gain_map_pixels(gm)
         .map_err(|e| format!("with_gain_map_pixels: {e}"))?
         .encoder()
@@ -2249,7 +2241,6 @@ where
 /// Encode `img` with `gm` attached, through the incremental `push_rows` +
 /// `finish` path — a separate code path in real codecs, where a job-level
 /// setting is easy to leave behind.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows_with_gain_map<E>(
     cfg: &E,
     img: &TestImage,
@@ -2262,7 +2253,7 @@ where
     let mut enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .with_gain_map_pixels(gm)
         .map_err(|e| format!("with_gain_map_pixels: {e}"))?
         .encoder()
@@ -3093,6 +3084,27 @@ where
 /// | Radiance HDR | scene-linear BT.709 has no ICC carrier: `Cicp` when the codec expressed it as CICP, else `Icc` |
 /// | JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | ICC (or an sRGB assumption): always `Icc` |
 ///
+/// Which color-signaling carriers a decoded image actually carried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ColorSignalPresence {
+    /// Whether the decoded source carried a CICP color tag.
+    pub has_cicp: bool,
+    /// Whether the decoded source carried an embedded ICC profile.
+    pub has_icc: bool,
+}
+
+impl ColorSignalPresence {
+    /// Construct signal presence flags from a decoded [`SourceColor`].
+    pub const fn from_source_color(sc: &SourceColor) -> Self {
+        Self {
+            has_cicp: sc.cicp.is_some(),
+            has_icc: sc.icc_profile.is_some(),
+        }
+    }
+}
+
+/// Expected [`ColorAuthority`] for `format` given which color signals were read.
+///
 /// Returns `None` where no rule is recorded — [`Custom`](ImageFormat::Custom),
 /// [`Unknown`](ImageFormat::Unknown), and the formats the audit did not cover
 /// (EXR, JPEG 2000, SVG) — so a check over those passes rather than inventing a
@@ -3100,11 +3112,10 @@ where
 /// invariant: codecs only set `Cicp` when `cicp` is populated).
 pub fn expected_color_authority(
     format: ImageFormat,
-    has_cicp: bool,
-    has_icc: bool,
+    signals: ColorSignalPresence,
 ) -> Option<ColorAuthority> {
     use ImageFormat::*;
-    let cicp_first = if has_cicp {
+    let cicp_first = if signals.has_cicp {
         ColorAuthority::Cicp
     } else {
         ColorAuthority::Icc
@@ -3112,7 +3123,7 @@ pub fn expected_color_authority(
     Some(match format {
         Png | Jxl | Heic | Hdr => cicp_first,
         Avif => {
-            if has_icc {
+            if signals.has_icc {
                 ColorAuthority::Icc
             } else {
                 cicp_first
@@ -3142,7 +3153,7 @@ pub fn expected_color_authority(
 /// downstream in the CMS.
 pub fn check_source_color_authority(format: ImageFormat, sc: &SourceColor) -> Conformance {
     const CHECK: &str = "source_color_authority";
-    let Some(want) = expected_color_authority(format, sc.cicp.is_some(), sc.icc_profile.is_some())
+    let Some(want) = expected_color_authority(format, ColorSignalPresence::from_source_color(sc))
     else {
         return Ok(());
     };
@@ -3290,7 +3301,6 @@ where
     }
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
@@ -3299,7 +3309,7 @@ where
     let mut e = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()?;
     let strip = e.preferred_strip_height().max(1);
     let mut y = 0;
@@ -3311,7 +3321,6 @@ where
     Ok(e.finish()?.into_vec())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_encode_from<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
@@ -3320,7 +3329,7 @@ where
     let e = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()?;
     let rb = img.row_bytes();
     let mut next = 0u32;
@@ -4406,7 +4415,11 @@ mod tests {
     /// asks of an undeclared encoder.
     #[test]
     fn minimal_gain_map_roundtrip() {
-        check_gain_map_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+        check_gain_map_roundtrip(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The fixture's ISO 21496-1 values are all dyadic, so the wire format
@@ -4530,7 +4543,7 @@ mod tests {
 
         // Drive the minimal codec entirely through the dyn surface; its
         // `At<CodecError>` is erased to `Box<dyn Error>` by the shim.
-        let cfg = MinimalDecoderConfig::new();
+        let cfg = MinimalDecoderConfig::default();
         let dyn_min: &dyn DynDecoderConfig = &cfg;
         let erased = dyn_min
             .dyn_job()
@@ -4569,7 +4582,7 @@ mod tests {
         use zencodec::decode::{DecodeJob, DecoderConfig};
         use zencodec::{CodecErrorExt, ErrorCategory};
 
-        let err = MinimalDecoderConfig::new()
+        let err = MinimalDecoderConfig::default()
             .job()
             .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
             .expect_err("malformed header must fail");
@@ -4597,8 +4610,8 @@ mod tests {
     #[test]
     fn minimal_capability_honesty() {
         check_capability_honesty(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
@@ -4620,13 +4633,13 @@ mod tests {
     #[test]
     fn minimal_fidelity_honesty() {
         check_fidelity_honesty(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
         assert_eq!(
-            MinimalEncoderConfig::new()
+            MinimalEncoderConfig::default()
                 .with_fidelity(Fidelity::Lossless)
                 .resolved_target_fidelity(),
             None
@@ -4636,8 +4649,8 @@ mod tests {
     #[test]
     fn minimal_color_authority_spec() {
         check_color_authority_spec(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
@@ -4656,7 +4669,9 @@ mod tests {
     fn expected_color_authority_table() {
         use ColorAuthority::{Cicp as C, Icc as I};
         use ImageFormat::*;
-        let e = expected_color_authority;
+        let e = |f, has_cicp, has_icc| {
+            expected_color_authority(f, ColorSignalPresence { has_cicp, has_icc })
+        };
         // CICP outranks ICC.
         for f in [Png, Jxl, Heic, Hdr] {
             assert_eq!(e(f, true, true), Some(C), "{f:?}");
@@ -4721,7 +4736,10 @@ mod tests {
     /// every optional path with `UnsupportedOperation`.
     #[test]
     fn minimal_one_shot_roundtrip_and_pixels() {
-        let (e, d) = (MinimalEncoderConfig::new(), MinimalDecoderConfig::new());
+        let (e, d) = (
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        );
         check_pixel_roundtrip(e, d, &TestImage::rgb8_gradient(10, 7)).unwrap();
     }
 
@@ -4733,7 +4751,7 @@ mod tests {
     fn minimal_decode_error_envelope_survives_erasure() {
         // 16 bytes of garbage: fails `parse_header` (short / bad magic) →
         // RefError::Invalid → At<CodecError>{MalformedImage, "zencodec-testkit/minimal"}.
-        check_decode_error_envelope(MinimalDecoderConfig::new(), &[0xABu8; 16]).unwrap();
+        check_decode_error_envelope(MinimalDecoderConfig::default(), &[0xABu8; 16]).unwrap();
     }
 
     /// The negative case proves the check has teeth. `reference` is Pattern A
@@ -4882,20 +4900,20 @@ mod tests {
     fn minimal_passes_truncation_series() {
         let img = TestImage::rgba8_gradient(9, 6);
         let valid = enc_oneshot(
-            &MinimalEncoderConfig::new(),
+            &MinimalEncoderConfig::default(),
             &img,
             Metadata::none(),
             MetadataPolicy::PreserveExact,
         )
         .unwrap();
-        check_decode_truncation_series(MinimalDecoderConfig::new(), &valid).unwrap();
+        check_decode_truncation_series(MinimalDecoderConfig::default(), &valid).unwrap();
     }
 
     /// A too-short `valid` is rejected up front — the check needs a real encoded
     /// image to truncate, not a stray byte.
     #[test]
     fn truncation_series_rejects_tiny_valid() {
-        let err = check_decode_truncation_series(MinimalDecoderConfig::new(), &[0x00])
+        let err = check_decode_truncation_series(MinimalDecoderConfig::default(), &[0x00])
             .expect_err("a 1-byte `valid` cannot be a real encoded image");
         assert_eq!(err.check, "decode_truncation_series");
     }
@@ -4977,8 +4995,8 @@ mod tests {
         // Minimal declares animation=false, so the check is not applicable and passes.
         let frames = [TestImage::rgba8_gradient_seeded(8, 8, 0)];
         check_animation_cross_path_equivalence(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &frames,
         )
         .unwrap();
@@ -4998,8 +5016,11 @@ mod tests {
     /// An SDR-only codec (no `hdr`) is out of scope, not a failure.
     #[test]
     fn minimal_native_hdr_roundtrip_skipped() {
-        check_native_hdr_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new())
-            .unwrap();
+        check_native_hdr_roundtrip(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The 16-bit HDR decode is labelled exactly `RGB16_BT2100_PQ` — the
@@ -5059,14 +5080,14 @@ mod tests {
     fn minimal_color_context_checks_pass_without_color() {
         let img = TestImage::rgba8_gradient(8, 6);
         check_color_context_consistency(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &img,
         )
         .unwrap();
         check_color_context_attached(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &img,
         )
         .unwrap();
@@ -5167,7 +5188,11 @@ mod tests {
 
     #[test]
     fn minimal_check_all() {
-        check_all(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+        check_all(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The reference inventory covers every section of a file carrying all the
@@ -5229,14 +5254,14 @@ mod tests {
     #[test]
     fn undeclared_inventory_is_unsupported() {
         let bytes = enc_oneshot(
-            &MinimalEncoderConfig::new(),
+            &MinimalEncoderConfig::default(),
             &TestImage::rgba8_gradient(5, 3),
             Metadata::none(),
             MetadataPolicy::PreserveExact,
         )
         .unwrap();
         assert!(!<MinimalDecoderConfig as DecoderConfig>::capabilities().inventory());
-        check_inventory_dispatch(MinimalDecoderConfig::new(), &bytes).unwrap();
+        check_inventory_dispatch(MinimalDecoderConfig::default(), &bytes).unwrap();
     }
 
     /// The reference round-trips metadata faithfully, so under PreserveExact the
@@ -5296,7 +5321,7 @@ mod tests {
 
         // A real codec error, located inside the codec module (the `?` site in
         // minimal.rs) by the bridge's track-caller `start_at` — exactly one frame.
-        let origin: At<CodecError> = MinimalDecoderConfig::new()
+        let origin: At<CodecError> = MinimalDecoderConfig::default()
             .job()
             .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
             .expect_err("malformed header must fail");

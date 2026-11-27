@@ -25,9 +25,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 pub use zencodec::decode::{ByteRange, Input, InputRequest};
-/// Deprecated byte-input request name; use [`InputRequest`].
-#[deprecated(note = "use InputRequest")]
-pub type Request = InputRequest;
 pub use zencodec::source::AccessPattern;
 
 use crate::packet::{Packet, RandomAccess};
@@ -416,18 +413,6 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
 /// Erase a muxer's error type.
 pub fn erase_muxer<M: Muxer + Send + 'static>(m: M) -> Box<dyn DynMuxer + Send> {
     Box::new(MuxerShim(m))
-}
-
-/// Apply a finish to an in-memory file: append the tail, then patch.
-///
-/// # Errors
-///
-/// See [`MuxFinish::apply_to`].
-#[deprecated(
-    note = "use finish.apply_to(file); use finish.validate(emitted_bytes) before external writes"
-)]
-pub fn apply_finish(file: &mut Vec<u8>, finish: MuxFinish) -> Result<(), PatchError> {
-    finish.apply_to(file)
 }
 
 /// A [`Demuxer`] as a [`ByteStepper`], so every `zencodec-io` cursor drives

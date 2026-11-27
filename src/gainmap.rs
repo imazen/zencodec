@@ -45,7 +45,7 @@ use crate::info::Cicp;
 /// |---------|----------------------------|--------------------------------|
 /// | JPEG APP2 (secondary) | [`JpegApp2BodyWithUrn`](Iso21496Format::JpegApp2BodyWithUrn) bytes — URN + payload | `FF E2` marker + `u16 BE` length (length counts itself + these bytes) |
 /// | AVIF `tmap` item | [`AvifTmap`](Iso21496Format::AvifTmap) bytes — this *is* the tmap item payload | ISOBMFF item framing (`iinf` / `iloc` / `iref`) pointing at these bytes |
-/// | JXL `jhgm` box | [`JpegApp2`](Iso21496Format::JpegApp2) bytes go into the bundle's `gain_map_metadata` field only — **no URN** | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
+/// | JXL `jhgm` box | [`JxlJhgm`](Iso21496Format::JxlJhgm) bytes go into the bundle's `gain_map_metadata` field only — **no URN** | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
 ///
 /// **Note on JXL:** `jhgm` is *not* just "an ISOBMFF box around the ISO
 /// payload". It's a structured bundle with its own header and trailing
@@ -84,21 +84,6 @@ use crate::info::Cicp;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Iso21496Format {
-    /// **Semantically equivalent to** [`JxlJhgm`](Self::JxlJhgm) — produces and
-    /// accepts identical bytes, but is a distinct variant with a different
-    /// discriminant. **Deprecated**: use [`JxlJhgm`](Self::JxlJhgm) for the bare
-    /// payload, or [`JpegApp2BodyWithUrn`](Self::JpegApp2BodyWithUrn) for the
-    /// full JPEG APP2 body.
-    ///
-    /// The original name was misleading: the bytes are NOT what a JPEG APP2
-    /// segment contains on the wire (they lack the required URN prefix).
-    /// Kept for source compatibility with 0.1.12–0.1.19 at the original
-    /// discriminant `0`.
-    #[deprecated(
-        since = "0.1.20",
-        note = "Misleading name — these bytes lack the URN and are not a standalone JPEG APP2 body. Use `JxlJhgm` for the same bytes, or `JpegApp2BodyWithUrn` for the full APP2 body including the URN."
-    )]
-    JpegApp2 = 0,
     /// Payload with an AVIF `tmap` version byte prefix.
     ///
     /// Layout: `version(u8=0) + min_ver(u16 BE) + writer_ver(u16 BE) + flags(u8) + <fraction payload>`.
@@ -142,9 +127,7 @@ pub enum Iso21496Format {
     JpegApp2BodyWithUrn = 3,
 }
 
-#[allow(deprecated)]
 const _: () = {
-    assert!(Iso21496Format::JpegApp2 as u8 == 0);
     assert!(Iso21496Format::AvifTmap as u8 == 1);
     assert!(Iso21496Format::JxlJhgm as u8 == 2);
     assert!(Iso21496Format::JpegApp2BodyWithUrn as u8 == 3);
@@ -944,21 +927,6 @@ impl Fraction {
         }
     }
 
-    /// Create from f64 with a fixed denominator (multiply-and-round).
-    ///
-    /// This is the simplest encoding: `numerator = round(value * denominator)`.
-    /// For canonical ISO 21496-1 fractions, prefer [`Self::from_f64_cf`].
-    #[deprecated(
-        since = "0.1.12",
-        note = "use `from_f64_cf` for canonical continued-fraction encoding"
-    )]
-    pub fn from_f64(value: f64, denominator: u32) -> Self {
-        Self {
-            numerator: math::round(value * denominator as f64) as i32,
-            denominator,
-        }
-    }
-
     /// Create from f64 using continued fractions for canonical encoding.
     ///
     /// Finds the best rational approximation, matching the algorithm used by
@@ -1012,22 +980,6 @@ impl UFraction {
             0.0
         } else {
             self.numerator as f64 / self.denominator as f64
-        }
-    }
-
-    /// Create from f64 with a fixed denominator (multiply-and-round).
-    ///
-    /// This is the simplest encoding: `numerator = round(value * denominator)`.
-    /// Clamps negative values to 0.
-    /// For canonical ISO 21496-1 fractions, prefer [`Self::from_f64_cf`].
-    #[deprecated(
-        since = "0.1.12",
-        note = "use `from_f64_cf` for canonical continued-fraction encoding"
-    )]
-    pub fn from_f64(value: f64, denominator: u32) -> Self {
-        Self {
-            numerator: math::round(value.max(0.0) * denominator as f64) as u32,
-            denominator,
         }
     }
 
@@ -1151,40 +1103,6 @@ const JPEG_HEADER_SIZE: usize = 5;
 /// Size of one fraction pair (numerator + denominator = 8 bytes).
 const FRACTION_SIZE: usize = 8;
 
-/// Parse ISO 21496-1 binary gain map metadata (JpegApp2 format).
-///
-/// This is a convenience alias for
-/// `parse_iso21496_fmt(data, Iso21496Format::JxlJhgm)`.
-///
-/// **Note:** In 0.1.11 this function used the AVIF tmap format (version byte
-/// prefix). It now uses the JpegApp2 format (no version byte). Use
-/// [`parse_iso21496_fmt`] with an explicit [`Iso21496Format`] to avoid
-/// ambiguity.
-#[deprecated(
-    since = "0.1.12",
-    note = "use `parse_iso21496_fmt` with an explicit `Iso21496Format`"
-)]
-pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
-    parse_iso21496_no_version(data)
-}
-
-/// Serialize [`GainMapParams`] to ISO 21496-1 binary format (JpegApp2 format).
-///
-/// This is a convenience alias for
-/// `serialize_iso21496_fmt(params, Iso21496Format::JxlJhgm)`.
-///
-/// **Note:** In 0.1.11 this function used the AVIF tmap format (version byte
-/// prefix). It now uses the JpegApp2 format (no version byte). Use
-/// [`serialize_iso21496_fmt`] with an explicit [`Iso21496Format`] to avoid
-/// ambiguity.
-#[deprecated(
-    since = "0.1.12",
-    note = "use `serialize_iso21496_fmt` with an explicit `Iso21496Format`"
-)]
-pub fn serialize_iso21496(params: &GainMapParams) -> Result<Vec<u8>, GainMapParseError> {
-    serialize_iso21496_fmt(params, Iso21496Format::JxlJhgm)
-}
-
 /// Parse ISO 21496-1 binary gain map metadata with explicit format selection.
 ///
 /// The `format` parameter selects the wire format variant:
@@ -1218,10 +1136,9 @@ pub fn parse_iso21496_fmt(
     data: &[u8],
     format: Iso21496Format,
 ) -> Result<GainMapParams, GainMapParseError> {
-    #[allow(deprecated)]
     match format {
         Iso21496Format::AvifTmap => parse_iso21496_avif(data),
-        Iso21496Format::JxlJhgm | Iso21496Format::JpegApp2 => parse_iso21496_no_version(data),
+        Iso21496Format::JxlJhgm => parse_iso21496_no_version(data),
         Iso21496Format::JpegApp2BodyWithUrn => {
             if data.len() < ISO_21496_1_URN.len()
                 || &data[..ISO_21496_1_URN.len()] != ISO_21496_1_URN
@@ -1281,8 +1198,7 @@ pub fn serialize_iso21496_fmt_into(
             &[0][..]
         }
         Iso21496Format::JpegApp2BodyWithUrn => ISO_21496_1_URN,
-        #[allow(deprecated)]
-        Iso21496Format::JxlJhgm | Iso21496Format::JpegApp2 => &[],
+        Iso21496Format::JxlJhgm => &[],
     };
     let count = wire.value_count();
     let payload_len = match wire.common {
@@ -3163,29 +3079,10 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn deprecated_jpeg_app2_produces_same_bytes_as_jxl_jhgm() {
-        let p = GainMapParams {
-            alternate_hdr_headroom: 1.5,
-            ..Default::default()
-        };
-        let jxl_bytes = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm).unwrap();
-        let old_bytes = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2).unwrap();
-        assert_eq!(jxl_bytes, old_bytes);
-
-        let parsed_jxl = parse_iso21496_fmt(&jxl_bytes, Iso21496Format::JxlJhgm).unwrap();
-        let parsed_old = parse_iso21496_fmt(&jxl_bytes, Iso21496Format::JpegApp2).unwrap();
-        assert_eq!(parsed_jxl, parsed_old);
-    }
-
-    #[test]
-    #[allow(deprecated)]
     fn iso21496_format_discriminants_are_pinned() {
-        assert_eq!(Iso21496Format::JpegApp2 as u8, 0);
         assert_eq!(Iso21496Format::AvifTmap as u8, 1);
         assert_eq!(Iso21496Format::JxlJhgm as u8, 2);
         assert_eq!(Iso21496Format::JpegApp2BodyWithUrn as u8, 3);
-        assert_ne!(Iso21496Format::JpegApp2, Iso21496Format::JxlJhgm);
     }
 
     #[test]

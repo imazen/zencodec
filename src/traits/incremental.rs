@@ -142,10 +142,6 @@ pub enum InputRequest {
     Len,
 }
 
-/// Legacy ambiguous name for a byte acquisition request.
-#[deprecated(note = "use InputRequest")]
-pub type Request = InputRequest;
-
 impl InputRequest {
     /// A request for at least `min_len` bytes from `offset`.
     #[inline]
@@ -461,8 +457,8 @@ pub trait IncrementalDecode {
         None
     }
 
-    /// Output pixel descriptor, once the header has been parsed.
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
+    /// Output pixel format, once the header has been parsed.
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
         None
     }
 
@@ -555,8 +551,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
-        (**self).output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        (**self).output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -588,8 +584,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
-        (**self).output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        (**self).output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -604,10 +600,10 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 /// errors retain priority. Cached completion remains successful. These checks
 /// do not interrupt a native call or undo sink effects already performed.
 ///
-/// Wrap a hand-written decoder in `Fused` and its own state machine need
+/// Wrap a hand-written decoder in `FusedIncrementalDecoder` and its own state machine need
 /// not track any of this.
 #[derive(Debug)]
-pub struct Fused<D> {
+pub struct FusedIncrementalDecoder<D> {
     inner: D,
     state: FusedState,
     controlled: bool,
@@ -623,7 +619,7 @@ enum FusedState {
     Failed,
 }
 
-impl<D> Fused<D> {
+impl<D> FusedIncrementalDecoder<D> {
     /// Wrap `inner`.
     pub const fn new(inner: D) -> Self {
         Self {
@@ -653,7 +649,7 @@ impl<D> Fused<D> {
     }
 }
 
-impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
+impl<D: IncrementalDecode> IncrementalDecode for FusedIncrementalDecoder<D> {
     type Error = D::Error;
 
     fn step(
@@ -717,8 +713,8 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         self.inner.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
-        self.inner.output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        self.inner.output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -726,7 +722,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
     }
 }
 
-impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
+impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for FusedIncrementalDecoder<D> {
     fn step_controlled(
         &mut self,
         input: Input<'_>,
@@ -788,7 +784,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
                 if self.interpretation.as_ref().is_some_and(|facts| {
                     facts.width != info.width
                         || facts.height != info.height
-                        || facts.descriptor.as_ref() != Some(&info.native_format)
+                        || facts.pixel_format.as_ref() != Some(&info.native_format)
                 }) {
                     return Err(StepError::Control(ControlError::InconsistentFacts));
                 }
@@ -826,10 +822,10 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
     }
 }
 
-/// Shim erasing a decoder's error type to [`ErasedError`].
-pub struct IncrementalDecoderShim<D>(pub D);
+/// Adapter erasing an incremental decoder's error type to [`ErasedError`].
+pub struct ErasedIncrementalDecoder<D>(pub D);
 
-impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
+impl<D: IncrementalDecode> IncrementalDecode for ErasedIncrementalDecoder<D> {
     type Error = ErasedError;
 
     fn step(
@@ -855,8 +851,8 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         self.0.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
-        self.0.output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        self.0.output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -865,12 +861,14 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
 }
 
 /// Erase `decoder` for [`DecodeJob::dyn_incremental_decoder`](crate::decode::DecodeJob::dyn_incremental_decoder),
-/// wrapped in [`Fused`] so the termination rules hold by construction.
+/// wrapped in [`FusedIncrementalDecoder`] so the termination rules hold by construction.
 pub fn erase_incremental<D>(decoder: D) -> Box<DynIncrementalDecoder>
 where
     D: IncrementalDecode + Send + 'static,
 {
-    Box::new(IncrementalDecoderShim(Fused::new(decoder)))
+    Box::new(ErasedIncrementalDecoder(FusedIncrementalDecoder::new(
+        decoder,
+    )))
 }
 
 #[cfg(test)]
@@ -882,10 +880,8 @@ mod tests {
     impl DecodeRowSink for NullSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            _h: u32,
-            _w: u32,
-            _d: PixelFormat,
+            _strip: crate::sink::RowStrip,
+            _format: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             Err("null sink".into())
         }
@@ -918,7 +914,7 @@ mod tests {
 
     #[test]
     fn fused_makes_errors_and_cancellation_terminal() {
-        let mut d = Fused::new(Flaky(0));
+        let mut d = FusedIncrementalDecoder::new(Flaky(0));
         let pulse = &crate::how_far::NoPulse;
         assert!(d.step(Input::empty(), &mut NullSink, Some(&pulse)).is_ok());
         assert!(matches!(
@@ -937,7 +933,7 @@ mod tests {
                 Err(StopReason::Cancelled)
             }
         }
-        let mut d = Fused::new(Flaky(0));
+        let mut d = FusedIncrementalDecoder::new(Flaky(0));
         assert!(matches!(
             d.step(
                 Input::empty(),

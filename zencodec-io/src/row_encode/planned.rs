@@ -500,11 +500,9 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     };
     let mut report = OperationReport::default();
     let bound_requirements = resolver.requirements();
-    let entry_requirements = out.options.preset;
     let run = || -> Result<(), Cause> {
         check(control)?;
         out.boundary = Stage::Policy;
-        entry_requirements.check_workspace(None)?;
         if let Some(required) = bound_requirements {
             required.check_workspace(None)?;
         }
@@ -655,7 +653,7 @@ pub(super) fn run<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             unknown_job_evidence(),
             offers,
             &mut resolver,
-            entry_requirements,
+            PolicySet::new(),
             pulse,
         ) {
             Ok(selected) => selected,

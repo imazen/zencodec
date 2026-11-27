@@ -17,7 +17,7 @@ impl EncodeJob for Job {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {

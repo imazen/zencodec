@@ -77,7 +77,7 @@ use crate::traits::{
 };
 use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
-    ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits, StopToken,
+    ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits,
 };
 
 mod collection;
@@ -106,8 +106,6 @@ where
 }
 
 trait EncoderEntry: Send + Sync {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry>;
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry>;
     fn as_dyn(&self) -> &dyn DynEncoderConfig;
     fn send_job(
         &self,
@@ -123,12 +121,6 @@ where
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
-        Box::new(self.clone())
-    }
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
-        Box::new((*self).with_fidelity(fidelity))
-    }
     fn as_dyn(&self) -> &dyn DynEncoderConfig {
         self
     }
@@ -144,12 +136,6 @@ where
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
-        Box::new(Self(self.0.clone()))
-    }
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
-        Box::new(Self(self.0.with_fidelity(fidelity)))
-    }
     fn as_dyn(&self) -> &dyn DynEncoderConfig {
         &self.0
     }
@@ -269,7 +255,7 @@ struct Registrations {
 /// borrow it, so one registration can be shared across calls.
 ///
 /// Operation defaults ([`with_limits`](Self::with_limits),
-/// [`with_stop`](Self::with_stop), [`with_decode_policy`](Self::with_decode_policy),
+/// [`with_pulse`](Self::with_pulse), [`with_decode_policy`](Self::with_decode_policy),
 /// [`with_encode_policy`](Self::with_encode_policy)) are stamped onto every
 /// job the set creates. Per-operation control (decode hints, metadata,
 /// canvas/loop settings) is available through [`decode_job`](Self::decode_job)
@@ -354,40 +340,27 @@ impl CodecSet {
         self
     }
 
-    /// Add a cancellation-only condition while retaining the operation pulse.
-    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    pub fn with_stop(mut self, stop: StopToken) -> Self {
-        use how_far::Pulse as _;
-        let pulse = self.pulse.take().unwrap_or_default();
-        self.pulse = Some(
-            how_far::WithStop::new(&pulse, stop)
-                .share()
-                .expect("owned SharedPulse and owned cancellation are shareable"),
-        );
-        self
-    }
-
     /// Progress and cancellation pulse stamped onto every job this set creates.
     pub fn with_pulse(mut self, pulse: how_far::SharedPulse) -> Self {
         self.pulse = Some(pulse);
         self
     }
 
-    /// Best-effort decode policy stamped onto every decode job this set creates.
+    /// Checked decode policy stamped onto every decode job this set creates.
     ///
-    /// The codec may ignore this legacy policy setter. For a required policy,
-    /// obtain a job with [`decode_job`](Self::decode_job), then call
-    /// [`DynDecodeJob::try_set_policy`](crate::decode::DynDecodeJob::try_set_policy).
+    /// Enforced via [`DynDecodeJob::try_set_policy`](crate::decode::DynDecodeJob::try_set_policy)
+    /// when a job is created; a decoder that cannot honor the policy refuses
+    /// with an error instead of silently ignoring it.
     pub fn with_decode_policy(mut self, policy: DecodePolicy) -> Self {
         self.decode_policy = Some(policy);
         self
     }
 
-    /// Best-effort encode policy stamped onto every encode job this set creates.
+    /// Checked encode policy stamped onto every encode job this set creates.
     ///
-    /// The codec may ignore this legacy policy setter. For a required policy,
-    /// obtain a job with [`encode_job`](Self::encode_job), then call
-    /// [`DynEncodeJob::try_set_policy`](crate::encode::DynEncodeJob::try_set_policy).
+    /// Enforced via [`DynEncodeJob::try_set_policy`](crate::encode::DynEncodeJob::try_set_policy)
+    /// when a job is created; an encoder that cannot honor the policy refuses
+    /// with an error instead of silently ignoring it.
     pub fn with_encode_policy(mut self, policy: EncodePolicy) -> Self {
         self.encode_policy = Some(policy);
         self
@@ -462,8 +435,18 @@ impl CodecSet {
 
     // --- Decode -------------------------------------------------------------
 
+    pub(crate) fn check_input_limit(&self, input_len: usize) -> Result<(), CodecSetError> {
+        if let Some(limits) = self.limits {
+            limits
+                .check_input_size(input_len as u64)
+                .map_err(|e| CodecSetError::Codec(Box::new(e)))?;
+        }
+        Ok(())
+    }
+
     /// Probe image metadata (header parse only) after detecting the format.
     pub fn probe<'a>(&'a self, data: &'a [u8]) -> Result<ImageInfo, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self.decode_job(format)?.probe(data)?)
     }
@@ -471,28 +454,30 @@ impl CodecSet {
     /// Detect the format and decode to owned pixels in the decoder's native
     /// pixel format.
     pub fn decode<'a>(&'a self, data: &'a [u8]) -> Result<DecodeOutput, CodecSetError> {
-        self.decode_preferring(data, &[])
+        self.decode_preferring_formats(data, &[])
     }
 
     /// Detect the format and decode, requesting output in one of the
     /// `preferred` pixel formats (ranked; the decoder picks the first it can
     /// produce without lossy conversion, else its native format).
-    pub fn decode_preferring<'a>(
+    pub fn decode_preferring_formats<'a>(
         &'a self,
         data: &'a [u8],
         preferred: &[PixelFormat],
     ) -> Result<DecodeOutput, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
-        self.decode_as(format, data, preferred)
+        self.decode_with_format(format, data, preferred)
     }
 
-    /// Decode `data` as `format`, skipping detection.
-    pub fn decode_as<'a>(
+    /// Decode `data` as `format`, skipping magic-byte detection.
+    pub fn decode_with_format<'a>(
         &'a self,
         format: ImageFormat,
         data: &'a [u8],
         preferred: &[PixelFormat],
     ) -> Result<DecodeOutput, CodecSetError> {
+        self.check_input_limit(data.len())?;
         Ok(self
             .decode_job(format)?
             .into_decoder(Cow::Borrowed(data), preferred)?
@@ -507,6 +492,7 @@ impl CodecSet {
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelFormat],
     ) -> Result<OutputInfo, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -522,6 +508,7 @@ impl CodecSet {
         data: &'a [u8],
         preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -540,6 +527,7 @@ impl CodecSet {
         data: &'a [u8],
         preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -575,7 +563,7 @@ impl CodecSet {
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelFormat],
-    ) -> Result<OutputInfo, BoxedError> {
+    ) -> Result<OutputInfo, CodecSetError> {
         // A short read (not `len()`) bounds the probe, so a stream-backed
         // source is not consumed to its end before decoding starts.
         let mut probe = alloc::vec![0u8; ImageFormat::RECOMMENDED_PROBE_BYTES + 1024];
@@ -583,13 +571,14 @@ impl CodecSet {
         probe.truncate(n);
         let format = self
             .detect(&probe)
-            .ok_or_else(|| Box::new(CodecSetError::UnrecognizedFormat) as BoxedError)?;
-        self.decode_job(format)
-            .map_err(|e| Box::new(e) as BoxedError)?
-            .push_decoder_from_source(source, sink, preferred)
+            .ok_or(CodecSetError::UnrecognizedFormat)?;
+        Ok(self
+            .decode_job(format)?
+            .push_decoder_from_source(source, sink, preferred)?)
     }
 
-    /// A decode job for `format` with this set's defaults stamped on.
+    /// A decode job for `format` with this set's defaults stamped on and
+    /// checked (`limits`, `pulse`, and `decode_policy` via `try_set_policy`).
     ///
     /// The escape hatch behind every decode convenience: set decode hints
     /// (crop, orientation, gain map, start frame) on the job, then call one of
@@ -598,22 +587,7 @@ impl CodecSet {
         &'a self,
         format: ImageFormat,
     ) -> Result<Box<dyn DynDecodeJob<'a> + 'a>, CodecSetError> {
-        let entry = self
-            .decoder_entry(format)
-            .ok_or(CodecSetError::NoDecoder(format))?;
-        let mut job = entry.dyn_job();
-        if let Some(limits) = self.limits {
-            job.set_limits(limits);
-        }
-        if let Some(pulse) = &self.pulse {
-            job.set_pulse(pulse.clone());
-        }
-        if let Some(policy) = self.decode_policy {
-            // Legacy convenience preserves best-effort behavior.
-            #[allow(deprecated)]
-            job.set_policy(policy);
-        }
-        Ok(job)
+        self.checked_decode_job(format, None)
     }
 
     pub(crate) fn checked_decode_job<'a>(
@@ -641,12 +615,6 @@ impl CodecSet {
     /// Pass this same control through policy, I/O, and native work.
     pub fn pulse(&self) -> &dyn crate::Pulse {
         self.pulse.as_ref().map_or(&crate::NoPulse, |pulse| pulse)
-    }
-
-    /// Legacy name for the operation control.
-    #[deprecated(note = "use pulse; operation control includes progress and cancellation")]
-    pub fn stop(&self) -> &dyn enough::Stop {
-        self.pulse()
     }
 
     pub(crate) fn operation_pulse(&self) -> &dyn crate::Pulse {
@@ -773,7 +741,8 @@ impl CodecSet {
         Ok(self.encode_job_with(format, fidelity)?.encode(pixels)?)
     }
 
-    /// An encode job for `format` with this set's defaults stamped on.
+    /// An encode job for `format` with this set's defaults stamped on and
+    /// checked (`limits`, `pulse`, and `encode_policy` via `try_set_policy`).
     ///
     /// The escape hatch behind the encode conveniences: set metadata, canvas
     /// size, or loop count on the job, then call
@@ -781,41 +750,25 @@ impl CodecSet {
     /// `push_rows`/`finish` streaming) or
     /// [`into_animation_frame_encoder`](DynEncodeJob::into_animation_frame_encoder).
     pub fn encode_job(&self, format: ImageFormat) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
-        let entry = self
-            .encoder_entry(format)
-            .ok_or(CodecSetError::NoEncoder(format))?;
-        Ok(self.stamped_encode_job(entry.as_dyn()))
+        self.checked_encode_job(format, None, None)
     }
 
-    /// Like [`encode_job`](Self::encode_job), with a per-call [`Fidelity`]
-    /// applied to a clone of the template first.
+    /// Like [`encode_job`](Self::encode_job), with a checked per-call
+    /// [`Fidelity`] applied to a clone of the template first.
+    ///
+    /// Unsupported or substituted fidelity targets refuse instead of falling
+    /// back silently.
     pub fn encode_job_with(
         &self,
         format: ImageFormat,
         fidelity: Fidelity,
     ) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
-        let entry = self
-            .encoder_entry(format)
-            .ok_or(CodecSetError::NoEncoder(format))?;
-        let tuned = entry.clone_entry().with_fidelity_entry(fidelity);
-        Ok(self.stamped_encode_job(tuned.as_dyn()))
+        self.checked_encode_job(format, Some(fidelity), None)
     }
 
     /// Decode `input` and re-encode it to `target` at `fidelity` — the one-call
     /// recompress / reformat, carrying the source's metadata under an explicit
-    /// retention policy and applying a color-emission policy.
-    ///
-    /// The headline proxy operation: `decode → carry source metadata → encode`.
-    /// The source's ICC / EXIF / XMP / CICP / HDR / orientation are read off the
-    /// decode result and offered to the encoder, filtered by `metadata`
-    /// ([`Web`](MetadataPolicy::Web) strips GPS / camera / timestamps / XMP and
-    /// keeps orientation + rights + color; [`PreserveExact`](MetadataPolicy::PreserveExact)
-    /// requests all carriers). An encoder may lack a requested carrier; this
-    /// method does not certify byte-exact metadata preservation. `color`
-    /// ([`ColorEmitPolicy`]) governs how
-    /// color *signaling* (ICC vs CICP) is emitted — it is **not** a pixel-level
-    /// color-space conversion. The color policy merges onto the set-level
-    /// [`EncodePolicy`] (overriding only its color field).
+    /// checked retention policy and applying a checked color-emission policy.
     ///
     /// # Scope and failure modes
     ///
@@ -824,20 +777,14 @@ impl CodecSet {
     ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
     /// - **No pixel processing** — recompresses at the decoded dimensions and
     ///   pixel format; no resize, crop, or CMS conversion.
-    /// - **No implicit descriptor downgrade** — if the target cannot accept
-    ///   the decoded descriptor, use an explicit pixel conversion or a
+    /// - **No implicit pixel-format downgrade** — if the target cannot accept
+    ///   the decoded pixel format, use an explicit pixel conversion or a
     ///   codec-specific encode path. The registered decoder is not re-run at a
     ///   lower precision behind the caller's back.
-    /// - **Fidelity and carrier support are best-effort** — the existing
-    ///   `with_fidelity`, `with_metadata_policy` and `with_policy` contracts do
-    ///   not report whether every request was honored. Use checked
-    ///   operation APIs when a property is required; capability flags are not admission.
-    ///
-    /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
-    /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
-    /// when `target` has no registered encoder, and forwards any decode or
-    /// encode error.
-    #[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
+    /// - **Checked fidelity, metadata, and color policy** — routes through
+    ///   `try_fidelity_job`, `try_set_metadata_policy`, and `try_set_policy`;
+    ///   an encoder that cannot honor the requested fidelity, retention policy,
+    ///   or color policy refuses with an error.
     pub fn transcode(
         &self,
         input: &[u8],
@@ -846,10 +793,11 @@ impl CodecSet {
         metadata: MetadataPolicy,
         color: ColorEmitPolicy,
     ) -> Result<EncodeOutput, CodecSetError> {
+        self.check_input_limit(input.len())?;
         let target_inputs = self
             .encoder_for(target)
             .ok_or(CodecSetError::NoEncoder(target))?
-            .supported_descriptors();
+            .supported_pixel_formats();
         // This is a still-image convenience. Reject known source content that
         // cannot travel through a single PixelView before decoding samples.
         let format = self
@@ -878,15 +826,12 @@ impl CodecSet {
             ));
         }
         let source_metadata = Metadata::from(decoded.info());
-        let mut job = self.encode_job_with(target, fidelity)?;
-        job.set_metadata_policy(source_metadata, metadata);
-        // Legacy transcode preserves best-effort behavior.
-        #[allow(deprecated)]
-        job.set_policy(
-            self.encode_policy
-                .unwrap_or_else(EncodePolicy::none)
-                .with_color(color),
-        );
+        let policy = self
+            .encode_policy
+            .unwrap_or_else(EncodePolicy::none)
+            .with_color(color);
+        let mut job = self.checked_encode_job(target, Some(fidelity), Some(policy))?;
+        job.try_set_metadata_policy(source_metadata, metadata)?;
         Ok(job.encode(decoded.pixels())?)
     }
 
@@ -973,7 +918,7 @@ impl CodecSet {
     /// (same `UnrecognizedFormat` / codec errors), then estimates a still frame
     /// at the probed canvas dimensions in the decoder's native output format —
     /// its first
-    /// [`supported_descriptors`](DynDecoderConfig::supported_descriptors), which
+    /// [`supported_pixel_formats`](DynDecoderConfig::supported_pixel_formats), which
     /// carries the real channel count and bit depth (falling back to RGBA8 /
     /// RGB8 from the probed alpha only if the decoder lists none). Animations
     /// are costed as one canvas frame; for per-frame or full-sequence cost, or
@@ -984,6 +929,7 @@ impl CodecSet {
         data: &[u8],
         compute: &ComputeEnvironment,
     ) -> Result<ResourceEstimate, CodecSetError> {
+        self.check_input_limit(data.len())?;
         // Key off the *detected* (registration) format, which is what
         // `decoder_for` / `estimate_decode` index on — not `info.format`, the
         // format the decoder *reports*, which can differ (e.g. a decoder
@@ -992,7 +938,7 @@ impl CodecSet {
         let info = self.decode_job(format)?.probe(data)?;
         let descriptor = self
             .decoder_for(format)
-            .and_then(|d| d.supported_descriptors().first().cloned())
+            .and_then(|d| d.supported_pixel_formats().first().cloned())
             .unwrap_or(if info.has_alpha {
                 PixelFormat::RGBA8_SRGB
             } else {
@@ -1018,22 +964,6 @@ impl CodecSet {
             .iter()
             .find(|e| e.as_dyn().format() == format)
             .map(|b| &**b)
-    }
-
-    fn stamped_encode_job(&self, config: &dyn DynEncoderConfig) -> Box<dyn DynEncodeJob> {
-        let mut job = config.dyn_job();
-        if let Some(limits) = self.limits {
-            job.set_limits(limits);
-        }
-        if let Some(pulse) = &self.pulse {
-            job.set_pulse(pulse.clone());
-        }
-        if let Some(policy) = self.encode_policy {
-            // Legacy convenience preserves best-effort behavior.
-            #[allow(deprecated)]
-            job.set_policy(policy);
-        }
-        job
     }
 }
 
@@ -1142,8 +1072,8 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
 
-    fn output_descriptor(&self) -> Option<PixelFormat> {
-        self.inner.as_ref().and_then(|d| d.output_descriptor())
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.inner.as_ref().and_then(|d| d.output_pixel_format())
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -1191,9 +1121,9 @@ mod tests {
     }
 
     #[test]
-    fn decode_as_without_decoder_is_no_decoder() {
+    fn decode_with_format_without_decoder_is_no_decoder() {
         let set = CodecSet::new();
-        match set.decode_as(ImageFormat::Jpeg, &[0xFF, 0xD8], &[]) {
+        match set.decode_with_format(ImageFormat::Jpeg, &[0xFF, 0xD8], &[]) {
             Err(CodecSetError::NoDecoder(ImageFormat::Jpeg)) => {}
             other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
         }

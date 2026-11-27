@@ -3,7 +3,9 @@
 use alloc::format;
 use alloc::vec::Vec;
 
-use zencodec::decode::{BatchMeta, DecodeRowSink, RowMetadata, SinkError};
+use zencodec::decode::{
+    BatchMeta, DecodeRowSink, RowMetadata, RowStrip, SinkError, StripDimensions,
+};
 use zenpixels::{
     ByteStorage, ByteStorageMut, PixelBuf, PixelBufParts, PixelFormat, PixelView, PixelViewMut,
 };
@@ -139,15 +141,12 @@ impl DecodeRowSink for CollectSink {
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
+        strip: RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.provide_buffer_with_metadata(
-            BatchMeta::final_rows(y),
-            height,
-            width,
+            BatchMeta::final_rows(strip.y),
+            StripDimensions::new(strip.width, strip.height),
             descriptor,
             &RowMetadata::default(),
         )
@@ -156,11 +155,11 @@ impl DecodeRowSink for CollectSink {
     fn provide_buffer_with_metadata(
         &mut self,
         meta: BatchMeta,
-        height: u32,
-        width: u32,
+        size: StripDimensions,
         descriptor: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
+        let StripDimensions { width, height } = size;
         if !meta.is_final {
             return Err("CollectSink: provisional rows are not admitted".into());
         }
@@ -245,11 +244,11 @@ mod tests {
     fn completed_pixels_cannot_be_reopened_for_writing() {
         let mut sink = CollectSink::new();
         sink.begin(1, 1, PixelFormat::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
+        sink.provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
+            sink.provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::GRAY8_SRGB)
                 .is_err()
         );
     }
@@ -259,20 +258,20 @@ mod tests {
         let mut sink = CollectSink::new();
         sink.begin(1, 65, PixelFormat::GRAY8_SRGB).unwrap();
         for _ in 0..65 {
-            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
+            sink.provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::GRAY8_SRGB)
                 .unwrap();
         }
         assert_eq!(sink.rows_written(), 65);
         assert!(sink.finish().is_err());
         assert!(!sink.finished());
         // Out-of-order and overlapping delivery remain valid.
-        sink.provide_next_buffer(32, 33, 1, PixelFormat::GRAY8_SRGB)
+        sink.provide_next_buffer(RowStrip::new(32, 1, 33), PixelFormat::GRAY8_SRGB)
             .unwrap();
-        sink.provide_next_buffer(1, 32, 1, PixelFormat::GRAY8_SRGB)
+        sink.provide_next_buffer(RowStrip::new(1, 1, 32), PixelFormat::GRAY8_SRGB)
             .unwrap();
         sink.finish().unwrap();
         assert!(
-            sink.provide_next_buffer(0, 1, 1, PixelFormat::GRAY8_SRGB)
+            sink.provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::GRAY8_SRGB)
                 .is_err()
         );
         assert!(sink.into_buffer().is_some());
@@ -290,7 +289,7 @@ mod tests {
             let original = sink.bytes().as_ptr();
             for y in 0..2 {
                 let mut rows = sink
-                    .provide_next_buffer(y, 1, 3, descriptor.clone())
+                    .provide_next_buffer(RowStrip::new(y, 3, 1), descriptor.clone())
                     .unwrap();
                 rows.row_mut(0).fill(37 + y as u8);
             }
@@ -309,7 +308,7 @@ mod tests {
         assert!(CollectSink::new().into_buffer().is_none());
         let mut sink = CollectSink::new();
         sink.begin(2, 1, PixelFormat::GRAY8_SRGB).unwrap();
-        sink.provide_next_buffer(0, 1, 2, PixelFormat::GRAY8_SRGB)
+        sink.provide_next_buffer(RowStrip::new(0, 2, 1), PixelFormat::GRAY8_SRGB)
             .unwrap()
             .row_mut(0)
             .copy_from_slice(&[17, 23]);
@@ -331,7 +330,7 @@ mod tests {
         assert!(!sink.finished());
         sink.begin(3, 2, PixelFormat::GRAY8_SRGB).unwrap();
         for y in 0..2 {
-            sink.provide_next_buffer(y, 1, 3, PixelFormat::GRAY8_SRGB)
+            sink.provide_next_buffer(RowStrip::new(y, 3, 1), PixelFormat::GRAY8_SRGB)
                 .unwrap()
                 .row_mut(0)
                 .copy_from_slice(&[1 + y as u8, 3, 5]);

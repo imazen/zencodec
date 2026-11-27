@@ -1,5 +1,5 @@
-//! Stored requests bind configuration before starting a controlled native job.
-use super::{DecodeRequest, OperationError, Output};
+//! Stored options bind configuration before starting a controlled native job.
+use super::{DecodeOptions, OperationError, Output};
 use crate::{
     CodecSet, CodecSetError, ImageFormat, ImageInfo, decode::*, source::AccessPattern,
     storage::StorageBudget,
@@ -9,7 +9,7 @@ use alloc::boxed::Box;
 use zenpixels::PixelFormat;
 
 pub(super) struct CheckedDecoder {
-    request: DecodeRequest,
+    request: DecodeOptions,
     codecs: CodecSet,
     storage: StorageBudget,
     inner: Option<Box<DynControlledDecoder>>,
@@ -17,7 +17,7 @@ pub(super) struct CheckedDecoder {
 }
 impl CheckedDecoder {
     pub(super) fn new(
-        request: DecodeRequest,
+        request: DecodeOptions,
         codecs: CodecSet,
         storage: StorageBudget,
     ) -> Result<Self, OperationError> {
@@ -75,8 +75,8 @@ impl IncrementalDecode for CheckedDecoder {
     fn take_details(&mut self) -> Option<DecodeDetails> {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
-    fn output_descriptor(&self) -> Option<PixelFormat> {
-        self.inner.as_ref().and_then(|d| d.output_descriptor())
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.inner.as_ref().and_then(|d| d.output_pixel_format())
     }
     fn access_pattern(&self) -> AccessPattern {
         self.inner.as_ref().map_or_else(
@@ -114,10 +114,10 @@ impl ControlledIncrementalDecode for CheckedDecoder {
         if let ControlledProgress::Suspended { boundary, .. } = &progress
             && boundary.facts().state == InterpretationState::Final
             && let Output::Require(requested) = &self.request.output
-            && let Some(actual) = &boundary.facts().descriptor
+            && let Some(actual) = &boundary.facts().pixel_format
             && actual != requested
         {
-            return Err(StepError::Codec(OperationError::OutputDescriptor {
+            return Err(StepError::Codec(OperationError::OutputPixelFormat {
                 requested: Box::new(requested.clone()),
                 actual: Box::new(actual.clone()),
             }));
@@ -162,7 +162,7 @@ pub(super) fn decode_owned(
     if let (Some(requested), Some(actual)) = (required.as_ref(), prepared)
         && &actual != requested
     {
-        return Err(OperationError::OutputDescriptor {
+        return Err(OperationError::OutputPixelFormat {
             requested: Box::new(requested.clone()),
             actual: Box::new(actual),
         });
@@ -174,7 +174,7 @@ pub(super) fn decode_owned(
     if let Some(requested) = required {
         let actual = output.pixels().format().clone();
         if actual != requested {
-            return Err(OperationError::OutputDescriptor {
+            return Err(OperationError::OutputPixelFormat {
                 requested: Box::new(requested),
                 actual: Box::new(actual),
             });
@@ -260,7 +260,7 @@ mod admission_tests {
             } else if !succeeds {
                 assert!(matches!(
                     result,
-                    Err(OperationError::OutputDescriptor { .. })
+                    Err(OperationError::OutputPixelFormat { .. })
                 ));
             }
         }

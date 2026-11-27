@@ -15,7 +15,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::output::OwnedAnimationFrame;
-use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
+use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits};
 
 use zenpixels::{PixelFormat, PixelView};
 
@@ -224,23 +224,11 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 /// [`DynDecoderConfig::dyn_job`]. Use the `set_*` methods to configure,
 /// then call one of the `into_*` methods to create a decoder.
 pub trait DynDecodeJob<'a> {
-    /// Set cooperative cancellation token.
-    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    fn set_stop(&mut self, pulse: StopToken) {
-        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
-    }
-
     /// Retain all operation control capabilities through type erasure.
     fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
-
-    /// Legacy best-effort decode policy; unsupported fields may be ignored.
-    #[deprecated(
-        note = "may silently ignore policy; use try_set_policy or a checked operation request"
-    )]
-    fn set_policy(&mut self, policy: crate::DecodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
     ///
@@ -270,7 +258,7 @@ pub trait DynDecodeJob<'a> {
     }
 
     /// Hint: crop to this region in source coordinates.
-    fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
+    fn set_crop_hint(&mut self, crop: crate::image::Rect);
 
     /// Set orientation handling strategy.
     fn set_orientation(&mut self, hint: OrientationHint);
@@ -419,12 +407,6 @@ where
         self.try_apply(|job| job.with_limits(limits));
     }
 
-    fn set_policy(&mut self, policy: crate::DecodePolicy) {
-        // Preserve the legacy setter behavior; checked callers use try_set_policy.
-        #[allow(deprecated)]
-        self.try_apply(|job| job.with_policy(policy));
-    }
-
     fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
         let Some(job) = self.0.as_mut() else {
             return Err("DecodeJobShim: job already consumed (double take)".into());
@@ -451,8 +433,8 @@ where
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        self.try_apply(|job| job.with_crop_hint(x, y, width, height));
+    fn set_crop_hint(&mut self, crop: crate::image::Rect) {
+        self.try_apply(|job| job.with_crop_hint(crop));
     }
 
     fn set_orientation(&mut self, hint: OrientationHint) {
@@ -591,7 +573,7 @@ pub trait DynDecoderConfig: Send + Sync {
     fn formats(&self) -> &'static [ImageFormat];
 
     /// Pixel formats this decoder can produce natively.
-    fn supported_descriptors(&self) -> &'static [PixelFormat];
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat];
 
     /// Decoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static DecodeCapabilities;
@@ -628,8 +610,8 @@ where
         C::formats()
     }
 
-    fn supported_descriptors(&self) -> &'static [PixelFormat] {
-        C::supported_descriptors()
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
 
     fn capabilities(&self) -> &'static DecodeCapabilities {

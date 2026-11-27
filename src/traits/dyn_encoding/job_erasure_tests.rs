@@ -29,7 +29,7 @@ impl EncodeJob for Job {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
     fn extensions(&self) -> Option<&dyn Any> {
@@ -202,8 +202,8 @@ impl EncodeJob for CheckedMetadataJob {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
-        panic!("checked path called best-effort setter")
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
+        panic!("checked path called unfiltered setter")
     }
     fn try_set_metadata_policy(
         &mut self,

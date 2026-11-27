@@ -30,15 +30,13 @@ struct Sink {
 impl DecodeRowSink for Sink {
     fn provide_next_buffer(
         &mut self,
-        _: u32,
-        rows: u32,
-        width: u32,
+        strip: RowStrip,
         descriptor: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         Ok(PixelViewMut::new_with_format_cow(
             &mut self.bytes,
-            width,
-            rows,
+            strip.width,
+            strip.height,
             1,
             zenpixels::FormatCow::from_owned(descriptor),
         )?)
@@ -58,7 +56,7 @@ fn producer(
 ) -> impl IncrementalDecode<Error = CoroutineError> {
     CoroutineDecoder::new(move |mut ctx| async move {
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(DESC);
+        ctx.set_output_pixel_format(DESC);
         let mut result = details(drops);
         if wrong_geometry {
             result.info.width = 2;
@@ -196,7 +194,7 @@ fn cancelled_resume_discards_pending_details_without_adoption() {
         zencodec::source::AccessPattern::Sequential,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.set_details(details(owned));
             ctx.interpretation(InterpretationFacts::new(
                 1,
@@ -239,7 +237,7 @@ fn terminal_details_cannot_change_adopted_interpretation() {
         zencodec::source::AccessPattern::Sequential,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.interpretation(InterpretationFacts::new(
                 1,
                 1,
@@ -306,9 +304,7 @@ fn sink_stop_prevents_completion_and_releases_details() {
     impl DecodeRowSink for StoppingSink {
         fn provide_next_buffer(
             &mut self,
-            _: u32,
-            _: u32,
-            _: u32,
+            _: RowStrip,
             _: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("completion-only producer has no row callback");
@@ -338,7 +334,7 @@ fn sink_stop_prevents_completion_and_releases_details() {
                 let owner = drops.clone();
                 let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
                     ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-                    ctx.set_output_descriptor(DESC);
+                    ctx.set_output_pixel_format(DESC);
                     ctx.set_details(details(owner));
                     Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
                 });
@@ -458,7 +454,7 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
         zencodec::source::AccessPattern::Sequential,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(first.clone());
+            ctx.set_output_pixel_format(first.clone());
             ctx.interpretation(InterpretationFacts::new(
                 1,
                 1,
@@ -466,7 +462,7 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
                 InterpretationState::Final,
             ))
             .await?;
-            ctx.set_output_descriptor(changed.clone());
+            ctx.set_output_pixel_format(changed.clone());
             let pixels = PixelView::new_with_format_cow(
                 &[81],
                 1,

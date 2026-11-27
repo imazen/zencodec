@@ -122,7 +122,7 @@ impl EncodeRouteFacts {
             pixels: EncodeFacts {
                 width: declaration.width,
                 height: declaration.height,
-                descriptor: declaration.descriptor.clone(),
+                pixel_format: declaration.pixel_format.clone(),
             },
             evidence,
             input: plan.input,

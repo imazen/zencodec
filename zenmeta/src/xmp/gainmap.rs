@@ -72,6 +72,16 @@ impl core::fmt::Display for XmpError {
 }
 impl core::error::Error for XmpError {}
 
+/// Parsed Ultra HDR gain-map XMP metadata and optional container byte length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ParsedGainMapXmp {
+    /// Decoded gain-map numeric parameters (`hdrgm:*`).
+    pub params: zencodec::GainMapParams,
+    /// Optional `Item:Length` (in bytes) of the secondary gain-map image from
+    /// `Container:Directory`, when present in the same XMP packet.
+    pub gain_map_byte_len: Option<usize>,
+}
+
 /// Generate XMP for a 2-item Primary + GainMap Ultra HDR image.
 ///
 /// This single packet goes in the primary JPEG's APP1 marker. It carries
@@ -96,9 +106,9 @@ impl core::error::Error for XmpError {}
 ///     c.gamma = 1.0;
 /// }
 /// let xmp = generate_xmp(&params, 5_000).expect("representable metadata");
-/// let (parsed, length) = parse_xmp(&xmp).expect("parse");
-/// assert_eq!(length, Some(5_000));
-/// assert!((parsed.channels[0].max - 2.0).abs() < 1e-5);
+/// let parsed = parse_xmp(&xmp).expect("parse");
+/// assert_eq!(parsed.gain_map_byte_len, Some(5_000));
+/// assert!((parsed.params.channels[0].max - 2.0).abs() < 1e-5);
 /// ```
 pub fn generate_xmp(
     metadata: &zencodec::GainMapParams,
@@ -253,10 +263,10 @@ fn format_triple(values: &[f64; 3], single_channel: bool) -> String {
 /// Parse Ultra HDR XMP numeric metadata + optional `Item:Length` for
 /// the gain map.
 ///
-/// Returns `(metadata, gainmap_length)`. For access to the full
+/// Returns [`ParsedGainMapXmp`]. For access to the full
 /// `Container:Directory` (depth maps, confidence maps, vendor items),
 /// use [`parse_xmp_full`] instead.
-pub fn parse_xmp(xmp: &str) -> Result<(zencodec::GainMapParams, Option<usize>), XmpError> {
+pub fn parse_xmp(xmp: &str) -> Result<ParsedGainMapXmp, XmpError> {
     if xmp.len() > MAX_XMP_LENGTH {
         return Err(XmpError::LengthLimit {
             got: xmp.len(),
@@ -336,7 +346,10 @@ pub fn parse_xmp(xmp: &str) -> Result<(zencodec::GainMapParams, Option<usize>), 
     if gainmaps.next().is_some() {
         return Err(XmpError::Invalid("multiple gain-map items".into()));
     }
-    Ok((metadata, length))
+    Ok(ParsedGainMapXmp {
+        params: metadata,
+        gain_map_byte_len: length,
+    })
 }
 fn numeric_values(values: Vec<String>, name: &str) -> Result<Vec<f64>, XmpError> {
     values
@@ -363,7 +376,7 @@ pub fn parse_xmp_full(xmp: &str) -> (Option<zencodec::GainMapParams>, Vec<Contai
         return (None, Vec::new());
     };
     (
-        parse_xmp(xmp).ok().map(|(m, _)| m),
+        parse_xmp(xmp).ok().map(|p| p.params),
         checked_container_items(&packet).unwrap_or_default(),
     )
 }
@@ -484,8 +497,9 @@ mod tests {
     fn parse_xmp_roundtrips_scalar_values() {
         let original = test_metadata();
         let xmp = generate_xmp(&original, 5_000).unwrap();
-        let (parsed, length) = parse_xmp(&xmp).unwrap();
-        assert_eq!(length, Some(5_000));
+        let parsed_xmp = parse_xmp(&xmp).unwrap();
+        let parsed = parsed_xmp.params;
+        assert_eq!(parsed_xmp.gain_map_byte_len, Some(5_000));
         // Verify every numeric field roundtrips, not just .max.
         for i in 0..3 {
             assert!((parsed.channels[i].min - original.channels[i].min).abs() < XMP_FLOAT_TOL);
@@ -510,7 +524,7 @@ mod tests {
     fn parse_xmp_roundtrips_multi_channel_values() {
         let original = multi_channel_metadata();
         let xmp = generate_xmp(&original, 5_000).unwrap();
-        let (parsed, _) = parse_xmp(&xmp).unwrap();
+        let parsed = parse_xmp(&xmp).unwrap().params;
         // All three channels must differ — a regression that replicated
         // channel-0 to 1/2 would have channels[0].min == channels[1].min.
         for i in 0..3 {
@@ -610,8 +624,9 @@ mod tests {
  </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>"#;
-        let (parsed, length) = parse_xmp(xmp).expect("seine gain-map XMP must parse");
-        assert_eq!(length, None);
+        let parsed_xmp = parse_xmp(xmp).expect("seine gain-map XMP must parse");
+        let parsed = parsed_xmp.params;
+        assert_eq!(parsed_xmp.gain_map_byte_len, None);
 
         let expect_min = [-0.256907, -0.261365, -0.280284];
         let expect_max = [1.277177, 1.277203, 1.277969];
@@ -660,7 +675,7 @@ mod tests {
             .unwrap()
             .replace("hdrgm:", "gain:")
             .replace("xmlns:hdrgm=", "xmlns:gain=");
-        assert_eq!(parse_xmp(&xml).unwrap().1, Some(123));
+        assert_eq!(parse_xmp(&xml).unwrap().gain_map_byte_len, Some(123));
         let fake = xml.replace(HDRGM_NAMESPACE, "urn:spoof");
         assert!(matches!(parse_xmp(&fake), Err(XmpError::NotUltraHdr)));
         let duplicate = xml.replace(
@@ -762,9 +777,10 @@ mod tests {
                 return Ok(());
             }
             let xmp = result.unwrap();
-            let (parsed, parsed_length) = parse_xmp(&xmp)
+            let parsed_xmp = parse_xmp(&xmp)
                 .expect("parse should succeed on self-generated XMP");
-            prop_assert_eq!(parsed_length, Some(length));
+            let parsed = parsed_xmp.params;
+            prop_assert_eq!(parsed_xmp.gain_map_byte_len, Some(length));
 
             for i in 0..3 {
                 prop_assert!(

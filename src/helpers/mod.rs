@@ -28,11 +28,7 @@ pub use cicp::{
     CicpDisplay, color_primaries_name, matrix_coefficients_name, transfer_characteristics_name,
 };
 pub use exif::{parse_exif_orientation, set_exif_color_space, set_exif_orientation};
-pub use icc::descriptor_for_decoded_pixels_v2;
-#[allow(deprecated)]
-pub use icc::{
-    IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
-};
+pub use icc::{pixel_format_for_decoded_pixels, resolve_color};
 pub use pixels::codec_spec;
 #[cfg(test)]
 pub(crate) use pixels::signal_range;
@@ -63,8 +59,7 @@ pub fn copy_rows_to_sink(
         part.y += offset;
         let mut dst = sink.provide_buffer_with_metadata(
             part,
-            rows,
-            pixels.width(),
+            crate::sink::StripDimensions::new(pixels.width(), rows),
             pixels.format().clone(),
             &metadata,
         )?;

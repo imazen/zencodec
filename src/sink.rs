@@ -35,6 +35,65 @@ use zenpixels::{ColorOrigin, HdrMetadata, PixelFormat, PixelView, PixelViewMut, 
 /// Boxed error type for sink failures.
 pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
 
+/// Location and size of a horizontal strip requested from a [`DecodeRowSink`].
+///
+/// Using a named struct avoids swapping `width` and `height` across sink
+/// implementations and call sites.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RowStrip {
+    /// Starting row index (top row of this strip, 0-based).
+    pub y: u32,
+    /// Width of the strip in pixels.
+    pub width: u32,
+    /// Number of rows in this strip.
+    pub height: u32,
+}
+
+impl RowStrip {
+    /// Construct a strip request at row `y` with `width` pixels and `height` rows.
+    #[inline]
+    pub const fn new(y: u32, width: u32, height: u32) -> Self {
+        Self { y, width, height }
+    }
+
+    /// Return the strip's `(width, height)` as [`StripDimensions`].
+    #[inline]
+    pub const fn dimensions(self) -> StripDimensions {
+        StripDimensions {
+            width: self.width,
+            height: self.height,
+        }
+    }
+}
+
+/// Width and row count of a strip whose starting row `y` is carried in
+/// [`BatchMeta`](crate::decode::BatchMeta).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StripDimensions {
+    /// Width of the strip in pixels.
+    pub width: u32,
+    /// Number of rows in this strip.
+    pub height: u32,
+}
+
+impl StripDimensions {
+    /// Construct strip dimensions of `width` pixels by `height` rows.
+    #[inline]
+    pub const fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
+    /// Combine with a starting row `y` into a [`RowStrip`].
+    #[inline]
+    pub const fn at_row(self, y: u32) -> RowStrip {
+        RowStrip {
+            y,
+            width: self.width,
+            height: self.height,
+        }
+    }
+}
+
 /// Evidence and provenance for the active samples of one decoded strip.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
@@ -126,7 +185,7 @@ impl RowMetadata {
 /// # Example implementation
 ///
 /// ```
-/// use zencodec::decode::DecodeRowSink;
+/// use zencodec::decode::{DecodeRowSink, RowStrip};
 /// use zenpixels::{PixelFormat, PixelViewMut, FormatCow};
 ///
 /// struct CollectSink {
@@ -134,13 +193,23 @@ impl RowMetadata {
 /// }
 ///
 /// impl DecodeRowSink for CollectSink {
-///     fn provide_next_buffer(&mut self, _y: u32, height: u32, width: u32, descriptor: PixelFormat) -> Result<PixelViewMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
-///         let bpp = descriptor.layout.bytes_per_pixel();
-///         let stride = width as usize * bpp;
-///         let needed = height as usize * stride;
+///     fn provide_next_buffer(
+///         &mut self,
+///         strip: RowStrip,
+///         format: PixelFormat,
+///     ) -> Result<PixelViewMut<'_>, Box<dyn core::error::Error + Send + Sync>> {
+///         let bpp = format.layout.bytes_per_pixel();
+///         let stride = strip.width as usize * bpp;
+///         let needed = strip.height as usize * stride;
 ///         self.buf.resize(needed, 0);
-///         Ok(PixelViewMut::new_with_format_cow(&mut self.buf, width, height, stride, FormatCow::from_owned(descriptor))
-///             .expect("buffer sized correctly"))
+///         Ok(PixelViewMut::new_with_format_cow(
+///             &mut self.buf,
+///             strip.width,
+///             strip.height,
+///             stride,
+///             FormatCow::from_owned(format),
+///         )
+///         .expect("buffer sized correctly"))
 ///     }
 /// }
 /// ```
@@ -154,12 +223,7 @@ pub trait DecodeRowSink {
     /// - Initialize processing state
     ///
     /// Return `Err(...)` to abort the decode. Default: no-op.
-    fn begin(
-        &mut self,
-        _width: u32,
-        _height: u32,
-        _descriptor: PixelFormat,
-    ) -> Result<(), SinkError> {
+    fn begin(&mut self, _width: u32, _height: u32, _format: PixelFormat) -> Result<(), SinkError> {
         Ok(())
     }
 
@@ -177,12 +241,11 @@ pub trait DecodeRowSink {
         core::num::NonZeroU32::MAX
     }
 
-    /// Provide a mutable pixel buffer for decoded rows `y .. y + height`.
+    /// Provide a mutable pixel buffer for decoded rows `strip.y .. strip.y + strip.height`.
     ///
-    /// The codec passes the strip `width` (pixels), `height` (rows in this
-    /// strip), and `descriptor` (pixel format). The sink returns a
-    /// [`PixelViewMut`] with its chosen stride.
-    /// Its width, row count and descriptor must match the request. Respect
+    /// The codec passes `strip` (`y`, `width`, `height`) and `format` (pixel
+    /// format). The sink returns a [`PixelViewMut`] with its chosen stride.
+    /// Its width, row count and pixel format must match the request. Respect
     /// [`max_buffer_rows`](Self::max_buffer_rows) when dividing native batches.
     ///
     /// The codec writes into the buffer via `row_mut()` for each row.
@@ -194,10 +257,8 @@ pub trait DecodeRowSink {
     /// the caller.
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelFormat,
+        strip: RowStrip,
+        format: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError>;
 
     /// Lend rows whose incoming samples carry explicit evidence or provenance.
@@ -208,15 +269,14 @@ pub trait DecodeRowSink {
     fn provide_buffer_with_metadata(
         &mut self,
         meta: crate::decode::BatchMeta,
-        height: u32,
-        width: u32,
-        descriptor: PixelFormat,
+        size: StripDimensions,
+        format: PixelFormat,
         metadata: &RowMetadata,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         let view = if meta.is_final {
-            self.provide_next_buffer(meta.y, height, width, descriptor)?
+            self.provide_next_buffer(size.at_row(meta.y), format)?
         } else {
-            self.provide_pass_buffer(meta, height, width, descriptor)?
+            self.provide_pass_buffer(meta, size, format)?
         };
         Ok(view.with_hdr(metadata.hdr))
     }
@@ -245,7 +305,7 @@ pub trait DecodeRowSink {
         false
     }
 
-    /// Provide a buffer for provisional rows `meta.y .. meta.y + height` of
+    /// Provide a buffer for provisional rows `meta.y .. meta.y + size.height` of
     /// pass `meta.pass`: an approximation a later pass replaces. Called only
     /// on sinks whose [`accepts_provisional`](Self::accepts_provisional)
     /// returned `true`, never for final rows (`meta.is_final` is `false`),
@@ -258,11 +318,10 @@ pub trait DecodeRowSink {
     fn provide_pass_buffer(
         &mut self,
         meta: crate::traits::BatchMeta,
-        height: u32,
-        width: u32,
-        descriptor: PixelFormat,
+        size: StripDimensions,
+        format: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
-        let _ = (meta, height, width, descriptor);
+        let _ = (meta, size, format);
         Err("this sink does not accept provisional rows".into())
     }
 }
@@ -289,7 +348,7 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                _descriptor: PixelFormat,
+                _format: PixelFormat,
             ) -> Result<(), SinkError> {
                 assert!(!self.began, "begin called twice");
                 self.began = true;
@@ -298,23 +357,21 @@ mod tests {
 
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelFormat,
+                strip: RowStrip,
+                format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 assert!(self.began, "provide_next_buffer before begin");
-                self.strips.push((y, height));
-                let bpp = descriptor.layout.bytes_per_pixel();
-                let stride = width as usize * bpp;
-                let needed = height as usize * stride;
+                self.strips.push((strip.y, strip.height));
+                let bpp = format.layout.bytes_per_pixel();
+                let stride = strip.width as usize * bpp;
+                let needed = strip.height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
-                    width,
-                    height,
+                    strip.width,
+                    strip.height,
                     stride,
-                    zenpixels::FormatCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(format),
                 )
                 .expect("valid buffer"))
             }
@@ -343,7 +400,9 @@ mod tests {
         for strip in 0..3u32 {
             let y = strip * 8;
             let h = 8;
-            let mut ps = sink.provide_next_buffer(y, h, width, desc.clone()).unwrap();
+            let mut ps = sink
+                .provide_next_buffer(RowStrip::new(y, width, h), desc.clone())
+                .unwrap();
             assert_eq!(ps.stride_bytes(), 30);
             for row in 0..h {
                 let row_data = ps.row_mut(row);
@@ -371,21 +430,19 @@ mod tests {
         impl DecodeRowSink for SimpleSink {
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelFormat,
+                strip: RowStrip,
+                format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                let bpp = descriptor.layout.bytes_per_pixel();
-                let stride = width as usize * bpp;
-                let needed = height as usize * stride;
+                let bpp = format.layout.bytes_per_pixel();
+                let stride = strip.width as usize * bpp;
+                let needed = strip.height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
-                    width,
-                    height,
+                    strip.width,
+                    strip.height,
                     stride,
-                    zenpixels::FormatCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(format),
                 )
                 .expect("valid buffer"))
             }
@@ -394,7 +451,7 @@ mod tests {
         fn use_sink(sink: &mut dyn DecodeRowSink) {
             sink.begin(10, 8, PixelFormat::RGB8_SRGB).unwrap();
             let ps = sink
-                .provide_next_buffer(0, 8, 10, PixelFormat::RGB8_SRGB)
+                .provide_next_buffer(RowStrip::new(0, 10, 8), PixelFormat::RGB8_SRGB)
                 .unwrap();
             assert_eq!(ps.stride_bytes(), 30);
             assert_eq!(ps.width(), 10);
@@ -416,22 +473,20 @@ mod tests {
         impl DecodeRowSink for ReuseSink {
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelFormat,
+                strip: RowStrip,
+                format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 self.call_count += 1;
-                let bpp = descriptor.layout.bytes_per_pixel();
-                let stride = width as usize * bpp;
-                let needed = height as usize * stride;
+                let bpp = format.layout.bytes_per_pixel();
+                let stride = strip.width as usize * bpp;
+                let needed = strip.height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
-                    width,
-                    height,
+                    strip.width,
+                    strip.height,
                     stride,
-                    zenpixels::FormatCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(format),
                 )
                 .expect("valid buffer"))
             }
@@ -446,19 +501,25 @@ mod tests {
 
         // Multiple sequential borrows — each one ends before the next starts
         {
-            let mut ps = sink.provide_next_buffer(0, 4, 10, desc.clone()).unwrap();
+            let mut ps = sink
+                .provide_next_buffer(RowStrip::new(0, 10, 4), desc.clone())
+                .unwrap();
             for row in 0..4 {
                 ps.row_mut(row).fill(1);
             }
         }
         {
-            let mut ps = sink.provide_next_buffer(4, 4, 10, desc.clone()).unwrap();
+            let mut ps = sink
+                .provide_next_buffer(RowStrip::new(4, 10, 4), desc.clone())
+                .unwrap();
             for row in 0..4 {
                 ps.row_mut(row).fill(2);
             }
         }
         {
-            let mut ps = sink.provide_next_buffer(8, 4, 10, desc).unwrap();
+            let mut ps = sink
+                .provide_next_buffer(RowStrip::new(8, 10, 4), desc)
+                .unwrap();
             for row in 0..4 {
                 ps.row_mut(row).fill(3);
             }
@@ -478,27 +539,25 @@ mod tests {
         impl DecodeRowSink for AlignedSink {
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelFormat,
+                strip: RowStrip,
+                format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                let bpp = descriptor.layout.bytes_per_pixel();
-                let row_bytes = width as usize * bpp;
+                let bpp = format.layout.bytes_per_pixel();
+                let row_bytes = strip.width as usize * bpp;
                 // Round stride up to next multiple of 64
                 let stride = (row_bytes + 63) & !63;
-                let needed = if height > 0 {
-                    (height as usize - 1) * stride + row_bytes
+                let needed = if strip.height > 0 {
+                    (strip.height as usize - 1) * stride + row_bytes
                 } else {
                     0
                 };
                 self.buf.resize(needed, 0);
                 Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
-                    width,
-                    height,
+                    strip.width,
+                    strip.height,
                     stride,
-                    zenpixels::FormatCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(format),
                 )
                 .expect("valid buffer"))
             }
@@ -508,7 +567,7 @@ mod tests {
 
         // RGBA8: width=10, bpp=4 → row_bytes=40, stride=64
         let ps = sink
-            .provide_next_buffer(0, 4, 10, PixelFormat::RGBA8_SRGB)
+            .provide_next_buffer(RowStrip::new(0, 10, 4), PixelFormat::RGBA8_SRGB)
             .unwrap();
         assert_eq!(ps.stride_bytes(), 64);
         assert_eq!(ps.width(), 10);
@@ -523,17 +582,15 @@ mod tests {
         impl DecodeRowSink for FailSink {
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                _height: u32,
-                _width: u32,
-                _descriptor: PixelFormat,
+                _strip: RowStrip,
+                _format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 Err("sink cancelled".into())
             }
         }
 
         let mut sink = FailSink;
-        let result = sink.provide_next_buffer(0, 8, 10, PixelFormat::RGB8_SRGB);
+        let result = sink.provide_next_buffer(RowStrip::new(0, 10, 8), PixelFormat::RGB8_SRGB);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "sink cancelled");
     }
@@ -549,31 +606,29 @@ mod tests {
                 &mut self,
                 _width: u32,
                 _height: u32,
-                descriptor: PixelFormat,
+                format: PixelFormat,
             ) -> Result<(), SinkError> {
-                if descriptor != PixelFormat::RGBA8_SRGB {
-                    return Err(format!("sink requires RGBA8, got {descriptor:?}").into());
+                if format != PixelFormat::RGBA8_SRGB {
+                    return Err(format!("sink requires RGBA8, got {format:?}").into());
                 }
                 Ok(())
             }
 
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelFormat,
+                strip: RowStrip,
+                format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
-                let bpp = descriptor.layout.bytes_per_pixel();
-                let stride = width as usize * bpp;
-                let needed = height as usize * stride;
+                let bpp = format.layout.bytes_per_pixel();
+                let stride = strip.width as usize * bpp;
+                let needed = strip.height as usize * stride;
                 self.buf.resize(needed, 0);
                 Ok(PixelViewMut::new_with_format_cow(
                     &mut self.buf,
-                    width,
-                    height,
+                    strip.width,
+                    strip.height,
                     stride,
-                    zenpixels::FormatCow::from_owned(descriptor),
+                    zenpixels::FormatCow::from_owned(format),
                 )
                 .expect("valid buffer"))
             }
@@ -598,10 +653,8 @@ mod tests {
         impl DecodeRowSink for FinishFailSink {
             fn provide_next_buffer(
                 &mut self,
-                _y: u32,
-                _height: u32,
-                _width: u32,
-                _descriptor: PixelFormat,
+                _strip: RowStrip,
+                _format: PixelFormat,
             ) -> Result<PixelViewMut<'_>, SinkError> {
                 unreachable!("not called in this test")
             }

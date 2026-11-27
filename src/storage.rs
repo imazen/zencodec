@@ -342,7 +342,7 @@ impl<T> SharedStorage<T> {
         })
     }
     /// The full backing allocation's admitted byte charge, not this view's size.
-    pub fn charged_bytes(&self) -> usize {
+    pub fn backing_allocation_bytes(&self) -> usize {
         self.allocation.reservation.bytes
     }
 }
@@ -350,7 +350,7 @@ impl<T> fmt::Debug for SharedStorage<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SharedStorage")
             .field("elements", &self.len())
-            .field("charged_bytes", &self.charged_bytes())
+            .field("backing_allocation_bytes", &self.backing_allocation_bytes())
             .finish_non_exhaustive()
     }
 }

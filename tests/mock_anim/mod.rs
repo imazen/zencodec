@@ -159,7 +159,7 @@ impl DecoderConfig for MockDecoderConfig {
         &[ImageFormat::Pnm]
     }
 
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
         SUPPORTED
     }
@@ -234,13 +234,16 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
         self
     }
 
-    fn with_policy(mut self, policy: zencodec::decode::DecodePolicy) -> Self {
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::decode::DecodePolicy,
+    ) -> Result<(), UnsupportedOperation> {
         self.policy = Some(policy);
-        self
+        Ok(())
     }
 
-    fn with_crop_hint(mut self, x: u32, y: u32, width: u32, height: u32) -> Self {
-        self.crop = Some((x, y, width, height));
+    fn with_crop_hint(mut self, crop: zencodec::Rect) -> Self {
+        self.crop = Some((crop.x, crop.y, crop.width, crop.height));
         self
     }
 
@@ -613,7 +616,7 @@ impl EncoderConfig for MockEncoderConfig {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
         SUPPORTED
     }
@@ -696,12 +699,24 @@ impl EncodeJob for MockEncodeJob {
         self
     }
 
-    fn with_policy(mut self, policy: zencodec::encode::EncodePolicy) -> Self {
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::encode::EncodePolicy,
+    ) -> Result<(), UnsupportedOperation> {
         self.policy = Some(policy);
-        self
+        Ok(())
     }
 
-    fn with_metadata(mut self, meta: Metadata) -> Self {
+    fn try_set_metadata_policy(
+        &mut self,
+        meta: Metadata,
+        policy: zencodec::MetadataPolicy,
+    ) -> Result<(), zencodec::encode::BoxedError> {
+        self.metadata = Some(meta.filtered(&policy));
+        Ok(())
+    }
+
+    fn with_unfiltered_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = Some(meta);
         self
     }

@@ -297,10 +297,6 @@ impl Metadata {
     /// not rejected, so a `Custom` policy that drops color signaling should drop
     /// `hdr` too.
     #[must_use]
-    #[deprecated(
-        since = "0.1.27",
-        note = "compatibility helper; use zenmeta::metadata::filter for metadata processing"
-    )]
     pub fn filtered(&self, policy: &MetadataPolicy) -> Metadata {
         let f = policy.fields();
         let mut out = Metadata::none();

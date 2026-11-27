@@ -40,7 +40,7 @@ fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_
             move |mut ctx| async move {
                 let retained = owner.bytes(8)?;
                 ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Qoi));
-                ctx.set_output_descriptor(RGBA);
+                ctx.set_output_pixel_format(RGBA);
                 ctx.interpretation(InterpretationFacts::new(
                     2,
                     2,
@@ -157,7 +157,7 @@ fn cursors_hold_real_boundaries_while_the_adapter_prepares_other_stages() {
                         assert_eq!(boundary.facts().state, InterpretationState::Provisional);
                         BoundaryAction::ContinueReading
                     } else {
-                        assert_eq!(stage.output_descriptor(), Some(RGBA));
+                        assert_eq!(stage.output_pixel_format(), Some(RGBA));
                         assert_eq!(boundary.facts().state, InterpretationState::Final);
                         BoundaryAction::AdoptInterpretation
                     };
@@ -214,7 +214,7 @@ fn storage_admission_precedes_initialization_and_row_publication() {
             budget.clone(),
             |mut ctx| async move {
                 ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Qoi));
-                ctx.set_output_descriptor(RGBA);
+                ctx.set_output_pixel_format(RGBA);
                 ctx.interpretation(InterpretationFacts::new(
                     2,
                     2,
@@ -272,13 +272,11 @@ impl DecodeRowSink for Sink {
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        h: u32,
-        w: u32,
+        strip: RowStrip,
         d: PixelFormat,
     ) -> Result<PixelViewMut<'_>, SinkError> {
         self.rows += 1;
-        self.pixels.provide_next_buffer(y, h, w, d)
+        self.pixels.provide_next_buffer(strip, d)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
         self.ended += 1;
@@ -304,13 +302,11 @@ fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            h: u32,
-            w: u32,
+            strip: RowStrip,
             d: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
-            assert_eq!(h, 1);
-            self.0.provide_next_buffer(y, h, w, d)
+            assert_eq!(strip.height, 1);
+            self.0.provide_next_buffer(strip, d)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
             self.0.finish()
@@ -362,7 +358,7 @@ fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynCo
             let mut late = [0];
             ctx.read_exact_at(25, &mut late).await?;
             assert_eq!(late, [7]);
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             ctx.interpretation(InterpretationFacts::new(
                 2,
                 2,

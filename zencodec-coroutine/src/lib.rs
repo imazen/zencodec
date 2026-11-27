@@ -17,7 +17,7 @@
 //!     let mut hdr = [0u8; 16];
 //!     ctx.read_exact_at(0, &mut hdr).await?;
 //!     ctx.set_info(info_from(&hdr));
-//!     ctx.set_output_descriptor(PixelFormat::RGBA8_SRGB);
+//!     ctx.set_output_pixel_format(PixelFormat::RGBA8_SRGB);
 //!     ctx.announce(MetadataUpdate::HeaderReady).await?;
 //!     for strip in strips {
 //!         let mut buf = vec![0u8; strip.len];

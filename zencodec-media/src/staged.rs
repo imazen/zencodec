@@ -40,7 +40,7 @@ use zencodec::{
     At,
     frame::{Frame, FrameInterpretation},
     operation::{
-        FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+        FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, FrameSummary,
         OperationPolicy, OperationReport, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
@@ -125,8 +125,6 @@ pub enum Refusal {
     Terminal,
     /// No input frame completed policy admission. Empty output is unsupported.
     NoAdmittedFrames,
-    /// The legacy preset setter was called after input had been accepted.
-    PolicyChangedAfterInput,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -155,7 +153,7 @@ struct State<E, M, D> {
     config: CodecConfig,
     fidelity: Option<zencodec::encode::Fidelity>,
     packets: Staging,
-    previous: Option<FrameFacts>,
+    previous: Option<FrameSummary>,
 }
 /// Completed output and its bounded application decision history.
 #[derive(Debug)]
@@ -176,9 +174,7 @@ pub struct Completed {
 pub struct StagedEncode<E, M, D, R> {
     state: Option<State<E, M, D>>,
     resolver: R,
-    preset: PolicySet,
     report: OperationReport,
-    policy_changed_after_input: bool,
 }
 impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R> {
     /// Retain the encoder and prepare exact-timing output from its actual config.
@@ -258,24 +254,8 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         Ok(Self {
             state: Some(state),
             resolver,
-            preset: PolicySet::new(),
             report: OperationReport::default(),
-            policy_changed_after_input: false,
         })
-    }
-    /// Preset consulted when the resolver returns `UsePreset`.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    /// Call before the first accepted frame. Calling it afterward makes the
-    /// next push or finish refuse without publishing the staged output.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.policy_changed_after_input |= self
-            .state
-            .as_ref()
-            .is_some_and(|state| state.previous.is_some());
-        self.preset = preset;
-        self
     }
     /// Bounded decisions, including after a terminal failure.
     pub fn report(&self) -> &OperationReport {
@@ -306,7 +286,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), At<Failure>> {
         let target = input.interpretation().clone();
-        let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
+        let mut offer = FrameConversionOffer::new(FrameSummary::new(&target, input.timing()));
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
         self.push_converted(input, &target, offer, Ok, pulse)
@@ -331,13 +311,11 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         let mut stage = Stage::Policy;
         let run = || -> Result<(), Cause> {
             check(local_pulse)?;
-            if self.policy_changed_after_input {
-                return Err(invalid(Refusal::PolicyChangedAfterInput));
-            }
             if state.encoder.output_fidelity() != state.fidelity {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
-            if conversion.encoder_input != FrameFacts::new(target, conversion.encoder_input.timing)
+            if conversion.encoder_input
+                != FrameSummary::new(target, conversion.encoder_input.timing)
             {
                 return Err(invalid(Refusal::OfferMismatch));
             }
@@ -362,7 +340,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
                 progress,
                 &[offer],
                 &mut self.resolver,
-                self.preset,
+                PolicySet::new(),
                 pulse,
             ) {
                 Ok((_, record)) => self.report.record(record),
@@ -372,7 +350,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
                 }
             }
             stage = Stage::Convert;
-            let previous = FrameFacts::new(input.interpretation(), input.timing());
+            let previous = FrameSummary::new(input.interpretation(), input.timing());
             let converted = execute(input)?;
             check(local_pulse)?;
             if converted.interpretation().as_ref() != target
@@ -431,9 +409,6 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut drain = || -> Result<(), Cause> {
             check(local_pulse)?;
-            if self.policy_changed_after_input {
-                return Err(invalid(Refusal::PolicyChangedAfterInput));
-            }
             if state.previous.is_none() {
                 return Err(invalid(Refusal::NoAdmittedFrames));
             }

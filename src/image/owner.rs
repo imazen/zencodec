@@ -444,7 +444,7 @@ mod tests {
         vec![Auxiliary {
             kind: AuxiliaryKind::Depth,
             name: String::new(),
-            source_precision: SourcePrecision::Float {
+            source_sample_format: SourceSampleFormat::Float {
                 bits: 32,
                 exponent_bits: 8,
             },

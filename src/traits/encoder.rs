@@ -62,55 +62,25 @@ pub trait Encoder: Sized {
     /// Encode a complete image at once (consumes self).
     fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>;
 
-    /// Encode from sRGB(A) 8-bit pixels provided as raw bytes.
+    /// Encode a complete image at once, permitting destructive in-place
+    /// modification of the caller's pixel buffer (consumes self).
     ///
-    /// Hot-path entry point for RGBA8 data from bitmap sources (e.g.
-    /// imageflow). The buffer is mutable — the encoder may modify it
-    /// in-place for format adaptation (e.g. RGBA→BGRA channel reorder,
-    /// alpha premultiplication, stripping alpha to RGB). Callers must
+    /// Hot-path entry point for callers that already own a mutable buffer
+    /// (for example RGBA8/RGBX8/BGRA8 from an image pipeline) and will discard
+    /// it after encoding. The encoder may mutate pixel bytes in-place for
+    /// zero-allocation format adaptation (e.g. channel swizzle, alpha
+    /// premultiplication, or filling opaque padding channels). Callers must
     /// not rely on the buffer contents after this call returns.
     ///
-    /// The default delegates to [`encode()`](Encoder::encode) by wrapping
-    /// the raw bytes in a [`PixelView`] with the appropriate descriptor.
-    /// Codec overrides (e.g. zenjpeg) may bypass `PixelView` construction
-    /// for zero-overhead encoding from raw buffers.
+    /// Unlike raw byte-pointer entry points, [`PixelViewMut`] validates
+    /// dimensions, byte stride, buffer length, and alpha semantics
+    /// (`RGBA8_SRGB` vs `RGBX8_SRGB`) fallibly at construction — eliminating
+    /// panics, bare `bool` flags, and pixel-vs-byte stride confusion.
     ///
-    /// # Parameters
-    ///
-    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel (may be mutated).
-    ///   Length must be ≥ `stride_pixels * height * 4`.
-    /// - `make_opaque`: if `true`, treat the alpha channel as padding
-    ///   (enables RGB fast paths in codecs that don't support alpha).
-    ///   Some codecs set all alpha bytes to 255 in-place.
-    /// - `width`, `height`: image dimensions in pixels
-    /// - `stride_pixels`: row stride in **pixels** (not bytes), must be ≥ `width`.
-    ///   Stride in bytes is `stride_pixels * 4`. Callers creating bitmaps
-    ///   for this method should allocate rows with `stride_pixels = width`
-    ///   (contiguous) unless alignment requirements dictate otherwise.
-    ///   Non-contiguous strides (stride > width) are supported but may
-    ///   prevent zero-copy fast paths in some codecs.
-    fn encode_srgba8(
-        self,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
-    ) -> Result<EncodeOutput, Self::Error> {
-        let descriptor = if make_opaque {
-            &zenpixels::formats::RGBX8_SRGB
-        } else {
-            &zenpixels::formats::RGBA8_SRGB
-        };
-        let stride_bytes = stride_pixels as usize * 4;
-        // PixelView::new only fails on dimension/stride/length mismatch,
-        // which is a caller bug (not untrusted input — encoders receive
-        // validated data). Panic is appropriate; UnsupportedOperation::PixelFormat
-        // would mask the real issue and mislead callers.
-        let pixels = PixelView::new(data, width, height, stride_bytes, descriptor).expect(
-            "encode_srgba8: data.len() does not match width * height * 4 (stride-adjusted)",
-        );
-        self.encode(pixels)
+    /// The default delegates to [`encode()`](Encoder::encode) without mutating
+    /// the buffer.
+    fn encode_in_place(self, pixels: PixelViewMut<'_>) -> Result<EncodeOutput, Self::Error> {
+        self.encode(pixels.as_view())
     }
 
     /// Declare the image before the first [`push_rows`](Self::push_rows):

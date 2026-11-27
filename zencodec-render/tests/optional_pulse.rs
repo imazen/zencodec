@@ -10,7 +10,7 @@ use zencodec::{
     storage::{StorageBudget, StorageError},
 };
 use zencodec_render::{RenderRequest, RenderStage, Renderer, geometry};
-use zenpixels::{Orientation, PixelBuffer, PixelDescriptor};
+use zenpixels::{Orientation, PixelBuf, PixelFormat};
 
 fn image() -> ImageOutput {
     let mut interpretation = ImageInterpretation::packed(
@@ -28,11 +28,11 @@ fn image() -> ImageOutput {
     );
     interpretation.composition = Some(Composition::Composited);
     ImageOutput::packed(
-        PixelBuffer::from_vec(
+        PixelBuf::from_bytes(
             vec![3, 5, 7, 255, 11, 13, 17, 255],
             2,
             1,
-            PixelDescriptor::RGBA8_SRGB,
+            PixelFormat::RGBA8_SRGB,
         )
         .unwrap(),
         vec![],
@@ -44,8 +44,8 @@ fn image() -> ImageOutput {
 fn assert_pixels(output: &ImageOutput) {
     output
         .with_pixels(|pixels| {
-            assert_eq!((pixels.width(), pixels.rows()), (1, 2));
-            assert_eq!(pixels.descriptor(), PixelDescriptor::RGBA8_SRGB);
+            assert_eq!((pixels.width(), pixels.height()), (1, 2));
+            assert_eq!(pixels.format(), &PixelFormat::RGBA8_SRGB);
             assert_eq!(pixels.row(0), [3, 5, 7, 255]);
             assert_eq!(pixels.row(1), [11, 13, 17, 255]);
         })
@@ -53,12 +53,11 @@ fn assert_pixels(output: &ImageOutput) {
 }
 
 #[test]
-#[allow(deprecated)] // Keep the separate-preset entry point covered during migration.
 fn none_renders_exact_samples_and_publishes_once() {
-    for entry in 0..3 {
+    for entry in 0..2 {
         let storage = StorageBudget::new(1024, 16);
         let renderer = Renderer::new(storage.clone())
-            .with_request(RenderRequest::new(PixelDescriptor::RGBA8_SRGB));
+            .with_request(RenderRequest::new(PixelFormat::RGBA8_SRGB));
         let publications = Cell::new(0);
         let mut resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
             publications.set(publications.get() + 1);
@@ -69,12 +68,7 @@ fn none_renders_exact_samples_and_publishes_once() {
             assert_pixels(&output);
             assert_eq!(publications.get(), 0);
         } else {
-            let output = if entry == 1 {
-                renderer.render(image(), &mut resolver, None)
-            } else {
-                renderer.render_with_preset(image(), &mut resolver, PolicySet::new(), None)
-            }
-            .unwrap();
+            let output = renderer.render(image(), &mut resolver, None).unwrap();
             assert_pixels(&output.into_output());
             assert_eq!(publications.get(), 1);
         }
@@ -91,10 +85,9 @@ impl Stop for TimedOut {
 }
 
 #[test]
-#[allow(deprecated)]
 fn some_stopped_preserves_the_typed_reason_before_allocation_and_publication() {
     let pulse = StopOnly::new(TimedOut);
-    for entry in 0..3 {
+    for entry in 0..2 {
         let storage = StorageBudget::new(1024, 16);
         let renderer = Renderer::new(storage.clone());
         let mut resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
@@ -109,12 +102,9 @@ fn some_stopped_preserves_the_typed_reason_before_allocation_and_publication() {
                 ErrorCategory::Stopped(StopReason::TimedOut),
             );
         } else {
-            let error = if entry == 1 {
-                renderer.render(image(), &mut resolver, Some(&pulse))
-            } else {
-                renderer.render_with_preset(image(), &mut resolver, PolicySet::new(), Some(&pulse))
-            }
-            .unwrap_err();
+            let error = renderer
+                .render(image(), &mut resolver, Some(&pulse))
+                .unwrap_err();
             assert_eq!(error.error().stage, RenderStage::ColorPlan);
             assert_eq!(
                 zencodec::find_cause::<CodecError>(&error)
@@ -143,33 +133,25 @@ fn none_preserves_storage_admission_and_blocks_publication_on_failure() {
 }
 
 #[test]
-#[allow(deprecated)]
-fn required_workspace_refuses_before_projection_for_bound_and_legacy_policies() {
+fn required_workspace_refuses_before_projection_for_bound_policies() {
     use zencodec::operation::{
         BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
     };
-    for entry in 0..3 {
-        // Zero output allowance makes premature projection observably fail with
-        // StorageError instead of the required workspace admission cause.
-        let storage = StorageBudget::new(0, 0);
-        let renderer = Renderer::new(storage.clone());
-        let strict = PolicySet::new().with_workspace_limit(u64::MAX);
-        let callback = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
-            panic!("unknown workspace must refuse before callback")
-        };
-        let mut bound = BoundPolicy::new(strict, callback);
-        let error = match entry {
-            0 => renderer.render(image(), &mut bound, None),
-            1 => renderer.render_with_preset(image(), &mut bound, PolicySet::new(), None),
-            _ => renderer.render_with_preset(image(), &mut PolicySet::new(), strict, None),
-        }
-        .unwrap_err();
-        let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
-        assert_eq!(
-            unmet.iter().collect::<Vec<_>>(),
-            vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
-        );
-        assert!(zencodec::find_cause::<StorageError>(&error).is_none());
-        assert_eq!(storage.reserved_bytes(), 0);
-    }
+    // Zero output allowance makes premature projection observably fail with
+    // StorageError instead of the required workspace admission cause.
+    let storage = StorageBudget::new(0, 0);
+    let renderer = Renderer::new(storage.clone());
+    let strict = PolicySet::new().with_workspace_limit(u64::MAX);
+    let callback = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+        panic!("unknown workspace must refuse before callback")
+    };
+    let mut bound = BoundPolicy::new(strict, callback);
+    let error = renderer.render(image(), &mut bound, None).unwrap_err();
+    let unmet = zencodec::find_cause::<UnmetRequirements>(&error).unwrap();
+    assert_eq!(
+        unmet.iter().collect::<Vec<_>>(),
+        vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+    );
+    assert!(zencodec::find_cause::<StorageError>(&error).is_none());
+    assert_eq!(storage.reserved_bytes(), 0);
 }

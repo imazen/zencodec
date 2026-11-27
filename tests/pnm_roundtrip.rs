@@ -134,7 +134,7 @@ fn dyn_encode_decode_rgb8_roundtrip() {
     let enc_config: &dyn DynEncoderConfig = &config;
 
     assert_eq!(enc_config.format(), ImageFormat::Pnm);
-    assert!(!enc_config.supported_descriptors().is_empty());
+    assert!(!enc_config.supported_pixel_formats().is_empty());
 
     let enc_job = enc_config.dyn_job();
     let encoder = enc_job.into_encoder().expect("dyn encoder");
@@ -253,7 +253,7 @@ fn encoder_config_static_methods() {
         ImageFormat::Pnm
     );
 
-    let descs = <PnmEncoderConfig as EncoderConfig>::supported_descriptors();
+    let descs = <PnmEncoderConfig as EncoderConfig>::supported_pixel_formats();
     assert!(descs.contains(&PixelFormat::RGB8_SRGB));
     assert!(descs.contains(&PixelFormat::GRAY8_SRGB));
 
@@ -268,7 +268,7 @@ fn decoder_config_static_methods() {
         &[ImageFormat::Pnm]
     );
 
-    let descs = <PnmDecoderConfig as DecoderConfig>::supported_descriptors();
+    let descs = <PnmDecoderConfig as DecoderConfig>::supported_pixel_formats();
     assert!(descs.contains(&PixelFormat::RGB8_SRGB));
     assert!(descs.contains(&PixelFormat::GRAY8_SRGB));
 
@@ -625,11 +625,10 @@ fn sink_preallocated_buffer() {
     impl DecodeRowSink for PreallocSink<'_> {
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             // Validate format matches what we pre-allocated for
             if descriptor != self.expected_desc {
                 return Err(format!(
@@ -720,11 +719,10 @@ fn sink_format_mismatch_rejected_at_begin() {
 
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (height, width) = (strip.height, strip.width);
             let bpp = descriptor.layout.bytes_per_pixel();
             let stride = width as usize * bpp;
             let needed = height as usize * stride;
@@ -797,11 +795,10 @@ fn sink_row_processing_pipeline() {
     impl DecodeRowSink for ProcessingSink {
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             // Process the *previous* strip before handing out the next buffer
             self.process_pending();
 
@@ -909,11 +906,10 @@ fn sink_completion_aware() {
 
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             let output = self.output.as_mut().ok_or("begin() not called")?;
             if descriptor != output.format {
                 return Err("format mismatch".into());
@@ -1006,11 +1002,10 @@ fn sink_simd_aligned_decode_into() {
     impl DecodeRowSink for AlignedDecodeIntoSink {
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             if descriptor != self.desc || width != self.width {
                 return Err("format/width mismatch".into());
             }
@@ -1097,11 +1092,10 @@ fn sink_through_dyn_dispatch() {
     impl DecodeRowSink for CollectSink {
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             // Record what the codec told us (first call)
             if self.desc.is_none() {
                 self.desc = Some(descriptor.clone());
@@ -1181,13 +1175,11 @@ fn sink_deferred_allocation() {
 
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            _width: u32,
-            _descriptor: PixelFormat,
+            strip: zencodec::decode::RowStrip,
+            descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
             let buf = self.buf.as_mut().ok_or("begin() not called")?;
-            borrow_rows(buf, y, height, _descriptor)
+            borrow_rows(buf, strip.y, strip.height, descriptor)
         }
     }
 
@@ -1245,11 +1237,10 @@ fn sink_multi_strip_simulation() {
     impl DecodeRowSink for MultiStripSink {
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (y, height, width) = (strip.y, strip.height, strip.width);
             if width != self.output.width || descriptor != self.output.format {
                 return Err("mismatch".into());
             }
@@ -1271,7 +1262,10 @@ fn sink_multi_strip_simulation() {
     for strip_y in (0..height).step_by(strip_height as usize) {
         let h = strip_height.min(height - strip_y);
         let mut dst = sink
-            .provide_next_buffer(strip_y, h, width, desc.clone())
+            .provide_next_buffer(
+                zencodec::decode::RowStrip::new(strip_y, width, h),
+                desc.clone(),
+            )
             .unwrap();
         for row in 0..h {
             dst.row_mut(row).copy_from_slice(src.row(strip_y + row));
@@ -1313,11 +1307,10 @@ fn sink_early_abort() {
     impl DecodeRowSink for AbortAfterNSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            height: u32,
-            width: u32,
+            strip: zencodec::decode::RowStrip,
             descriptor: PixelFormat,
         ) -> Result<PixelViewMut<'_>, SinkError> {
+            let (height, width) = (strip.height, strip.width);
             self.strips_seen += 1;
             if self.strips_seen > self.strips_before_abort {
                 return Err("abort: seen enough".into());
@@ -1349,7 +1342,10 @@ fn sink_early_abort() {
     let mut aborted = false;
     for strip_y in (0..height).step_by(strip_h as usize) {
         let h = strip_h.min(height - strip_y);
-        match sink.provide_next_buffer(strip_y, h, width, desc.clone()) {
+        match sink.provide_next_buffer(
+            zencodec::decode::RowStrip::new(strip_y, width, h),
+            desc.clone(),
+        ) {
             Ok(mut dst) => {
                 for row in 0..h {
                     dst.row_mut(row).copy_from_slice(src.row(strip_y + row));

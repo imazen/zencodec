@@ -121,18 +121,3 @@ fn required_workspace_refuses_before_collection_factory() {
     };
     assert!(zencodec::find_cause::<UnmetRequirements>(&error).is_some());
 }
-
-#[test]
-#[allow(deprecated)]
-fn late_legacy_workspace_refuses_before_discovery_without_losing_owner() {
-    use zencodec::operation::UnmetRequirements;
-    let mut images = CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |_| {
-        Ok(Empty { fail: false })
-    })
-    .unwrap()
-    .with_policy_set(PolicySet::new().with_workspace_limit(u64::MAX));
-    let error = images.images().unwrap_err();
-    assert!(zencodec::find_cause::<UnmetRequirements>(&error).is_some());
-    assert!(!images.is_finished());
-    assert_eq!(images.report().decisions().count(), 0);
-}

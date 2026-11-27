@@ -33,8 +33,8 @@ pub use encoding_route::{
     EncodeEvidence, EncodeRouteFacts, EncodeRouteOffer, InputAcquisition, ReplayEvidence,
     resolve_encode_route,
 };
-pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
-pub use image::{ImageFacts, resolve_image};
+pub use frame::{FrameSummary, PublicationOffer, resolve_frame};
+pub use image::{ImageSummary, resolve_image};
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
@@ -133,8 +133,8 @@ pub enum OperationError {
         /// Decisions that preceded this failure.
         report: Box<OperationReport>,
     },
-    /// The decoder could not produce the required descriptor without conversion.
-    OutputDescriptor {
+    /// The decoder could not produce the required pixel format without conversion.
+    OutputPixelFormat {
         /// Required output interpretation and layout.
         requested: Box<PixelFormat>,
         /// The decoder's actual output interpretation and layout.
@@ -170,7 +170,7 @@ impl fmt::Display for OperationError {
             Self::Execution { .. } => {
                 f.write_str("selected encoder failed; inspect the decision report and native cause")
             }
-            Self::OutputDescriptor { requested, actual } => write!(
+            Self::OutputPixelFormat { requested, actual } => write!(
                 f,
                 "required output {:?}; decoder produced {:?}",
                 crate::helpers::redacted_spec(requested),
@@ -202,20 +202,20 @@ enum Output {
     Require(PixelFormat),
 }
 
-/// Reusable requirements for decoding one image into owned pixels.
+/// Reusable requirements and preferences for decoding one image into owned pixels.
 ///
 /// Set-level controls (limits, stop/pulse, policy) are inherited. An explicitly
 /// supplied policy replaces the set's policy and is checked before the decoder
 /// receives input. Resource limits keep their codec-defined enforcement scope;
-/// this request does not turn an estimate into a whole-operation memory bound.
+/// these options do not turn an estimate into a whole-operation memory bound.
 #[derive(Clone, Debug, Default)]
-pub struct DecodeRequest {
+pub struct DecodeOptions {
     format: Option<ImageFormat>,
     policy: Option<DecodePolicy>,
     output: Output,
 }
 
-impl DecodeRequest {
+impl DecodeOptions {
     /// Detect the registered input format and request its native output.
     pub const fn new() -> Self {
         Self {
@@ -232,35 +232,35 @@ impl DecodeRequest {
     }
 
     /// Record a required policy, replacing the inherited set policy.
-    pub const fn with_policy(mut self, policy: DecodePolicy) -> Self {
+    pub const fn require_policy(mut self, policy: DecodePolicy) -> Self {
         self.policy = Some(policy);
         self
     }
 
-    /// Require this output descriptor. An unsupported result is an error;
+    /// Require this output pixel format. An unsupported result is an error;
     /// conversion or lower precision is never selected implicitly.
     ///
     /// The one-shot path first asks the retained decoder to prepare its output
-    /// descriptor, when supported, then always verifies the actual result. When
+    /// format, when supported, then always verifies the actual result. When
     /// early facts are unavailable, refusal can follow a full raster allocation.
     /// For controlled execution,
     /// [`Self::start_controlled`] checks the final interpretation before sink
     /// effects; this is not a bound on native decoding workspace.
-    pub fn with_output(mut self, descriptor: PixelFormat) -> Self {
-        self.output = Output::Require(descriptor);
+    pub fn require_pixel_format(mut self, format: PixelFormat) -> Self {
+        self.output = Output::Require(format);
         self
     }
 
-    /// Prefer these descriptors in order, permitting the decoder's native
-    /// fallback. Inspect the returned pixels for the selected descriptor.
-    pub fn preferring_output(mut self, descriptors: impl Into<Vec<PixelFormat>>) -> Self {
-        self.output = Output::Prefer(descriptors.into());
+    /// Prefer these pixel formats in order, permitting the decoder's native
+    /// fallback. Inspect the returned pixels for the selected format.
+    pub fn prefer_pixel_formats(mut self, formats: impl Into<Vec<PixelFormat>>) -> Self {
+        self.output = Output::Prefer(formats.into());
         self
     }
 
     /// Start controlled decoding through the same registered templates and
-    /// checked requirements as this request's one-shot path. Format detection
-    /// consumes no prefix bytes. A required descriptor is checked at final
+    /// checked requirements as these options' one-shot path. Format detection
+    /// consumes no prefix bytes. A required pixel format is checked at final
     /// interpretation, before policy adoption or sink effects.
     ///
     /// Serve the returned session with `zencodec_io::PolicyDecoder` and any
@@ -291,6 +291,9 @@ impl DecodeRequest {
                 .operation_pulse()
                 .check()
                 .map_err(OperationError::Stopped)?;
+            codecs
+                .check_input_limit(input.len())
+                .map_err(OperationError::Codec)?;
             let format = self
                 .format
                 .or_else(|| codecs.detect(input))
@@ -298,7 +301,7 @@ impl DecodeRequest {
             let preferred = match &self.output {
                 Output::Native => &[][..],
                 Output::Prefer(list) => list,
-                Output::Require(descriptor) => core::slice::from_ref(descriptor),
+                Output::Require(format) => core::slice::from_ref(format),
             };
             let job = codecs
                 .checked_decode_job(format, self.policy)
@@ -307,7 +310,7 @@ impl DecodeRequest {
                 .into_decoder(Cow::Borrowed(input), preferred)
                 .map_err(|e| OperationError::Codec(e.into()))?;
             let required = match &self.output {
-                Output::Require(descriptor) => Some(descriptor.clone()),
+                Output::Require(format) => Some(format.clone()),
                 _ => None,
             };
             decoding::decode_owned(decoder, required, codecs.operation_pulse())
@@ -326,7 +329,7 @@ impl DecodeRequest {
 /// Preparing it checks required fidelity and encode policy and stamps the
 /// registry's limits/cancellation. It does not construct an encoder, read
 /// pixels, validate output metadata, or establish a native memory bound.
-/// Ordinary callers use `EncodeRequest::encode`; adapters can retain this
+/// Ordinary callers use `EncodeOptions::encode`; adapters can retain this
 /// same object alongside a conversion plan until their resolver chooses it.
 pub struct PreparedEncode {
     offer: EncodeOffer,
@@ -356,7 +359,7 @@ impl PreparedEncode {
 /// A prepared encoder job with compile-time thread-transfer capability.
 ///
 /// The same checked requirements and offer as `PreparedEncode`, retaining Send
-/// until native encoder construction. Created by `EncodeRequest::prepare_send`.
+/// until native encoder construction. Created by `EncodeOptions::prepare_send`.
 pub struct PreparedSendEncode {
     offer: EncodeOffer,
     job: Box<dyn crate::encode::DynEncodeJob + Send>,
@@ -379,18 +382,17 @@ impl PreparedSendEncode {
     }
 }
 
-/// Reusable requirements for encoding pixels with a registered template.
+/// Reusable requirements and preferences for encoding pixels with a registered template.
 ///
 /// A fidelity target is checked at configuration time. This confirms the
 /// requested mode/quality selection, not a perceptual score or that arbitrary
 /// inputs satisfy a backend's content-dependent lossless restrictions.
 #[derive(Clone, Debug)]
-pub struct EncodeRequest {
+pub struct EncodeOptions {
     format: ImageFormat,
     fidelity: FidelityRequest,
     policy: Option<EncodePolicy>,
     policy_defaults: EncodePolicy,
-    preset: PolicySet,
     resolution: Option<crate::Resolution>,
     orientation_mode: Option<crate::encode::EncodeOrientation>,
     metadata: Option<(crate::Metadata, crate::MetadataPolicy)>,
@@ -403,7 +405,7 @@ enum FidelityRequest {
     Alternatives(Vec<Fidelity>),
 }
 
-impl EncodeRequest {
+impl EncodeOptions {
     /// Use the registered encoder template, inheriting the set's controls.
     pub const fn new(format: ImageFormat) -> Self {
         Self {
@@ -411,7 +413,6 @@ impl EncodeRequest {
             fidelity: FidelityRequest::Template,
             policy: None,
             policy_defaults: EncodePolicy::none(),
-            preset: PolicySet::new(),
             resolution: None,
             orientation_mode: None,
             metadata: None,
@@ -423,7 +424,7 @@ impl EncodeRequest {
     /// selection or pixel input. Unsupported candidates refuse; no capability
     /// query or callback can waive this requirement. Omission inherits the
     /// registered template's metadata configuration.
-    pub fn with_metadata_policy(
+    pub fn require_metadata_policy(
         mut self,
         metadata: crate::Metadata,
         policy: crate::MetadataPolicy,
@@ -434,7 +435,7 @@ impl EncodeRequest {
 
     /// Require this fidelity target; unsupported, substituted and unreported
     /// targets fail before encoding pixels.
-    pub fn with_fidelity(mut self, fidelity: Fidelity) -> Self {
+    pub fn require_fidelity(mut self, fidelity: Fidelity) -> Self {
         self.fidelity = FidelityRequest::Required(fidelity);
         self
     }
@@ -442,24 +443,15 @@ impl EncodeRequest {
     /// Permit only these fidelity targets, in preference order. Invalid values
     /// refuse the whole request; unsupported values may be omitted from offers.
     /// There is no encode retry after the resolver selects a prepared job.
-    pub fn preferring_fidelity(mut self, targets: impl Into<Vec<Fidelity>>) -> Self {
+    pub fn prefer_fidelities(mut self, targets: impl Into<Vec<Fidelity>>) -> Self {
         self.fidelity = FidelityRequest::Alternatives(targets.into());
-        self
-    }
-
-    /// Configure the built-in policy used by ordinary execution and delegation.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub const fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
         self
     }
 
     /// Require exact physical density, or an equivalent unknown-unit aspect.
     /// No implicit rounding, unit loss, resize or orientation transform is allowed.
     /// Validation occurs during preparation, before the callback or pixel encoding.
-    pub const fn with_resolution(mut self, resolution: crate::Resolution) -> Self {
+    pub const fn require_resolution(mut self, resolution: crate::Resolution) -> Self {
         self.resolution = Some(resolution);
         self
     }
@@ -468,20 +460,23 @@ impl EncodeRequest {
     /// Preparation refuses unsupported codecs before invoking the resolver or
     /// encoding pixels. Metadata still supplies the intrinsic orientation.
     /// This is not a memory bound or an implicit conversion between formats.
-    pub const fn with_orientation_mode(mut self, mode: crate::encode::EncodeOrientation) -> Self {
+    pub const fn require_orientation_mode(
+        mut self,
+        mode: crate::encode::EncodeOrientation,
+    ) -> Self {
         self.orientation_mode = Some(mode);
         self
     }
 
     /// Record a required policy, replacing the inherited set policy.
-    pub const fn with_policy(mut self, policy: EncodePolicy) -> Self {
+    pub const fn require_policy(mut self, policy: EncodePolicy) -> Self {
         self.policy = Some(policy);
         self
     }
 
     /// Supply adapter defaults for unspecified policy fields.
     ///
-    /// Explicit fields in the request's policy (or the inherited set policy)
+    /// Explicit fields in the options' policy (or the inherited set policy)
     /// win, including `Some(false)`. Filled fields go through the same checked
     /// setter as requirements; an unsupported default refuses preparation.
     /// An all-`None` default leaves the registered template unchanged.
@@ -661,13 +656,13 @@ impl EncodeRequest {
         let facts = EncodeFacts {
             width: pixels.width(),
             height: pixels.height(),
-            descriptor: pixels.format().clone(),
+            pixel_format: pixels.format().clone(),
         };
         let (selected, record) = policy::choose_encode(
             facts,
             &offers,
             resolver,
-            self.preset,
+            PolicySet::new(),
             codecs.operation_pulse(),
         )
         .map_err(|error| {
@@ -709,7 +704,7 @@ mod descriptor_diagnostics {
                 intent: RenderingIntent::RelativeColorimetric,
             },
         );
-        let failure = OperationError::OutputDescriptor {
+        let failure = OperationError::OutputPixelFormat {
             requested: Box::new(request),
             actual: Box::new(PixelFormat::RGB8_SRGB),
         };
@@ -717,7 +712,7 @@ mod descriptor_diagnostics {
             assert!(!diagnostic.contains("239, 239"));
             assert!(diagnostic.len() < 600);
         }
-        let OperationError::OutputDescriptor { requested, .. } = failure else {
+        let OperationError::OutputPixelFormat { requested, .. } = failure else {
             unreachable!()
         };
         let ColorSpace::Icc { profile, .. } = &requested.color else {

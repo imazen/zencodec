@@ -62,7 +62,7 @@ fn encode_then_decode_as_roundtrips_pixels() {
     assert_eq!(encoded.format(), ImageFormat::Pnm);
 
     let decoded = set
-        .decode_as(ImageFormat::Pnm, encoded.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, encoded.data(), &[])
         .expect("decode_as");
     assert_eq!(decoded.width(), W);
     assert_eq!(decoded.height(), H);
@@ -189,7 +189,7 @@ fn encode_with_fidelity_clones_the_template() {
         )
         .expect("encode_with");
     let decoded = set
-        .decode_as(ImageFormat::Pnm, out.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, out.data(), &[])
         .expect("decode");
     assert_eq!((decoded.width(), decoded.height()), (W, H));
 
@@ -199,18 +199,18 @@ fn encode_with_fidelity_clones_the_template() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_job_carries_metadata() {
     let set = reference_set();
 
     let meta = Metadata::none().with_icc(vec![1, 2, 3, 4]);
     let mut job = set.encode_job(ImageFormat::Pnm).expect("encode_job");
-    job.set_metadata_policy(meta, MetadataPolicy::PreserveExact);
+    job.try_set_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     let encoder = job.into_encoder().expect("encoder");
     let out = encoder.encode(rgb_pixels(&PIXELS, W, H)).expect("encode");
 
     let decoded = set
-        .decode_as(ImageFormat::Pnm, out.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, out.data(), &[])
         .expect("decode");
     assert_eq!(
         decoded.info().source_color.icc_profile.as_deref(),
@@ -219,7 +219,6 @@ fn encode_job_carries_metadata() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn transcode_roundtrips_pixels_and_carries_metadata() {
     use zencodec::encode::Fidelity;
 
@@ -229,10 +228,11 @@ fn transcode_roundtrips_pixels_and_carries_metadata() {
 
     // A source bitstream that carries an ICC profile.
     let mut job = set.encode_job(ImageFormat::Pnm).expect("encode_job");
-    job.set_metadata_policy(
+    job.try_set_metadata_policy(
         Metadata::none().with_icc(vec![9, 8, 7, 6]),
         MetadataPolicy::PreserveExact,
-    );
+    )
+    .expect("metadata policy");
     let source = job
         .encode(rgb_pixels(&PIXELS, W, H))
         .expect("encode source");
@@ -276,7 +276,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
@@ -313,14 +313,14 @@ fn transcode_refuses_implicit_precision_loss() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn checked_policy_admission_matches_generic_and_erased_jobs() {
     let metadata = Metadata::none().with_xmp(b"private note".as_slice());
     let strip_xmp = EncodePolicy::none().with_embed_xmp(false);
 
     let typed = ReferenceEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .expect("metadata policy")
         .try_with_policy(strip_xmp)
         .expect("reference admits XMP gate")
         .encode(rgb_pixels(&PIXELS, W, H))
@@ -330,7 +330,9 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
         .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
     let mut erased = set.encode_job(ImageFormat::Pnm).expect("erased job");
-    erased.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    erased
+        .try_set_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     erased.try_set_policy(strip_xmp).expect("erased XMP gate");
     let erased = erased
         .encode(rgb_pixels(&PIXELS, W, H))
@@ -353,7 +355,8 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
     let metadata = Metadata::none().with_xmp(b"private note".as_slice());
     let mut generic = ReferenceEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .expect("metadata policy")
         .try_with_policy(strip_xmp)
         .expect("initial policy");
     assert_eq!(
@@ -361,7 +364,9 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
         Err(UnsupportedOperation::EncodePolicy)
     );
     let mut dynamic = set.encode_job(ImageFormat::Pnm).expect("erased job");
-    dynamic.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    dynamic
+        .try_set_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     dynamic.try_set_policy(strip_xmp).expect("initial policy");
     let error = dynamic
         .try_set_policy(mixed)
@@ -394,14 +399,18 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
     assert_eq!(
         ReferenceZcrDecoderConfig
             .job()
-            .try_with_policy(DecodePolicy::strict())
+            .try_with_policy(DecodePolicy::untrusted_minimal())
             .err(),
         Some(UnsupportedOperation::DecodePolicy)
     );
     let mut decode = set
         .decode_job(ImageFormat::Custom(&ZCR_FORMAT))
         .expect("decode job");
-    assert!(decode.try_set_policy(DecodePolicy::strict()).is_err());
+    assert!(
+        decode
+            .try_set_policy(DecodePolicy::untrusted_minimal())
+            .is_err()
+    );
     decode
         .try_set_policy(DecodePolicy::none())
         .expect("empty policy");
@@ -492,13 +501,13 @@ fn missing_codecs_report_typed_errors() {
         Err(CodecSetError::NoEncoder(ImageFormat::Pnm)) => {}
         other => panic!("expected NoEncoder(Pnm), got {other:?}"),
     }
-    match set.decode_as(ImageFormat::Jpeg, b"\xFF\xD8\xFF", &[]) {
+    match set.decode_with_format(ImageFormat::Jpeg, b"\xFF\xD8\xFF", &[]) {
         Err(CodecSetError::NoDecoder(ImageFormat::Jpeg)) => {}
         other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
     }
 
     // A codec failure passes through with the codec's error in the chain.
-    match set.decode_as(ImageFormat::Pnm, b"not zcr bytes at all", &[]) {
+    match set.decode_with_format(ImageFormat::Pnm, b"not zcr bytes at all", &[]) {
         Err(CodecSetError::Codec(e)) => {
             let msg = format!("{e}");
             assert!(msg.contains("invalid"), "unexpected codec error: {msg}");
@@ -587,7 +596,7 @@ fn estimate_decode_of_probes_then_estimates() {
     let info = set.probe(encoded.data()).expect("probe");
     let descriptor = set
         .decoder_for(format)
-        .and_then(|d| d.supported_descriptors().first().cloned())
+        .and_then(|d| d.supported_pixel_formats().first().cloned())
         .expect("native descriptor");
     let explicit = set
         .estimate_decode(
@@ -627,7 +636,9 @@ fn registered_custom_formats_survive_exact_allowlists_and_decode_pixels() {
         .unwrap();
     let detected = set.detect(encoded.data()).unwrap();
     assert!(candidates(Some(&[custom])).contains(&detected));
-    let decoded = set.decode_as(detected, encoded.data(), &[]).unwrap();
+    let decoded = set
+        .decode_with_format(detected, encoded.data(), &[])
+        .unwrap();
     let pixels = decoded.pixels();
     let actual: Vec<_> = (0..pixels.height())
         .flat_map(|y| pixels.row(y).iter().copied())

@@ -94,8 +94,8 @@ impl zencodec::decode::IncrementalDecode for BadPreCancel {
     fn info(&self) -> Option<&zencodec::ImageInfo> {
         self.inner.info()
     }
-    fn output_descriptor(&self) -> Option<zenpixels::PixelFormat> {
-        self.inner.output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        self.inner.output_pixel_format()
     }
 }
 

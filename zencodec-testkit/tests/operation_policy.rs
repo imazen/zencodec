@@ -11,7 +11,7 @@ use zencodec::{
     At, CodecSet, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
     encode::{EncodeJob, EncodeOutput, Encoder, EncoderConfig, Fidelity},
     operation::{
-        Decision, DecisionCode, Decline, EncodeRequest, OperationError, PolicyFailure, PolicySet,
+        Decision, DecisionCode, Decline, EncodeOptions, OperationError, PolicyFailure, PolicySet,
         Question, Selection,
     },
 };
@@ -42,7 +42,7 @@ impl EncoderConfig for Control {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         SUPPORTED
     }
@@ -87,9 +87,13 @@ impl EncodeJob for Job {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    #[allow(deprecated)]
-    fn with_metadata(mut self, metadata: Metadata) -> Self {
-        self.inner = Some(self.inner.take().unwrap().with_metadata(metadata));
+    fn with_unfiltered_metadata(mut self, metadata: Metadata) -> Self {
+        self.inner = Some(
+            self.inner
+                .take()
+                .unwrap()
+                .with_unfiltered_metadata(metadata),
+        );
         self
     }
     fn encoder(mut self) -> Result<Enc, RefError> {
@@ -206,8 +210,8 @@ fn transferable_preparation_checks_required_policy_and_cancellation() {
             counts.clone(),
         ))))
         .with_encode_policy(EncodePolicy::none().with_strict(true));
-    let error = EncodeRequest::new(ImageFormat::Pnm)
-        .with_fidelity(Fidelity::Lossless)
+    let error = EncodeOptions::new(ImageFormat::Pnm)
+        .require_fidelity(Fidelity::Lossless)
         .prepare_send(&set)
         .unwrap_err();
     assert_eq!(
@@ -220,7 +224,7 @@ fn transferable_preparation_checks_required_policy_and_cancellation() {
         counts.dropped.load(Ordering::SeqCst)
     );
     request()
-        .with_policy(EncodePolicy::none())
+        .require_policy(EncodePolicy::none())
         .prepare_send(&set)
         .unwrap();
     let made = counts.made.load(Ordering::SeqCst);
@@ -245,8 +249,8 @@ impl EncoderConfig for ThreadAffine {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        Control::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        Control::supported_pixel_formats()
     }
     fn job(self) -> Self::Job {
         ThreadAffineJob {
@@ -265,9 +269,8 @@ impl EncodeJob for ThreadAffineJob {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    #[allow(deprecated)]
-    fn with_metadata(mut self, metadata: Metadata) -> Self {
-        self.inner = self.inner.with_metadata(metadata);
+    fn with_unfiltered_metadata(mut self, metadata: Metadata) -> Self {
+        self.inner = self.inner.with_unfiltered_metadata(metadata);
         self
     }
     fn encoder(self) -> Result<Enc, RefError> {
@@ -288,7 +291,7 @@ fn thread_affine_jobs_remain_supported_and_first_registration_still_wins() {
     let set = CodecSet::new()
         .with_encoder(ThreadAffine(control.clone()))
         .with_send_encoder(control);
-    let req = EncodeRequest::new(ImageFormat::Pnm);
+    let req = EncodeOptions::new(ImageFormat::Pnm);
     for set in [&set, &set.clone()] {
         let error = req.prepare_send(set).unwrap_err();
         assert!(matches!(
@@ -305,8 +308,8 @@ fn thread_affine_jobs_remain_supported_and_first_registration_still_wins() {
         .unwrap();
     assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
 }
-fn request() -> EncodeRequest {
-    EncodeRequest::new(ImageFormat::Pnm).preferring_fidelity(vec![
+fn request() -> EncodeOptions {
+    EncodeOptions::new(ImageFormat::Pnm).prefer_fidelities(vec![
         Fidelity::codec_quality(25.0),
         Fidelity::codec_quality(80.0),
         Fidelity::Lossless,
@@ -334,8 +337,8 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
                     panic!("unexpected question")
                 };
                 assert_eq!(
-                    (facts.width, facts.height, facts.descriptor),
-                    (3, 2, PixelFormat::RGB8_SRGB)
+                    (facts.width, facts.height, &facts.pixel_format),
+                    (3, 2, &PixelFormat::RGB8_SRGB)
                 );
                 assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
                 assert_eq!(counts.made.load(Ordering::SeqCst), 2);
@@ -370,15 +373,10 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
 }
 
 #[test]
-#[allow(deprecated)] // Qualify the compatibility setter alongside the policy argument.
-fn builtin_policy_is_configurable_directly_or_through_one_delegation() {
+fn builtin_policy_is_configurable_directly() {
     let (_, set, pixels) = setup();
     let first = request().encode(&set, pixels.as_slice()).unwrap();
     assert_eq!(selected(first.report()).preference_index, 1);
-    let req = request().with_policy_set(PolicySet::new().prefer_lossless(true));
-    let lossless = req.encode(&set, pixels.as_slice()).unwrap();
-    assert_eq!(selected(lossless.report()).preference_index, 2);
-    assert!(lossless.report().decisions().next().unwrap().used_preset);
     let direct = request()
         .encode_with(
             &set,
@@ -404,8 +402,8 @@ fn invalid_requests_refuse_before_preparing_any_job_or_calling_policy() {
         vec![Fidelity::Lossless, Fidelity::codec_quality(f32::NAN)],
     ] {
         assert!(
-            EncodeRequest::new(ImageFormat::Pnm)
-                .preferring_fidelity(targets)
+            EncodeOptions::new(ImageFormat::Pnm)
+                .prefer_fidelities(targets)
                 .encode_with(&set, pixels.as_slice(), &mut resolver)
                 .is_err()
         );
@@ -413,8 +411,8 @@ fn invalid_requests_refuse_before_preparing_any_job_or_calling_policy() {
     assert_eq!(calls, 0);
     assert_eq!(counts.made.load(Ordering::SeqCst), 0);
     // The inclusive bound succeeds; only one prepared job is executed.
-    EncodeRequest::new(ImageFormat::Pnm)
-        .preferring_fidelity(vec![Fidelity::Lossless; 64])
+    EncodeOptions::new(ImageFormat::Pnm)
+        .prefer_fidelities(vec![Fidelity::Lossless; 64])
         .encode(&set, pixels.as_slice())
         .unwrap();
     assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
@@ -661,8 +659,8 @@ fn required_metadata_refuses_before_execution_for_normal_and_send_jobs() {
         Metadata::none(),
         Metadata::none().with_xmp(&b"required"[..]),
     ] {
-        let request = EncodeRequest::new(ImageFormat::Pnm)
-            .with_metadata_policy(metadata, zencodec::MetadataPolicy::PreserveExact);
+        let request = EncodeOptions::new(ImageFormat::Pnm)
+            .require_metadata_policy(metadata, zencodec::MetadataPolicy::PreserveExact);
         for error in [
             request.prepare(&set).unwrap_err(),
             request.prepare_send(&set).unwrap_err(),
@@ -680,7 +678,7 @@ fn required_metadata_refuses_before_execution_for_normal_and_send_jobs() {
     assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
     assert_eq!(counts.made.load(Ordering::SeqCst), 4);
     assert_eq!(counts.dropped.load(Ordering::SeqCst), 4);
-    EncodeRequest::new(ImageFormat::Pnm)
+    EncodeOptions::new(ImageFormat::Pnm)
         .encode(&set, TestImage::rgb8_gradient(3, 2).as_slice())
         .unwrap();
     assert_eq!(counts.executed.load(Ordering::SeqCst), 1);

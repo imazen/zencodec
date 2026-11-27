@@ -84,13 +84,15 @@ fn transcode_in_one_call() {
     // headline proxy operation. `metadata` decides retention (`Web` strips
     // GPS/camera/timestamps/XMP, keeps orientation + rights + color); `color`
     // decides how color *signaling* is emitted (not a pixel CMS conversion).
+    // The reference encoder only supports `Verbatim` color signaling; real
+    // codecs also accept `Balanced` and `Compact`.
     let out = codecs
         .transcode(
             source.data(),
             ImageFormat::Pnm,
             Fidelity::Lossless,
             MetadataPolicy::Web,
-            ColorEmitPolicy::Balanced,
+            ColorEmitPolicy::Verbatim,
         )
         .unwrap();
 
@@ -100,7 +102,6 @@ fn transcode_in_one_call() {
 // ── Encode / decode controls ────────────────────────────────────────────────
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_with_fidelity_and_metadata() {
     let codecs = codecs();
 
@@ -113,10 +114,11 @@ fn encode_with_fidelity_and_metadata() {
     // Metadata (ICC/EXIF/XMP) rides along via the job. Configure it, then
     // `encode` straight off the job — no `into_encoder()` step.
     let mut job = codecs.encode_job(ImageFormat::Pnm).unwrap();
-    job.set_metadata_policy(
+    job.try_set_metadata_policy(
         Metadata::none().with_icc(vec![1, 2, 3, 4]),
         MetadataPolicy::PreserveExact,
-    );
+    )
+    .unwrap();
     let with_icc = job.encode(rgb8(&RGB)).unwrap();
     let info = codecs.probe(with_icc.data()).unwrap();
     assert!(info.source_color.icc_profile.is_some());
@@ -129,11 +131,11 @@ fn decode_requesting_a_pixel_format() {
 
     // Ask the decoder to produce RGBA8. A decoder that can output several
     // formats honors the preference; one that can't (like the reference)
-    // returns its native format — so read the descriptor back, don't assume it.
+    // returns its native format — so read the pixel format back, don't assume it.
     // When you truly need a format the decoder can't make, convert the output
     // (see `convert_a_decoded_image_to_another_format`).
     let image = codecs
-        .decode_preferring(file.data(), &[PixelFormat::RGBA8_SRGB])
+        .decode_preferring_formats(file.data(), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
     let _got = image.pixels().format().clone();
     assert_eq!((image.width(), image.height()), (W, H));
@@ -203,7 +205,7 @@ fn encode_from_a_foreign_pixel_format() {
     let supported = codecs
         .encoder_for(ImageFormat::Pnm)
         .unwrap()
-        .supported_descriptors();
+        .supported_pixel_formats();
 
     let source =
         PixelView::new(&bgra, W, H, W as usize * 4, &zenpixels::formats::BGRA8_SRGB).unwrap();

@@ -46,7 +46,7 @@ use whereat::At;
 use zencodec::decode::{
     AnimationFrameDecoder, BatchMeta, Decode, DecodeCapabilities, DecodeJob, DecodeOutput,
     DecodeRowSink, DecoderConfig, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, SinkError, SourceColor, StepError, StreamingDecode,
+    OutputInfo, Progress, SinkError, SourceColor, StepError, StreamingDecode, StripDimensions,
 };
 use zencodec::encode::{
     AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
@@ -196,7 +196,7 @@ pub(crate) fn descriptor_for_header(h: &Header) -> Result<PixelFormat, RefError>
     let mut effective = source.clone();
     effective.icc_profile = gated.as_ref().and_then(|value| value.icc.clone());
     effective.cicp = gated.and_then(|value| value.cicp);
-    zencodec::helpers::descriptor_for_decoded_pixels_v2(layout, &effective, None)
+    zencodec::helpers::pixel_format_for_decoded_pixels(layout, &effective, None)
         .map_err(|err| RefError::Invalid(err.to_string()))
 }
 
@@ -873,7 +873,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         &DESCRIPTORS
     }
     fn capabilities() -> &'static EncodeCapabilities {
@@ -935,24 +935,31 @@ impl EncodeJob for RefEncodeJob {
     fn with_limits(self, _limits: ResourceLimits) -> Self {
         self
     }
-    fn with_policy(mut self, policy: EncodePolicy) -> Self {
-        self.policy = policy;
-        self
-    }
     fn try_set_policy(&mut self, policy: EncodePolicy) -> Result<(), UnsupportedOperation> {
         let mut unsupported = policy;
         unsupported.embed_icc = None;
         unsupported.embed_exif = None;
         unsupported.embed_xmp = None;
+        if matches!(unsupported.color, Some(zencodec::ColorEmitPolicy::Verbatim)) {
+            unsupported.color = None;
+        }
         if unsupported != EncodePolicy::none() {
             return Err(UnsupportedOperation::EncodePolicy);
         }
         self.policy = policy;
         Ok(())
     }
-    fn with_metadata(mut self, meta: Metadata) -> Self {
+    fn with_unfiltered_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = meta;
         self
+    }
+    fn try_set_metadata_policy(
+        &mut self,
+        meta: Metadata,
+        policy: zencodec::MetadataPolicy,
+    ) -> Result<(), zencodec::encode::BoxedError> {
+        self.metadata = meta.filtered(&policy);
+        Ok(())
     }
     fn with_loop_count(mut self, count: Option<u32>) -> Self {
         self.loop_count = count;
@@ -1318,7 +1325,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         duration: zencodec::animation::FrameDuration,
         stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::animation::FrameDuration, RefError> {
-        let mut timing = self.timing;
+        let mut timing = self.timing.clone();
         let encoded = timing
             .quantize(duration)
             .map_err(|e| RefError::Invalid(e.to_string()))?;
@@ -1380,7 +1387,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         &[ImageFormat::Pnm]
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
         &DESCRIPTORS
     }
     fn capabilities() -> &'static DecodeCapabilities {
@@ -1444,8 +1451,8 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
     fn formats() -> &'static [ImageFormat] {
         ZCR_FORMATS
     }
-    fn supported_descriptors() -> &'static [PixelFormat] {
-        ReferenceDecoderConfig::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        ReferenceDecoderConfig::supported_pixel_formats()
     }
     fn capabilities() -> &'static DecodeCapabilities {
         ReferenceDecoderConfig::capabilities()
@@ -1626,8 +1633,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
                 let mut dst = sink
                     .provide_buffer_with_metadata(
                         BatchMeta::final_rows(*sy),
-                        *rows,
-                        h.width,
+                        StripDimensions::new(h.width, *rows),
                         desc.clone(),
                         &metadata,
                     )
@@ -1779,7 +1785,7 @@ impl StreamingDecode for RefStreamDec<'_> {
 /// self-delimiting header parses, then for each strip of up to four rows
 /// with `min_len` set to the strip's size, and decodes straight from the
 /// driver's bytes into the sink. Termination and cancellation rules come
-/// from [`Fused`](zencodec::decode::Fused) (applied by
+/// from [`FusedIncrementalDecoder`](zencodec::decode::FusedIncrementalDecoder) (applied by
 /// [`erase_incremental`](zencodec::decode::erase_incremental)), so the state
 /// machine below handles only decoding. Only the first frame is decoded,
 /// like the one-shot path.
@@ -1879,8 +1885,7 @@ impl IncrementalDecode for RefIncDec {
             let mut dst = sink
                 .provide_buffer_with_metadata(
                     BatchMeta::final_rows(self.next_row),
-                    rows,
-                    width,
+                    StripDimensions::new(width, rows),
                     desc,
                     &row_metadata(info),
                 )
@@ -1904,7 +1909,7 @@ impl IncrementalDecode for RefIncDec {
         self.header.as_ref().map(|(_, _, info)| info)
     }
 
-    fn output_descriptor(&self) -> Option<PixelFormat> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         self.header.as_ref().map(|(_, desc, _)| desc.clone())
     }
 

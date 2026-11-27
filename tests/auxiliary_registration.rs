@@ -7,7 +7,7 @@ use zencodec::{
     image::{
         Auxiliary, AuxiliaryGrid, AuxiliaryImageOwner, AuxiliaryKind, ImageGeometry,
         ImageInterpretation, ImageOutput, OutputError, PackedImageOwner, Rect, Samples,
-        SourcePrecision, ValueSlice, Values,
+        SourceSampleFormat, ValueSlice, Values,
     },
 };
 use zenpixels::{Orientation, PixelBuf, PixelFormat, PixelView, SampleType};
@@ -52,7 +52,7 @@ fn role() -> Auxiliary {
     Auxiliary {
         kind: AuxiliaryKind::Depth,
         name: String::new(),
-        source_precision: SourcePrecision::Integer {
+        source_sample_format: SourceSampleFormat::Integer {
             bits: 8,
             signed: false,
         },
