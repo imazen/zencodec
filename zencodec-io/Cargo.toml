@@ -1,6 +1,6 @@
 [package]
 name = "zencodec-io"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
@@ -19,8 +19,8 @@ std = ["zencodec/std"]
 tokio = ["std", "dep:tokio"]
 
 [dependencies]
-zencodec = { path = "..", version = ">=0.2.0, <0.4.0" }
-zenpixels = { version = ">=0.3.1, <0.5.0", default-features = false }
+zencodec = { path = "..", version = ">=0.3.0, <0.5.0" }
+zenpixels = { version = ">=0.5.0, <0.6.0", default-features = false }
 enough = "0.4.4"
 how-far = { version = "0.1.0", default-features = false }
 tokio = { version = "1.53.3", default-features = false, features = ["sync", "io-util", "macros"], optional = true }

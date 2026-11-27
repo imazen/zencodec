@@ -3,9 +3,10 @@
 use zencodec::ImageInfo;
 use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlledIncrementalDecode, ControlledProgress, DecodeBoundary,
-    DecodeRowSink, Event, Fused, IncrementalDecode, Input, InputRequest, StepError,
+    DecodeRowSink, Event, FusedIncrementalDecoder, IncrementalDecode, Input, InputRequest,
+    StepError,
 };
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 use crate::{ByteStepper, Step, Stepped};
 
@@ -31,7 +32,7 @@ pub enum ControlledEvent {
 /// sink failure, cancellation or unwind drops the native session, so retaining
 /// this adapter does not retain its managed buffers after failure.
 pub struct ControlledStepper<'a, D, S> {
-    decoder: Option<Fused<D>>,
+    decoder: Option<FusedIncrementalDecoder<D>>,
     sink: &'a mut S,
 }
 
@@ -39,7 +40,7 @@ impl<'a, D: ControlledIncrementalDecode, S: DecodeRowSink> ControlledStepper<'a,
     /// Bind a decoder to its destination; construction performs no decoding.
     pub fn new(decoder: D, sink: &'a mut S) -> Self {
         Self {
-            decoder: Some(Fused::new(decoder)),
+            decoder: Some(FusedIncrementalDecoder::new(decoder)),
             sink,
         }
     }
@@ -62,10 +63,10 @@ impl<'a, D: ControlledIncrementalDecode, S: DecodeRowSink> ControlledStepper<'a,
     }
 
     /// Proposed output layout and interpretation, if known.
-    pub fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    pub fn output_pixel_format(&self) -> Option<PixelFormat> {
         self.decoder
             .as_ref()
-            .and_then(IncrementalDecode::output_descriptor)
+            .and_then(IncrementalDecode::output_pixel_format)
     }
 
     /// Apply a decision to the exact held boundary. This resumes the protocol;

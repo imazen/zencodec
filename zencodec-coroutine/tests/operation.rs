@@ -12,15 +12,15 @@ use zencodec::{
     At, CodecSet, ImageFormat, ImageFormatDefinition, ImageInfo, ResourceLimits, SharedPulse,
     UnsupportedOperation,
     decode::*,
-    operation::{Decision, DecodeRequest, OperationError, PolicySet, Question},
+    operation::{Decision, DecodeOptions, OperationError, PolicySet, Question},
     source::{AccessPattern, SliceReadAt},
     storage::StorageBudget,
 };
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
-const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 static FORMAT: ImageFormatDefinition = ImageFormatDefinition::new(
     "controlled-fixture",
     None,
@@ -49,8 +49,9 @@ impl DecoderConfig for Config {
     fn formats() -> &'static [ImageFormat] {
         &[IMAGE]
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[RGBA]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[RGBA];
+        SUPPORTED
     }
     fn job<'a>(self) -> Self::Job<'a> {
         self
@@ -75,43 +76,40 @@ impl<'a> DecodeJob<'a> for Config {
         self.limits = limits;
         self
     }
-    fn with_policy(self, _: DecodePolicy) -> Self {
-        panic!("checked path must not call the best-effort setter")
-    }
     fn probe(&self, _: &[u8]) -> Result<ImageInfo, Self::Error> {
         Ok(ImageInfo::new(2, 2, IMAGE))
     }
     fn output_info(&self, _: &[u8]) -> Result<OutputInfo, Self::Error> {
         Ok(OutputInfo::full_decode(2, 2, RGBA))
     }
-    fn decoder(self, _: Cow<'a, [u8]>, _: &[PixelDescriptor]) -> Result<Self::Dec, Self::Error> {
+    fn decoder(self, _: Cow<'a, [u8]>, _: &[PixelFormat]) -> Result<Self::Dec, Self::Error> {
         panic!("no silent one-shot fallback")
     }
     fn push_decoder(
         self,
         _: Cow<'a, [u8]>,
         _: &mut dyn DecodeRowSink,
-        _: &[PixelDescriptor],
+        _: &[PixelFormat],
     ) -> Result<OutputInfo, Self::Error> {
         panic!("no silent push fallback")
     }
     fn streaming_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[PixelDescriptor],
+        _: &[PixelFormat],
     ) -> Result<Self::StreamDec, Self::Error> {
         panic!("no silent streaming fallback")
     }
     fn animation_frame_decoder(
         self,
         _: Cow<'a, [u8]>,
-        _: &[PixelDescriptor],
+        _: &[PixelFormat],
     ) -> Result<Self::AnimationFrameDec, Self::Error> {
         panic!("no animation fallback")
     }
     fn dyn_controlled_decoder(
         self,
-        _: &[PixelDescriptor],
+        _: &[PixelFormat],
         storage: StorageBudget,
     ) -> Result<Box<DynControlledDecoder>, BoxedError> {
         self.limits.check_dimensions(2, 2)?;
@@ -124,7 +122,7 @@ impl<'a> DecodeJob<'a> for Config {
                 ctx.read_exact_at(0, &mut magic).await?;
                 assert_eq!(magic, *b"CTL1");
                 ctx.set_info(ImageInfo::new(2, 2, IMAGE));
-                ctx.set_output_descriptor(RGBA);
+                ctx.set_output_pixel_format(RGBA);
                 ctx.interpretation(InterpretationFacts::new(
                     2,
                     2,
@@ -137,7 +135,14 @@ impl<'a> DecodeJob<'a> for Config {
                 ctx.read_exact_at(4, &mut pixels).await?;
                 ctx.write_rows(
                     BatchMeta::final_rows(0),
-                    &PixelSlice::new(&pixels, 2, 2, 8, RGBA).unwrap(),
+                    &PixelView::new_with_format_cow(
+                        &pixels,
+                        2,
+                        2,
+                        8,
+                        zenpixels::FormatCow::from_owned(RGBA),
+                    )
+                    .unwrap(),
                 )
                 .await?;
                 Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
@@ -162,7 +167,7 @@ fn input() -> Vec<u8> {
 fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(RGBA);
+    let request = DecodeOptions::new().require_pixel_format(RGBA);
     for read_at in [false, true] {
         let storage = budget();
         let mut calls = 0;
@@ -171,7 +176,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
             let Question::Boundary { facts, .. } = q else {
                 panic!()
             };
-            assert_eq!(facts.descriptor, Some(RGBA));
+            assert_eq!(facts.pixel_format, Some(RGBA));
             assert_eq!(work.load(Ordering::SeqCst), before);
             calls += 1;
             Ok(Decision::UsePreset)
@@ -207,7 +212,7 @@ fn stored_request_detects_and_executes_through_slice_and_positional_drivers() {
 fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let work = Arc::new(AtomicUsize::new(0));
     let codecs = codecs(work.clone());
-    let request = DecodeRequest::new().with_output(PixelDescriptor::RGB8_SRGB);
+    let request = DecodeOptions::new().require_pixel_format(PixelFormat::RGB8_SRGB);
     let mut resolver = |_q: Question<'_>| -> Result<Decision, At<Infallible>> {
         panic!("an unmet requirement is not a policy choice")
     };
@@ -219,23 +224,24 @@ fn required_descriptor_refuses_before_policy_adoption_and_pixel_work() {
     let error = drive_from_slice(&mut decoder, &input(), &mut sink, None, 7).unwrap_err();
     assert!(matches!(
         zencodec::find_cause::<OperationError>(&error),
-        Some(OperationError::OutputDescriptor { .. })
+        Some(OperationError::OutputPixelFormat { .. })
     ));
     assert!(sink.as_pixel_slice().is_none());
     assert_eq!(work.load(Ordering::SeqCst), 0);
-    let preferred = DecodeRequest::new().preferring_output(vec![PixelDescriptor::RGB8_SRGB]);
+    let preferred = DecodeOptions::new().prefer_pixel_formats(vec![PixelFormat::RGB8_SRGB]);
     let mut decoder = PolicyDecoder::new(
         preferred.start_controlled(&codecs, budget()).unwrap(),
         PolicySet::new(),
     );
     drive_from_slice(&mut decoder, &input(), &mut sink, None, 7).unwrap();
-    assert_eq!(sink.as_pixel_slice().unwrap().descriptor(), RGBA);
+    assert_eq!(sink.as_pixel_slice().unwrap().format().clone(), RGBA);
 }
 
 #[test]
 fn known_format_checks_inherited_policy_and_limits_without_reading_input() {
-    let codecs = codecs(Arc::new(AtomicUsize::new(0))).with_decode_policy(DecodePolicy::strict());
-    let request = DecodeRequest::new().with_format(IMAGE);
+    let codecs =
+        codecs(Arc::new(AtomicUsize::new(0))).with_decode_policy(DecodePolicy::untrusted_minimal());
+    let request = DecodeOptions::new().with_format(IMAGE);
     let error = match request.start_controlled(&codecs, budget()) {
         Err(e) => e,
         Ok(_) => panic!("unchecked policy"),
@@ -244,11 +250,14 @@ fn known_format_checks_inherited_policy_and_limits_without_reading_input() {
         zencodec::find_cause::<UnsupportedOperation>(&error),
         Some(&UnsupportedOperation::DecodePolicy)
     );
-    let request = request.with_policy(DecodePolicy::none());
+    let request = request.require_policy(DecodePolicy::none());
     let codecs = codecs.with_limits(ResourceLimits::none().with_max_pixels(3));
     let error = match request.start_controlled(&codecs, budget()) {
         Err(e) => e,
         Ok(_) => panic!("lost limits"),
     };
-    assert!(zencodec::find_cause::<zencodec::LimitExceeded>(&error).is_some());
+    assert_eq!(
+        zencodec::find_cause::<zencodec::LimitExceeded>(&error),
+        Some(&zencodec::LimitExceeded::Pixels { actual: 4, max: 3 })
+    );
 }

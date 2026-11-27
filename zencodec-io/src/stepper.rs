@@ -21,7 +21,7 @@ use zencodec::source::ReadAt;
 
 use crate::admission::{self, InputError};
 use crate::drive::{DriveOptions, DriveStats};
-use crate::window::{ProtocolViolation, Window, check_need, read_target};
+use crate::window::{ProtocolViolation, Window, check_consumed, check_need, read_target};
 
 /// A stage that consumes bytes through the sans-I/O dialogue.
 pub trait ByteStepper {
@@ -237,6 +237,7 @@ impl SliceCursor {
         loop {
             let input = self.offer(bytes);
             let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
+            check_consumed(p.consumed, input.bytes.len()).map_err(DriveFailure::Protocol)?;
             self.take(p.consumed);
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
@@ -274,6 +275,9 @@ pub struct ReadAtCursor {
     from_fetched: Option<(usize, usize)>,
     /// Set once the source turned out to be in memory.
     slice: Option<SliceCursor>,
+    /// Exact first post-seek request bound by [`bind_reposition`](Self::bind_reposition),
+    /// fulfilled before the next stage step.
+    pending_request: Option<InputRequest>,
 }
 
 impl ReadAtCursor {
@@ -288,6 +292,7 @@ impl ReadAtCursor {
             coalesced: Vec::new(),
             from_fetched: None,
             slice: None,
+            pending_request: None,
         }
     }
 
@@ -350,6 +355,155 @@ impl ReadAtCursor {
         }
     }
 
+    /// Validate that `access` can satisfy a reposition requiring `required` access
+    /// and starting at `first_request`, preserving usable unread buffered bytes on
+    /// forward/in-window repositions, retaining `first_request` to be fulfilled before
+    /// the next stage step, and refusing before mutating state if the underlying
+    /// source cannot satisfy the target or any missing tail.
+    pub fn bind_reposition(
+        &mut self,
+        access: &zencodec::source::SourceAccess,
+        required: zencodec::source::AccessPattern,
+        first_request: InputRequest,
+    ) -> Result<(), InputError> {
+        if !access.satisfies(required) {
+            return Err(InputError::Limit {
+                needed: 1,
+                limit: 0,
+            });
+        }
+        let known_total = self.window.total.or(access.known_len);
+        let (target_offset, needed_end) = match first_request {
+            InputRequest::Len => {
+                if known_total.is_none()
+                    && !access.satisfies(zencodec::source::AccessPattern::RandomAccess)
+                {
+                    return Err(InputError::Limit {
+                        needed: 1,
+                        limit: 0,
+                    });
+                }
+                if self.window.total.is_none() {
+                    self.window.total = access.known_len;
+                }
+                self.pending_request = Some(InputRequest::Len);
+                return Ok(());
+            }
+            InputRequest::AtLeast { offset, min_len } => {
+                let req_len = min_len.max(1) as u64;
+                let end = offset.checked_add(req_len).ok_or(InputError::Limit {
+                    needed: u64::MAX,
+                    limit: usize::MAX,
+                })?;
+                if let Some(total) = known_total
+                    && offset > total
+                {
+                    return Err(InputError::Limit {
+                        needed: offset,
+                        limit: usize::try_from(total).unwrap_or(usize::MAX),
+                    });
+                }
+                (offset, end)
+            }
+            InputRequest::Range(r) => {
+                let end = r.offset.checked_add(r.length).ok_or(InputError::Limit {
+                    needed: u64::MAX,
+                    limit: usize::MAX,
+                })?;
+                if let Some(total) = known_total
+                    && end > total
+                {
+                    return Err(InputError::Limit {
+                        needed: end,
+                        limit: usize::try_from(total).unwrap_or(usize::MAX),
+                    });
+                }
+                (r.offset, end)
+            }
+            _ => {
+                return Err(InputError::Limit {
+                    needed: 1,
+                    limit: 0,
+                });
+            }
+        };
+
+        if let Some(cursor) = &mut self.slice {
+            let cur_start = cursor.start as u64;
+            if target_offset < cur_start {
+                let back = cur_start - target_offset;
+                if !access.satisfies(zencodec::source::AccessPattern::BoundedBacktrack {
+                    window_bytes: back,
+                }) {
+                    return Err(InputError::Limit {
+                        needed: back,
+                        limit: 0,
+                    });
+                }
+            }
+            let off_usize = usize::try_from(target_offset).map_err(|_| InputError::Limit {
+                needed: target_offset,
+                limit: usize::MAX,
+            })?;
+            if off_usize >= cursor.start && off_usize <= cursor.end {
+                cursor.start = off_usize;
+            } else {
+                cursor.start = off_usize;
+                cursor.end = off_usize;
+            }
+            self.pending_request = Some(first_request);
+            return Ok(());
+        }
+
+        let mut high_water = self.window.end();
+        for (off, buf) in &self.fetched {
+            high_water = high_water.max(off.saturating_add(buf.len() as u64));
+        }
+
+        // Longest contiguous buffered prefix that `window.position(target_offset, ..)`
+        // will actually retain (matching `window.position`'s precedence: `window` first,
+        // otherwise the first matching `fetched` buffer).
+        let retained_end =
+            if target_offset >= self.window.base() && target_offset < self.window.end() {
+                self.window.end()
+            } else if let Some((off, buf)) = self.fetched.iter().find(|(off, buf)| {
+                target_offset >= *off && target_offset < off.saturating_add(buf.len() as u64)
+            }) {
+                off.saturating_add(buf.len() as u64)
+            } else {
+                target_offset
+            };
+
+        // If fulfilling `first_request` must read bytes starting behind `high_water`,
+        // verify the source can backtrack that far BEFORE mutating cursor buffers.
+        if retained_end < needed_end && retained_end < high_water {
+            let back = high_water - retained_end;
+            if !access
+                .satisfies(zencodec::source::AccessPattern::BoundedBacktrack { window_bytes: back })
+            {
+                return Err(InputError::Limit {
+                    needed: back,
+                    limit: 0,
+                });
+            }
+        }
+
+        if retained_end > target_offset {
+            self.window.position(target_offset, &mut self.fetched);
+            self.from_fetched = None;
+            self.fetched.clear();
+        } else {
+            self.from_fetched = None;
+            self.fetched.clear();
+            self.window.reset_to(target_offset);
+        }
+        if self.window.total.is_none() {
+            self.window.total = access.known_len;
+        }
+        self.pending_request = Some(first_request);
+        Ok(())
+    }
+
     /// Step `stage` over `source` until it produces an output. Pass the same
     /// source on every call.
     #[inline]
@@ -369,13 +523,40 @@ impl ReadAtCursor {
         }
         if let Some(cursor) = &mut self.slice {
             let bytes = source.as_slice().expect("the source stays in memory");
+            if let Some(req) = self.pending_request {
+                let total = bytes.len() as u64;
+                let past = match req {
+                    InputRequest::AtLeast { offset, .. } => offset > total,
+                    InputRequest::Range(r) => r.end() > total,
+                    _ => false,
+                };
+                if past {
+                    return Err(DriveFailure::Protocol(ProtocolViolation::NeedPastEnd {
+                        request: req,
+                        total,
+                    }));
+                }
+                cursor.serve(bytes, &[req]);
+                self.pending_request = None;
+            }
             return cursor
                 .next(bytes, stage, pulse)
                 .map_err(DriveFailure::widen);
         }
+        if !self.started {
+            self.started = true;
+            if self.window.total.is_none() {
+                self.window.total = source.len_hint();
+            }
+        }
+        if let Some(req) = self.pending_request {
+            self.serve(&[req], source)?;
+            self.pending_request = None;
+        }
         loop {
             let input = self.offer(source);
             let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
+            check_consumed(p.consumed, input.bytes.len()).map_err(DriveFailure::Protocol)?;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;
@@ -718,6 +899,7 @@ mod read {
             loop {
                 let input = self.offer();
                 let p = stage.step(input, pulse).map_err(PumpFailure::Step)?;
+                check_consumed(p.consumed, input.bytes.len()).map_err(PumpFailure::Protocol)?;
                 if matches!(p.step, Step::Need) {
                     check_need(stage.requested(), &input, p.consumed)
                         .map_err(PumpFailure::Protocol)?;

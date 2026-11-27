@@ -10,7 +10,7 @@ use crate::detect::SourceEncodingDetails;
 use crate::gainmap::GainMapPresence;
 use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
-use zenpixels::{ColorAuthority, ColorPrimaries, TransferFunction};
+use zenpixels::{ColorOrigin, Primaries, Transfer};
 
 // Re-export color types from zenpixels — the canonical definitions.
 pub use zenpixels::Cicp;
@@ -204,6 +204,45 @@ pub(crate) enum AuthoritativeColor<'a> {
     Cicp(Cicp),
 }
 
+// Adapted from imazen/zenpixels fde59b96632557592cffa9b7301acd8db96ed078.
+/// Precedence between color claims in the source file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum ColorAuthority {
+    /// ICC profile bytes take precedence for CMS transforms.
+    ///
+    /// The CMS should parse `icc_profile` and use its TRC curves directly.
+    /// Any CICP tag embedded inside the ICC should NOT override the TRC
+    /// (i.e., `allow_use_cicp_transfer: false` in moxcms terms).
+    ///
+    /// Codecs should only set this when `icc_profile` is populated.
+    /// Lenient consumers may fall back to `cicp` if ICC is absent.
+    #[default]
+    Icc,
+    /// CICP codes take precedence for CMS transforms.
+    ///
+    /// The CMS should build a source profile from the `cicp` field
+    /// (e.g., `ColorProfile::new_from_cicp()` in moxcms). The ICC profile,
+    /// if present, is for backwards-compatible metadata roundtripping only.
+    ///
+    /// Codecs should only set this when `cicp` is populated.
+    /// Lenient consumers may fall back to `icc_profile` if CICP is absent.
+    Cicp,
+}
+
+impl ColorAuthority {
+    /// Choose between the ICC and CICP form of a color source: the authoritative one
+    /// when it is present, otherwise the other. Every reader of the authority should
+    /// choose through this, so that they cannot disagree.
+    #[inline]
+    pub fn select<T>(self, icc: Option<T>, cicp: Option<T>) -> Option<T> {
+        match self {
+            Self::Icc => icc.or(cicp),
+            Self::Cicp => cicp.or(icc),
+        }
+    }
+}
+
 /// Source color description from the image file.
 ///
 /// Groups color-related metadata from the original source: CICP tags,
@@ -211,7 +250,7 @@ pub(crate) enum AuthoritativeColor<'a> {
 /// (content light level, mastering display).
 ///
 /// These describe the *source* color space — not the current pixel
-/// data's color space (which is tracked by [`zenpixels::PixelDescriptor`]).
+/// data's color space (which is tracked by [`zenpixels::PixelFormat`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct SourceColor {
@@ -245,32 +284,17 @@ pub struct SourceColor {
     pub content_light_level: Option<ContentLightLevel>,
     /// Mastering Display Color Volume (SMPTE ST 2086) for HDR content.
     pub mastering_display: Option<MasteringDisplay>,
-    /// Absolute-luminance anchor — the nits that a relative-linear sample
-    /// value of `1.0` represents (gain-map reconstruction yields 203, the
-    /// BT.2408 diffuse white).
+    /// Luminance in cd/m² represented by a relative-linear sample of `1.0`.
     ///
-    /// # Codec contract
+    /// Use the diffuse-white anchor signalled by the format when available.
+    /// If the codec adopts the BT.2408 reference white, set
+    /// [`DiffuseWhite::BT2408`] (203 cd/m²). Use `None` when the anchor is
+    /// unspecified. Gain-map reconstruction uses the BT.2408 anchor.
     ///
-    /// Codecs SHOULD populate this with `Some(value)` whenever they can
-    /// deliver a useful absolute-luminance anchor — including format-defined
-    /// implicit defaults that consumer code would otherwise have to
-    /// reconstruct independently. Consumer omission is worse than codec
-    /// double-signalling, so prefer to set the default at the source layer:
-    ///
-    /// - **Explicitly signalled** (JPEG XL `intensity_target`, OpenEXR
-    ///   `whiteLuminance`, HEIF `ndwt`, JXL gain-map `alternate_hdr_headroom`
-    ///   reconstruction): pass it through.
-    /// - **Spec-defined implicit default** (JPEG XL `intensity_target = 255`
-    ///   when the field is omitted, PQ container peak 10 000, HLG nominal
-    ///   peak per BT.2100 §6 + ambient): emit the format default so callers
-    ///   don't have to know per-codec rules.
-    /// - **Cross-format conventions** when the codec has a strong opinion:
-    ///   PNG with `cICP` transfer = PQ → emit `DiffuseWhite::BT2408` (203)
-    ///   as the cross-vendor relative-linear convention.
-    ///
-    /// `None` is reserved for genuinely-ambiguous cases (e.g. an unknown
-    /// transfer function paired with no metadata). When unsignalled, the
-    /// converter falls back to `DiffuseWhite::BT2408`.
+    /// PQ's 10,000 cd/m² endpoint and HLG's nominal display peak describe
+    /// transfer or display behavior. Record signalled content and mastering
+    /// peaks in [`zenpixels::HdrMetadata`] using
+    /// [`Self::content_light_level`] and [`Self::mastering_display`] as applicable.
     pub diffuse_white: Option<DiffuseWhite>,
 }
 
@@ -317,15 +341,21 @@ impl SourceColor {
         self
     }
 
-    /// Whether this content uses an HDR transfer function (PQ or HLG).
+    /// Whether the authoritative source carrier signals PQ or HLG.
     ///
-    /// Checks CICP first (cheap), then falls back to inspecting the ICC
-    /// profile's cicp tag via lightweight tag table scan. Does NOT require
-    /// a full ICC profile parse.
-    ///
-    /// When true, a colorimetric CMS transform to an SDR destination will
-    /// clip highlights — tone mapping is required first.
+    /// The ICC check reads its CICP tag. For decoded pixels, use their current
+    /// image spec, which can differ from the source carriers after conversion.
     pub fn has_hdr_transfer(&self) -> bool {
+        let cicp = match self.authoritative() {
+            Some(AuthoritativeColor::Cicp(cicp)) => Some(cicp),
+            Some(AuthoritativeColor::Icc(icc)) => zenpixels::Cicp::from_icc(icc),
+            None => None,
+        };
+        cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+    }
+
+    /// Check whether either original source carrier signals PQ or HLG.
+    pub fn any_tag_has_hdr_transfer(&self) -> bool {
         if let Some(c) = self.cicp
             && matches!(c.transfer_characteristics, 16 | 18)
         {
@@ -339,23 +369,32 @@ impl SourceColor {
         false
     }
 
-    /// Derive the transfer function from CICP metadata.
-    pub fn transfer_function(&self) -> TransferFunction {
+    /// Read the transfer function from the raw source CICP tuple.
+    ///
+    /// This inspects [`Self::cicp`] even when ICC is authoritative. An absent
+    /// or unrecognized CICP transfer yields [`Transfer::Unknown`]. For the
+    /// selected source carrier, use [`Self::authoritative_origin`]. For
+    /// decoded samples, consult their [`zenpixels::PixelFormat`].
+    pub fn transfer_function(&self) -> Transfer {
         self.cicp
-            .and_then(|c| TransferFunction::from_cicp(c.transfer_characteristics))
-            .unwrap_or(TransferFunction::Unknown)
+            .and_then(|c| Transfer::from_cicp(c.transfer_characteristics))
+            .unwrap_or(Transfer::Unknown)
     }
 
-    /// Derive the color primaries from CICP metadata.
-    pub fn color_primaries(&self) -> ColorPrimaries {
+    /// Read the primaries from the raw source CICP tuple.
+    ///
+    /// This inspects [`Self::cicp`] even when ICC is authoritative. An absent
+    /// tuple yields [`Primaries::Bt709`] and an unrecognized code yields
+    /// [`Primaries::Unknown`]. For the selected source carrier, use
+    /// [`Self::authoritative_origin`].
+    pub fn color_primaries(&self) -> Primaries {
         self.cicp
-            .map(|c| c.color_primaries_enum())
-            .unwrap_or(ColorPrimaries::Bt709)
+            .map(|c| Primaries::from_cicp(c.color_primaries).unwrap_or(Primaries::Unknown))
+            .unwrap_or(Primaries::Bt709)
     }
 
-    /// The color source that decides this image's color: the authoritative one when
-    /// it is present, otherwise the other. Every reader chooses through this, so
-    /// they cannot disagree.
+    /// Select the source carrier for color interpretation, falling back to the
+    /// other carrier when the authoritative one is absent.
     pub(crate) fn authoritative(&self) -> Option<AuthoritativeColor<'_>> {
         self.color_authority.select(
             self.icc_profile.as_ref().map(AuthoritativeColor::Icc),
@@ -363,29 +402,24 @@ impl SourceColor {
         )
     }
 
-    /// Build a [`zenpixels::ColorContext`] that carries only the
-    /// authoritative color field.
+    /// Return the chosen source-file color claim using the codec's precedence.
     ///
-    /// When [`color_authority`](Self::color_authority) is `Cicp` and CICP
-    /// is present, the ICC profile is dropped — the CMS will work from
-    /// CICP directly. When authority is `Icc` and ICC is present, CICP is
-    /// dropped. When the authoritative field is absent, the other is kept
-    /// as a fallback.
-    ///
-    /// This ensures [`zenpixels::ColorContext::as_profile_source()`]
-    /// returns the authoritative source without needing a separate
-    /// authority parameter.
-    pub fn to_color_context(&self) -> zenpixels::ColorContext {
-        let base = match self.authoritative() {
-            Some(AuthoritativeColor::Icc(icc)) => zenpixels::ColorContext::from_icc(icc.clone()),
-            Some(AuthoritativeColor::Cicp(cicp)) => zenpixels::ColorContext::from_cicp(cicp),
-            None => zenpixels::ColorContext::default(),
-        };
-        // Carry the absolute-luminance anchor onto the pixel-side color context
-        // so the converter (e.g. `zenpixels_convert::hdr::quantize_to`) reads it.
-        match self.diffuse_white {
-            Some(white) => base.with_diffuse_white(white),
-            None => base,
+    /// For full source provenance, use [`Self::color_origin`].
+    pub fn authoritative_origin(&self) -> ColorOrigin {
+        match self.authoritative() {
+            Some(AuthoritativeColor::Icc(icc)) => ColorOrigin::from_icc(icc.clone()),
+            Some(AuthoritativeColor::Cicp(cicp)) => ColorOrigin::from_cicp(cicp),
+            None => ColorOrigin::assumed(),
+        }
+    }
+
+    /// Return both original color carriers when they exist.
+    pub fn color_origin(&self) -> ColorOrigin {
+        match (&self.icc_profile, self.cicp) {
+            (Some(icc), Some(cicp)) => ColorOrigin::from_icc_and_cicp(icc.clone(), cicp),
+            (Some(icc), None) => ColorOrigin::from_icc(icc.clone()),
+            (None, Some(cicp)) => ColorOrigin::from_cicp(cicp),
+            (None, None) => ColorOrigin::assumed(),
         }
     }
 }
@@ -543,9 +577,9 @@ pub struct ImageInfo {
 }
 
 // ImageInfo contains Arc, Vec, trait objects — heavily pointer-dependent.
-// (SourceColor gained the diffuse_white Option<f32> anchor: 248 → 256 on 64-bit.)
+// (Option<DiffuseWhite> uses NonZeroU32 niche so SourceColor fits back into 248 bytes on 64-bit.)
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ImageInfo>() == 256);
+const _: () = assert!(core::mem::size_of::<ImageInfo>() == 248);
 
 impl ImageInfo {
     /// Create a new `ImageInfo` with the given dimensions and format.
@@ -778,23 +812,18 @@ impl ImageInfo {
         }
     }
 
-    /// Derive the transfer function from CICP metadata.
+    /// Read the transfer function from the raw source CICP tuple.
     ///
-    /// Delegates to [`SourceColor::transfer_function()`].
-    ///
-    /// Use this to resolve a [`zenpixels::PixelDescriptor`]'s unknown transfer function:
-    ///
-    /// ```ignore
-    /// let desc = pixels.descriptor().with_transfer(info.transfer_function());
-    /// ```
-    pub fn transfer_function(&self) -> TransferFunction {
+    /// Delegates to [`SourceColor::transfer_function()`]. Consult the decoded
+    /// pixels' [`zenpixels::PixelFormat`] for their current transfer function.
+    pub fn transfer_function(&self) -> Transfer {
         self.source_color.transfer_function()
     }
 
-    /// Derive the color primaries from CICP metadata.
+    /// Read the primaries from the raw source CICP tuple.
     ///
     /// Delegates to [`SourceColor::color_primaries()`].
-    pub fn color_primaries(&self) -> ColorPrimaries {
+    pub fn color_primaries(&self) -> Primaries {
         self.source_color.color_primaries()
     }
 
@@ -943,8 +972,8 @@ mod tests {
     fn cicp_constants() {
         assert_eq!(Cicp::SRGB.color_primaries, 1);
         assert_eq!(Cicp::SRGB.transfer_characteristics, 13);
-        assert_eq!(Cicp::BT2100_PQ.transfer_characteristics, 16);
-        assert_eq!(Cicp::BT2100_HLG.transfer_characteristics, 18);
+        assert_eq!(Cicp::BT2100_PQ_YCBCR_FULL.transfer_characteristics, 16);
+        assert_eq!(Cicp::BT2100_HLG_YCBCR_FULL.transfer_characteristics, 18);
         const { assert!(Cicp::SRGB.full_range) };
     }
 
@@ -968,10 +997,10 @@ mod tests {
             0.005,
         );
         let info = ImageInfo::new(3840, 2160, ImageFormat::Avif)
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_content_light_level(clli)
             .with_mastering_display(mdcv);
-        assert_eq!(info.source_color.cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(info.source_color.cicp, Some(Cicp::BT2100_PQ_YCBCR_FULL));
         assert_eq!(
             info.source_color
                 .content_light_level
@@ -987,74 +1016,107 @@ mod tests {
 
     #[test]
     fn transfer_function_from_cicp() {
-        use TransferFunction;
+        use Transfer;
 
         let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::SRGB);
-        assert_eq!(info.transfer_function(), TransferFunction::Srgb);
+        assert_eq!(info.transfer_function(), Transfer::Srgb);
 
-        let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_PQ);
-        assert_eq!(info.transfer_function(), TransferFunction::Pq);
+        let info =
+            ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
+        assert_eq!(info.transfer_function(), Transfer::Pq);
 
-        let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_HLG);
-        assert_eq!(info.transfer_function(), TransferFunction::Hlg);
+        let info =
+            ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
+        assert_eq!(
+            info.transfer_function(),
+            Transfer::Hlg(zenpixels::HlgMode::Scene)
+        );
     }
 
     #[test]
     fn transfer_function_without_cicp() {
-        use TransferFunction;
+        use Transfer;
 
         let info = ImageInfo::new(100, 100, ImageFormat::Jpeg);
-        assert_eq!(info.transfer_function(), TransferFunction::Unknown);
+        assert_eq!(info.transfer_function(), Transfer::Unknown);
     }
 
     #[test]
     fn transfer_function_unrecognized_cicp() {
-        use TransferFunction;
+        use Transfer;
 
         // CICP with unrecognized transfer characteristics code
         let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::new(1, 99, 0, true));
-        assert_eq!(info.transfer_function(), TransferFunction::Unknown);
+        assert_eq!(info.transfer_function(), Transfer::Unknown);
     }
 
     #[test]
     fn cicp_display_srgb() {
-        let s = alloc::format!("{}", Cicp::SRGB);
+        let s = alloc::format!("{}", crate::helpers::CicpDisplay(Cicp::SRGB));
         assert_eq!(s, "BT.709/sRGB / sRGB / Identity/RGB (full range)");
     }
 
     #[test]
     fn cicp_display_bt2100_pq() {
-        let s = alloc::format!("{}", Cicp::BT2100_PQ);
+        let s = alloc::format!(
+            "{}",
+            crate::helpers::CicpDisplay(Cicp::BT2100_PQ_YCBCR_FULL)
+        );
         assert_eq!(s, "BT.2020 / PQ (HDR) / BT.2020 NCL (full range)");
     }
 
     #[test]
     fn cicp_display_limited_range() {
         let cicp = Cicp::new(1, 1, 1, false);
-        let s = alloc::format!("{}", cicp);
+        let s = alloc::format!("{}", crate::helpers::CicpDisplay(cicp));
         assert_eq!(s, "BT.709/sRGB / BT.709 / BT.709 (limited range)");
     }
 
     #[test]
     fn cicp_name_helpers() {
-        assert_eq!(Cicp::color_primaries_name(1), "BT.709/sRGB");
-        assert_eq!(Cicp::color_primaries_name(12), "Display P3");
-        assert_eq!(Cicp::color_primaries_name(255), "Unknown");
+        assert_eq!(crate::helpers::color_primaries_name(1), "BT.709/sRGB");
+        assert_eq!(crate::helpers::color_primaries_name(12), "Display P3");
+        assert_eq!(crate::helpers::color_primaries_name(255), "Unknown");
 
-        assert_eq!(Cicp::transfer_characteristics_name(13), "sRGB");
-        assert_eq!(Cicp::transfer_characteristics_name(16), "PQ (HDR)");
-        assert_eq!(Cicp::transfer_characteristics_name(18), "HLG (HDR)");
+        assert_eq!(crate::helpers::transfer_characteristics_name(13), "sRGB");
+        assert_eq!(
+            crate::helpers::transfer_characteristics_name(16),
+            "PQ (HDR)"
+        );
+        assert_eq!(
+            crate::helpers::transfer_characteristics_name(18),
+            "HLG (HDR)"
+        );
 
-        assert_eq!(Cicp::matrix_coefficients_name(0), "Identity/RGB");
-        assert_eq!(Cicp::matrix_coefficients_name(6), "BT.601");
-        assert_eq!(Cicp::matrix_coefficients_name(9), "BT.2020 NCL");
+        assert_eq!(crate::helpers::matrix_coefficients_name(0), "Identity/RGB");
+        assert_eq!(crate::helpers::matrix_coefficients_name(6), "BT.601");
+        assert_eq!(crate::helpers::matrix_coefficients_name(9), "BT.2020 NCL");
     }
 
     // -----------------------------------------------------------------------
     // SourceColor + ColorAuthority + has_hdr_transfer() tests
     // -----------------------------------------------------------------------
 
-    use crate::icc::tests::build_icc_with_cicp;
+    /// Build a minimal valid ICC profile with a cicp tag for testing.
+    fn build_icc_with_cicp(cp: u8, tc: u8, mc: u8, fr: bool) -> alloc::vec::Vec<u8> {
+        let mut data = alloc::vec![0u8; 256];
+        let size = data.len() as u32;
+        data[0..4].copy_from_slice(&size.to_be_bytes());
+        data[8..12].copy_from_slice(&[4, 0x40, 0, 0]);
+        data[12..16].copy_from_slice(b"mntr");
+        data[16..20].copy_from_slice(b"RGB ");
+        data[36..40].copy_from_slice(b"acsp");
+        data[128..132].copy_from_slice(&1u32.to_be_bytes());
+        data[132..136].copy_from_slice(b"cicp");
+        data[136..140].copy_from_slice(&144u32.to_be_bytes());
+        data[140..144].copy_from_slice(&12u32.to_be_bytes());
+        data[144..148].copy_from_slice(b"cicp");
+        data[152] = cp;
+        data[153] = tc;
+        data[154] = mc;
+        data[155] = if fr { 1 } else { 0 };
+        data
+    }
 
     /// Build a minimal ICC profile without a cicp tag.
     fn build_icc_no_cicp() -> alloc::vec::Vec<u8> {
@@ -1093,13 +1155,13 @@ mod tests {
 
     #[test]
     fn has_hdr_transfer_cicp_pq() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         assert!(sc.has_hdr_transfer());
     }
 
     #[test]
     fn has_hdr_transfer_cicp_hlg() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
         assert!(sc.has_hdr_transfer());
     }
 
@@ -1157,28 +1219,54 @@ mod tests {
         assert!(!sc.has_hdr_transfer());
     }
 
-    // --- has_hdr_transfer() priority: CICP checked before ICC ---
+    // --- Conflicting carrier diagnostics and authority ---
 
     #[test]
     fn has_hdr_transfer_cicp_wins_over_icc() {
-        // CICP says PQ, ICC says sRGB → CICP checked first → HDR
+        // CICP is explicitly selected over the SDR ICC.
         let icc = build_icc_with_cicp(1, 13, 0, true);
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
-            .with_icc_profile(icc);
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
+            .with_icc_profile(icc)
+            .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn has_hdr_transfer_cicp_sdr_but_icc_hdr_still_detects() {
-        // CICP says sRGB (tc=13) → first check doesn't match (not PQ/HLG).
-        // Falls through to ICC check → finds PQ cicp tag → HDR.
-        // Conservative: if ANY signal says HDR, we report HDR.
-        let icc = build_icc_with_cicp(9, 16, 0, true);
-        let sc = SourceColor::default()
-            .with_cicp(Cicp::SRGB)
-            .with_icc_profile(icc);
-        assert!(sc.has_hdr_transfer());
+    fn has_hdr_transfer_chooses_authority_in_both_directions() {
+        let cases = [
+            (Cicp::SRGB, build_icc_with_cicp(9, 16, 0, true), false),
+            (
+                Cicp::BT2100_PQ_YCBCR_FULL,
+                build_icc_with_cicp(1, 13, 0, true),
+                true,
+            ),
+        ];
+        for (cicp, icc, cicp_is_hdr) in cases {
+            let sc = SourceColor::default()
+                .with_cicp(cicp)
+                .with_icc_profile(icc)
+                .with_color_authority(ColorAuthority::Cicp);
+            assert_eq!(sc.has_hdr_transfer(), cicp_is_hdr);
+            assert!(sc.any_tag_has_hdr_transfer());
+            let sc = sc.with_color_authority(ColorAuthority::Icc);
+            assert_eq!(sc.has_hdr_transfer(), !cicp_is_hdr);
+            assert!(sc.any_tag_has_hdr_transfer());
+        }
+    }
+
+    #[test]
+    fn source_cicp_accessors_report_raw_codes_with_authoritative_icc() {
+        let source = SourceColor::default()
+            .with_icc_profile(build_icc_with_cicp(1, 13, 0, true))
+            .with_color_authority(ColorAuthority::Icc);
+        assert_eq!(source.transfer_function(), Transfer::Unknown);
+        assert_eq!(source.color_primaries(), Primaries::Bt709);
+
+        let source = source.with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
+        assert_eq!(source.transfer_function(), Transfer::Pq);
+        assert_eq!(source.color_primaries(), Primaries::Bt2020);
+        assert!(!source.has_hdr_transfer());
     }
 
     #[test]
@@ -1186,8 +1274,9 @@ mod tests {
         // CICP says PQ → first check matches → returns true immediately.
         // Even garbage ICC doesn't prevent detection.
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
-            .with_icc_profile(alloc::vec![0xFF; 10]);
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
+            .with_icc_profile(alloc::vec![0xFF; 10])
+            .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
     }
 
@@ -1220,30 +1309,33 @@ mod tests {
     #[test]
     fn source_color_transfer_function() {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
-        assert_eq!(sc.transfer_function(), TransferFunction::Srgb);
+        assert_eq!(sc.transfer_function(), Transfer::Srgb);
 
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
-        assert_eq!(sc.transfer_function(), TransferFunction::Pq);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
+        assert_eq!(sc.transfer_function(), Transfer::Pq);
 
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
-        assert_eq!(sc.transfer_function(), TransferFunction::Hlg);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
+        assert_eq!(
+            sc.transfer_function(),
+            Transfer::Hlg(zenpixels::HlgMode::Scene)
+        );
 
         // No CICP → Unknown
         let sc = SourceColor::default();
-        assert_eq!(sc.transfer_function(), TransferFunction::Unknown);
+        assert_eq!(sc.transfer_function(), Transfer::Unknown);
     }
 
     #[test]
     fn source_color_primaries() {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
-        assert_eq!(sc.color_primaries(), ColorPrimaries::Bt709);
+        assert_eq!(sc.color_primaries(), Primaries::Bt709);
 
         let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
-        assert_eq!(sc.color_primaries(), ColorPrimaries::DisplayP3);
+        assert_eq!(sc.color_primaries(), Primaries::DisplayP3);
 
         // No CICP → defaults to BT.709 (sRGB primaries)
         let sc = SourceColor::default();
-        assert_eq!(sc.color_primaries(), ColorPrimaries::Bt709);
+        assert_eq!(sc.color_primaries(), Primaries::Bt709);
     }
 
     // -----------------------------------------------------------------------
@@ -1316,7 +1408,7 @@ mod tests {
         let icc = alloc::vec![0u8; 128];
         let sc = SourceColor::default()
             .with_icc_profile(icc)
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
         assert_eq!(sc.color_authority, ColorAuthority::Icc);
         assert!(sc.icc_profile.is_some());
@@ -1327,7 +1419,7 @@ mod tests {
     #[test]
     fn spec_avif_nclx_only() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Cicp);
         assert_eq!(sc.color_authority, ColorAuthority::Cicp);
         assert!(sc.cicp.is_some());
@@ -1380,10 +1472,10 @@ mod tests {
     #[test]
     fn mismatch_icc_authority_no_icc_profile() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
         // Authority says ICC, but only CICP present — codec bug.
-        // has_hdr_transfer still detects HDR via CICP (ignores authority).
+        // The present CICP carrier is the fallback.
         assert!(sc.has_hdr_transfer());
         assert!(sc.icc_profile.is_none()); // the mismatch
     }
@@ -1396,7 +1488,7 @@ mod tests {
             .with_icc_profile(icc_pq)
             .with_color_authority(ColorAuthority::Cicp);
         // Authority says CICP, but only ICC present — codec bug.
-        // has_hdr_transfer still detects HDR via ICC cicp tag.
+        // The present ICC carrier is the fallback.
         assert!(sc.has_hdr_transfer());
         assert!(sc.cicp.is_none()); // the mismatch
     }
@@ -1411,7 +1503,7 @@ mod tests {
             .with_icc_profile(alloc::vec![1, 2, 3])
             .with_cicp(Cicp::DISPLAY_P3)
             .with_color_authority(ColorAuthority::Cicp);
-        let ctx = sc.to_color_context();
+        let ctx = sc.authoritative_origin();
         assert!(
             ctx.icc.is_none(),
             "ICC should be dropped when CICP is authoritative"
@@ -1426,7 +1518,7 @@ mod tests {
             .with_icc_profile(icc.clone())
             .with_cicp(Cicp::SRGB)
             .with_color_authority(ColorAuthority::Icc);
-        let ctx = sc.to_color_context();
+        let ctx = sc.authoritative_origin();
         assert!(
             ctx.cicp.is_none(),
             "CICP should be dropped when ICC is authoritative"
@@ -1440,7 +1532,7 @@ mod tests {
         let sc = SourceColor::default()
             .with_icc_profile(icc.clone())
             .with_color_authority(ColorAuthority::Cicp);
-        let ctx = sc.to_color_context();
+        let ctx = sc.authoritative_origin();
         // CICP was authoritative but absent — fall back to ICC.
         assert_eq!(ctx.icc.as_deref(), Some(icc.as_slice()));
         assert!(ctx.cicp.is_none());
@@ -1449,18 +1541,18 @@ mod tests {
     #[test]
     fn to_color_context_icc_authoritative_no_icc_keeps_cicp_fallback() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
-        let ctx = sc.to_color_context();
+        let ctx = sc.authoritative_origin();
         // ICC was authoritative but absent — fall back to CICP.
         assert!(ctx.icc.is_none());
-        assert_eq!(ctx.cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(ctx.cicp, Some(Cicp::BT2100_PQ_YCBCR_FULL));
     }
 
     #[test]
     fn to_color_context_neither_field_present() {
         let sc = SourceColor::default();
-        let ctx = sc.to_color_context();
+        let ctx = sc.authoritative_origin();
         assert!(ctx.icc.is_none());
         assert!(ctx.cicp.is_none());
     }
@@ -1472,10 +1564,10 @@ mod tests {
             .with_icc_profile(alloc::vec![1, 2, 3])
             .with_cicp(Cicp::SRGB)
             .with_color_authority(ColorAuthority::Cicp);
-        let ctx = sc.to_color_context();
-        let src = ctx.as_profile_source().unwrap();
+        let ctx = sc.authoritative_origin();
+        let src = ctx.kind;
         assert!(
-            matches!(src, zenpixels::ColorProfileSource::Cicp(_)),
+            matches!(src, zenpixels::OriginKind::Cicp),
             "CICP authoritative should produce Cicp source, got {src:?}"
         );
 
@@ -1485,10 +1577,10 @@ mod tests {
             .with_icc_profile(icc)
             .with_cicp(Cicp::SRGB)
             .with_color_authority(ColorAuthority::Icc);
-        let ctx = sc.to_color_context();
-        let src = ctx.as_profile_source().unwrap();
+        let ctx = sc.authoritative_origin();
+        let src = ctx.kind;
         assert!(
-            matches!(src, zenpixels::ColorProfileSource::Icc(_)),
+            matches!(src, zenpixels::OriginKind::Icc),
             "ICC authoritative should produce Icc source, got {src:?}"
         );
     }

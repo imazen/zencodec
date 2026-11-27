@@ -4,10 +4,10 @@
 //! this module nor its owners depend on media sessions or I/O drivers.
 
 use crate::frame::{FrameInterpretation, FrameTiming};
+use crate::plane::AnyPlane;
+use crate::plane::PlaneEncoding;
 use alloc::{boxed::Box, sync::Arc};
 use core::fmt;
-use zenpixels::plane::AnyPlane;
-use zenpixels::plane::PlaneEncoding;
 
 /// Facts about one presentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -34,7 +34,7 @@ impl Presentation {
     };
 }
 
-pub use zenpixels::plane::PlaneError;
+pub use crate::plane::PlaneError;
 
 /// A picture's planes, mapped. Views borrow the mapping, which borrows the
 /// picture, so storage stays put while it is read (rav1d-safe: "a mapped

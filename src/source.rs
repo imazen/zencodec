@@ -19,6 +19,178 @@ use core::fmt;
 
 use crate::traits::BoxedError;
 
+/// How the host or driver acquires encoded input bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Acquisition {
+    /// Complete source is already resident in memory and borrowable zero-copy.
+    Borrowed,
+    /// Positional random-access source (file `pread`, HTTP Range, object store).
+    Positional,
+    /// Forward-only sequential stream (socket, pipe, unseekable upload).
+    ForwardStream,
+    /// Forward stream backed by an explicitly admitted replay buffer or spill file.
+    ReplayBuffered,
+}
+
+/// Conservative bound reported for a native resource quantity (memory, workspace,
+/// scan bytes, or finish trailer size).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum NativeBound<T> {
+    /// Exact byte or slot count known upfront.
+    Exact(T),
+    /// Proven conservative upper bound that runtime usage will not exceed.
+    UpperBound(T),
+    /// Native backend cannot prove a finite upper bound; requires explicit best-effort
+    /// policy or process/sandbox isolation.
+    Unknown,
+}
+
+impl<T: Copy> NativeBound<T> {
+    /// Returns the known exact or upper-bound value, or `None` when [`Unknown`](Self::Unknown).
+    #[inline]
+    #[must_use]
+    pub const fn known(self) -> Option<T> {
+        match self {
+            Self::Exact(v) | Self::UpperBound(v) => Some(v),
+            Self::Unknown => None,
+        }
+    }
+
+    /// Returns `true` when this bound is [`Unknown`](Self::Unknown).
+    #[inline]
+    #[must_use]
+    pub const fn is_unknown(self) -> bool {
+        matches!(self, Self::Unknown)
+    }
+}
+
+/// Metadata describing one offered slice of bytes in a sans-I/O protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct ByteOffer {
+    /// Absolute starting byte offset of the offered prefix.
+    pub offset: u64,
+    /// Length in bytes of the offered slice.
+    pub len: usize,
+    /// Total source length, if known.
+    pub total_len: Option<u64>,
+}
+
+impl ByteOffer {
+    /// Construct a [`ByteOffer`].
+    #[inline]
+    #[must_use]
+    pub const fn new(offset: u64, len: usize, total_len: Option<u64>) -> Self {
+        Self {
+            offset,
+            len,
+            total_len,
+        }
+    }
+}
+
+/// Transport access capabilities declared by a source before route admission.
+///
+/// Drivers and demuxer factories inspect [`SourceAccess`] to decide whether seeking,
+/// trailing-index reads (e.g., MP4 `moov` at EOF), or range batching can be admitted
+/// without touching the transport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct SourceAccess {
+    /// Underlying byte-acquisition mode.
+    pub acquisition: Acquisition,
+    /// Most demanding [`AccessPattern`] this source can serve natively.
+    pub access_pattern: AccessPattern,
+    /// Known total byte length without reading to EOF, if available.
+    pub known_len: Option<u64>,
+    /// Whether bytes at already-observed offsets are guaranteed immutable for this run.
+    pub immutable: bool,
+    /// Whether the transport can overlap concurrent range requests.
+    pub supports_range_batch: bool,
+}
+
+impl SourceAccess {
+    /// An immutable in-memory slice of `len` bytes.
+    #[inline]
+    #[must_use]
+    pub const fn borrowed(len: u64) -> Self {
+        Self {
+            acquisition: Acquisition::Borrowed,
+            access_pattern: AccessPattern::RandomAccess,
+            known_len: Some(len),
+            immutable: true,
+            supports_range_batch: false,
+        }
+    }
+
+    /// A positional random-access source with optional known length.
+    #[inline]
+    #[must_use]
+    pub const fn positional(known_len: Option<u64>) -> Self {
+        Self {
+            acquisition: Acquisition::Positional,
+            access_pattern: AccessPattern::RandomAccess,
+            known_len,
+            immutable: false,
+            supports_range_batch: false,
+        }
+    }
+
+    /// A forward-only unseekable byte stream with unknown length.
+    #[inline]
+    #[must_use]
+    pub const fn forward_stream() -> Self {
+        Self {
+            acquisition: Acquisition::ForwardStream,
+            access_pattern: AccessPattern::Sequential,
+            known_len: None,
+            immutable: false,
+            supports_range_batch: false,
+        }
+    }
+
+    /// Mark whether the source guarantees an immutable representation for this run.
+    #[inline]
+    #[must_use]
+    pub const fn with_immutable(mut self, immutable: bool) -> Self {
+        self.immutable = immutable;
+        self
+    }
+
+    /// Mark whether the transport overlaps concurrent range batches.
+    #[inline]
+    #[must_use]
+    pub const fn with_range_batch(mut self, supports: bool) -> Self {
+        self.supports_range_batch = supports;
+        self
+    }
+
+    /// Set the known total byte length.
+    #[inline]
+    #[must_use]
+    pub const fn with_known_len(mut self, len: Option<u64>) -> Self {
+        self.known_len = len;
+        self
+    }
+
+    /// Whether this source can natively serve `required` without extra replay buffering.
+    #[inline]
+    #[must_use]
+    pub const fn satisfies(&self, required: AccessPattern) -> bool {
+        match (self.access_pattern, required) {
+            (_, AccessPattern::Sequential) => true,
+            (AccessPattern::RandomAccess, _) => true,
+            (
+                AccessPattern::BoundedBacktrack { window_bytes: have },
+                AccessPattern::BoundedBacktrack { window_bytes: need },
+            ) => have >= need,
+            _ => false,
+        }
+    }
+}
+
 /// How a decoder reads its input, declared so drivers can size a buffer or
 /// choose a fetch strategy for unseekable streams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

@@ -122,32 +122,32 @@ impl Collection for Selected {
     }
 }
 #[test]
-#[allow(deprecated)] // Both requirement sources must protect the retained owner.
-fn late_requirement_blocks_decode_and_transform_and_owner_remains_usable() {
+fn open_workspace_requirement_refuses_before_factory_and_unrestricted_open_reaches_decode() {
     let calls = Arc::new(AtomicUsize::new(0));
+    let factory_calls = Arc::new(AtomicUsize::new(0));
+    let error = CheckedCollection::<Selected, _>::open(
+        SharedPulse::default(),
+        PolicySet::new().with_workspace_limit(u64::MAX),
+        |_| {
+            factory_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Selected {
+                calls: calls.clone(),
+            })
+        },
+    )
+    .err()
+    .expect("unknown workspace must refuse before factory");
+    assert_workspace(&error);
+    assert_eq!(factory_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
     let mut images = CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |_| {
         Ok(Selected {
             calls: calls.clone(),
         })
     })
-    .unwrap()
-    .with_policy_set(PolicySet::new().with_workspace_limit(u64::MAX));
+    .unwrap();
     let id = Origin::new().image(0);
-    let error = images
-        .decode_with(
-            &id,
-            &ImageRequest::new(),
-            |_, _| -> Result<ImageOutput, Cause> {
-                panic!("transform must not execute after admission refusal")
-            },
-        )
-        .unwrap_err();
-    assert_workspace(&error);
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
-    assert!(!images.is_finished());
-    assert_eq!(images.report().decisions().count(), 0);
-    // Explicit caller reconfiguration proves the native owner survived refusal.
-    images = images.with_policy_set(PolicySet::new());
     let error = images.decode(&id, &ImageRequest::new()).unwrap_err();
     assert!(zencodec::find_cause::<SelectionError>(&error).is_some());
     assert_eq!(calls.load(Ordering::SeqCst), 1);

@@ -2,6 +2,31 @@
 
 ## Native image selection (unreleased experiment)
 
+### QUEUED BREAKING CHANGES
+
+- **zencodec 0.3 greenfield API cleanup (4-agent review):**
+  - Removed all pre-0.3 deprecated items (`zencodec::icc`, `decode::Request`, `encode::Request`, `metadata_rewrite::Request`, `with_stop`/`set_stop`, `with_policy`/`set_policy`, `with_metadata`/`set_metadata`, `with_metadata_policy`/`set_metadata_policy`, `encode_srgba8`, `ComputeEnvironment::new`, `Iso21496Format::JpegApp2`, `parse_iso21496`/`serialize_iso21496`/`from_f64`, `ThreadingPolicy` legacy aliases, `DecodeOutput`/`AnimationFrame::duration_ms`, `CodecSet::{with_stop, stop, with_fidelity_entry}`, `with_policy_set` on operations/collections/drivers, `zencodec_io::encode_to_writer`, `zencodec_media::container::apply_finish`, `zencodec_render::Renderer::render_with_preset`).
+  - Renamed `descriptor` terminology consistently to `pixel_format`: `supported_pixel_formats()`, `output_pixel_format()`, `DecodeOutput::pixel_format()`, `ImageCharacteristics::pixel_format()`, `EncodeDeclaration::pixel_format`, `InterpretationFacts::pixel_format`, `EncodeFacts::pixel_format`, `OperationError::OutputPixelFormat`, `pixel_format_for_decoded_pixels()`, `CoroutineContext::set_output_pixel_format()`.
+  - Clarified operation options & checked requirements: `DecodeRequest` → `DecodeOptions` (`require_policy`, `require_pixel_format`, `prefer_pixel_formats`), `EncodeRequest` → `EncodeOptions` (`require_fidelity`, `prefer_fidelities`, `require_policy`, `require_metadata_policy`, `require_resolution`, `require_orientation_mode`), `ImageFacts` → `ImageSummary`, `FrameFacts` → `FrameSummary`.
+  - Replaced raw positional `(y, height, width)` sink arguments with `RowStrip` and `StripDimensions` on `DecodeRowSink::{provide_next_buffer, provide_pass_buffer, provide_buffer_with_metadata}`; replaced `with_crop_hint(x, y, w, h)` with `Rect` (`zencodec::Rect`, removing duplicate `frame::Crop`).
+  - Renamed confusing items for clarity: `DecodePolicy::strict()` → `untrusted_minimal()`, `Fused` → `FusedIncrementalDecoder`, `IncrementalDecoderShim` → `ErasedIncrementalDecoder`, `SourcePrecision` → `SourceSampleFormat`, `CodePlane` → `ComponentCodePlane`, `SharedStorage::charged_bytes` → `backing_allocation_bytes`, `CodecSet::decode_as` → `decode_with_format`, `CodecSet::decode_preferring` → `decode_preferring_formats`, `ImageCharacteristics::input_bytes` → `uncompressed_frame_bytes`, `ResourceEstimate::with_peak_max` → `with_peak_memory_bytes_max` (+ `with_peak_memory_bytes_est`, `with_wall_ms`), `with_metadata`/`set_metadata` → `with_unfiltered_metadata`/`set_unfiltered_metadata`, `encode_srgba8` → `encode_in_place(PixelViewMut<'_>)`.
+  - Boxed `DecodeDetails` inside `DecodeOutput` (keeping `size_of::<DecodeOutput>() <= 200` bytes); removed `Copy` from `TimingQuantizer` (keeps `Clone`) to prevent accidental phase duplication; enforced `CodecSet` `max_input_bytes` on `probe`, `decode`, `decode_with_format`, `decode_preferring_formats`, `transcode`, and `DecodeOptions::decode`; fixed `CodecSet::push_decode_from_source` to return `Result<OutputInfo, CodecSetError>`.
+  - Added `zencodec::advanced` grouping codec-authoring traits/modules and introducing `StillEncoder`/`StillEncoderConfig` and `StillDecoder`/`StillDecoderConfig` single-trait wrappers for simple still-only codecs.
+  - **zenmeta:** de-abbreviated `ifd::walk` (`IfdWalkConfig`, `walk_ifd`, `Layout::{byte_order, is_big_tiff}`, `Entry::{offset, field_type, value_field_offset}`, `ValueLocation`, `Ifd::{offset, next_ifd_offset, last_entry_by_tag, first_unknown_type_entry}`, `Walk::{data, layout, absolute_offset, value_location, entry_bytes, entry_uints, find_entry}`, `Fate::disposition`, `PartCandidate::disposition`, `DecodedChunkGeometry::{row_bytes, active_rows, declared_rows, active_bytes}`), replaced `display::Error::Removed(&'static str)` with typed `Error::RemovedSignal(RenderSignal)`, replaced `xmp::gainmap` tuple returns with `ParsedGainMapXmp`, renamed `rewrite::Context::packet` → `check_metadata_budget`, removed `apple::GainMapMetadata` alias and test-gated `apple::compatibility`.
+- Integrate zenpixels 0.5 packed carriers and algebraic `PixelFormat`. Active
+  color is part of `PixelFormat`, while source-file precedence remains in
+  `SourceColor`. Native plane and exact-grid contracts are available through
+  `zencodec::plane` and `zencodec::sample`.
+
+- zencodec 0.3 replaces the local sample types with zenpixels re-exports.
+  Exact sample facts retain independent color and alpha grids.
+- Animation sink completion carries exact timing. Erased frame decoders expose
+  borrowed rendering and owned copies return allocation failures.
+- Color emission, decoded ICC projection and ISO 21496-1 and XMP writers have
+  checked results. Binary gain maps preserve rational pairs and wire channel count.
+- Exact encode admission is separate from layout compatibility. Row adapters
+  preserve pixel evidence and validate sink lifecycle and declared geometry.
+
 ### Added
 
 - Testkit `check_metadata_retained` compares required resolved metadata against
@@ -45,11 +70,22 @@
 
 ### Deprecated
 
+- Deprecated zenpixels 0.5 migration shims remain available to codec adapters
+  during the rollout.
+
 - Best-effort `EncodeJob::with_metadata_policy` and
   `DynEncodeJob::set_metadata_policy`; use the checked metadata setters.
   Compatibility behavior remains unchanged and native support is explicit.
 
 ### Fixed
+
+- Color emission can project the coding of diffuse-white-anchored samples to
+  CICP, retain matching Adobe RGB and other recognized ICC profiles without a
+  CICP representation, and preserve BT.709 transfer aliases in verbatim CICP.
+- ISO gain-map projection derives reverse rendering from HDR-base headrooms
+  when the backward bit is clear and rejects a contradictory set bit at the
+  rendering boundary. Binary metadata round-trips the original bit.
+- Row metadata merging uses zenpixels' shared exact-depth grid union.
 
 - Coroutine polling preserves a native failure when cancellation is signalled
   during the same poll, retaining typed causes and terminal cleanup.

@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 121 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 5 lines (5 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 135 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 7 lines (7 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 3
-#   pub types (struct/enum/trait/alias)        25
-#   pub consts/statics                          2
-#   free functions                             38
+#   pub types (struct/enum/trait/alias)        27
+#   pub consts/statics                          3
+#   free functions                             43
 #   inherent methods                            8
-#   struct fields                              11
+#   struct fields                              15
 #   enum variants                              16
-#   trait roster entries (type × trait)        46
-#   auto-trait-complete types                  16
-#   auto-trait exceptions                       4
+#   trait roster entries (type × trait)        52
+#   auto-trait-complete types                  17
+#   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                           74
+#   (root)                           86
 #   pulse                             9
 #   reference                        20
 
-## items (98 lines)
+## items (110 lines)
 
 pub mod zencodec_testkit
 pub mod pulse
@@ -59,7 +59,7 @@ pub ExpectedError::Category(zencodec::error::ErrorCategory)
 pub ExpectedError::Unsupported(zencodec::capabilities::UnsupportedOperation)
 pub fn ExpectedError::matches(self, &(dyn core::error::Error + 'static)) -> bool
 pub enum PrefixOutcome<'a>
-pub PrefixOutcome::Accept(zenpixels::buffer::PixelSlice<'a>)
+pub PrefixOutcome::Accept(zenpixels::buffer::PixelView<'a>)
 pub PrefixOutcome::Reject(ExpectedError)
 pub enum RefError [also: reference]
 pub RefError::Cancelled(enough::reason::StopReason)
@@ -67,6 +67,13 @@ pub RefError::Invalid(alloc::string::String)
 pub RefError::Limit(zencodec::limits::LimitExceeded)
 pub RefError::Sink(zencodec::sink::SinkError)
 pub RefError::Unsupported(zencodec::capabilities::UnsupportedOperation)
+pub struct ColorSignalPresence
+pub ColorSignalPresence::has_cicp: bool
+pub ColorSignalPresence::has_icc: bool
+pub const fn ColorSignalPresence::from_source_color(&zencodec::info::SourceColor) -> Self
+pub struct DisplayFrameCase<'a>
+pub DisplayFrameCase::pixels: zenpixels::buffer::PixelView<'a>
+pub DisplayFrameCase::timing: zencodec::cost::FrameCompletion
 pub struct Failure
 pub Failure::check: &'static str
 pub Failure::detail: alloc::string::String
@@ -78,24 +85,26 @@ pub struct ReferenceEncoderConfig [also: reference]
 pub fn reference::ReferenceEncoderConfig::new() -> Self
 pub struct ReferenceZcrDecoderConfig [also: reference]
 pub struct TestImage
-pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelView<'_>
 pub fn TestImage::rgb8_gradient(u32, u32) -> Self
 pub fn TestImage::rgb8_gradient_seeded(u32, u32, u8) -> Self
 pub fn TestImage::rgba8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient_seeded(u32, u32, u8) -> Self
 pub struct TimingCase<'a>
-pub TimingCase::expected: core::result::Result<(zencodec::animation::FrameDuration, zenpixels::buffer::PixelSlice<'a>), ExpectedError>
-pub TimingCase::pixels: zenpixels::buffer::PixelSlice<'a>
+pub TimingCase::expected: core::result::Result<(zencodec::animation::FrameDuration, zenpixels::buffer::PixelView<'a>), ExpectedError>
+pub TimingCase::pixels: zenpixels::buffer::PixelView<'a>
 pub TimingCase::requested: zencodec::animation::FrameDuration
 pub static ZCR_FORMAT: zencodec::format::ImageFormatDefinition [also: reference]
 pub fn assert_uses_codec_error_envelope<E, D>() where E: zencodec::traits::encoding::EncoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, <E as zencodec::traits::encoding::EncoderConfig>::Job: zencodec::traits::encoding::EncodeJob<Error = whereat::at::At<zencodec::error::CodecError>>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = whereat::at::At<zencodec::error::CodecError>>, D: zencodec::traits::decoding::DecoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <D as zencodec::traits::decoding::DecoderConfig>::Job: zencodec::traits::decoding::DecodeJob<'a, Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <<D as zencodec::traits::decoding::DecoderConfig>::Job as zencodec::traits::decoding::DecodeJob<'a>>::Dec: zencodec::traits::decoder::Decode<Error = whereat::at::At<zencodec::error::CodecError>>
 pub fn check_all<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
+pub fn check_animation_begin_refusal<E>(E, zenpixels::buffer::PixelView<'_>, zenpixels::buffer::PixelView<'_>, ExpectedError) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cases<E, D>(E, D, bool, &[TimingCase<'_>]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cross_path_equivalence<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
+pub fn check_animation_delivery<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[zenpixels::color::PixelFormat], zencodec::orientation::OrientationHint, core::option::Option<u32>, &[DisplayFrameCase<'_>]) -> Conformance
 pub fn check_animation_durations<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[zencodec::animation::FrameDuration]) -> Conformance
 pub fn check_animation_streaming_output_honesty<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
-pub fn check_animation_timing<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>, bool, &[(zencodec::animation::FrameDuration, core::option::Option<zencodec::animation::FrameDuration>)]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
-pub fn check_animation_timing_unsupported<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
+pub fn check_animation_timing<E, D>(E, D, zenpixels::buffer::PixelView<'_>, bool, &[(zencodec::animation::FrameDuration, core::option::Option<zencodec::animation::FrameDuration>)]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
+pub fn check_animation_timing_unsupported<E, D>(E, D, zenpixels::buffer::PixelView<'_>) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_capability_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_color_authority_spec<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_color_context_attached<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
@@ -103,9 +112,10 @@ pub fn check_color_context_consistency<E, D>(E, D, &TestImage) -> Conformance wh
 pub fn check_cross_path_pixel_equivalence<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_decode_error_envelope<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig + 'static
 pub fn check_decode_policy_admission<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], zencodec::policy::DecodePolicy, zencodec::policy::DecodePolicy, bool, &zencodec::metadata::Metadata) -> Conformance
+pub fn check_decode_preferences<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[zenpixels::color::PixelFormat], zenpixels::buffer::PixelView<'_>) -> Conformance
 pub fn check_decode_prefix_cases<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[PrefixCase<'_>]) -> Conformance
 pub fn check_decode_truncation_series<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig + 'static
-pub fn check_encode_policy_admission<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>, zencodec::metadata::Metadata, zencodec::policy::EncodePolicy, zencodec::policy::EncodePolicy, bool, &zencodec::metadata::Metadata) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error> + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
+pub fn check_encode_policy_admission<E, D>(E, D, zenpixels::buffer::PixelView<'_>, zencodec::metadata::Metadata, zencodec::policy::EncodePolicy, zencodec::policy::EncodePolicy, bool, &zencodec::metadata::Metadata) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error> + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_fidelity_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_gain_map_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_incremental_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
@@ -114,6 +124,7 @@ pub fn check_incremental_decoder<F, O>(F, O, &[u8]) -> Conformance where F: core
 pub fn check_inventory<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig
 pub fn check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
+pub fn check_metadata_inspector<E: core::fmt::Display>(&[u8], &zencodec::metadata::Metadata, impl core::ops::function::FnOnce(&[u8]) -> core::result::Result<zencodec::metadata::Metadata, E>) -> Conformance
 pub fn check_metadata_no_leak<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_metadata_retained(&zencodec::metadata::Metadata, &zencodec::metadata::Metadata) -> Conformance
 pub fn check_metadata_rewrite<'a>(zencodec::metadata_rewrite::RewriteRequest<'a>, impl core::ops::function::Fn(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>, impl core::ops::function::Fn(&[u8]) -> Conformance) -> Conformance
@@ -123,12 +134,14 @@ pub fn check_pixel_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zen
 pub fn check_read_at_contract(&mut dyn zencodec::source::DynReadAt, &[u8]) -> Conformance
 pub fn check_seekable_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
 pub fn check_source_color_authority(zencodec::format::ImageFormat, &zencodec::info::SourceColor) -> Conformance
+pub fn check_source_color_fixture(&zencodec::info::SourceColor, core::option::Option<zenpixels::cicp::Cicp>, core::option::Option<&[u8]>, zencodec::info::ColorAuthority) -> Conformance
 pub fn check_streaming_output_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
-pub fn expected_color_authority(zencodec::format::ImageFormat, bool, bool) -> core::option::Option<zenpixels::color::ColorAuthority>
+pub fn expected_color_authority(zencodec::format::ImageFormat, ColorSignalPresence) -> core::option::Option<zencodec::info::ColorAuthority>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (18 types)
+## trait impls (19 types)
 
+ColorSignalPresence: Clone, Copy, Debug, Eq, Hash, PartialEq
 ExpectedError: Clone, Copy, Debug, Eq, PartialEq
 Failure: Clone, Debug, Display, Error
 pulse::Case: Clone, Copy, Debug, Eq, PartialEq
@@ -150,7 +163,8 @@ whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 
 ## auto traits
 
-16 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+17 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+TestImage: !RefUnwindSafe !UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe
 reference::RefIncDec: !RefUnwindSafe !UnwindSafe

@@ -142,10 +142,6 @@ pub enum InputRequest {
     Len,
 }
 
-/// Legacy ambiguous name for a byte acquisition request.
-#[deprecated(note = "use InputRequest")]
-pub type Request = InputRequest;
-
 impl InputRequest {
     /// A request for at least `min_len` bytes from `offset`.
     #[inline]
@@ -176,11 +172,7 @@ impl InputRequest {
                 input.offset == offset
                     && (input.bytes.len() >= min_len || input.total_len == Some(input.end()))
             }
-            Self::Range(r) => {
-                input.offset == r.offset
-                    && (input.bytes.len() as u64 >= r.length
-                        || input.total_len == Some(input.end()))
-            }
+            Self::Range(r) => input.offset == r.offset && (input.bytes.len() as u64) >= r.length,
             Self::Len => input.total_len.is_some(),
         }
     }
@@ -461,8 +453,8 @@ pub trait IncrementalDecode {
         None
     }
 
-    /// Output pixel descriptor, once the header has been parsed.
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
+    /// Output pixel format, once the header has been parsed.
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
         None
     }
 
@@ -555,8 +547,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for Box<D> {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
-        (**self).output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        (**self).output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -588,8 +580,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
         (**self).take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
-        (**self).output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        (**self).output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -604,10 +596,10 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 /// errors retain priority. Cached completion remains successful. These checks
 /// do not interrupt a native call or undo sink effects already performed.
 ///
-/// Wrap a hand-written decoder in `Fused` and its own state machine need
+/// Wrap a hand-written decoder in `FusedIncrementalDecoder` and its own state machine need
 /// not track any of this.
 #[derive(Debug)]
-pub struct Fused<D> {
+pub struct FusedIncrementalDecoder<D> {
     inner: D,
     state: FusedState,
     controlled: bool,
@@ -623,7 +615,7 @@ enum FusedState {
     Failed,
 }
 
-impl<D> Fused<D> {
+impl<D> FusedIncrementalDecoder<D> {
     /// Wrap `inner`.
     pub const fn new(inner: D) -> Self {
         Self {
@@ -653,7 +645,7 @@ impl<D> Fused<D> {
     }
 }
 
-impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
+impl<D: IncrementalDecode> IncrementalDecode for FusedIncrementalDecoder<D> {
     type Error = D::Error;
 
     fn step(
@@ -717,8 +709,8 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
         self.inner.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
-        self.inner.output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        self.inner.output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -726,7 +718,7 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
     }
 }
 
-impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
+impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for FusedIncrementalDecoder<D> {
     fn step_controlled(
         &mut self,
         input: Input<'_>,
@@ -743,15 +735,15 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             self.state = FusedState::Failed;
             return Err(StepError::Cancelled(reason));
         }
-        if let FusedState::Suspended(boundary) = self.state {
+        if let FusedState::Suspended(boundary) = &self.state {
             return Ok(ControlledProgress::Suspended {
                 consumed: 0,
-                boundary,
+                boundary: boundary.clone(),
             });
         }
         // Caught unwinds cannot resume a half-mutated native decoder.
         self.state = FusedState::Failed;
-        let mut guarded = GuardedSink::new(sink, self.interpretation);
+        let mut guarded = GuardedSink::new(sink, self.interpretation.clone());
         let result = self.inner.step_controlled(input, &mut guarded, pulse);
         if let Some(error) = guarded.refused {
             return Err(StepError::Control(error));
@@ -775,6 +767,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         if let ControlledProgress::Suspended { boundary, .. } = &progress
             && self
                 .interpretation
+                .as_ref()
                 .is_some_and(|facts| facts != boundary.facts())
         {
             return Err(StepError::Control(ControlError::FinalInterpretationChanged));
@@ -784,16 +777,18 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
                 event: Event::Done(info),
                 ..
             }) => {
-                if self.interpretation.is_some_and(|facts| {
+                if self.interpretation.as_ref().is_some_and(|facts| {
                     facts.width != info.width
                         || facts.height != info.height
-                        || facts.descriptor != Some(info.native_format)
+                        || facts.pixel_format.as_ref() != Some(&info.native_format)
                 }) {
                     return Err(StepError::Control(ControlError::InconsistentFacts));
                 }
                 FusedState::Done(info.clone())
             }
-            ControlledProgress::Suspended { boundary, .. } => FusedState::Suspended(*boundary),
+            ControlledProgress::Suspended { boundary, .. } => {
+                FusedState::Suspended(boundary.clone())
+            }
             _ => FusedState::Running,
         };
         Ok(progress)
@@ -816,17 +811,17 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         self.inner.resume(id, action, pulse)?;
         pulse.unwrap_or(&crate::NoPulse).check()?;
         if action == BoundaryAction::AdoptInterpretation {
-            self.interpretation = Some(boundary.facts());
+            self.interpretation = Some(boundary.facts().clone());
         }
         self.state = FusedState::Running;
         Ok(())
     }
 }
 
-/// Shim erasing a decoder's error type to [`ErasedError`].
-pub struct IncrementalDecoderShim<D>(pub D);
+/// Adapter erasing an incremental decoder's error type to [`ErasedError`].
+pub struct ErasedIncrementalDecoder<D>(pub D);
 
-impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
+impl<D: IncrementalDecode> IncrementalDecode for ErasedIncrementalDecoder<D> {
     type Error = ErasedError;
 
     fn step(
@@ -852,8 +847,8 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
         self.0.take_details()
     }
 
-    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
-        self.0.output_descriptor()
+    fn output_pixel_format(&self) -> Option<zenpixels::PixelFormat> {
+        self.0.output_pixel_format()
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -862,28 +857,28 @@ impl<D: IncrementalDecode> IncrementalDecode for IncrementalDecoderShim<D> {
 }
 
 /// Erase `decoder` for [`DecodeJob::dyn_incremental_decoder`](crate::decode::DecodeJob::dyn_incremental_decoder),
-/// wrapped in [`Fused`] so the termination rules hold by construction.
+/// wrapped in [`FusedIncrementalDecoder`] so the termination rules hold by construction.
 pub fn erase_incremental<D>(decoder: D) -> Box<DynIncrementalDecoder>
 where
     D: IncrementalDecode + Send + 'static,
 {
-    Box::new(IncrementalDecoderShim(Fused::new(decoder)))
+    Box::new(ErasedIncrementalDecoder(FusedIncrementalDecoder::new(
+        decoder,
+    )))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::{PixelDescriptor, PixelSliceMut};
+    use zenpixels::{PixelFormat, PixelViewMut};
 
     struct NullSink;
     impl DecodeRowSink for NullSink {
         fn provide_next_buffer(
             &mut self,
-            _y: u32,
-            _h: u32,
-            _w: u32,
-            _d: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _strip: crate::sink::RowStrip,
+            _format: PixelFormat,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             Err("null sink".into())
         }
     }
@@ -915,7 +910,7 @@ mod tests {
 
     #[test]
     fn fused_makes_errors_and_cancellation_terminal() {
-        let mut d = Fused::new(Flaky(0));
+        let mut d = FusedIncrementalDecoder::new(Flaky(0));
         let pulse = &crate::how_far::NoPulse;
         assert!(d.step(Input::empty(), &mut NullSink, Some(&pulse)).is_ok());
         assert!(matches!(
@@ -934,7 +929,7 @@ mod tests {
                 Err(StopReason::Cancelled)
             }
         }
-        let mut d = Fused::new(Flaky(0));
+        let mut d = FusedIncrementalDecoder::new(Flaky(0));
         assert!(matches!(
             d.step(
                 Input::empty(),
@@ -966,7 +961,7 @@ mod tests {
             }
             Ok(Progress::new(
                 0,
-                Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::GRAY8_SRGB)),
+                Event::Done(OutputInfo::full_decode(1, 1, PixelFormat::GRAY8_SRGB)),
             ))
         }
         fn requested(&self) -> &[InputRequest] {

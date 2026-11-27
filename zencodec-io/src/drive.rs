@@ -9,7 +9,7 @@ use zencodec::decode::{
 use zencodec::source::ReadAt;
 
 use crate::stepper::{DriveFailure, ReadAtCursor};
-use crate::window::check_need;
+use crate::window::{check_consumed, check_need};
 
 /// Tuning for the drivers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,7 +172,8 @@ where
             .step(input, sink, pulse)
             .map_err(DriveFailure::Step)?;
         stats.steps += 1;
-        start += p.consumed.min(end - start);
+        check_consumed(p.consumed, input.bytes.len()).map_err(DriveFailure::Protocol)?;
+        start += p.consumed;
         progress.observe(decoder, &p.event);
         match p.event {
             Event::Done(info) => return Ok((info, stats)),
@@ -227,6 +228,7 @@ where
         let p = decoder
             .step(input, sink, pulse)
             .map_err(DriveFailure::Step)?;
+        check_consumed(p.consumed, input.bytes.len()).map_err(DriveFailure::Protocol)?;
         if p.event == Event::Need {
             check_need(decoder.requested(), &input, p.consumed).map_err(DriveFailure::Protocol)?;
         }

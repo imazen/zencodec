@@ -15,7 +15,7 @@ use zencodec::decode::{
 };
 use zencodec::source::SourceError;
 use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 use crate::input::InputStore;
 
@@ -80,7 +80,7 @@ impl fmt::Display for CoroutineError {
             ),
             Self::RowsBeforeHeader => write!(
                 f,
-                "coroutine wrote rows before set_info and set_output_descriptor"
+                "coroutine wrote rows before set_info and set_output_pixel_format"
             ),
         }
     }
@@ -183,7 +183,9 @@ pub(crate) struct PendingRows {
     pub(crate) width: u32,
     pub(crate) rows: u32,
     pub(crate) stride: usize,
-    pub(crate) descriptor: PixelDescriptor,
+    pub(crate) offset: usize,
+    pub(crate) descriptor: PixelFormat,
+    pub(crate) metadata: zencodec::decode::RowMetadata,
 }
 
 /// State shared between the decoder and the coroutine it polls. Only one
@@ -209,7 +211,7 @@ pub(crate) struct Shared {
     pub(crate) details: Option<zencodec::decode::DecodeDetails>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
     pub(crate) info_generation: u64,
-    pub(crate) descriptor: Option<PixelDescriptor>,
+    pub(crate) descriptor: Option<PixelFormat>,
     pub(crate) accepts_provisional: bool,
     pub(crate) cancelled: Option<StopReason>,
 }
@@ -342,7 +344,7 @@ impl CoroutineContext {
     pub fn write_rows<'a>(
         &'a mut self,
         meta: BatchMeta,
-        rows: &PixelSlice<'_>,
+        rows: &PixelView<'_>,
     ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
         let refusal = {
             let shared = self.shared.lock();
@@ -359,12 +361,16 @@ impl CoroutineContext {
             };
         }
         let width = rows.width();
-        let count = rows.rows();
-        let descriptor = rows.descriptor();
+        let count = rows.height();
+        let descriptor = rows.format().clone();
         let size = (width as usize)
-            .checked_mul(descriptor.bytes_per_pixel())
+            .checked_mul(descriptor.layout.bytes_per_pixel())
             .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
-        let Some((stride, len)) = size else {
+        let alignment = descriptor.layout.min_alignment();
+        let Some((stride, len)) = size.and_then(|(stride, len)| {
+            len.checked_add(alignment - 1)
+                .map(|allocated| (stride, allocated))
+        }) else {
             return WriteRows {
                 shared: &self.shared,
                 pending: None,
@@ -384,9 +390,11 @@ impl CoroutineContext {
                 error: Some(error),
             };
         }
+        let bytes = data.as_mut_slice();
+        let offset = bytes.as_ptr().align_offset(alignment);
         for r in 0..count {
-            let at = r as usize * stride;
-            data.as_mut_slice()[at..at + stride].copy_from_slice(&rows.row(r)[..stride]);
+            let at = offset + r as usize * stride;
+            bytes[at..at + stride].copy_from_slice(rows.row(r));
         }
         WriteRows {
             shared: &self.shared,
@@ -397,7 +405,9 @@ impl CoroutineContext {
                 width,
                 rows: count,
                 stride,
+                offset,
                 descriptor,
+                metadata: zencodec::decode::RowMetadata::from_view(rows),
             }),
         }
     }
@@ -458,13 +468,13 @@ impl CoroutineContext {
         drop(previous);
     }
 
-    /// Set the negotiated output descriptor.
-    pub fn set_output_descriptor(&mut self, descriptor: PixelDescriptor) {
+    /// Set the negotiated output pixel format.
+    pub fn set_output_pixel_format(&mut self, pixel_format: PixelFormat) {
         let mut shared = self.shared.lock();
-        if shared.adopted.is_some() && shared.descriptor != Some(descriptor) {
+        if shared.adopted.is_some() && shared.descriptor.as_ref() != Some(&pixel_format) {
             shared.control_failure = Some(ControlError::FinalInterpretationChanged);
         }
-        shared.descriptor = Some(descriptor);
+        shared.descriptor = Some(pixel_format);
     }
 
     /// Suspend before work affected by these interpretation facts. Await this
@@ -525,14 +535,14 @@ impl Future for Interpret<'_> {
             if shared.boundary.is_some() || shared.reply.is_some() {
                 return Poll::Ready(Err(ControlError::InvalidReply.into()));
             }
-            if let Some(adopted) = shared.adopted {
-                return Poll::Ready(if adopted == facts {
+            if let Some(adopted) = &shared.adopted {
+                return Poll::Ready(if adopted == &facts {
                     Ok(BoundaryAction::AdoptInterpretation)
                 } else {
                     Err(ControlError::FinalInterpretationChanged.into())
                 });
             }
-            if facts.descriptor != shared.descriptor
+            if facts.pixel_format != shared.descriptor
                 || shared
                     .info
                     .as_ref()

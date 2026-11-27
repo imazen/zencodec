@@ -13,9 +13,9 @@
 //! ```
 //!
 //! Encoding and decoding are both **type-erased**: encoders accept any pixel
-//! format at runtime via [`PixelSlice`] and dispatch internally based on the
+//! format at runtime via [`PixelView`] and dispatch internally based on the
 //! descriptor. Decoders return native pixels; the caller provides a ranked
-//! preference list of [`PixelDescriptor`](crate::PixelDescriptor)s.
+//! preference list of [`PixelFormat`](crate::PixelFormat)s.
 //!
 //! Color management is explicitly **not** the codec's job. Decoders return
 //! native pixels with ICC/CICP metadata. Encoders accept pixels as-is and
@@ -45,9 +45,9 @@ pub use dyn_encoding::{DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEn
 pub use encoder::{AnimationFrameEncoder, Encoder};
 pub use encoding::{EncodeJob, EncoderConfig};
 pub use incremental::{
-    BatchMeta, ByteRange, DynIncrementalDecoder, ErasedError, Event, Fused, IncrementalDecode,
-    IncrementalDecoderShim, Input, InputRequest, MetadataUpdate, Progress, StepError,
-    erase_incremental,
+    BatchMeta, ByteRange, DynIncrementalDecoder, ErasedError, ErasedIncrementalDecoder, Event,
+    FusedIncrementalDecoder, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress,
+    StepError, erase_incremental,
 };
 pub use unsupported::Unsupported;
 
@@ -60,6 +60,3 @@ use alloc::boxed::Box;
 pub type BoxedError = Box<dyn core::error::Error + Send + Sync>;
 
 pub(crate) use dyn_encoding::erase_send_job;
-
-#[allow(deprecated)]
-pub use incremental::Request;

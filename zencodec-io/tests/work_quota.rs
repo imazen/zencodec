@@ -12,16 +12,16 @@ use std::sync::{
 };
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, StepError,
+    OutputInfo, Progress, RowStrip, StepError,
 };
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_io::tokio_io::{BytesSource, Inline, Job, decode_async, transcode_async};
 use zencodec_io::{CollectSink, DriveOptions, WorkQuota};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const ROWS: u32 = 37;
-const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 #[derive(Debug)]
 struct Failed;
 impl core::fmt::Display for Failed {
@@ -54,7 +54,7 @@ impl IncrementalDecode for Burst {
             }
             n if n <= ROWS as usize => {
                 let row = n as u32 - 1;
-                sink.provide_next_buffer(row, 1, 1, RGBA)
+                sink.provide_next_buffer(RowStrip::new(row, 1, 1), RGBA)
                     .map_err(StepError::Sink)?
                     .row_mut(0)
                     .copy_from_slice(&[row as u8, 1, 2, 255]);
@@ -77,7 +77,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {
@@ -164,15 +164,15 @@ impl Encoder for Raw {
     fn reject(_: zencodec::UnsupportedOperation) -> Failed {
         Failed
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Failed> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Failed> {
         Err(Failed)
     }
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Failed> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<OutputTiming, Failed> {
         self.bytes.extend_from_slice(b"RAW!");
         Ok(OutputTiming::streaming(0))
     }
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Failed> {
-        for y in 0..rows.rows() {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), Failed> {
+        for y in 0..rows.height() {
             self.bytes.extend_from_slice(rows.row(y));
         }
         Ok(())

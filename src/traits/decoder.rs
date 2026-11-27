@@ -4,7 +4,7 @@ use crate::output::{AnimationFrame, OwnedAnimationFrame};
 use crate::sink::SinkError;
 use crate::{DecodeOutput, ImageInfo, OutputInfo};
 
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// Single-image decode. Returns owned pixels.
 ///
@@ -26,7 +26,7 @@ pub trait Decode: Sized {
     /// an output raster or perform pixel/coefficient reconstruction. This is not
     /// a whole-operation memory bound. Native errors retain their original type;
     /// retained cancellation controls apply. The default does no work.
-    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, Self::Error> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelFormat>, Self::Error> {
         Ok(None)
     }
 
@@ -53,7 +53,7 @@ pub trait Decode: Sized {
 /// let info = job.output_info(data)?;
 /// let mut dec = job.streaming_decoder(&[], data)?;
 /// while let Some((y, strip)) = dec.next_batch()? {
-///     // process strip.rows() scanlines starting at row y
+///     // process strip.height() scanlines starting at row y
 /// }
 /// ```
 pub trait StreamingDecode {
@@ -67,7 +67,7 @@ pub trait StreamingDecode {
     ///
     /// Format preferences were bound at construction. The format remains
     /// consistent across all batches.
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, Self::Error>;
 
     /// Image metadata, available after construction.
     fn info(&self) -> &ImageInfo;
@@ -165,7 +165,8 @@ pub trait AnimationFrameDecoder: Sized {
     ///
     /// Default implementation calls [`render_next_frame()`](AnimationFrameDecoder::render_next_frame)
     /// and copies the pixel data. Codecs that produce owned data natively
-    /// may override for efficiency.
+    /// may override for efficiency. The default consumes the frame even if the
+    /// subsequent pixel copy fails.
     ///
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_owned(
@@ -173,7 +174,10 @@ pub trait AnimationFrameDecoder: Sized {
         pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, Self::Error> {
         match self.render_next_frame(pulse)? {
-            Some(frame) => Ok(Some(frame.to_owned_frame())),
+            Some(frame) => frame
+                .try_to_owned_frame()
+                .map(Some)
+                .map_err(|error| Self::wrap_sink_error(alloc::boxed::Box::new(error))),
             None => Ok(None),
         }
     }

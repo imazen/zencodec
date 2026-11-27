@@ -95,7 +95,7 @@ impl EncodeEvidence {
 
 /// Bounded summary of the immutable declaration and configured job plan.
 /// ICC/color payloads and input owners remain borrowed only in the question.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct EncodeRouteFacts {
     /// Actual declared sample geometry and layout.
@@ -113,8 +113,8 @@ pub struct EncodeRouteFacts {
 }
 impl EncodeRouteFacts {
     /// Copy only bounded facts; do not clone materialized color carriers.
-    pub const fn new(
-        declaration: &EncodeDeclaration<'_>,
+    pub fn new(
+        declaration: &EncodeDeclaration,
         plan: &EncodePlan,
         evidence: EncodeEvidence,
     ) -> Self {
@@ -122,7 +122,7 @@ impl EncodeRouteFacts {
             pixels: EncodeFacts {
                 width: declaration.width,
                 height: declaration.height,
-                descriptor: declaration.descriptor,
+                pixel_format: declaration.pixel_format.clone(),
             },
             evidence,
             input: plan.input,
@@ -241,7 +241,7 @@ impl EncodeRouteOffer {
 /// Only compatible, mandatory-admitted original indices reach the callback.
 /// No owner or ICC payload is cloned into offers or the returned bounded record.
 pub fn resolve_encode_route<R: OperationPolicy + ?Sized>(
-    declaration: &EncodeDeclaration<'_>,
+    declaration: &EncodeDeclaration,
     plan: &EncodePlan,
     evidence: EncodeEvidence,
     offers: &[EncodeRouteOffer],
@@ -253,11 +253,11 @@ pub fn resolve_encode_route<R: OperationPolicy + ?Sized>(
     let facts = EncodeRouteFacts::new(declaration, plan, evidence);
     policy::choose(
         offers,
-        DecisionContext::EncodeRoute(facts),
+        DecisionContext::EncodeRoute(facts.clone()),
         |choices| Question::EncodeRoute {
             declaration,
             plan,
-            facts,
+            facts: facts.clone(),
             choices,
         },
         Selection::EncodeRoute,

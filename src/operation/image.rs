@@ -1,6 +1,6 @@
 //! Resolve publication of the exact owned selected-image output.
 use super::{
-    DecisionContext, FrameFacts, OperationPolicy, Outcome, PolicyFailure, PolicySet,
+    DecisionContext, FrameSummary, OperationPolicy, Outcome, PolicyFailure, PolicySet,
     PublicationOffer, Question, Selection, policy,
 };
 use crate::{
@@ -8,14 +8,14 @@ use crate::{
     frame::{FrameTiming, Presentation},
     image::{ImageGeometry, ImageOutput, Placement},
 };
-use zenpixels::{Orientation, PixelDescriptor};
+use zenpixels::{Orientation, PixelFormat};
 
-/// Bounded diagnostic facts, without pixel bytes, names, profiles or source
-/// payloads. They describe the held output; they do not establish privacy or a
+/// Bounded diagnostic summary, without pixel bytes, names, profiles or source
+/// payloads. It describes the held output; it does not establish privacy or a
 /// native workspace bound. Full source details remain accessible in the question.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct ImageFacts {
+pub struct ImageSummary {
     /// Stored output extent within the selected canvas.
     pub geometry: ImageGeometry,
     /// Selected view established by the adapter or checked collection. This
@@ -25,8 +25,8 @@ pub struct ImageFacts {
     pub placement: Option<Placement>,
     /// Residual orientation, if the adapter establishes one.
     pub orientation: Option<Orientation>,
-    /// Actual packed pixel descriptor, absent for native component codes.
-    pub packed: Option<PixelDescriptor>,
+    /// Actual packed pixel format, absent for native component codes.
+    pub packed: Option<PixelFormat>,
     /// Declared emitted planes. Mapping checks the native storage separately.
     pub planes: usize,
     /// Number of retained auxiliary planes.
@@ -40,12 +40,12 @@ pub struct ImageFacts {
     /// Native presentation facts, when established.
     pub presentation: Option<Presentation>,
     /// Native component interpretation, when supplied by a frame adapter.
-    pub frame: Option<FrameFacts>,
-    /// Original component facts after explicit conversion to packed color.
+    pub frame: Option<FrameSummary>,
+    /// Original component summary after explicit conversion to packed color.
     /// These are provenance; `packed` describes the current sample encoding.
-    pub source_frame: Option<FrameFacts>,
+    pub source_frame: Option<FrameSummary>,
 }
-impl ImageFacts {
+impl ImageSummary {
     /// Inspect retained metadata without mapping, converting or copying samples.
     pub fn new(image: &ImageOutput) -> Self {
         let interpretation = image.interpretation();
@@ -65,10 +65,10 @@ impl ImageFacts {
             frame: interpretation
                 .signal
                 .as_ref()
-                .map(|signal| FrameFacts::new(signal, interpretation.timing.unwrap_or_default())),
+                .map(|signal| FrameSummary::new(signal, interpretation.timing.unwrap_or_default())),
             source_frame: image
                 .source_frame()
-                .map(|source| FrameFacts::new(source, interpretation.timing.unwrap_or_default())),
+                .map(|source| FrameSummary::new(source, interpretation.timing.unwrap_or_default())),
         }
     }
 }
@@ -88,10 +88,10 @@ pub fn resolve_image<R: OperationPolicy + ?Sized>(
     pulse: Option<&dyn crate::Pulse>,
 ) -> Result<Outcome<ImageOutput>, At<PolicyFailure>> {
     let pulse = pulse.unwrap_or(&crate::NoPulse);
-    let facts = ImageFacts::new(&image);
+    let facts = ImageSummary::new(&image);
     let (_, record) = policy::choose(
         &[PublicationOffer::ReturnHeld],
-        DecisionContext::Image(facts),
+        DecisionContext::Image(facts.clone()),
         |choices| Question::Image {
             image: &image,
             facts: &facts,

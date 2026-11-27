@@ -9,10 +9,10 @@ use crate::{
 };
 use alloc::{sync::Arc, vec::Vec};
 use core::convert::Infallible;
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
-fn declaration() -> EncodeDeclaration<'static> {
-    EncodeDeclaration::new(7, 9, PixelDescriptor::RGB8_SRGB)
+fn declaration() -> EncodeDeclaration {
+    EncodeDeclaration::new(7, 9, PixelFormat::RGB8_SRGB)
 }
 fn job_evidence() -> EncodeEvidence {
     EncodeEvidence::new(EncodeOffer {
@@ -392,7 +392,7 @@ fn final_pass_timing_is_not_wait_retention_and_the_plan_is_borrowed() {
     )
     .unwrap();
     assert!(
-        matches!(record.context, DecisionContext::EncodeRoute(f) if f.output_phase == OutputPhase::FinalPass)
+        matches!(&record.context, DecisionContext::EncodeRoute(f) if f.output_phase == OutputPhase::FinalPass)
     );
     assert!(!alloc::format!("{record:?}").contains("7, 7, 7"));
     let mut observed = plan.clone();
@@ -552,7 +552,7 @@ fn discovery_may_continue_but_final_adoption_cannot_bypass_replay_obligations() 
             let boundary = DecodeBoundary::new(InterpretationFacts::new(
                 7,
                 9,
-                Some(PixelDescriptor::RGB8_SRGB),
+                Some(PixelFormat::RGB8_SRGB),
                 state,
             ))
             .unwrap();
@@ -789,7 +789,7 @@ fn invalid_shared_plans_keep_typed_causes_including_with_no_offers() {
     invalid.timing = OutputTiming::streaming(0);
     let cases = [
         (
-            EncodeDeclaration::new(0, 9, PixelDescriptor::RGB8_SRGB),
+            EncodeDeclaration::new(0, 9, PixelFormat::RGB8_SRGB),
             plan(Some(1)),
             EncodePlanError::Dimensions,
         ),
@@ -879,7 +879,7 @@ fn shared_job_metadata_applies_to_every_route_and_survives_in_context() {
     )
     .unwrap();
     assert_eq!(index, 1);
-    let DecisionContext::EncodeRoute(facts) = record.context else {
+    let DecisionContext::EncodeRoute(facts) = &record.context else {
         panic!()
     };
     assert_eq!(facts.evidence.metadata, evidence.metadata);

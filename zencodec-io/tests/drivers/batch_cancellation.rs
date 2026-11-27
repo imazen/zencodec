@@ -28,7 +28,7 @@ impl IncrementalDecode for BatchCancellationProbe {
                 Event::Metadata(MetadataUpdate::HeaderReady)
             }
             1 => {
-                sink.provide_next_buffer(0, 1, 1, RGBA)
+                sink.provide_next_buffer(RowStrip::new(0, 1, 1), RGBA)
                     .map_err(StepError::Sink)?
                     .row_mut(0)
                     .copy_from_slice(&[1, 2, 3, 255]);
@@ -51,7 +51,7 @@ impl IncrementalDecode for BatchCancellationProbe {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> zencodec::source::AccessPattern {

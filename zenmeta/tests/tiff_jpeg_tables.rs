@@ -3,7 +3,7 @@
 use core::cell::Cell;
 use zencodec::ImageFormat;
 use zencodec::inventory::{Disposition, Inventory, MetadataKind, PartKind, PartTag};
-use zenmeta::ifd::walk::{self, Cand, Entry, Fate, Ifd, Kind, Rules, Walk};
+use zenmeta::ifd::walk::{self, Entry, Fate, Ifd, Kind, PartCandidate, Rules, Walk};
 
 struct Structural;
 
@@ -307,7 +307,7 @@ fn decoder_table_rules_are_separate_and_metadata_overlap_keeps_the_stronger_fate
     f.entry(2, 521, &[ac]);
     let rules = DecoderRules::default();
     let mut w = walk::walk(&f.bytes, 0, f.bytes.len() as u64, &rules);
-    let metadata = Cand::new(
+    let metadata = PartCandidate::new(
         q + 5..q + 19,
         PartKind::Field,
         PartTag::Code(700),

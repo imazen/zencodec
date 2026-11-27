@@ -10,7 +10,7 @@ use std::io::Cursor;
 
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
-    OutputInfo, Progress, SinkError, StepError,
+    OutputInfo, Progress, RowStrip, SinkError, StepError,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -21,11 +21,11 @@ use zencodec_io::{
     BufferPolicy, BufferedReadAt, CollectSink, DriveError, DriveOptions, ProtocolViolation,
     PumpError, StdSourceError, drive_from_read_at, drive_from_slice, pump_read_to_sink,
 };
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 const W: u32 = 4;
 const H: u32 = 4;
-const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const RGBA: PixelFormat = PixelFormat::RGBA8_SRGB;
 
 fn minitile() -> Vec<u8> {
     let mut f = vec![0u8; 128];
@@ -67,7 +67,7 @@ fn minitile_decoder() -> Dec {
         let h = u32::from_le_bytes(header[8..12].try_into().unwrap());
         let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
         ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         let mut index = [0u8; 16];
         ctx.read_exact_at(index_at, &mut index).await?;
@@ -82,18 +82,31 @@ fn minitile_decoder() -> Dec {
         let stride = w as usize * 4;
         ctx.write_rows(
             BatchMeta::final_rows(0),
-            &PixelSlice::new(&tile0, w, 2, stride, RGBA).unwrap(),
+            &PixelView::new_with_format_cow(
+                &tile0,
+                w,
+                2,
+                stride,
+                zenpixels::FormatCow::from_owned(RGBA),
+            )
+            .unwrap(),
         )
         .await?;
         ctx.write_rows(
             BatchMeta::final_rows(2),
-            &PixelSlice::new(&tile1, w, 2, stride, RGBA).unwrap(),
+            &PixelView::new_with_format_cow(
+                &tile1,
+                w,
+                2,
+                stride,
+                zenpixels::FormatCow::from_owned(RGBA),
+            )
+            .unwrap(),
         )
         .await?;
         Ok(OutputInfo::full_decode(w, h, RGBA))
     })
 }
-
 /// "SEQ1" + N rows of 2 RGBA pixels, each row 8 bytes, written one row at a time.
 fn sequential_file(rows: u32) -> Vec<u8> {
     let mut f = b"SEQ1".to_vec();
@@ -111,12 +124,19 @@ fn sequential_decoder() -> Dec {
         assert_eq!(&magic[..4], b"SEQ1");
         let rows = u32::from_le_bytes(magic[4..8].try_into().unwrap());
         ctx.set_info(ImageInfo::new(2, rows, ImageFormat::Png));
-        ctx.set_output_descriptor(RGBA);
+        ctx.set_output_pixel_format(RGBA);
         ctx.announce(MetadataUpdate::HeaderReady).await?;
         for y in 0..rows {
             let mut row = [0u8; 8];
             ctx.read_exact(&mut row).await?;
-            let s = PixelSlice::new(&row, 2, 1, 8, RGBA).unwrap();
+            let s = PixelView::new_with_format_cow(
+                &row,
+                2,
+                1,
+                8,
+                zenpixels::FormatCow::from_owned(RGBA),
+            )
+            .unwrap();
             ctx.write_rows(BatchMeta::final_rows(y), &s).await?;
         }
         Ok(OutputInfo::full_decode(2, rows, RGBA))
@@ -188,20 +208,18 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
         bytes_read: std::rc::Rc<std::cell::Cell<usize>>,
     }
     impl DecodeRowSink for FirstRowAt {
-        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
             self.inner.begin(w, h, d)
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            strip: RowStrip,
+            descriptor: PixelFormat,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             if self.first_row_seen.is_none() {
                 self.first_row_seen = Some(self.bytes_read.get());
             }
-            self.inner.provide_next_buffer(y, height, width, descriptor)
+            self.inner.provide_next_buffer(strip, descriptor)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
             self.inner.finish()
@@ -473,7 +491,7 @@ impl IncrementalDecode for Trickle {
                 sink.begin(1, 1, RGBA).map_err(StepError::Sink)?;
                 self.begun = true;
                 let mut dst = sink
-                    .provide_next_buffer(0, 1, 1, RGBA)
+                    .provide_next_buffer(RowStrip::new(0, 1, 1), RGBA)
                     .map_err(StepError::Sink)?;
                 dst.row_mut(0).copy_from_slice(&[1, 2, 3, 4]);
                 return Ok(Progress::new(
@@ -510,7 +528,7 @@ impl IncrementalDecode for Trickle {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(RGBA)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -593,7 +611,7 @@ impl IncrementalDecode for Bad {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         None
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -870,8 +888,8 @@ impl<D: IncrementalDecode> IncrementalDecode for RetainedControl<D> {
     fn info(&self) -> Option<&ImageInfo> {
         self.decoder.info()
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.decoder.output_descriptor()
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.decoder.output_pixel_format()
     }
     fn access_pattern(&self) -> AccessPattern {
         self.decoder.access_pattern()
@@ -910,7 +928,7 @@ fn no_per_call_control_during_resume_keeps_a_retained_stop_terminal() {
     let native =
         CoroutineDecoder::controlled(32, AccessPattern::RandomAccess, |mut ctx| async move {
             ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(RGBA);
+            ctx.set_output_pixel_format(RGBA);
             ctx.interpretation(InterpretationFacts::new(
                 2,
                 1,
@@ -920,7 +938,14 @@ fn no_per_call_control_during_resume_keeps_a_retained_stop_terminal() {
             .await?;
             ctx.write_rows(
                 BatchMeta::final_rows(0),
-                &PixelSlice::new(&[9; 8], 2, 1, 8, RGBA).unwrap(),
+                &PixelView::new_with_format_cow(
+                    &[9; 8],
+                    2,
+                    1,
+                    8,
+                    zenpixels::FormatCow::from_owned(RGBA),
+                )
+                .unwrap(),
             )
             .await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 1, RGBA))
@@ -1273,21 +1298,19 @@ mod tokio_drivers {
         names: Vec<Option<String>>,
     }
     impl DecodeRowSink for ThreadNameSink {
-        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
             self.names
                 .push(std::thread::current().name().map(String::from));
             self.inner.begin(w, h, d)
         }
         fn provide_next_buffer(
             &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            strip: RowStrip,
+            descriptor: PixelFormat,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             self.names
                 .push(std::thread::current().name().map(String::from));
-            self.inner.provide_next_buffer(y, height, width, descriptor)
+            self.inner.provide_next_buffer(strip, descriptor)
         }
         fn finish(&mut self) -> Result<(), SinkError> {
             self.inner.finish()
@@ -1364,22 +1387,20 @@ mod tokio_drivers {
             tx: Option<tokio::sync::oneshot::Sender<()>>,
         }
         impl DecodeRowSink for Notify {
-            fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+            fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
                 self.inner.begin(w, h, d)
             }
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                if self.inner.rows_written() + height as u64 >= self.at
+                strip: RowStrip,
+                descriptor: PixelFormat,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                if self.inner.rows_written() + strip.height as u64 >= self.at
                     && let Some(tx) = self.tx.take()
                 {
                     let _ = tx.send(());
                 }
-                self.inner.provide_next_buffer(y, height, width, descriptor)
+                self.inner.provide_next_buffer(strip, descriptor)
             }
             fn finish(&mut self) -> Result<(), SinkError> {
                 self.inner.finish()
@@ -1457,7 +1478,7 @@ mod tokio_drivers {
             .iter()
             .filter_map(|e| match e {
                 StripEvent::Strip { meta, pixels } => {
-                    Some((meta.y, pixels.as_slice().row(0).to_vec()))
+                    Some((meta.y, pixels.as_view().row(0).to_vec()))
                 }
                 _ => None,
             })
@@ -1591,12 +1612,10 @@ mod tokio_drivers {
         impl DecodeRowSink for DropFlag {
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                self.1.provide_next_buffer(y, height, width, descriptor)
+                strip: RowStrip,
+                descriptor: PixelFormat,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                self.1.provide_next_buffer(strip, descriptor)
             }
         }
         struct Hung;
@@ -1641,20 +1660,18 @@ mod tokio_drivers {
             pulse: RecordingPulse,
         }
         impl DecodeRowSink for TripAt {
-            fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+            fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
                 self.inner.begin(w, h, d)
             }
             fn provide_next_buffer(
                 &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                if y == 1 {
+                strip: RowStrip,
+                descriptor: PixelFormat,
+            ) -> Result<PixelViewMut<'_>, SinkError> {
+                if strip.y == 1 {
                     self.pulse.cancel();
                 }
-                self.inner.provide_next_buffer(y, height, width, descriptor)
+                self.inner.provide_next_buffer(strip, descriptor)
             }
         }
         let pulse = RecordingPulse::default();
@@ -1751,20 +1768,20 @@ mod tokio_drivers {
         fn reject(_op: zencodec::UnsupportedOperation) -> EncErr {
             EncErr
         }
-        fn encode(self, _pixels: PixelSlice<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
+        fn encode(self, _pixels: PixelView<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
             Err(EncErr)
         }
         fn begin(
             &mut self,
             w: u32,
             h: u32,
-            _d: PixelDescriptor,
+            _d: PixelFormat,
         ) -> Result<zencodec::encode::OutputTiming, EncErr> {
             self.out.extend_from_slice(&[w as u8, h as u8, 0, 0]);
             Ok(zencodec::encode::OutputTiming::streaming(0))
         }
-        fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), EncErr> {
-            for r in 0..rows.rows() {
+        fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
+            for r in 0..rows.height() {
                 self.out.extend_from_slice(rows.row(r));
             }
             let pending = self.out.len() - self.drained;
@@ -1868,7 +1885,7 @@ mod tokio_drivers {
         src.read_many_at(&mut [(f(0) as u64, &mut t0[..]), (f(2) as u64, &mut t1[..])])?;
         sink.begin(W, H, RGBA)?;
         for (y, tile) in [(0u32, &t0), (2, &t1)] {
-            let mut dst = sink.provide_next_buffer(y, 2, W, RGBA)?;
+            let mut dst = sink.provide_next_buffer(RowStrip::new(y, W, 2), RGBA)?;
             for r in 0..2 {
                 dst.row_mut(r)
                     .copy_from_slice(&tile[r as usize * 16..r as usize * 16 + 16]);
@@ -2076,7 +2093,7 @@ impl IncrementalDecode for Greedy {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         None
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -2093,8 +2110,17 @@ fn a_decoder_that_overclaims_a_fetched_range_does_not_panic_the_driver() {
         step: 0,
         req: Vec::new(),
     };
-    // The fetched-buffer offset is clamped like the window's: the drive
-    // ends (here at Done) instead of indexing past the fetched bytes.
+    // Claiming more bytes than offered is a typed protocol violation rather
+    // than silent clamping or an out-of-bounds panic.
     let r = drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default());
-    assert!(r.is_ok(), "{r:?}");
+    assert!(
+        matches!(
+            r,
+            Err(DriveError::Protocol(ProtocolViolation::OverConsumed {
+                consumed: 108,
+                offered: 8
+            }))
+        ),
+        "{r:?}"
+    );
 }

@@ -1,7 +1,7 @@
 //! Completion facts must agree with the interpretation already adopted.
 use zencodec::{ImageInfo, decode::*, how_far::NoPulse, operation::PolicySet};
 use zencodec_io::{CollectSink, PolicyDecoder};
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 struct ChangedCompletion {
     boundary: DecodeBoundary,
@@ -35,13 +35,13 @@ impl ControlledIncrementalDecode for ChangedCompletion {
         if !self.adopted {
             return Ok(ControlledProgress::Suspended {
                 consumed: 0,
-                boundary: self.boundary,
+                boundary: self.boundary.clone(),
             });
         }
-        sink.begin(1, 1, PixelDescriptor::RGB8_SRGB)
+        sink.begin(1, 1, PixelFormat::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         let _ = sink
-            .provide_next_buffer(0, 1, 1, PixelDescriptor::RGB8_SRGB)
+            .provide_next_buffer(RowStrip::new(0, 1, 1), PixelFormat::RGB8_SRGB)
             .map_err(StepError::Sink)?;
         sink.finish().map_err(StepError::Sink)?;
         // All sink calls match the adopted facts. Only the successful completion
@@ -64,15 +64,15 @@ impl ControlledIncrementalDecode for ChangedCompletion {
 #[test]
 fn policy_decoder_rejects_done_facts_that_contradict_adopted_output() {
     for done in [
-        OutputInfo::full_decode(2, 1, PixelDescriptor::RGB8_SRGB),
-        OutputInfo::full_decode(1, 2, PixelDescriptor::RGB8_SRGB),
-        OutputInfo::full_decode(1, 1, PixelDescriptor::RGBA8_SRGB),
+        OutputInfo::full_decode(2, 1, PixelFormat::RGB8_SRGB),
+        OutputInfo::full_decode(1, 2, PixelFormat::RGB8_SRGB),
+        OutputInfo::full_decode(1, 1, PixelFormat::RGBA8_SRGB),
     ] {
         let decoder = ChangedCompletion {
             boundary: DecodeBoundary::new(InterpretationFacts::new(
                 1,
                 1,
-                Some(PixelDescriptor::RGB8_SRGB),
+                Some(PixelFormat::RGB8_SRGB),
                 InterpretationState::Final,
             ))
             .unwrap(),

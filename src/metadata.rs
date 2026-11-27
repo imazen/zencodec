@@ -36,7 +36,7 @@ use alloc::sync::Arc;
 use crate::Orientation;
 use crate::exif::{Exif, ExifPolicy, Retention};
 use crate::info::{Cicp, ContentLightLevel, DiffuseWhite, MasteringDisplay};
-use zenpixels::{ColorPrimaries, TransferFunction};
+use zenpixels::{Primaries, Transfer};
 
 /// Owned image metadata for encode/decode roundtrip.
 ///
@@ -213,22 +213,22 @@ impl Metadata {
 
     /// Derive the transfer function from CICP metadata.
     ///
-    /// Returns the [`TransferFunction`] corresponding to the CICP
-    /// `transfer_characteristics` code, or [`Unknown`](TransferFunction::Unknown)
+    /// Returns the [`Transfer`] corresponding to the CICP
+    /// `transfer_characteristics` code, or [`Unknown`](Transfer::Unknown)
     /// if CICP is absent or the code is not recognized.
-    pub fn transfer_function(&self) -> TransferFunction {
+    pub fn transfer_function(&self) -> Transfer {
         self.cicp
-            .and_then(|c| TransferFunction::from_cicp(c.transfer_characteristics))
-            .unwrap_or(TransferFunction::Unknown)
+            .and_then(|c| Transfer::from_cicp(c.transfer_characteristics))
+            .unwrap_or(Transfer::Unknown)
     }
 
     /// Derive the color primaries from CICP metadata.
     ///
-    /// Returns [`Bt709`](ColorPrimaries::Bt709) if CICP is absent.
-    pub fn color_primaries(&self) -> ColorPrimaries {
+    /// Returns [`Bt709`](Primaries::Bt709) if CICP is absent.
+    pub fn color_primaries(&self) -> Primaries {
         self.cicp
-            .map(|c| c.color_primaries_enum())
-            .unwrap_or(ColorPrimaries::Bt709)
+            .map(|c| Primaries::from_cicp(c.color_primaries).unwrap_or(Primaries::Unknown))
+            .unwrap_or(Primaries::Bt709)
     }
 
     /// Apply a retention [`MetadataPolicy`], returning a filtered copy.
@@ -297,10 +297,6 @@ impl Metadata {
     /// not rejected, so a `Custom` policy that drops color signaling should drop
     /// `hdr` too.
     #[must_use]
-    #[deprecated(
-        since = "0.1.27",
-        note = "compatibility helper; use zenmeta::metadata::filter for metadata processing"
-    )]
     pub fn filtered(&self, policy: &MetadataPolicy) -> Metadata {
         let f = policy.fields();
         let mut out = Metadata::none();
@@ -705,10 +701,10 @@ mod tests {
     #[test]
     fn metadata_transfer_function() {
         let meta = Metadata::none().with_cicp(Cicp::SRGB);
-        assert_eq!(meta.transfer_function(), TransferFunction::Srgb);
+        assert_eq!(meta.transfer_function(), Transfer::Srgb);
 
         let meta = Metadata::none();
-        assert_eq!(meta.transfer_function(), TransferFunction::Unknown);
+        assert_eq!(meta.transfer_function(), Transfer::Unknown);
     }
 
     #[test]
@@ -932,7 +928,7 @@ mod tests {
     fn diffuse_white_survives_retaining_policies() {
         // Exercise the decode-info -> encode-metadata boundary with a source
         // anchor different from the conventional 203-nit fallback.
-        let white = DiffuseWhite::new(100.0);
+        let white = DiffuseWhite::new(100.0).unwrap();
         let mut info = crate::ImageInfo::new(1, 1, crate::ImageFormat::Png);
         info.source_color.diffuse_white = Some(white);
         let metadata = Metadata::from(&info);
@@ -957,7 +953,7 @@ mod tests {
 
     #[test]
     fn diffuse_white_alone_is_not_empty() {
-        let metadata = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0));
+        let metadata = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0).unwrap());
         assert!(!metadata.is_empty());
         assert!(metadata.clear_diffuse_white().is_empty());
     }

@@ -7,10 +7,10 @@ use zencodec::{
     image::{
         Auxiliary, AuxiliaryGrid, AuxiliaryImageOwner, AuxiliaryKind, ImageGeometry,
         ImageInterpretation, ImageOutput, OutputError, PackedImageOwner, Rect, Samples,
-        SourcePrecision, ValueSlice, Values,
+        SourceSampleFormat, ValueSlice, Values,
     },
 };
-use zenpixels::{ChannelType, Orientation, PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{Orientation, PixelBuf, PixelFormat, PixelView, SampleType};
 
 struct Extra {
     bytes: [u8; 6],
@@ -22,7 +22,7 @@ impl AuxiliaryImageOwner for Extra {
         if index != 0 {
             return Ok(None);
         }
-        ValueSlice::new(&self.bytes, self.width, 2, 3, ChannelType::U8).map(|v| {
+        ValueSlice::new(&self.bytes, self.width, 2, 3, SampleType::U8).map(|v| {
             Some(v.with_grid(if self.aligned.load(Ordering::SeqCst) {
                 AuxiliaryGrid::ColorSamples
             } else {
@@ -36,8 +36,8 @@ struct Owner {
     separate: bool,
 }
 impl PackedImageOwner for Owner {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
-        Ok(PixelSlice::new(&[3; 18], 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap())
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
+        Ok(PixelView::new(&[3; 18], 2, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap())
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
         self.extra.auxiliary(index)
@@ -52,7 +52,7 @@ fn role() -> Auxiliary {
     Auxiliary {
         kind: AuxiliaryKind::Depth,
         name: String::new(),
-        source_precision: SourcePrecision::Integer {
+        source_sample_format: SourceSampleFormat::Integer {
             bits: 8,
             signed: false,
         },
@@ -104,10 +104,10 @@ fn matching_dimensions_and_source_reduction_never_infer_registration() {
         let image = ImageOutput::from_packed_owner(owner, vec![role()], interpretation()).unwrap();
         assert_eq!(grid(&image), AuxiliaryGrid::Unknown);
         let values =
-            Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, ChannelType::U8).unwrap();
+            Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8).unwrap();
         assert_eq!(values.grid(), AuxiliaryGrid::Unknown);
         assert_eq!(values.as_slice().grid(), AuxiliaryGrid::Unknown);
-        let pixels = PixelBuffer::from_vec(vec![3; 12], 2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, PixelFormat::RGB8_SRGB).unwrap();
         let image = ImageOutput::packed(pixels, vec![(role(), values)], interpretation()).unwrap();
         assert_eq!(grid(&image), AuxiliaryGrid::Unknown);
     }
@@ -119,10 +119,10 @@ fn known_registration_checks_shape_for_owned_and_native_planes_without_copying()
         let (owner, _) = owner(width, true, false);
         let address = owner.extra.bytes.as_ptr();
         let native = ImageOutput::from_packed_owner(owner, vec![role()], interpretation());
-        let values = Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, ChannelType::U8)
+        let values = Values::new(vec![17, 18, 99, 19, 20, 98], width, 2, 3, SampleType::U8)
             .unwrap()
             .with_grid(AuxiliaryGrid::ColorSamples);
-        let pixels = PixelBuffer::from_vec(vec![3; 12], 2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelBuf::from_bytes(vec![3; 12], 2, 2, PixelFormat::RGB8_SRGB).unwrap();
         let owned = ImageOutput::packed(pixels, vec![(role(), values)], interpretation());
         if width == 1 {
             for result in [native, owned] {
@@ -180,4 +180,84 @@ fn registration_is_frozen_through_clones_and_both_color_replacement_owners() {
             }
         }
     }
+}
+
+#[test]
+fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
+    use zencodec::gainmap::{DecodedGainMap, GainMapInfo, GainMapIngestError, GainMapParams};
+    use zenpixels::{
+        AlphaMode, BitPacking, ColorSpace, DualLayerHdrBuf, Orientation, PixelBuf, PixelFormat,
+        SampleLayout,
+    };
+    let spec = PixelFormat::new(
+        SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 10 }),
+        ColorSpace::Untagged {
+            total_channels: 1,
+            alpha: AlphaMode::None,
+        },
+    );
+    let mut params = GainMapParams::default();
+    params.alternate_hdr_headroom = 2.0;
+    params
+        .channels
+        .iter_mut()
+        .for_each(|channel| channel.max = 2.0);
+    params.use_base_color_space = false;
+    let stale = GainMapInfo::new(params, 9, 11, 3)
+        .with_alternate_cicp(zencodec::Cicp::new(12, 16, 0, true));
+    let samples = PixelBuf::from_typed(vec![0u16, 1023], 2, 1, spec.clone()).unwrap();
+    let map = DecodedGainMap::try_new(samples, stale.clone()).unwrap();
+    assert_eq!(
+        (
+            map.metadata.width,
+            map.metadata.height,
+            map.metadata.channels,
+            map.metadata.bit_depth
+        ),
+        (2, 1, 1, 10)
+    );
+    assert_eq!(
+        map.metadata.alternate_cicp,
+        Some(zencodec::Cicp::new(12, 16, 0, true))
+    );
+    let alternate = map
+        .metadata
+        .alternate_cicp
+        .unwrap()
+        .to_color_space(AlphaMode::None)
+        .unwrap();
+    let pair = DualLayerHdrBuf::new_with_alternate_color(
+        PixelBuf::new(3, 2, PixelFormat::RGB8_SRGB).unwrap(),
+        map.pixels,
+        map.metadata.params.exact_metadata().unwrap(),
+        alternate.clone(),
+    )
+    .unwrap()
+    .with_orientation(Orientation::Rotate90);
+    assert_eq!(pair.as_view().display_dimensions(), (2, 3));
+    let parts = pair.into_parts();
+    assert_eq!(parts.orientation, Orientation::Rotate90);
+    assert_eq!(parts.alternate_color_space, Some(alternate));
+    assert_eq!(
+        parts.gain_map.as_view().row(0),
+        [0u16.to_ne_bytes(), 1023u16.to_ne_bytes()].concat()
+    );
+    assert!(DualLayerHdrBuf::from_parts(parts).is_ok());
+    assert!(zenpixels::GainMapMetadata::sdr_to_hdr_stops(2.0).is_some());
+    assert!(zenpixels::GainMapMetadata::sdr_to_hdr_stops(f32::NAN).is_none());
+
+    let rgba = PixelBuf::new(2, 1, PixelFormat::RGBA8_SRGB).unwrap();
+    assert!(matches!(
+        DecodedGainMap::try_new(rgba, stale.clone()),
+        Err(GainMapIngestError::Layout)
+    ));
+    let unsupported = PixelFormat::new(
+        SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 9 }),
+        spec.color,
+    );
+    let samples = PixelBuf::from_typed(vec![0u16, 511], 2, 1, unsupported).unwrap();
+    assert!(matches!(
+        DecodedGainMap::try_new(samples, stale),
+        Err(GainMapIngestError::BitDepth)
+    ));
 }

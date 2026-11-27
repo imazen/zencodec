@@ -20,8 +20,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 
 use zencodec::encode::OutputBuffer;
 
@@ -584,14 +584,14 @@ impl VideoDecoder for ToyDecoder {
         let interp = Arc::new(
             FrameInterpretation::new(
                 FrameGeometry::full(video.coded_width, video.coded_height),
-                zenpixels::plane::PlanarLayout::new(
+                zencodec::plane::PlanarLayout::new(
                     (vec![PlaneRole::Luma])
                         .into_iter()
                         .map(|role| {
-                            zenpixels::plane::PlaneSpec::new(
+                            zencodec::plane::PlaneSpec::new(
                                 role,
-                                zenpixels::plane::PlaneEncoding::Code(
-                                    SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+                                zencodec::plane::PlaneEncoding::Code(
+                                    SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap(),
                                 ),
                             )
                         })
@@ -656,10 +656,10 @@ impl VideoDecoder for ToyDecoder {
             let data = b[start..start + w * h].to_vec();
             let planes = OwnedPlanes::new(
                 vec![OwnedPlane::U8(
-                    zenpixels::plane::PlaneBuf::new(data, w, h, w)
+                    zencodec::plane::PlaneBuf::new(data, w, h, w)
                         .map_err(|_| SessionError::Codec(ToyError::ShapeMismatch))?,
                 )],
-                SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap(),
+                SampleEncoding::new(zenpixels::SampleType::U8, 8, 0).unwrap(),
             )
             .map_err(|_| SessionError::Codec(ToyError::ShapeMismatch))?;
             let mut presentation = Presentation::default();
@@ -698,12 +698,17 @@ impl VideoDecoder for ToyDecoder {
         Ok(Receive::NeedInput)
     }
 
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn end_input(
+        &mut self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.ended = true;
         Ok(())
     }
 
-    fn reset(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn reset(&mut self, stop: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.hold.clear();
         self.ready.clear();
         self.last = None;
@@ -773,7 +778,7 @@ impl ToyEncoder {
         let mut payload = Vec::with_capacity(2 + w * h);
         payload.push(1);
         payload.push(0);
-        let zenpixels::plane::AnyPlane::U8(plane) = plane else {
+        let zencodec::plane::AnyPlane::U8(plane) = plane else {
             return Err(SessionError::Codec(ToyError::ShapeMismatch));
         };
         for r in plane.rows() {
@@ -859,7 +864,11 @@ impl VideoEncoder for ToyEncoder {
         Ok(Receive::NeedInput)
     }
 
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn end_input(
+        &mut self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.ended = true;
         Ok(())
     }

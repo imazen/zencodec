@@ -154,20 +154,20 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn checked_decode_policy_and_inventory_boundaries() {
     let image = TestImage::rgb8_gradient(4, 3);
     let meta = Metadata::none().with_xmp(b"retained".as_slice());
     let bytes = E::new()
         .job()
-        .with_metadata_policy(meta.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta.clone(), MetadataPolicy::PreserveExact)
+        .unwrap()
         .encode(image.as_slice())
         .unwrap();
     tk::check_decode_policy_admission(
         D,
         bytes.data(),
         DecodePolicy::none(),
-        DecodePolicy::strict(),
+        DecodePolicy::untrusted_minimal(),
         false,
         &meta,
     )
@@ -186,7 +186,7 @@ fn checked_decode_policy_and_inventory_boundaries() {
             D,
             bytes.data(),
             DecodePolicy::none(),
-            DecodePolicy::strict(),
+            DecodePolicy::untrusted_minimal(),
             true,
             &meta
         )

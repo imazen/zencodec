@@ -8,12 +8,12 @@ use crate::At;
 use crate::frame::{
     Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, Presentation,
 };
+use crate::plane::AnyPlane;
+use crate::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
+use crate::sample::SampleEncoding;
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
-use zenpixels::plane::AnyPlane;
-use zenpixels::plane::{FloatEncoding, PlaneEncoding, PlaneRef};
-use zenpixels::sample::SampleEncoding;
-use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
+use zenpixels::{AlphaMode, Orientation, PixelBuf, PixelView, SampleType};
 type Failure = At<OutputError>;
 
 mod placement;
@@ -22,8 +22,8 @@ mod owner;
 pub use owner::{AuxiliaryImageOwner, PackedImageOwner};
 mod replace;
 
-/// A rectangle in the selected image's stored coordinates, before orientation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A rectangle in stored coordinates, before orientation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Rect {
     /// Horizontal origin.
     pub x: u32,
@@ -33,6 +33,18 @@ pub struct Rect {
     pub width: u32,
     /// Height in rows.
     pub height: u32,
+}
+
+impl Rect {
+    /// Construct a rectangle at `(x, y)` with `width` and `height`.
+    pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
 }
 
 /// Position of returned samples within the selected image's stored canvas.
@@ -131,9 +143,9 @@ pub enum AuxiliaryKind {
     Unknown(u32),
 }
 
-/// Original source precision, independent of emitted storage precision.
+/// Original source sample format, independent of emitted storage precision.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SourcePrecision {
+pub enum SourceSampleFormat {
     /// Original integer sample precision; emitted storage may be floating point.
     Integer {
         /// Number of source bits.
@@ -158,7 +170,7 @@ pub struct Auxiliary {
     /// Unfiltered source name. May contain private data; not a safe log label.
     pub name: String,
     /// Source facts, not the representation/geometry of the returned plane.
-    pub source_precision: SourcePrecision,
+    pub source_sample_format: SourceSampleFormat,
     /// Source power-of-two reduction; emitted dimensions are independently mapped.
     pub source_dim_shift: u32,
 }
@@ -196,7 +208,7 @@ pub struct Values {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 
@@ -208,7 +220,7 @@ pub struct ValueSlice<'a> {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 impl<'a> ValueSlice<'a> {
@@ -219,7 +231,7 @@ impl<'a> ValueSlice<'a> {
         width: u32,
         height: u32,
         stride: usize,
-        channel: ChannelType,
+        channel: SampleType,
     ) -> Result<Self, At<OutputError>> {
         let row = (width as usize)
             .checked_mul(channel.byte_size())
@@ -280,7 +292,7 @@ impl Values {
         width: u32,
         height: u32,
         stride: usize,
-        channel: ChannelType,
+        channel: SampleType,
     ) -> Result<Self, At<OutputError>> {
         ValueSlice::new(&bytes, width, height, stride, channel)?;
         Ok(Self {
@@ -325,11 +337,11 @@ fn check_auxiliary_grid(
 /// Borrowed samples tied to the mapping and their declared interpretation.
 pub enum Samples<'a> {
     /// Packed color with native stride and color metadata.
-    Pixels(PixelSlice<'a>),
+    Pixels(PixelView<'a>),
     /// Strided auxiliary scalar values.
     Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
-    Codes(CodePlane<'a>),
+    Codes(ComponentCodePlane<'a>),
     /// Floating component samples with their explicit value mapping.
     Float {
         /// Native-endian strided samples.
@@ -338,17 +350,17 @@ pub enum Samples<'a> {
         encoding: FloatEncoding,
     },
 }
-/// A mapped native plane with the code encoding its words carry. Built on
-/// [`zenpixels::plane::AnyPlane`]; the storage type is checked against the
+/// A mapped native component plane with the code encoding its words carry. Built on
+/// [`crate::plane::AnyPlane`]; the storage type is checked against the
 /// encoding at construction.
 #[derive(Clone, Copy, Debug)]
-pub struct CodePlane<'a> {
+pub struct ComponentCodePlane<'a> {
     plane: AnyPlane<'a>,
     encoding: SampleEncoding,
     components: usize,
 }
 
-impl<'a> CodePlane<'a> {
+impl<'a> ComponentCodePlane<'a> {
     /// Codes of `encoding` stored in `plane`.
     ///
     /// # Errors
@@ -357,13 +369,14 @@ impl<'a> CodePlane<'a> {
     pub fn new(
         plane: AnyPlane<'a>,
         encoding: SampleEncoding,
-    ) -> Result<Self, zenpixels::sample::CodePlaneError> {
-        zenpixels::sample::CodePlane::new(plane, encoding)?;
-        Ok(Self {
+    ) -> Result<Self, crate::sample::CodePlaneError> {
+        let mapped = Self {
             plane,
             encoding,
             components: 1,
-        })
+        };
+        mapped.component(0)?;
+        Ok(mapped)
     }
 
     /// The native plane.
@@ -392,7 +405,6 @@ impl<'a> CodePlane<'a> {
             AnyPlane::U8(p) => p.stride(),
             AnyPlane::U16(p) => p.stride() * 2,
             AnyPlane::F32(p) => p.stride() * 4,
-            _ => 0,
         }
     }
 
@@ -434,8 +446,35 @@ impl<'a> CodePlane<'a> {
     pub fn component(
         &self,
         index: usize,
-    ) -> Result<zenpixels::sample::CodePlane<'a>, zenpixels::sample::CodePlaneError> {
-        zenpixels::sample::CodePlane::component(self.plane, self.components, index, self.encoding)
+    ) -> Result<crate::sample::CodePlane<'a>, crate::sample::CodePlaneError> {
+        use crate::sample::{CodePlane, CodePlaneError};
+        use zenpixels::sample::InterleavedCodeLayout;
+
+        match self.plane {
+            AnyPlane::U8(p) => CodePlane::component_from_u8(
+                p.into_strided_samples(),
+                InterleavedCodeLayout {
+                    width_words: p.width(),
+                    height: p.height(),
+                    stride_words: p.stride(),
+                    component_count: self.components,
+                    component_index: index,
+                },
+                self.encoding,
+            ),
+            AnyPlane::U16(p) => CodePlane::component_from_u16(
+                p.into_strided_samples(),
+                InterleavedCodeLayout {
+                    width_words: p.width(),
+                    height: p.height(),
+                    stride_words: p.stride(),
+                    component_count: self.components,
+                    component_index: index,
+                },
+                self.encoding,
+            ),
+            AnyPlane::F32(_) => Err(CodePlaneError::StorageMismatch),
+        }
     }
 
     /// Read a single-component plane at spatial `(x, y)`.
@@ -463,19 +502,19 @@ impl Samples<'_> {
     /// two words per spatial position; its role records the order.
     pub fn dimensions(&self) -> (usize, usize) {
         match self {
-            Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
+            Self::Pixels(p) => (p.width() as usize, p.height() as usize),
             Self::Values(p) => (p.width as usize, p.height as usize),
             Self::Codes(p) => (p.width(), p.height()),
             Self::Float { plane, .. } => (plane.width(), plane.height()),
         }
     }
     /// Storage sample type, not original precision or code depth.
-    pub fn channel_type(&self) -> ChannelType {
+    pub fn channel_type(&self) -> SampleType {
         match self {
-            Self::Pixels(p) => p.descriptor().channel_type(),
+            Self::Pixels(p) => p.format().layout.sample,
             Self::Values(p) => p.channel,
             Self::Codes(p) => p.encoding().storage(),
-            Self::Float { .. } => ChannelType::F32,
+            Self::Float { .. } => SampleType::F32,
         }
     }
     /// Significant code bits for component words; absent for pixels/values.
@@ -488,7 +527,7 @@ impl Samples<'_> {
     /// Distance between row starts in bytes.
     pub fn stride_bytes(&self) -> usize {
         match self {
-            Self::Pixels(p) => p.stride(),
+            Self::Pixels(p) => p.stride_bytes(),
             Self::Values(p) => p.stride,
             Self::Codes(p) => p.stride_bytes(),
             Self::Float { plane, .. } => plane.stride() * core::mem::size_of::<f32>(),
@@ -534,7 +573,7 @@ pub trait MappedImage {
     fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
 }
 pub(crate) struct SampleFacts {
-    pub packed: Option<zenpixels::PixelDescriptor>,
+    pub packed: Option<zenpixels::PixelFormat>,
     pub planes: usize,
     pub auxiliaries: usize,
     pub applied_spot_colors: usize,
@@ -642,7 +681,7 @@ impl ImageOutput {
     /// auxiliary planes. Validate the selected region and compatible facts.
     /// Auxiliary planes retain their own dimensions; no resampling is implied.
     pub fn packed(
-        pixels: PixelBuffer,
+        pixels: PixelBuf,
         extras: Vec<(Auxiliary, Values)>,
         interpretation: ImageInterpretation,
     ) -> Result<Self, At<OutputError>> {
@@ -737,7 +776,7 @@ impl ImageOutput {
     /// and refuse this path. The borrowed pixels cannot outlive their mapping.
     pub fn with_pixels<T>(
         &self,
-        consume: impl FnOnce(PixelSlice<'_>) -> T,
+        consume: impl FnOnce(PixelView<'_>) -> T,
     ) -> Result<T, At<OutputError>> {
         let mapped = self.map()?;
         let plane = mapped
@@ -906,14 +945,14 @@ impl core::error::Error for OutputError {
 }
 
 struct Packed {
-    pixels: PixelBuffer,
+    pixels: PixelBuf,
     extras: Vec<(Meaning, Values)>,
 }
 struct PackedMap<'a>(&'a Packed);
 impl ImageStorage for Packed {
     fn facts(&self) -> SampleFacts {
         SampleFacts {
-            packed: Some(self.pixels.descriptor()),
+            packed: Some(self.pixels.format().clone()),
             planes: 1 + self.extras.len(),
             auxiliaries: self.extras.len(),
             applied_spot_colors: self
@@ -946,7 +985,7 @@ impl MappedImage for PackedMap<'_> {
         if index == 0 {
             return Ok(Some(Plane {
                 meaning: &Meaning::Color,
-                samples: Samples::Pixels(self.0.pixels.as_slice()),
+                samples: Samples::Pixels(self.0.pixels.as_view()),
             }));
         }
         Ok(self
@@ -1055,11 +1094,11 @@ impl MappedImage for ComponentMap<'_> {
         }
         let samples = match (samples, expected_encoding) {
             (plane, PlaneEncoding::Code(encoding)) => Samples::Codes({
-                let mut codes = CodePlane::new(plane, encoding).map_err(|_| mismatch())?;
+                let mut codes = ComponentCodePlane::new(plane, encoding).map_err(|_| mismatch())?;
                 codes.components = spec.role().components();
                 codes
             }),
-            (zenpixels::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
+            (crate::plane::AnyPlane::F32(plane), PlaneEncoding::Float(encoding)) => {
                 Samples::Float { plane, encoding }
             }
             _ => return Err(fail(OutputError::Interpretation)),

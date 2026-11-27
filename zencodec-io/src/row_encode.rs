@@ -10,9 +10,9 @@
 //! ```
 //! use zencodec::{encode::Encoder, operation::PolicySet, storage::StorageBudget};
 //! use zencodec_io::row_encode::{self, Options, Raster};
-//! use zenpixels::PixelSlice;
+//! use zenpixels::PixelView;
 //! fn save<E: Encoder, W: std::io::Write>(
-//!     encoder: E, pixels: PixelSlice<'_>, writer: W,
+//!     encoder: E, pixels: PixelView<'_>, writer: W,
 //! ) -> Result<row_encode::Completed, Box<dyn core::error::Error>> {
 //!     Ok(row_encode::encode(
 //!         encoder, Raster::new(pixels), writer, PolicySet::new(),
@@ -22,7 +22,7 @@
 //! }
 //! ```
 use crate::destination::{Destination, Forward};
-use alloc::{boxed::Box, collections::VecDeque, sync::Arc};
+use alloc::{boxed::Box, collections::VecDeque};
 use core::{
     error::Error,
     fmt,
@@ -34,8 +34,10 @@ use std::{
     io::{self, Read, Seek, SeekFrom, Write},
 };
 use zencodec::output_patch::OutputAccess;
+use zencodec::sample::ExactDepth;
 use zencodec::{
     At,
+    decode::RowMetadata,
     encode::{
         DynEncodeJob, DynEncoder, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
         EncodePlanError, Encoder, InputRequirement,
@@ -46,41 +48,41 @@ use zencodec::{
     },
     storage::{OwnedStorage, StorageBudget},
 };
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, sample::ExactDepth};
+use zenpixels::{ColorSpace, PixelFormat, PixelView, PixelViewMut};
 
 mod planned;
 
 /// Fixed sample declaration for this operation. Color conversion is not implicit.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Description {
     /// Width in samples.
     pub width: u32,
     /// Total rows.
     pub height: u32,
     /// Complete sample descriptor accepted by the configured encoder.
-    pub descriptor: PixelDescriptor,
-    /// Original color context carried on every source and encoder row view.
-    pub color_context: Option<Arc<ColorContext>>,
+    pub descriptor: PixelFormat,
     /// Optional assertion about current canonical samples, checked before push.
     /// `Some` is strict: unsupported layouts refuse before startup, including
     /// full-storage CMYK claims. `None` does not restrict sample depth.
     /// It does not prove the encoder preserves samples or bound native memory.
     pub exact_depth: Option<ExactDepth>,
+    /// Optional evidence and provenance for the raster this source supplies.
+    pub pixel_metadata: Option<RowMetadata>,
 }
 impl Description {
     /// Construct a declaration; execution checks dimensions and size arithmetic.
-    pub const fn new(width: u32, height: u32, descriptor: PixelDescriptor) -> Self {
+    pub const fn new(width: u32, height: u32, descriptor: PixelFormat) -> Self {
         Self {
             width,
             height,
             descriptor,
-            color_context: None,
             exact_depth: None,
+            pixel_metadata: None,
         }
     }
-    /// Attach the actual sample context without changing the descriptor.
-    pub fn with_color_context(mut self, context: Arc<ColorContext>) -> Self {
-        self.color_context = Some(context);
+    /// Declare the actual interpretation of the source samples.
+    pub fn with_color(mut self, color: ColorSpace) -> Self {
+        self.descriptor.color = color;
         self
     }
 
@@ -90,6 +92,36 @@ impl Description {
     pub const fn with_exact_depth(mut self, exact: ExactDepth) -> Self {
         self.exact_depth = Some(exact);
         self
+    }
+    /// Carry proven properties and provenance for every active source row.
+    /// An exact-depth claim is separately verified against each row.
+    pub fn with_pixel_metadata(mut self, mut metadata: RowMetadata) -> Self {
+        self.exact_depth = metadata.facts.depth.take().or(self.exact_depth);
+        self.pixel_metadata = Some(metadata);
+        self
+    }
+
+    fn encode_declaration(&self, access: OutputAccess) -> EncodeDeclaration {
+        let mut declaration =
+            EncodeDeclaration::new(self.width, self.height, self.descriptor.clone())
+                .with_access(access);
+        if let Some(metadata) = self.pixel_metadata.clone() {
+            declaration = declaration.with_pixel_metadata(metadata);
+        }
+        if let Some(exact) = self.exact_depth {
+            declaration = declaration.with_exact_depth(exact);
+        }
+        declaration
+    }
+
+    fn attach_to_verified_rows<'a>(&'a self, view: PixelView<'a>) -> PixelView<'a> {
+        let view = if let Some(metadata) = &self.pixel_metadata {
+            metadata.attach(view)
+        } else {
+            view
+        };
+        let facts = view.facts().with_depth(self.exact_depth);
+        view.with_assumed_facts(facts)
     }
 }
 /// A fixed-interpretation source, retained across policy and read on demand.
@@ -105,7 +137,7 @@ pub trait Source {
     /// Return a real immutable raster view retained for the entire operation.
     /// The default supplies no borrow. The driver uses this returned storage,
     /// never `mechanism()` or a capability flag, as exact replay evidence.
-    fn borrowed_pixels(&self) -> Option<PixelSlice<'_>> {
+    fn borrowed_pixels(&self) -> Option<PixelView<'_>> {
         None
     }
     /// Whether ordered traversals can restart at row zero without reconstructing
@@ -127,7 +159,7 @@ pub trait Source {
     fn read_rows(
         &mut self,
         first: u32,
-        rows: PixelSliceMut<'_>,
+        rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error>;
 }
@@ -135,47 +167,56 @@ pub trait Source {
 /// An attached exact-depth claim is preserved and verified before each push.
 /// Unsupported claimed layouts refuse before startup; this is stricter than
 /// using an otherwise identical unclaimed view.
-pub struct Raster<'a>(PixelSlice<'a>);
+pub struct Raster<'a>(PixelView<'a>, Option<ExactDepth>);
 impl<'a> Raster<'a> {
     /// Retain the caller's raster borrow; source padding is not copied.
-    pub const fn new(pixels: PixelSlice<'a>) -> Self {
-        Self(pixels)
+    pub fn new(pixels: PixelView<'a>) -> Self {
+        let depth = pixels.facts().depth;
+        Self(pixels, depth)
+    }
+
+    /// Retain separate color and alpha depth assertions for verification.
+    pub fn with_exact_depth(mut self, depth: ExactDepth) -> Self {
+        self.1 = Some(depth);
+        self
     }
 }
 impl Source for Raster<'_> {
     type Error = zencodec::CodecError;
     fn description(&self) -> Description {
-        let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.descriptor());
-        desc.color_context = self.0.color_context().cloned();
-        desc.exact_depth = self.0.exact_depth();
+        let mut metadata = RowMetadata::from_view(&self.0);
+        metadata.facts.depth = self.1;
+        let mut desc = Description::new(self.0.width(), self.0.height(), self.0.format().clone());
+        if metadata != RowMetadata::default() {
+            desc = desc.with_pixel_metadata(metadata);
+        }
         desc
     }
     fn mechanism(&self) -> OutputSource {
         OutputSource::BorrowedRaster
     }
-    fn borrowed_pixels(&self) -> Option<PixelSlice<'_>> {
+    fn borrowed_pixels(&self) -> Option<PixelView<'_>> {
         Some(self.0.clone())
     }
     fn read_rows(
         &mut self,
         first: u32,
-        mut rows: PixelSliceMut<'_>,
+        mut rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         let pulse = pulse.unwrap_or(&zencodec::NoPulse);
         if rows.width() != self.0.width()
-            || rows.descriptor() != self.0.descriptor()
-            || rows.color_context() != self.0.color_context()
+            || rows.format() != self.0.format()
             || first
-                .checked_add(rows.rows())
-                .is_none_or(|end| end > self.0.rows())
+                .checked_add(rows.height())
+                .is_none_or(|end| end > self.0.height())
         {
             return Err(zencodec::CodecError::new(
                 None,
                 zencodec::InvalidKind::Buffer.into(),
             ));
         }
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             pulse
                 .check()
                 .map_err(|r| zencodec::CodecError::new(None, r.into()))?;
@@ -190,7 +231,6 @@ pub struct Options {
     storage: StorageBudget,
     max_output_bytes: u64,
     batch_rows: NonZeroU32,
-    preset: PolicySet,
     disk: Option<Disk>,
     raw_disk: Option<planned::RawDisk>,
 }
@@ -202,7 +242,6 @@ impl Options {
             storage,
             max_output_bytes,
             batch_rows: NonZeroU32::new(16).unwrap(),
-            preset: PolicySet::new(),
             disk: None,
             raw_disk: None,
         }
@@ -257,14 +296,6 @@ impl Options {
     /// and follow the native encoder's requests; this does not bound their size.
     pub fn with_batch_rows(mut self, rows: NonZeroU32) -> Self {
         self.batch_rows = rows;
-        self
-    }
-    /// Built-in policy used when the supplied callback returns UsePreset.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
         self
     }
 }
@@ -666,7 +697,7 @@ pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: OperationPoli
 
 fn validate_row_plan(
     plan: EncodePlan,
-    declaration: &EncodeDeclaration<'_>,
+    declaration: &EncodeDeclaration,
 ) -> Result<EncodePlan, Cause> {
     plan.validate(declaration)?;
     if matches!(plan.input, InputRequirement::WholeRaster) {
@@ -679,27 +710,23 @@ trait RowStartup {
     type Enc: Encoder;
     // Preserve legacy allocation/start ordering on the existing raw adapter.
     const EARLY_BUFFER: bool;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause>;
-    fn start(
-        self,
-        declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
-    ) -> Result<Self::Enc, Cause>;
+    fn plan(&mut self, declaration: &EncodeDeclaration) -> Result<EncodePlan, Cause>;
+    fn start(self, declaration: &EncodeDeclaration, plan: &EncodePlan) -> Result<Self::Enc, Cause>;
 }
 struct LegacyStartup<E>(E);
 impl<E: Encoder> RowStartup for LegacyStartup<E> {
     type Enc = E;
     const EARLY_BUFFER: bool = true;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+    fn plan(&mut self, declaration: &EncodeDeclaration) -> Result<EncodePlan, Cause> {
         let timing = self.0.begin_output(
             declaration.width,
             declaration.height,
-            declaration.descriptor,
+            declaration.pixel_format.clone(),
             declaration.access,
         )?;
         Ok(EncodePlan::rows(timing))
     }
-    fn start(self, _: &EncodeDeclaration<'_>, _: &EncodePlan) -> Result<E, Cause> {
+    fn start(self, _: &EncodeDeclaration, _: &EncodePlan) -> Result<E, Cause> {
         Ok(self.0)
     }
 }
@@ -710,14 +737,10 @@ where
 {
     type Enc = J::Enc;
     const EARLY_BUFFER: bool = false;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+    fn plan(&mut self, declaration: &EncodeDeclaration) -> Result<EncodePlan, Cause> {
         validate_row_plan(self.0.plan_encode(declaration)?, declaration)
     }
-    fn start(
-        self,
-        declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
-    ) -> Result<Self::Enc, Cause> {
+    fn start(self, declaration: &EncodeDeclaration, plan: &EncodePlan) -> Result<Self::Enc, Cause> {
         let mut encoder = self.0.encoder()?;
         let observed = encoder.begin_declared(declaration)?;
         plan.validate_started(&observed)?;
@@ -729,14 +752,10 @@ struct DynPlannedStartup(Box<dyn DynEncodeJob>);
 impl RowStartup for DynPlannedStartup {
     type Enc = DynRows;
     const EARLY_BUFFER: bool = false;
-    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+    fn plan(&mut self, declaration: &EncodeDeclaration) -> Result<EncodePlan, Cause> {
         validate_row_plan(self.0.plan_encode(declaration)?, declaration)
     }
-    fn start(
-        self,
-        declaration: &EncodeDeclaration<'_>,
-        plan: &EncodePlan,
-    ) -> Result<Self::Enc, Cause> {
+    fn start(self, declaration: &EncodeDeclaration, plan: &EncodePlan) -> Result<Self::Enc, Cause> {
         let mut encoder = self.0.into_encoder()?;
         let observed = encoder.begin_declared(declaration)?;
         plan.validate_started(&observed)?;
@@ -752,7 +771,7 @@ impl Encoder for DynRows {
     fn reject(operation: zencodec::UnsupportedOperation) -> Self::Error {
         Self::Error::new(Box::new(operation))
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         self.0.encode(pixels).map_err(Self::Error::new)
     }
     fn pending_output(&self) -> &[u8] {
@@ -761,7 +780,7 @@ impl Encoder for DynRows {
     fn consume_output(&mut self, n: usize) {
         self.0.consume_output(n);
     }
-    fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Self::Error> {
+    fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Self::Error> {
         self.0.push_rows(pixels).map_err(Self::Error::new)
     }
     fn pull_rows(
@@ -795,14 +814,12 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     let mut patched_bytes = 0;
     let mut report = OperationReport::default();
     let bound_requirements = resolver.requirements();
-    let entry_requirements = options.preset;
     let run = || -> Result<OutputSchedule, Cause> {
         check(control)?;
         // This adapter has no qualified native preparation/workspace bound.
         // Refuse before asking the job to prepare any state. These checks do
         // not discharge the unchanged requirements at final route selection.
         boundary = Stage::Policy;
-        entry_requirements.check_workspace(None)?;
         if let Some(required) = bound_requirements {
             required.check_workspace(None)?;
         }
@@ -812,8 +829,9 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         if desc.width == 0 || desc.height == 0 {
             return Err(Refusal::Empty.into());
         }
+        desc.descriptor.validate()?;
         let stride = (desc.width as usize)
-            .checked_mul(desc.descriptor.bytes_per_pixel())
+            .checked_mul(desc.descriptor.layout.bytes_per_pixel())
             .ok_or(Refusal::Overflow)?;
         let rows = options.batch_rows.get().min(desc.height);
         let len = stride.checked_mul(rows as usize).ok_or(Refusal::Overflow)?;
@@ -827,14 +845,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         } else {
             OutputAccess::Forward
         };
-        let mut declaration =
-            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor).with_access(access);
-        if let Some(color) = &desc.color_context {
-            declaration = declaration.with_color(color);
-        }
-        if let Some(exact) = desc.exact_depth {
-            declaration = declaration.with_exact_depth(exact);
-        }
+        let declaration = desc.encode_declaration(access);
         // Includes the legacy path, whose plan() may start native headers.
         // This validates structure only; planning must not read source samples.
         declaration.validate_exact_depth()?;
@@ -865,7 +876,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
             OutputScheduleFacts::new(timing, mechanism),
             offers,
             &mut resolver,
-            options.preset,
+            PolicySet::new(),
             pulse,
         ) {
             Ok(selected) => selected,
@@ -932,34 +943,31 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 .ok_or(Refusal::Overflow)?;
             boundary = Stage::Read;
             validate_source(&source, &desc, mechanism)?;
-            let mut destination = PixelSliceMut::new(
+            let destination = PixelViewMut::new(
                 &mut buffer.as_mut_slice()[..size],
                 desc.width,
                 count,
                 stride,
-                desc.descriptor,
+                &desc.descriptor,
             )?;
-            if let Some(context) = &desc.color_context {
-                destination = destination.with_color_context(context.clone());
-            }
             source.read_rows(y, destination, pulse)?;
             check(control)?;
             validate_source(&source, &desc, mechanism)?;
             boundary = Stage::Encode;
-            let mut pixels = PixelSlice::new(
+            let pixels = PixelView::new(
                 &buffer.as_slice()[..size],
                 desc.width,
                 count,
                 stride,
-                desc.descriptor,
+                &desc.descriptor,
             )?;
             if let Some(exact) = desc.exact_depth {
                 // Check untagged rows written through the mutable source view.
                 // Per-row checks retain the first contradictory absolute row;
                 // nothing in this strip reaches the encoder until all pass.
-                for row in 0..pixels.rows() {
+                for row in 0..pixels.height() {
                     check(control)?;
-                    if !exact.holds_for(&pixels.sub_rows(row, 1))? {
+                    if !exact.holds_for(&pixels.sub_rows(row, 1)?)? {
                         return Err(ExactDepthContradiction {
                             first_row: y + row,
                             claim: exact,
@@ -972,14 +980,8 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 boundary = Stage::Read;
                 validate_source(&source, &desc, mechanism)?;
                 boundary = Stage::Encode;
-                pixels = pixels.with_exact_depth(exact)?;
             }
-            // Grid verification needs no color context. Attach it only after
-            // scanning so its per-row borrowed views need no Arc clone/drop.
-            if let Some(context) = &desc.color_context {
-                pixels = pixels.with_color_context(context.clone());
-            }
-            encoder.push_rows(pixels)?;
+            encoder.push_rows(desc.attach_to_verified_rows(pixels))?;
             y += count;
         }
         drop(source);
@@ -1061,22 +1063,18 @@ mod tests {
     #[test]
     fn raster_honors_both_strides_and_refuses_context_mismatch_before_copy() {
         let input = [1, 2, 3, 99, 98, 97, 4, 5, 6];
-        let context = Arc::new(ColorContext::from_cicp(zencodec::Cicp::SRGB));
-        let pixels = PixelSlice::new(&input, 1, 2, 6, PixelDescriptor::RGB8_SRGB)
-            .unwrap()
-            .with_color_context(context.clone());
+        let spec = PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3);
+        let pixels = PixelView::new(&input, 1, 2, 6, &spec).unwrap();
         let mut source = Raster::new(pixels);
         let mut output = [77; 12];
-        let view = PixelSliceMut::new(&mut output, 1, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+        let view = PixelViewMut::new(&mut output, 1, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
         assert!(
             source
                 .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
                 .is_err()
         );
         assert_eq!(output, [77; 12]);
-        let view = PixelSliceMut::new(&mut output, 1, 2, 9, PixelDescriptor::RGB8_SRGB)
-            .unwrap()
-            .with_color_context(context);
+        let view = PixelViewMut::new(&mut output, 1, 2, 9, &spec).unwrap();
         source
             .read_rows(0, view, Some(&zencodec::how_far::NoPulse))
             .unwrap();
@@ -1101,14 +1099,14 @@ mod patch_tests {
         fn reject(op: zencodec::UnsupportedOperation) -> Self::Error {
             io::Error::other(op)
         }
-        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+        fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
             Err(io::Error::other("negotiated path only"))
         }
         fn begin_output(
             &mut self,
             _: u32,
             _: u32,
-            _: PixelDescriptor,
+            _: PixelFormat,
             _: OutputAccess,
         ) -> Result<OutputTiming, Self::Error> {
             self.pending = true;
@@ -1120,7 +1118,7 @@ mod patch_tests {
         fn consume_output(&mut self, _: usize) {
             self.pending = false;
         }
-        fn push_rows(&mut self, _: PixelSlice<'_>) -> Result<(), Self::Error> {
+        fn push_rows(&mut self, _: PixelView<'_>) -> Result<(), Self::Error> {
             Ok(())
         }
         fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error> {
@@ -1158,7 +1156,7 @@ mod patch_tests {
         }
     }
     fn source() -> Raster<'static> {
-        Raster::new(PixelSlice::new(&[7, 8, 9], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap())
+        Raster::new(PixelView::new(&[7, 8, 9], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap())
     }
     fn options() -> Options {
         Options::new(StorageBudget::new(1024, 16), 1024)

@@ -8,71 +8,47 @@ pub(super) const HEIC_BRANDS: &[&[u8; 4]] = &[
     b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs",
 ];
 
-fn has_ftyp(data: &[u8]) -> bool {
-    data.len() >= 12 && &data[4..8] == b"ftyp"
+/// Return the major brand and complete compatible brands visible in the prefix.
+fn ftyp_brands(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    if data.get(4..8)? != b"ftyp" {
+        return None;
+    }
+    let size = u32::from_be_bytes(data[..4].try_into().ok()?);
+    let (major_start, end) = match size {
+        0 => (8, data.len() as u64),
+        1 => (16, u64::from_be_bytes(data.get(8..16)?.try_into().ok()?)),
+        size => (8, u64::from(size)),
+    };
+    let compatible_start = major_start + 8;
+    if end < compatible_start as u64 || (size != 0 && end % 4 != 0) {
+        return None;
+    }
+    let end = end.min(data.len() as u64) as usize;
+    Some((
+        data.get(major_start..major_start + 4)?,
+        data.get(compatible_start..end).unwrap_or(&[]),
+    ))
 }
 
-fn scan_compat_brands(data: &[u8], target: &[&[u8; 4]]) -> bool {
-    let box_size_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-    let end = match box_size_u32 {
-        // box_size == 0 means the box extends to the end of the data
-        0 => data.len(),
-        // box_size == 1 means the real size is a 64-bit value at offset 8
-        1 => {
-            if data.len() < 16 {
-                return false;
-            }
-            let extended = u64::from_be_bytes([
-                data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-            ]);
-            // Clamp to data length (we only scan what we have)
-            (extended as usize).min(data.len())
-        }
-        size => (size as usize).min(data.len()),
+fn detect_ftyp(data: &[u8], brands: &[&[u8; 4]]) -> bool {
+    let Some((major, compatible)) = ftyp_brands(data) else {
+        return false;
     };
-    // For box_size == 1, compatible brands start after the 16-byte header
-    // (8 bytes extended size overlaps the major_brand/minor_version area,
-    // so brands start at offset 24). For normal boxes, brands start at 16.
-    let brands_start = if box_size_u32 == 1 { 24 } else { 16 };
-    let mut offset = brands_start;
-    while offset + 4 <= end {
-        let compat = &data[offset..offset + 4];
-        if target.iter().any(|b| compat[..4] == b[..]) {
-            return true;
-        }
-        offset += 4;
-    }
-    false
+    brands.iter().any(|brand| major == *brand)
+        || (matches!(major, b"mif1" | b"msf1")
+            && compatible
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|code| brands.contains(&code)))
 }
 
 fn detect_avif(data: &[u8]) -> bool {
-    if !has_ftyp(data) {
-        return false;
-    }
-    let major = &data[8..12];
-    if major == b"avif" || major == b"avis" {
-        return true;
-    }
-    if major == b"mif1" || major == b"msf1" {
-        scan_compat_brands(data, &[b"avif", b"avis"])
-    } else {
-        false
-    }
+    detect_ftyp(data, &[b"avif", b"avis"])
 }
 
 fn detect_heic(data: &[u8]) -> bool {
-    if !has_ftyp(data) {
-        return false;
-    }
-    let major = &data[8..12];
-    if HEIC_BRANDS.iter().any(|b| major == &b[..]) {
-        return true;
-    }
-    if major == b"mif1" || major == b"msf1" {
-        scan_compat_brands(data, HEIC_BRANDS)
-    } else {
-        false
-    }
+    detect_ftyp(data, HEIC_BRANDS)
 }
 
 fn detect_tga(data: &[u8]) -> bool {

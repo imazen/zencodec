@@ -104,7 +104,7 @@ from display equivalence when qualifying adapters.
 
 `EncodePolicy.color` (a `ColorEmitPolicy`) says how to carry color — prefer
 compact CICP code points, keep the ICC bytes, or a custom mix.
-`resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy)` turns
+`resolve_color_emit(&SourceColor, &ColorSpace, &EncodeCapabilities, ColorEmitPolicy)` turns
 that into a concrete `ColorEmitPlan` (`{ cicp, icc: IccDisposition }`) against the
 target format's capabilities — no CMS, no codec dependency, never a silent ICC
 drop. The codec writes the carriers the plan names. The design and the rejected

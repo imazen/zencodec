@@ -9,20 +9,22 @@
 
 ## summary
 #
-#   inherent methods                            2
-#   trait roster entries (type × trait)         3
+#   inherent methods                            3
+#   trait roster entries (type × trait)         4
 #
 # per-module pub lines:
-#   (root)                            1
+#   (root)                            2
 #   pulse                             1
 
-## items (2 lines)
+## items (3 lines)
 
+pub fn ColorSignalPresence::assert_fields_are_eq(&self)
 pub fn ExpectedError::assert_fields_are_eq(&self)
 pub fn pulse::Case::assert_fields_are_eq(&self)
 
-## trait impls (3 types)
+## trait impls (4 types)
 
+ColorSignalPresence: TrivialClone
 ExpectedError: TrivialClone
 pulse::Case: TrivialClone
 pulse::Limits: TrivialClone

@@ -5,7 +5,7 @@
 //! sessions and accounted software allocations stay outside this crate.
 
 pub use crate::frame_storage::{Frame, MapError, MappedPlanes, Picture, PlaneError, Presentation};
-use zenpixels::{
+use crate::{
     plane::{PlanarLayout, PlaneEncoding},
     sample::SampleEncoding,
 };
@@ -13,20 +13,8 @@ use zenpixels::{
 use crate::time::Timestamp;
 use zenpixels::Cicp;
 
-pub use zenpixels::plane::{AnyPlane, PlaneRef, PlaneRole};
-
-/// A rectangle in coded coordinates.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Crop {
-    /// Left edge.
-    pub x: u32,
-    /// Top edge.
-    pub y: u32,
-    /// Width.
-    pub width: u32,
-    /// Height.
-    pub height: u32,
-}
+pub use crate::image::Rect;
+pub use crate::plane::{AnyPlane, PlaneRef, PlaneRole};
 
 /// The shape of a decoded picture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -38,7 +26,7 @@ pub struct FrameGeometry {
     pub coded_height: u32,
     /// Visible region in coded coordinates. Odd origins are kept, so the
     /// chroma phase of a cropped 4:2:0 picture stays known.
-    pub crop: Crop,
+    pub crop: Rect,
     /// Intended display size, when the stream says so; pixels are not
     /// resized.
     pub render: Option<(u32, u32)>,
@@ -50,7 +38,7 @@ impl FrameGeometry {
         Self {
             coded_width: width,
             coded_height: height,
-            crop: Crop {
+            crop: Rect {
                 x: 0,
                 y: 0,
                 width,

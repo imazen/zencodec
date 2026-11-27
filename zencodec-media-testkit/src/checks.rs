@@ -12,6 +12,7 @@ use enough::{Stop, StopReason};
 use zencodec::decode::{AnimationFrameDecoder, Input};
 use zencodec::encode::AnimationFrameEncoder;
 use zencodec::how_far::NoPulse;
+use zencodec::plane::AnyPlane;
 use zencodec::source::{ReadAt, SourceError};
 use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 use zencodec_io::{DriveFailure, DriveOptions, ReadAtCursor, SliceCursor, Yield};
@@ -28,8 +29,7 @@ use zencodec_media::session::{
     VideoDecoder, VideoEncoder, erase_video_decoder,
 };
 use zencodec_media::track::{AudioTrackInfo, CodecId, TrackInfo, TrackKind, VideoTrackInfo};
-use zenpixels::PixelBuffer;
-use zenpixels::plane::AnyPlane;
+use zenpixels::PixelBuf;
 
 /// A broken rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,42 +67,55 @@ impl Stop for Tripped {
     }
 }
 
-/// Every plane's samples in order, as bytes: what a frame shows.
-fn frame_pixels(frame: &Frame) -> Result<Vec<u8>, String> {
-    let mapped = frame.map().map_err(|e| e.to_string())?;
-    let mut out = Vec::new();
-    for i in 0..mapped.plane_count() {
-        let plane = mapped.plane(i).ok_or("plane disappeared")?;
-        match plane {
-            AnyPlane::U8(p) => p.rows().for_each(|r| out.extend_from_slice(r)),
-            AnyPlane::U16(p) => {
-                for r in p.rows() {
-                    for v in r {
-                        out.extend_from_slice(&v.to_le_bytes());
-                    }
-                }
-            }
-            _ => return Err("unsupported plane sample type".into()),
-        }
-    }
-    Ok(out)
+/// Active typed samples, including exact floating-point payload bits.
+#[derive(Debug, PartialEq, Eq)]
+enum PlaneSamples {
+    U8(Vec<u8>),
+    U16(Vec<u16>),
+    F32(Vec<u32>),
 }
 
-/// What a decoded frame is, for comparing two decodes.
+#[derive(Debug, PartialEq, Eq)]
+struct PlaneSnapshot {
+    dimensions: (usize, usize),
+    samples: PlaneSamples,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Shown {
-    pts: Option<Timestamp>,
-    keyframe: bool,
-    show_existing: bool,
-    pixels: Vec<u8>,
+    timing: zencodec::frame::FrameTiming,
+    presentation: zencodec::frame::Presentation,
+    interpretation: Arc<zencodec::frame::FrameInterpretation>,
+    planes: Vec<PlaneSnapshot>,
 }
 
 fn shown(frame: &Frame) -> Result<Shown, String> {
+    let mapped = frame.map().map_err(|e| e.to_string())?;
+    let planes = (0..mapped.plane_count())
+        .map(|i| {
+            let plane = mapped.plane(i).ok_or("plane disappeared")?;
+            let dimensions = (plane.width(), plane.height());
+            let samples = match plane {
+                AnyPlane::U8(plane) => PlaneSamples::U8(plane.rows().flatten().copied().collect()),
+                AnyPlane::U16(plane) => {
+                    PlaneSamples::U16(plane.rows().flatten().copied().collect())
+                }
+                AnyPlane::F32(plane) => {
+                    PlaneSamples::F32(plane.rows().flatten().map(|v| v.to_bits()).collect())
+                }
+                _ => return Err("new plane storage requires an exact sample snapshot"),
+            };
+            Ok(PlaneSnapshot {
+                dimensions,
+                samples,
+            })
+        })
+        .collect::<Result<_, &str>>()?;
     Ok(Shown {
-        pts: frame.timing().pts,
-        keyframe: frame.presentation().keyframe,
-        show_existing: frame.presentation().show_existing,
-        pixels: frame_pixels(frame)?,
+        timing: frame.timing(),
+        presentation: frame.presentation(),
+        interpretation: Arc::clone(frame.interpretation()),
+        planes,
     })
 }
 
@@ -205,13 +218,14 @@ where
             }
         }
     }
-    dec.end_input()
+    dec.end_input(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("end_input: {e:?}")))?;
-    dec.end_input()
+    dec.end_input(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("second end_input: {e:?}")))?;
     loop {
         match dec.receive(Some(&NoPulse)) {
             Ok(Receive::Ready(f)) => lazy.push(f),
+            Ok(Receive::Progress { .. }) => continue,
             Ok(Receive::EndOfStream) => break,
             other => return Err(fail(CHECK, format!("drain: {other:?}"))),
         }
@@ -261,7 +275,7 @@ where
     let first = decode_eager(&mut dec, packets).map_err(|e| fail(CHECK, e))?;
     let held = first[0].clone();
     let mapping = held.map().map_err(|e| fail(CHECK, e.to_string()))?;
-    dec.reset()
+    dec.reset(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("reset: {e:?}")))?;
     let after_reset = decode_eager(&mut dec, packets).map_err(|e| fail(CHECK, e))?;
     drop(dec);
@@ -294,7 +308,7 @@ where
         Err(SessionError::Finished) => {}
         other => return Err(fail(CHECK, format!("after cancellation: {other:?}"))),
     }
-    dec.reset()
+    dec.reset(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("reset after cancellation: {e:?}")))?;
     if !matches!(dec.receive(Some(&NoPulse)), Ok(Receive::NeedInput)) {
         return Err(fail(CHECK, "reset did not reopen the session"));
@@ -349,12 +363,13 @@ where
                 }
             }
         }
-        enc.end_input()
-            .and_then(|()| enc.end_input())
+        enc.end_input(Some(&NoPulse))
+            .and_then(|()| enc.end_input(Some(&NoPulse)))
             .map_err(|e| fail(CHECK, format!("end_input: {e:?}")))?;
         loop {
             match enc.receive(Some(&NoPulse)) {
                 Ok(Receive::Ready(p)) => out.push(keep(p)),
+                Ok(Receive::Progress { .. }) => continue,
                 Ok(Receive::EndOfStream) => break,
                 other => return Err(fail(CHECK, format!("drain: {other:?}"))),
             }
@@ -863,7 +878,7 @@ pub fn check_animation_over_video<E, M, D, C, P, R>(
     make_demuxer: impl FnOnce() -> D,
     make_decoder: impl FnOnce() -> C,
     render: R,
-    frames: &[PixelBuffer],
+    frames: &[PixelBuf],
     durations: &[FrameDuration],
 ) -> Conformance
 where
@@ -884,7 +899,7 @@ where
     let (w, h, desc) = (
         frames[0].width(),
         frames[0].height(),
-        frames[0].descriptor(),
+        frames[0].format().clone(),
     );
     let count = frames.len() as u32;
     // The file, bytes available after each push, and the reported lag.
@@ -893,7 +908,7 @@ where
         let mut a = AnimationVideoEncoder::new(make_encoder(), make_muxer(), capture(), lag_frames)
             .map_err(|e| fail(CHECK, format!("new: {e:?}")))?;
         let timing = a
-            .begin(w, h, desc, Some(count))
+            .begin(w, h, desc.clone(), Some(count))
             .map_err(|e| fail(CHECK, format!("begin: {e:?}")))?;
         let mut out = Vec::new();
         let mut points = Vec::new();
@@ -901,7 +916,7 @@ where
             a.take_output(&mut out);
         }
         for (f, d) in frames.iter().zip(durations) {
-            a.push_frame_exact(f.as_slice(), *d, None)
+            a.push_frame_exact(f.as_view(), *d, None)
                 .map_err(|e| fail(CHECK, format!("push: {e:?}")))?;
             points.push(out.len() + a.pending_output().len());
             if drain {
@@ -938,6 +953,11 @@ where
         }
     }
 
+    let clock = make_encoder()
+        .output_config()
+        .ok_or_else(|| fail(CHECK, "missing encoder clock"))?
+        .time_base;
+    let mut expected_tick = 0i64;
     let mut anim = VideoAnimationDecoder::new(
         Arc::<[u8]>::from(drained),
         make_demuxer(),
@@ -965,13 +985,32 @@ where
             ));
         }
         for y in 0..h {
-            if f.pixels().row(y) != want.as_slice().row(y) {
+            if f.pixels().row(y) != want.as_view().row(y) {
                 return Err(fail(CHECK, format!("frame {index} row {y} differs")));
             }
         }
-        if f.pts().is_none() {
-            return Err(fail(CHECK, format!("frame {index} has no timestamp")));
+        if f.frame_index() != index as u32
+            || f.pts()
+                .is_none_or(|pts| !pts.same_instant(Timestamp::new(expected_tick, clock)))
+            || f.pixels().format() != want.format()
+            || f.pixels().width() != w
+            || f.pixels().height() != h
+        {
+            return Err(fail(
+                CHECK,
+                format!("frame {index} lost its timing, index or display spec"),
+            ));
         }
+        let duration = durations[index];
+        let n = u128::from(duration.numerator()) * u128::from(clock.denominator());
+        let d = u128::from(duration.denominator()) * u128::from(clock.numerator());
+        if n % d != 0 {
+            return Err(fail(CHECK, "duration is not exact in the encoder clock"));
+        }
+        expected_tick = i64::try_from(n / d)
+            .ok()
+            .and_then(|ticks| expected_tick.checked_add(ticks))
+            .ok_or_else(|| fail(CHECK, "expected timestamp overflow"))?;
         index += 1;
     }
     if index != frames.len() {
@@ -987,7 +1026,7 @@ where
     a.begin(w, h, desc, Some(count + 1))
         .map_err(|e| fail(CHECK, format!("begin: {e:?}")))?;
     for (f, d) in frames.iter().zip(durations) {
-        a.push_frame_exact(f.as_slice(), *d, None)
+        a.push_frame_exact(f.as_view(), *d, None)
             .map_err(|e| fail(CHECK, format!("push: {e:?}")))?;
     }
     if a.finish(None).is_ok() {

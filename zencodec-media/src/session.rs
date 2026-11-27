@@ -29,6 +29,7 @@
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt;
+use core::num::NonZeroU32;
 
 use enough::StopReason;
 pub use zencodec::decode::ErasedError;
@@ -36,6 +37,7 @@ pub use zencodec::decode::ErasedError;
 use crate::frame::{Frame, FrameInterpretation};
 use crate::limits::MediaLimitExceeded;
 use crate::packet::Packet;
+use crate::timeline::TrackTiming;
 use crate::track::{CodecId, TrackInfo, VideoTrackInfo};
 use zencodec::time::TimeBase;
 
@@ -56,6 +58,12 @@ pub enum SendStatus {
 pub enum Receive<T> {
     /// One output.
     Ready(T),
+    /// Bounded output-free internal progress (e.g., consuming hidden/altref constituents
+    /// or lookahead substeps) so drivers yield cleanly without pretending input is needed.
+    Progress {
+        /// Accounted non-zero units of internal progress made by this step.
+        work_units: NonZeroU32,
+    },
     /// Nothing now; more input may be sent.
     NeedInput,
     /// Input ended and everything was drained. Stable.
@@ -93,6 +101,9 @@ pub enum ProtocolViolation {
     IndexRequired,
     /// `EndOfStream` before `end_input`.
     EndOfStreamBeforeEndInput,
+    /// A session emitted consecutive `Receive::Progress` steps past the pump's
+    /// bounded progress allowance without making an output or state transition.
+    ProgressLimitExceeded,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -193,6 +204,8 @@ pub struct CodecConfig {
     pub time_base: TimeBase,
     /// Declared video shape, when known.
     pub video: Option<VideoTrackInfo>,
+    /// Full track timing program (delay, seek pre-roll, edit segments) carried from the track.
+    pub timing: Arc<TrackTiming>,
 }
 
 impl CodecConfig {
@@ -204,6 +217,7 @@ impl CodecConfig {
             epoch: 0,
             time_base,
             video: None,
+            timing: Arc::new(TrackTiming::empty()),
         }
     }
     /// The declared video shape.
@@ -223,6 +237,17 @@ impl CodecConfig {
         self.epoch = epoch;
         self
     }
+
+    /// Attach a [`TrackTiming`] program.
+    pub fn with_timing(mut self, timing: TrackTiming) -> Self {
+        self.timing = Arc::new(timing);
+        self
+    }
+
+    /// Complete track timing declarations carried across this epoch.
+    pub fn timing(&self) -> &Arc<TrackTiming> {
+        &self.timing
+    }
 }
 
 impl From<&TrackInfo> for CodecConfig {
@@ -233,6 +258,7 @@ impl From<&TrackInfo> for CodecConfig {
             epoch: t.config_epoch(),
             time_base: t.time_base(),
             video: t.video_info().copied(),
+            timing: Arc::clone(t.timing()),
         }
     }
 }
@@ -287,11 +313,17 @@ pub trait VideoDecoder {
     ) -> Result<Receive<Frame>, SessionError<Self::Error>>;
 
     /// Declare end of input; idempotent. Then `receive` until `EndOfStream`.
-    fn end_input(&mut self) -> Result<(), SessionError<Self::Error>>;
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Self::Error>>;
 
     /// Discard queued input, output and references; keep configuration.
     /// Frames already returned stay valid.
-    fn reset(&mut self) -> Result<(), SessionError<Self::Error>>;
+    fn reset(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Self::Error>>;
 
     /// Facts about the stream seen so far.
     fn stream_info(&self) -> Option<&VideoStreamInfo>;
@@ -319,7 +351,10 @@ pub trait VideoEncoder {
     ) -> Result<Receive<Packet>, SessionError<Self::Error>>;
 
     /// Declare end of input; idempotent. Then `receive` until `EndOfStream`.
-    fn end_input(&mut self) -> Result<(), SessionError<Self::Error>>;
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Self::Error>>;
 
     /// Codec configuration a muxer needs before the first packet.
     fn output_config(&self) -> Option<&CodecConfig>;
@@ -371,11 +406,17 @@ impl<D: VideoDecoder> VideoDecoder for VideoDecoderShim<D> {
     ) -> Result<Receive<Frame>, SessionError<ErasedError>> {
         self.0.receive(pulse).map_err(erase)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<ErasedError>> {
-        self.0.end_input().map_err(erase)
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ErasedError>> {
+        self.0.end_input(pulse).map_err(erase)
     }
-    fn reset(&mut self) -> Result<(), SessionError<ErasedError>> {
-        self.0.reset().map_err(erase)
+    fn reset(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ErasedError>> {
+        self.0.reset(pulse).map_err(erase)
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {
         self.0.stream_info()
@@ -400,8 +441,11 @@ impl<E: VideoEncoder> VideoEncoder for VideoEncoderShim<E> {
     ) -> Result<Receive<Packet>, SessionError<ErasedError>> {
         self.0.receive(pulse).map_err(erase)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<ErasedError>> {
-        self.0.end_input().map_err(erase)
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ErasedError>> {
+        self.0.end_input(pulse).map_err(erase)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.0.output_config()
@@ -476,18 +520,21 @@ impl<D: VideoDecoder> VideoDecoder for FusedDecoder<D> {
         let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         self.guard(local_pulse, |d| d.receive(pulse))
     }
-    fn end_input(&mut self) -> Result<(), SessionError<D::Error>> {
-        if self.failed {
-            return Err(SessionError::Finished);
-        }
-        self.failed = true;
-        let r = self.inner.end_input();
-        self.failed = r.is_err();
-        r
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<D::Error>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        self.guard(local_pulse, |d| d.end_input(pulse))
     }
-    fn reset(&mut self) -> Result<(), SessionError<D::Error>> {
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<D::Error>> {
         self.failed = true;
-        let r = self.inner.reset();
+        if let Some(p) = pulse
+            && let Err(r) = p.check()
+        {
+            return Err(SessionError::Cancelled(r));
+        }
+        let r = self.inner.reset(pulse);
         self.failed = r.is_err();
         r
     }
@@ -558,8 +605,12 @@ impl<E: VideoEncoder> VideoEncoder for FusedEncoder<E> {
         let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
         self.guard(local_pulse, |encoder| encoder.receive(pulse))
     }
-    fn end_input(&mut self) -> Result<(), SessionError<E::Error>> {
-        self.guard(&zencodec::how_far::NoPulse, VideoEncoder::end_input)
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<E::Error>> {
+        let local_pulse = pulse.unwrap_or(&zencodec::NoPulse);
+        self.guard(local_pulse, |encoder| encoder.end_input(pulse))
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.inner.output_config()
@@ -604,11 +655,14 @@ impl<D: VideoDecoder + ?Sized> VideoDecoder for Box<D> {
     ) -> Result<Receive<Frame>, SessionError<D::Error>> {
         (**self).receive(pulse)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<D::Error>> {
-        (**self).end_input()
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<D::Error>> {
+        (**self).end_input(pulse)
     }
-    fn reset(&mut self) -> Result<(), SessionError<D::Error>> {
-        (**self).reset()
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<D::Error>> {
+        (**self).reset(pulse)
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {
         (**self).stream_info()
@@ -630,8 +684,11 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
     ) -> Result<Receive<Packet>, SessionError<E::Error>> {
         (**self).receive(pulse)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<E::Error>> {
-        (**self).end_input()
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<E::Error>> {
+        (**self).end_input(pulse)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         (**self).output_config()
@@ -641,9 +698,51 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
     }
 }
 
+/// Default maximum consecutive [`Receive::Progress`] steps allowed in pump helpers
+/// without an output (`Ready`), `NeedInput`, or `EndOfStream` transition.
+pub const DEFAULT_MAX_CONSECUTIVE_PROGRESS_STEPS: u32 = 4096;
+
+#[inline]
+fn check_pump_pulse<E, E2>(
+    pulse: Option<&dyn zencodec::Pulse>,
+) -> Result<(), PumpError<SessionError<E>, E2>> {
+    if let Some(p) = pulse {
+        p.check()
+            .map_err(SessionError::Cancelled)
+            .map_err(PumpError::Upstream)?;
+    }
+    Ok(())
+}
+
+#[inline]
+fn account_progress<E, E2>(
+    progress_steps: &mut u32,
+    work_units: NonZeroU32,
+    pulse: Option<&dyn zencodec::Pulse>,
+) -> Result<(), PumpError<SessionError<E>, E2>> {
+    if let Some(p) = pulse {
+        p.advance(u64::from(work_units.get()));
+        p.check()
+            .map_err(SessionError::Cancelled)
+            .map_err(PumpError::Upstream)?;
+    }
+    *progress_steps = progress_steps.saturating_add(1);
+    if *progress_steps > DEFAULT_MAX_CONSECUTIVE_PROGRESS_STEPS {
+        return Err(PumpError::Upstream(SessionError::Protocol(
+            ProtocolViolation::ProgressLimitExceeded,
+        )));
+    }
+    Ok(())
+}
+
 /// The backpressure loop every driver writes once: send, and while the codec
 /// says `ReceivePending`, receive output into `on_output` and retry; then
 /// deliver whatever output is ready.
+///
+/// Accounts every [`Receive::Progress`] `work_units` to `pulse`, enforces
+/// [`DEFAULT_MAX_CONSECUTIVE_PROGRESS_STEPS`] against non-terminating progress-only
+/// loops, and polls `pulse` before work, on progress, and after each `on_output`
+/// callback.
 ///
 /// # Errors
 ///
@@ -658,24 +757,48 @@ where
     D: VideoDecoder + ?Sized,
     F: FnMut(Frame) -> Result<(), E2>,
 {
+    check_pump_pulse(pulse)?;
     loop {
         match dec.send(packet, pulse).map_err(PumpError::Upstream)? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match dec.receive(pulse).map_err(PumpError::Upstream)? {
-                Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
-                _ => {
-                    return Err(PumpError::Upstream(SessionError::Protocol(
-                        ProtocolViolation::ReceivePendingWithoutOutput,
-                    )));
+            SendStatus::ReceivePending => {
+                let mut progress_steps = 0u32;
+                loop {
+                    match dec.receive(pulse).map_err(PumpError::Upstream)? {
+                        Receive::Ready(f) => {
+                            on_output(f).map_err(PumpError::Downstream)?;
+                            check_pump_pulse(pulse)?;
+                            break;
+                        }
+                        Receive::Progress { work_units } => {
+                            account_progress(&mut progress_steps, work_units, pulse)?;
+                        }
+                        _ => {
+                            return Err(PumpError::Upstream(SessionError::Protocol(
+                                ProtocolViolation::ReceivePendingWithoutOutput,
+                            )));
+                        }
+                    }
                 }
-            },
+            }
         }
     }
+    // Accepted: poll before draining ready outputs so cancellation raised during
+    // an accepted `send` is observed before any output callback.
+    check_pump_pulse(pulse)?;
     // Accepted: deliver whatever output is available now, so frames never
     // sit in the codec until the next backpressure event.
+    let mut progress_steps = 0u32;
     loop {
         match dec.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
+            Receive::Ready(f) => {
+                progress_steps = 0;
+                on_output(f).map_err(PumpError::Downstream)?;
+                check_pump_pulse(pulse)?;
+            }
+            Receive::Progress { work_units } => {
+                account_progress(&mut progress_steps, work_units, pulse)?;
+            }
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -701,22 +824,44 @@ where
     E: VideoEncoder + ?Sized,
     F: FnMut(Packet) -> Result<(), E2>,
 {
+    check_pump_pulse(pulse)?;
     loop {
         match enc.send(frame, pulse).map_err(PumpError::Upstream)? {
             SendStatus::Accepted => break,
-            SendStatus::ReceivePending => match enc.receive(pulse).map_err(PumpError::Upstream)? {
-                Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
-                _ => {
-                    return Err(PumpError::Upstream(SessionError::Protocol(
-                        ProtocolViolation::ReceivePendingWithoutOutput,
-                    )));
+            SendStatus::ReceivePending => {
+                let mut progress_steps = 0u32;
+                loop {
+                    match enc.receive(pulse).map_err(PumpError::Upstream)? {
+                        Receive::Ready(p) => {
+                            on_output(p).map_err(PumpError::Downstream)?;
+                            check_pump_pulse(pulse)?;
+                            break;
+                        }
+                        Receive::Progress { work_units } => {
+                            account_progress(&mut progress_steps, work_units, pulse)?;
+                        }
+                        _ => {
+                            return Err(PumpError::Upstream(SessionError::Protocol(
+                                ProtocolViolation::ReceivePendingWithoutOutput,
+                            )));
+                        }
+                    }
                 }
-            },
+            }
         }
     }
+    check_pump_pulse(pulse)?;
+    let mut progress_steps = 0u32;
     loop {
         match enc.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
+            Receive::Ready(p) => {
+                progress_steps = 0;
+                on_output(p).map_err(PumpError::Downstream)?;
+                check_pump_pulse(pulse)?;
+            }
+            Receive::Progress { work_units } => {
+                account_progress(&mut progress_steps, work_units, pulse)?;
+            }
             Receive::NeedInput => return Ok(()),
             Receive::EndOfStream => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -742,10 +887,20 @@ where
     D: VideoDecoder + ?Sized,
     F: FnMut(Frame) -> Result<(), E2>,
 {
-    dec.end_input().map_err(PumpError::Upstream)?;
+    check_pump_pulse(pulse)?;
+    dec.end_input(pulse).map_err(PumpError::Upstream)?;
+    check_pump_pulse(pulse)?;
+    let mut progress_steps = 0u32;
     loop {
         match dec.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(f) => on_output(f).map_err(PumpError::Downstream)?,
+            Receive::Ready(f) => {
+                progress_steps = 0;
+                on_output(f).map_err(PumpError::Downstream)?;
+                check_pump_pulse(pulse)?;
+            }
+            Receive::Progress { work_units } => {
+                account_progress(&mut progress_steps, work_units, pulse)?;
+            }
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
                 return Err(PumpError::Upstream(SessionError::Protocol(
@@ -770,10 +925,20 @@ where
     E: VideoEncoder + ?Sized,
     F: FnMut(Packet) -> Result<(), E2>,
 {
-    enc.end_input().map_err(PumpError::Upstream)?;
+    check_pump_pulse(pulse)?;
+    enc.end_input(pulse).map_err(PumpError::Upstream)?;
+    check_pump_pulse(pulse)?;
+    let mut progress_steps = 0u32;
     loop {
         match enc.receive(pulse).map_err(PumpError::Upstream)? {
-            Receive::Ready(p) => on_output(p).map_err(PumpError::Downstream)?,
+            Receive::Ready(p) => {
+                progress_steps = 0;
+                on_output(p).map_err(PumpError::Downstream)?;
+                check_pump_pulse(pulse)?;
+            }
+            Receive::Progress { work_units } => {
+                account_progress(&mut progress_steps, work_units, pulse)?;
+            }
             Receive::EndOfStream => return Ok(()),
             Receive::NeedInput => {
                 return Err(PumpError::Upstream(SessionError::Protocol(

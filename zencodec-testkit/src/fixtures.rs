@@ -107,7 +107,10 @@ pub fn sample_icc() -> Vec<u8> {
 /// buffer-context class gate reads, so the fixtures must carry a real one.
 pub fn sample_icc_with_class(class: &[u8; 4]) -> Vec<u8> {
     let mut v = std::vec![0u8; 132];
-    v[16..20].copy_from_slice(class); // data colour space (device class)
+    v[0..4].copy_from_slice(&132u32.to_be_bytes()); // declared profile size
+    v[12..16].copy_from_slice(b"mntr"); // Display profile class
+    v[16..20].copy_from_slice(class); // data colour space
+    v[20..24].copy_from_slice(b"XYZ "); // PCS
     v[36..40].copy_from_slice(b"acsp"); // ICC signature at offset 36
     v
 }

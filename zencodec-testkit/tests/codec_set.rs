@@ -21,19 +21,19 @@ use zencodec_testkit::reference::RefEncodeJob;
 use zencodec_testkit::{
     RefError, ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 // ===========================================================================
 // Helpers
 // ===========================================================================
 
-fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelSlice<'_> {
-    PixelSlice::new(
+fn rgb_pixels(bytes: &[u8], width: u32, height: u32) -> PixelView<'_> {
+    PixelView::new(
         bytes,
         width,
         height,
         width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )
     .expect("valid pixel slice")
 }
@@ -62,13 +62,13 @@ fn encode_then_decode_as_roundtrips_pixels() {
     assert_eq!(encoded.format(), ImageFormat::Pnm);
 
     let decoded = set
-        .decode_as(ImageFormat::Pnm, encoded.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, encoded.data(), &[])
         .expect("decode_as");
     assert_eq!(decoded.width(), W);
     assert_eq!(decoded.height(), H);
     let out = decoded.pixels();
     let mut round = Vec::new();
-    for y in 0..out.rows() {
+    for y in 0..out.height() {
         round.extend_from_slice(out.row(y));
     }
     assert_eq!(round, PIXELS);
@@ -189,7 +189,7 @@ fn encode_with_fidelity_clones_the_template() {
         )
         .expect("encode_with");
     let decoded = set
-        .decode_as(ImageFormat::Pnm, out.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, out.data(), &[])
         .expect("decode");
     assert_eq!((decoded.width(), decoded.height()), (W, H));
 
@@ -199,18 +199,18 @@ fn encode_with_fidelity_clones_the_template() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_job_carries_metadata() {
     let set = reference_set();
 
     let meta = Metadata::none().with_icc(vec![1, 2, 3, 4]);
     let mut job = set.encode_job(ImageFormat::Pnm).expect("encode_job");
-    job.set_metadata_policy(meta, MetadataPolicy::PreserveExact);
+    job.try_set_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     let encoder = job.into_encoder().expect("encoder");
     let out = encoder.encode(rgb_pixels(&PIXELS, W, H)).expect("encode");
 
     let decoded = set
-        .decode_as(ImageFormat::Pnm, out.data(), &[])
+        .decode_with_format(ImageFormat::Pnm, out.data(), &[])
         .expect("decode");
     assert_eq!(
         decoded.info().source_color.icc_profile.as_deref(),
@@ -219,7 +219,6 @@ fn encode_job_carries_metadata() {
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn transcode_roundtrips_pixels_and_carries_metadata() {
     use zencodec::encode::Fidelity;
 
@@ -229,10 +228,11 @@ fn transcode_roundtrips_pixels_and_carries_metadata() {
 
     // A source bitstream that carries an ICC profile.
     let mut job = set.encode_job(ImageFormat::Pnm).expect("encode_job");
-    job.set_metadata_policy(
+    job.try_set_metadata_policy(
         Metadata::none().with_icc(vec![9, 8, 7, 6]),
         MetadataPolicy::PreserveExact,
-    );
+    )
+    .expect("metadata policy");
     let source = job
         .encode(rgb_pixels(&PIXELS, W, H))
         .expect("encode source");
@@ -253,7 +253,7 @@ fn transcode_roundtrips_pixels_and_carries_metadata() {
     assert_eq!((decoded.width(), decoded.height()), (W, H));
     let mut round = Vec::new();
     let px = decoded.pixels();
-    for y in 0..px.rows() {
+    for y in 0..px.height() {
         round.extend_from_slice(px.row(y));
     }
     assert_eq!(round, PIXELS);
@@ -276,8 +276,9 @@ impl EncoderConfig for Rgb8OnlyEncoder {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
+        SUPPORTED
     }
 
     fn job(self) -> Self::Job {
@@ -289,7 +290,7 @@ impl EncoderConfig for Rgb8OnlyEncoder {
 fn transcode_refuses_implicit_precision_loss() {
     let samples = [0u8; 24];
     let pixels =
-        PixelSlice::new(&samples, W, H, 12, PixelDescriptor::RGB16_SRGB).expect("16-bit pixels");
+        PixelView::new(&samples, W, H, 12, &zenpixels::formats::RGB16_SRGB).expect("16-bit pixels");
     let source = ReferenceEncoderConfig::new()
         .encode(pixels)
         .expect("encode 16-bit source");
@@ -306,20 +307,20 @@ fn transcode_refuses_implicit_precision_loss() {
             ColorEmitPolicy::Verbatim,
         ),
         Err(CodecSetError::TranscodeRequiresExplicitHandling(
-            TranscodeBarrier::PixelDescriptor
+            TranscodeBarrier::PixelFormat
         ))
     ));
 }
 
 #[test]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn checked_policy_admission_matches_generic_and_erased_jobs() {
     let metadata = Metadata::none().with_xmp(b"private note".as_slice());
     let strip_xmp = EncodePolicy::none().with_embed_xmp(false);
 
     let typed = ReferenceEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .expect("metadata policy")
         .try_with_policy(strip_xmp)
         .expect("reference admits XMP gate")
         .encode(rgb_pixels(&PIXELS, W, H))
@@ -329,7 +330,9 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
         .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
     let mut erased = set.encode_job(ImageFormat::Pnm).expect("erased job");
-    erased.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    erased
+        .try_set_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     erased.try_set_policy(strip_xmp).expect("erased XMP gate");
     let erased = erased
         .encode(rgb_pixels(&PIXELS, W, H))
@@ -352,7 +355,8 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
     let metadata = Metadata::none().with_xmp(b"private note".as_slice());
     let mut generic = ReferenceEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .expect("metadata policy")
         .try_with_policy(strip_xmp)
         .expect("initial policy");
     assert_eq!(
@@ -360,7 +364,9 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
         Err(UnsupportedOperation::EncodePolicy)
     );
     let mut dynamic = set.encode_job(ImageFormat::Pnm).expect("erased job");
-    dynamic.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    dynamic
+        .try_set_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .expect("metadata policy");
     dynamic.try_set_policy(strip_xmp).expect("initial policy");
     let error = dynamic
         .try_set_policy(mixed)
@@ -393,14 +399,18 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
     assert_eq!(
         ReferenceZcrDecoderConfig
             .job()
-            .try_with_policy(DecodePolicy::strict())
+            .try_with_policy(DecodePolicy::untrusted_minimal())
             .err(),
         Some(UnsupportedOperation::DecodePolicy)
     );
     let mut decode = set
         .decode_job(ImageFormat::Custom(&ZCR_FORMAT))
         .expect("decode job");
-    assert!(decode.try_set_policy(DecodePolicy::strict()).is_err());
+    assert!(
+        decode
+            .try_set_policy(DecodePolicy::untrusted_minimal())
+            .is_err()
+    );
     decode
         .try_set_policy(DecodePolicy::none())
         .expect("empty policy");
@@ -478,7 +488,7 @@ fn streaming_decoder_borrowing_the_set() {
     let mut rows_seen = 0;
     while let Some((y, strip)) = dec.next_batch().expect("batch") {
         assert_eq!(y, rows_seen);
-        rows_seen += strip.rows();
+        rows_seen += strip.height();
     }
     assert_eq!(rows_seen, H);
 }
@@ -491,13 +501,13 @@ fn missing_codecs_report_typed_errors() {
         Err(CodecSetError::NoEncoder(ImageFormat::Pnm)) => {}
         other => panic!("expected NoEncoder(Pnm), got {other:?}"),
     }
-    match set.decode_as(ImageFormat::Jpeg, b"\xFF\xD8\xFF", &[]) {
+    match set.decode_with_format(ImageFormat::Jpeg, b"\xFF\xD8\xFF", &[]) {
         Err(CodecSetError::NoDecoder(ImageFormat::Jpeg)) => {}
         other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
     }
 
     // A codec failure passes through with the codec's error in the chain.
-    match set.decode_as(ImageFormat::Pnm, b"not zcr bytes at all", &[]) {
+    match set.decode_with_format(ImageFormat::Pnm, b"not zcr bytes at all", &[]) {
         Err(CodecSetError::Codec(e)) => {
             let msg = format!("{e}");
             assert!(msg.contains("invalid"), "unexpected codec error: {msg}");
@@ -538,7 +548,7 @@ fn one_shot_trait_methods_work_directly() {
 #[test]
 fn estimate_dispatches_to_the_registered_codec() {
     let set = reference_set();
-    let image = ImageCharacteristics::new(W, H, PixelDescriptor::RGB8_SRGB);
+    let image = ImageCharacteristics::new(W, H, PixelFormat::RGB8_SRGB);
     let compute = ComputeEnvironment::conservative();
 
     // Registered format → forwards to the codec's estimator and succeeds
@@ -586,7 +596,7 @@ fn estimate_decode_of_probes_then_estimates() {
     let info = set.probe(encoded.data()).expect("probe");
     let descriptor = set
         .decoder_for(format)
-        .and_then(|d| d.supported_descriptors().first().copied())
+        .and_then(|d| d.supported_pixel_formats().first().cloned())
         .expect("native descriptor");
     let explicit = set
         .estimate_decode(
@@ -626,10 +636,243 @@ fn registered_custom_formats_survive_exact_allowlists_and_decode_pixels() {
         .unwrap();
     let detected = set.detect(encoded.data()).unwrap();
     assert!(candidates(Some(&[custom])).contains(&detected));
-    let decoded = set.decode_as(detected, encoded.data(), &[]).unwrap();
+    let decoded = set
+        .decode_with_format(detected, encoded.data(), &[])
+        .unwrap();
     let pixels = decoded.pixels();
-    let actual: Vec<_> = (0..pixels.rows())
+    let actual: Vec<_> = (0..pixels.height())
         .flat_map(|y| pixels.row(y).iter().copied())
         .collect();
     assert_eq!(actual, PIXELS);
+}
+
+#[test]
+fn named_ranked_send_encoder_retains_send_on_second_provider_and_unifies_role_queries() {
+    use std::sync::Arc;
+    use zencodec::encode::{EncodeCapabilities, Fidelity, FidelityTargetError};
+    use zencodec::{ImageDecodeRole, ImageEncodeRole, NamedFactory, RegistrationId};
+
+    #[derive(Clone)]
+    struct TaggedEncoder {
+        tag: &'static str,
+        inner: ReferenceEncoderConfig,
+    }
+    impl EncoderConfig for TaggedEncoder {
+        type Error = RefError;
+        type Job = RefEncodeJob;
+        fn format() -> ImageFormat {
+            ImageFormat::Pnm
+        }
+        fn supported_pixel_formats() -> &'static [PixelFormat] {
+            <ReferenceEncoderConfig as EncoderConfig>::supported_pixel_formats()
+        }
+        fn capabilities() -> &'static EncodeCapabilities {
+            <ReferenceEncoderConfig as EncoderConfig>::capabilities()
+        }
+        fn job(self) -> Self::Job {
+            self.inner.job()
+        }
+        fn try_with_fidelity(self, target: Fidelity) -> Result<Self, FidelityTargetError> {
+            Ok(Self {
+                tag: self.tag,
+                inner: self.inner.try_with_fidelity(target)?,
+            })
+        }
+    }
+
+    // 1. Raw `with_role::<ImageDecodeRole>` must populate legacy `can_decode`, `detect`,
+    //    and `decodable_formats` so there is no split-brain between named and legacy tables.
+    let raw_dec_entry = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.zcr.raw_role",
+        "1.0.0",
+        Arc::new(ReferenceZcrDecoderConfig),
+    )
+    .unwrap();
+    let custom = ImageFormat::Custom(&ZCR_FORMAT);
+    let raw_set = CodecSet::new()
+        .with_role::<ImageDecodeRole>([custom], raw_dec_entry)
+        .unwrap();
+    assert!(raw_set.can_decode(custom));
+    assert_eq!(
+        raw_set.decodable_formats().collect::<Vec<_>>(),
+        vec![custom]
+    );
+
+    // 2. Mixed anonymous + named local (1st named) + named Send (2nd named) for ImageFormat::Pnm:
+    //    - Legacy `encoder_for` / `encode` picks the 1st provider ("anon-first").
+    //    - Ranked `factories::<ImageEncodeRole>(&ImageFormat::Pnm)` returns named #1 (local,
+    //      refuses `send_job`) and named #2 (`Send`, constructs a real `Send` job that encodes!).
+    let set = CodecSet::new()
+        .with_encoder(TaggedEncoder {
+            tag: "anon-first",
+            inner: ReferenceEncoderConfig::new(),
+        })
+        .with_named_encoder(
+            RegistrationId::new("org.imazen.pnm.local_first").unwrap(),
+            "1.0.0",
+            TaggedEncoder {
+                tag: "named-local",
+                inner: ReferenceEncoderConfig::new(),
+            },
+        )
+        .unwrap()
+        .with_named_send_encoder(
+            RegistrationId::new("org.imazen.pnm.send_second").unwrap(),
+            "2.0.0",
+            TaggedEncoder {
+                tag: "named-send",
+                inner: ReferenceEncoderConfig::new(),
+            },
+        )
+        .unwrap();
+
+    // Legacy first-wins still picks the anonymous first registration ("anon-first").
+    let legacy_first = set
+        .encoder_for(ImageFormat::Pnm)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TaggedEncoder>()
+        .unwrap();
+    assert_eq!(legacy_first.tag, "anon-first");
+    assert_eq!(set.encoders_for(ImageFormat::Pnm).count(), 3);
+
+    // Ranked role table exposes named providers in order with per-provider Send capability!
+    let ranked: Vec<_> = set
+        .factories::<ImageEncodeRole>(&ImageFormat::Pnm)
+        .collect();
+    assert_eq!(ranked.len(), 2);
+    assert_eq!(ranked[0].id.as_str(), "org.imazen.pnm.local_first");
+    assert_eq!(
+        ranked[0]
+            .factory
+            .config()
+            .as_any()
+            .downcast_ref::<TaggedEncoder>()
+            .unwrap()
+            .tag,
+        "named-local"
+    );
+    assert!(!ranked[0].factory.supports_send_job());
+    assert!(matches!(
+        ranked[0].factory.send_job(None),
+        Err(CodecSetError::EncoderJobNotSend(ImageFormat::Pnm))
+    ));
+
+    assert_eq!(ranked[1].id.as_str(), "org.imazen.pnm.send_second");
+    assert_eq!(
+        ranked[1]
+            .factory
+            .config()
+            .as_any()
+            .downcast_ref::<TaggedEncoder>()
+            .unwrap()
+            .tag,
+        "named-send"
+    );
+    assert!(ranked[1].factory.supports_send_job());
+    let send_job = ranked[1].factory.send_job(None).unwrap();
+    // Prove the returned job is actually Send by moving it to another thread and encoding!
+    let encoded = std::thread::spawn(move || send_job.encode(rgb_pixels(&PIXELS, W, H)))
+        .join()
+        .unwrap()
+        .unwrap();
+    assert_eq!(encoded.format(), ImageFormat::Pnm);
+    assert!(!encoded.data().is_empty());
+    assert!(raw_set.detect(encoded.data()).is_some());
+}
+
+#[test]
+fn raw_image_role_validates_keys_and_enforces_admitted_format_subset_uniformly() {
+    use std::sync::Arc;
+    use zencodec::decode::DecodeCapabilities;
+    use zencodec::encode::DynEncoderConfig;
+    use zencodec::{
+        ImageDecodeRole, ImageEncodeFactory, ImageEncodeRole, NamedFactory, RegistrationError,
+    };
+    use zencodec_testkit::reference::RefDecodeJob;
+
+    struct LocalEnc(ReferenceEncoderConfig);
+    impl ImageEncodeFactory for LocalEnc {
+        fn config(&self) -> &dyn DynEncoderConfig {
+            &self.0
+        }
+    }
+
+    #[derive(Clone)]
+    struct MultiFormatDecoder;
+    impl DecoderConfig for MultiFormatDecoder {
+        type Error = RefError;
+        type Job<'a> = RefDecodeJob;
+        fn formats() -> &'static [ImageFormat] {
+            static FORMATS: [ImageFormat; 2] = [ImageFormat::Pnm, ImageFormat::Custom(&ZCR_FORMAT)];
+            &FORMATS
+        }
+        fn supported_pixel_formats() -> &'static [PixelFormat] {
+            <ReferenceZcrDecoderConfig as DecoderConfig>::supported_pixel_formats()
+        }
+        fn capabilities() -> &'static DecodeCapabilities {
+            <ReferenceZcrDecoderConfig as DecoderConfig>::capabilities()
+        }
+        fn job<'a>(self) -> Self::Job<'a> {
+            ReferenceZcrDecoderConfig.job()
+        }
+    }
+
+    // 1. Registering a decoder or encoder under an unsupported format key MUST be rejected.
+    let bad_dec = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.bad.dec",
+        "1.0.0",
+        Arc::new(ReferenceDecoderConfig),
+    )
+    .unwrap();
+    assert!(matches!(
+        CodecSet::new().with_role::<ImageDecodeRole>([ImageFormat::Jpeg], bad_dec),
+        Err(RegistrationError::UnsupportedKey)
+    ));
+
+    let bad_enc = NamedFactory::<ImageEncodeRole>::try_new(
+        "org.imazen.bad.enc",
+        "1.0.0",
+        Arc::new(LocalEnc(ReferenceEncoderConfig::new())),
+    )
+    .unwrap();
+    assert!(matches!(
+        CodecSet::new().with_role::<ImageEncodeRole>([ImageFormat::Png], bad_enc),
+        Err(RegistrationError::UnsupportedKey)
+    ));
+
+    // 2. Registering a multi-format decoder (`[Pnm, ZCR]`) under the subset `[Pnm]` MUST
+    //    expose ONLY `Pnm` through BOTH ranked `factories::<ImageDecodeRole>` AND legacy
+    //    `can_decode`, `detect`, `decodable_formats`, and `decoders_for`.
+    let custom = ImageFormat::Custom(&ZCR_FORMAT);
+    let subset_entry = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.multi.pnm_only",
+        "1.0.0",
+        Arc::new(MultiFormatDecoder),
+    )
+    .unwrap();
+    let set = CodecSet::new()
+        .with_role::<ImageDecodeRole>([ImageFormat::Pnm], subset_entry)
+        .unwrap();
+
+    assert!(set.can_decode(ImageFormat::Pnm));
+    assert!(!set.can_decode(custom));
+    assert_eq!(
+        set.decodable_formats().collect::<Vec<_>>(),
+        vec![ImageFormat::Pnm]
+    );
+    assert_eq!(set.decoders_for(ImageFormat::Pnm).count(), 1);
+    assert_eq!(set.decoders_for(custom).count(), 0);
+    assert_eq!(
+        set.factories::<ImageDecodeRole>(&ImageFormat::Pnm).count(),
+        1
+    );
+    assert_eq!(set.factories::<ImageDecodeRole>(&custom).count(), 0);
+
+    // PNM magic matches, while ZCR1 magic is NOT advertised by legacy detect!
+    assert_eq!(set.detect(b"P6\n2 2\n255\n"), Some(ImageFormat::Pnm));
+    let zcr_bytes = ReferenceEncoderConfig::new()
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .unwrap();
+    assert_eq!(set.detect(zcr_bytes.data()), None);
 }

@@ -14,6 +14,8 @@ use core::fmt;
 use zencodec::time::{FrameDuration, TimeBase};
 use zenpixels::Cicp;
 
+use crate::timeline::TrackTiming;
+
 /// What a track carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -114,14 +116,14 @@ impl VideoTrackInfo {
 /// Audio channels: a count, and the layout when the container gives one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ChannelLayout {
+pub struct ChannelOrder {
     /// Number of channels.
     pub count: u16,
     /// A channel mask (WAVE / ITU order) when the container gives one.
     pub mask: Option<u64>,
 }
 
-impl ChannelLayout {
+impl ChannelOrder {
     /// `count` channels with no declared layout.
     pub const fn new(count: u16) -> Self {
         Self { count, mask: None }
@@ -141,12 +143,12 @@ pub struct AudioTrackInfo {
     /// Samples per second per channel.
     pub sample_rate: u32,
     /// The channels.
-    pub channels: ChannelLayout,
+    pub channels: ChannelOrder,
 }
 
 impl AudioTrackInfo {
     /// A track at `sample_rate` with `channels`.
-    pub const fn new(sample_rate: u32, channels: ChannelLayout) -> Self {
+    pub const fn new(sample_rate: u32, channels: ChannelOrder) -> Self {
         Self {
             sample_rate,
             channels,
@@ -176,6 +178,7 @@ pub struct TrackInfo {
     codec_delay: Option<FrameDuration>,
     seek_preroll: Option<FrameDuration>,
     edit_delay_ticks: Option<i64>,
+    timing: Arc<TrackTiming>,
     declared_packets: Option<u64>,
     declared_duration_ticks: Option<u64>,
 }
@@ -222,6 +225,7 @@ impl TrackInfo {
             codec_delay: None,
             seek_preroll: None,
             edit_delay_ticks: None,
+            timing: Arc::new(TrackTiming::empty()),
             declared_packets: None,
             declared_duration_ticks: None,
         }
@@ -318,6 +322,11 @@ impl TrackInfo {
         self.edit_delay_ticks
     }
 
+    /// Complete carrier timing program (delay, seek pre-roll, and edit segments).
+    pub fn timing(&self) -> &Arc<TrackTiming> {
+        &self.timing
+    }
+
     /// How many packets the container says the track has.
     pub fn declared_packets(&self) -> Option<u64> {
         self.declared_packets
@@ -345,18 +354,39 @@ impl TrackInfoBuilder {
     /// Decoder delay.
     pub fn with_codec_delay(mut self, d: FrameDuration) -> Self {
         self.0.codec_delay = Some(d);
+        Arc::make_mut(&mut self.0.timing).codec_delay = Some(d);
         self
     }
 
     /// Seek pre-roll.
     pub fn with_seek_preroll(mut self, d: FrameDuration) -> Self {
         self.0.seek_preroll = Some(d);
+        Arc::make_mut(&mut self.0.timing).seek_preroll = Some(d);
         self
     }
 
     /// Edit-list offset in track ticks.
+    ///
+    /// Also records legacy scalar edit evidence on [`TrackTiming::legacy_edit_delay_ticks`]
+    /// so downstream consumers never mistake a scalar-only track for an unedited track.
     pub fn with_edit_delay_ticks(mut self, ticks: i64) -> Self {
         self.0.edit_delay_ticks = Some(ticks);
+        Arc::make_mut(&mut self.0.timing).legacy_edit_delay_ticks = Some(ticks);
+        self
+    }
+
+    /// Attach a complete [`TrackTiming`] program (delay, pre-roll, and edit segments).
+    ///
+    /// Synchronizes legacy `codec_delay`, `seek_preroll`, and `edit_delay_ticks` getters
+    /// with `timing` symmetrically regardless of builder call order.
+    pub fn with_timing(mut self, mut timing: TrackTiming) -> Self {
+        self.0.codec_delay = timing.codec_delay;
+        self.0.seek_preroll = timing.seek_preroll;
+        if timing.legacy_edit_delay_ticks.is_none() {
+            timing.legacy_edit_delay_ticks = self.0.edit_delay_ticks;
+        }
+        self.0.edit_delay_ticks = timing.legacy_edit_delay_ticks;
+        self.0.timing = Arc::new(timing);
         self
     }
 

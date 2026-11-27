@@ -8,7 +8,7 @@ use std::{
 };
 use zencodec::enough::Stop as _;
 use zencodec::{
-    At, Cicp, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
+    At, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
     encode::{
         BoxedError, DynEncoderConfig, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
         EncodePlanError, Encoder, EncoderConfig, OutputTiming,
@@ -17,7 +17,7 @@ use zencodec::{
     storage::StorageBudget,
 };
 use zencodec_io::row_encode::{self, Description, Options, Source, Stage};
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ColorSpace, PixelFormat, PixelView, PixelViewMut};
 
 type Events = Arc<Mutex<Vec<&'static str>>>;
 fn event(events: &Events, name: &'static str) {
@@ -45,15 +45,20 @@ impl EncodeJob for Job {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
-    fn plan_encode(&self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, BoxedError> {
+    fn plan_encode(&self, declaration: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         event(&self.events, "plan");
-        assert_eq!(
-            declaration.color,
-            Some(&ColorContext::from_cicp(Cicp::DISPLAY_P3))
-        );
+        if declaration.pixel_format.layout.order.is_rgb_family() {
+            assert!(matches!(
+                declaration.pixel_format.color,
+                ColorSpace::Rgb {
+                    primaries: zenpixels::Primaries::DisplayP3,
+                    ..
+                }
+            ));
+        }
         Ok(self.plan.clone())
     }
     fn encoder(self) -> Result<Enc, Self::Error> {
@@ -81,8 +86,9 @@ impl EncoderConfig for Config {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
+        SUPPORTED
     }
     fn job(self) -> Job {
         self.0
@@ -126,30 +132,35 @@ impl Encoder for Enc {
     fn reject(op: UnsupportedOperation) -> Self::Error {
         io::Error::other(op)
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         panic!("no fallback")
     }
     fn begin_output(
         &mut self,
         _: u32,
         _: u32,
-        _: PixelDescriptor,
+        _: PixelFormat,
         _: zencodec::output_patch::OutputAccess,
     ) -> Result<OutputTiming, Self::Error> {
         panic!("must declare color before headers")
     }
     fn begin_declared(
         &mut self,
-        declaration: &EncodeDeclaration<'_>,
+        declaration: &EncodeDeclaration,
     ) -> Result<EncodePlan, Self::Error> {
         self.pulse
             .check()
             .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "start");
-        assert_eq!(
-            declaration.color,
-            Some(&ColorContext::from_cicp(Cicp::DISPLAY_P3))
-        );
+        if declaration.pixel_format.layout.order.is_rgb_family() {
+            assert!(matches!(
+                declaration.pixel_format.color,
+                ColorSpace::Rgb {
+                    primaries: zenpixels::Primaries::DisplayP3,
+                    ..
+                }
+            ));
+        }
         if self.fail_start {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -168,16 +179,21 @@ impl Encoder for Enc {
     fn consume_output(&mut self, n: usize) {
         self.pending.drain(..n);
     }
-    fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Self::Error> {
+    fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Self::Error> {
         self.pulse
             .check()
             .map_err(|reason| io::Error::other(zencodec::CodecError::new(None, reason.into())))?;
         event(&self.events, "push");
-        assert_eq!(
-            pixels.color_context().map(Arc::as_ref),
-            Some(&ColorContext::from_cicp(Cicp::DISPLAY_P3))
-        );
-        for row in 0..pixels.rows() {
+        if pixels.format().layout.order.is_rgb_family() {
+            assert!(matches!(
+                pixels.format().color,
+                ColorSpace::Rgb {
+                    primaries: zenpixels::Primaries::DisplayP3,
+                    ..
+                }
+            ));
+        }
+        for row in 0..pixels.height() {
             if let Some(pointers) = &self.row_pointers {
                 pointers
                     .lock()
@@ -226,14 +242,14 @@ impl Source for Rows {
     fn read_rows(
         &mut self,
         _: u32,
-        mut pixels: PixelSliceMut<'_>,
+        mut pixels: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         if self.require_absent_pulse {
             assert!(pulse.is_none(), "source keeps the absent per-call control");
         }
         event(&self.events, "read");
-        for row in 0..pixels.rows() {
+        for row in 0..pixels.height() {
             pixels.row_mut(row).fill(7);
         }
         Ok(())
@@ -275,8 +291,7 @@ impl Setup {
             events: Arc::default(),
             bytes: Arc::default(),
             description: Arc::new(Mutex::new(
-                Description::new(2, 2, PixelDescriptor::RGB8_SRGB)
-                    .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3))),
+                Description::new(2, 2, PixelFormat::RGB8_SRGB).with_color(ColorSpace::DISPLAY_P3),
             )),
         }
     }
@@ -442,25 +457,14 @@ fn policy_precedes_construction_and_finish_precedes_destination_waits() {
 }
 
 #[test]
-#[allow(deprecated)] // Preserve coverage of legacy and bound requirement conjunction.
 fn strict_unknown_workspace_refuses_before_planning_or_any_effect() {
     use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
     for erased in [false, true] {
-        for (legacy, bound) in [
-            (None, Some(0)),
-            (Some(0), None),
-            (Some(u64::MAX), Some(0)),
-            (Some(0), Some(u64::MAX)),
-        ] {
+        for limit in [0, u64::MAX] {
             let s = Setup::new();
             let storage = StorageBudget::new(4096, 16);
-            let mut options = Options::new(storage.clone(), 4096);
-            if let Some(limit) = legacy {
-                options = options.with_policy_set(PolicySet::new().with_workspace_limit(limit));
-            }
-            let requirements = bound.map_or(PolicySet::new(), |limit| {
-                PolicySet::new().with_workspace_limit(limit)
-            });
+            let options = Options::new(storage.clone(), 4096);
+            let requirements = PolicySet::new().with_workspace_limit(limit);
             let error = run_job(
                 erased,
                 s.job(),
@@ -632,7 +636,7 @@ fn erased_destination_preserves_negotiated_patches_and_forward_refusal() {
 // retain their configured controls; the row driver gets current pixel color.
 fn registry_job_to_writer<W: io::Write>(
     codecs: &zencodec::CodecSet,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     writer: W,
     storage: StorageBudget,
     pulse: &dyn zencodec::Pulse,
@@ -653,9 +657,16 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
     let s = Setup::new();
     let codecs = zencodec::CodecSet::new().with_encoder(Config(s.job()));
     let bytes = [7; 12];
-    let pixels = PixelSlice::new(&bytes, 2, 2, 6, PixelDescriptor::RGB8_SRGB)
-        .unwrap()
-        .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3)));
+    let pixels = PixelView::new_with_format_cow(
+        &bytes,
+        2,
+        2,
+        6,
+        zenpixels::FormatCow::from_owned(
+            PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+        ),
+    )
+    .unwrap();
     let mut output = Vec::new();
     let done = registry_job_to_writer(
         &codecs,
@@ -686,9 +697,16 @@ fn retained_raster_rows_reach_native_push_without_copying_or_padding_changes() {
         for batch in [1, 2] {
             let setup = Setup::new();
             let bytes = [1, 2, 3, 4, 5, 6, 99, 98, 97, 7, 8, 9, 10, 11, 12];
-            let pixels = PixelSlice::new(&bytes, 2, 2, 9, PixelDescriptor::RGB8_SRGB)
-                .unwrap()
-                .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3)));
+            let pixels = PixelView::new_with_format_cow(
+                &bytes,
+                2,
+                2,
+                9,
+                zenpixels::FormatCow::from_owned(
+                    PixelFormat::RGB8_SRGB.with_primaries(zenpixels::Primaries::DisplayP3),
+                ),
+            )
+            .unwrap();
             let expected = (0..2)
                 .map(|row| pixels.row(row).as_ptr() as usize)
                 .collect::<Vec<_>>();

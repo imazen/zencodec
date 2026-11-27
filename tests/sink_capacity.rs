@@ -1,6 +1,6 @@
 use core::num::NonZeroU32;
-use zencodec::decode::{BatchMeta, DecodeRowSink, SinkError};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zencodec::decode::{BatchMeta, DecodeRowSink, RowStrip, SinkError, StripDimensions};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 struct Bounded {
     bytes: Vec<u8>,
@@ -24,12 +24,10 @@ impl DecodeRowSink for Bounded {
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        h: u32,
-        w: u32,
-        d: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        self.provide_pass_buffer(BatchMeta::final_rows(y), h, w, d)
+        strip: RowStrip,
+        d: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        self.provide_pass_buffer(BatchMeta::final_rows(strip.y), strip.dimensions(), d)
     }
     fn accepts_provisional(&self) -> bool {
         true
@@ -37,16 +35,25 @@ impl DecodeRowSink for Bounded {
     fn provide_pass_buffer(
         &mut self,
         meta: BatchMeta,
-        h: u32,
-        w: u32,
-        d: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        assert!(h <= self.cap.get(), "copy exceeded admitted row capacity");
+        size: StripDimensions,
+        d: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        assert!(
+            size.height <= self.cap.get(),
+            "copy exceeded admitted row capacity"
+        );
         if self.fail_at.is_some_and(|y| meta.y >= y) {
             return Err("deliberate sink failure".into());
         }
-        self.calls.push((meta, h));
-        PixelSliceMut::new(&mut self.bytes[meta.y as usize * 12..], w, h, 12, d).map_err(Into::into)
+        self.calls.push((meta, size.height));
+        PixelViewMut::new_with_format_cow(
+            &mut self.bytes[meta.y as usize * 12..],
+            size.width,
+            size.height,
+            12,
+            zenpixels::FormatCow::from_owned(d),
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -58,7 +65,7 @@ fn native_batches_split_without_losing_stride_pass_or_row_coordinates() {
             raw[y * 15 + x] = (y * 9 + x) as u8;
         }
     }
-    let pixels = PixelSlice::new(&raw, 3, 7, 15, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&raw, 3, 7, 15, &zenpixels::formats::RGB8_SRGB).unwrap();
     for cap in [1, 2, 3, 7, 9, u32::MAX] {
         for is_final in [false, true] {
             let mut sink = Bounded::new(cap);
@@ -90,7 +97,7 @@ fn native_batches_split_without_losing_stride_pass_or_row_coordinates() {
 #[test]
 fn row_overflow_fails_before_effects_and_sink_failure_stops_remaining_strips() {
     let raw = [0; 7 * 9];
-    let pixels = PixelSlice::new(&raw, 3, 7, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&raw, 3, 7, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
     let mut sink = Bounded::new(2);
     assert!(
         zencodec::helpers::copy_rows_to_sink(

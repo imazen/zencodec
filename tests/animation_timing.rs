@@ -1,6 +1,6 @@
 use zencodec::animation::{FrameDuration, TimingError};
 use zencodec::{AnimationFrame, OwnedAnimationFrame};
-use zenpixels::{PixelBuffer, PixelDescriptor};
+use zenpixels::{PixelBuf, PixelFormat};
 
 #[test]
 fn rational_source_durations_are_canonical_and_never_clamped() {
@@ -43,29 +43,25 @@ fn destination_clocks_are_exact_or_fail_without_wrapping() {
 }
 
 #[test]
-#[allow(deprecated)] // This test keeps the published legacy getter's conversion contract.
 fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
     let pixels =
-        PixelBuffer::from_vec(vec![1, 2, 3, 4, 5, 6], 2, 1, PixelDescriptor::RGB8_SRGB).unwrap();
-    for (duration, legacy) in [
-        (FrameDuration::new(1001, 30000).unwrap(), 33),
-        (FrameDuration::new(1, 65535).unwrap(), 0),
-        (FrameDuration::new(0, 100).unwrap(), 0),
-        (FrameDuration::new(u64::MAX, 1).unwrap(), u32::MAX),
+        PixelBuf::from_bytes(vec![1, 2, 3, 4, 5, 6], 2, 1, PixelFormat::RGB8_SRGB).unwrap();
+    for duration in [
+        FrameDuration::new(1001, 30000).unwrap(),
+        FrameDuration::new(1, 65535).unwrap(),
+        FrameDuration::new(0, 100).unwrap(),
+        FrameDuration::new(u64::MAX, 1).unwrap(),
     ] {
-        let borrowed = AnimationFrame::with_duration(pixels.as_slice(), duration, 7);
-        let owned = borrowed.to_owned_frame();
+        let borrowed = AnimationFrame::with_duration(pixels.as_view(), duration, 7);
+        let owned = borrowed.try_to_owned_frame().unwrap();
         assert_eq!(owned.duration(), duration);
-        assert_eq!(owned.duration_ms(), legacy);
         assert_eq!(owned.frame_index(), 7);
         let borrowed_again = owned.as_animation_frame();
         assert_eq!(borrowed_again.duration(), duration);
-        assert_eq!(borrowed_again.duration_ms(), legacy);
         assert_eq!(borrowed_again.pixels().row(0), &[1, 2, 3, 4, 5, 6]);
     }
     let legacy = OwnedAnimationFrame::new(pixels, u32::MAX, 0);
     assert_eq!(legacy.duration(), FrameDuration::from_millis(u32::MAX));
-    assert_eq!(legacy.duration_ms(), u32::MAX);
 }
 
 #[test]
@@ -111,7 +107,7 @@ fn zero_and_rejection_do_not_corrupt_rounding_state() {
     let mut quantizer = TimingQuantizer::new(100, 65535).unwrap();
     let fractional = FrameDuration::new(1, 30).unwrap();
     quantizer.quantize(fractional).unwrap();
-    let mut control = quantizer;
+    let mut control = quantizer.clone();
     assert_eq!(
         quantizer.quantize(FrameDuration::new(u64::MAX, 1).unwrap()),
         Err(TimingError::Overflow)
@@ -140,7 +136,7 @@ fn integer_ticks_do_not_expand_a_large_fractional_phase() {
             .unwrap(),
         FrameDuration::from_millis(10)
     );
-    let mut control = quantizer;
+    let mut control = quantizer.clone();
     assert_eq!(
         quantizer.quantize(FrameDuration::new(1, 4294967189).unwrap()),
         Err(TimingError::Overflow)

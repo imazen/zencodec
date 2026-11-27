@@ -4,6 +4,31 @@
 //! from source XMP, and filter metadata inside encoded auxiliary images too.
 use zencodec::{GainMapParams, Metadata, MetadataPolicy};
 
+/// A rendering-critical signal that a metadata policy attempted to remove.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RenderSignal {
+    /// EXIF/container pixel orientation.
+    Orientation,
+    /// Coding-independent code points (primaries, transfer, matrix, range).
+    Cicp,
+    /// HDR luminance metadata (content light level, mastering display, diffuse white).
+    HdrLuminance,
+    /// Non-sRGB ICC color profile.
+    IccProfile,
+}
+
+impl core::fmt::Display for RenderSignal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Orientation => "orientation",
+            Self::Cicp => "CICP",
+            Self::HdrLuminance => "HDR luminance",
+            Self::IccProfile => "ICC profile",
+        })
+    }
+}
+
 /// Retention would change rendering, or the gain-map parameters are invalid.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -11,14 +36,14 @@ pub enum Error {
     /// Invalid typed parameters; preserve the diagnostic from the gain-map parser.
     GainMap(zencodec::gainmap::GainMapParseError),
     /// A rendering field was removed without an accompanying pixel conversion.
-    Removed(&'static str),
+    RemovedSignal(RenderSignal),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::GainMap(e) => write!(f, "invalid gain map: {e}"),
-            Self::Removed(field) => {
-                write!(f, "retention would remove display information: {field}")
+            Self::RemovedSignal(signal) => {
+                write!(f, "retention would remove display information: {signal}")
             }
         }
     }
@@ -46,16 +71,16 @@ pub fn filter_for_gain_map(
     params.validate().map_err(Error::GainMap)?;
     let out = crate::metadata::filter(meta, policy);
     if out.orientation != meta.orientation {
-        return Err(Error::Removed("orientation"));
+        return Err(Error::RemovedSignal(RenderSignal::Orientation));
     }
     if out.cicp != meta.cicp {
-        return Err(Error::Removed("CICP"));
+        return Err(Error::RemovedSignal(RenderSignal::Cicp));
     }
     if out.content_light_level != meta.content_light_level
         || out.mastering_display != meta.mastering_display
         || out.diffuse_white != meta.diffuse_white
     {
-        return Err(Error::Removed("HDR luminance"));
+        return Err(Error::RemovedSignal(RenderSignal::HdrLuminance));
     }
     if meta.icc_profile.is_some()
         && out.icc_profile.is_none()
@@ -64,7 +89,7 @@ pub fn filter_for_gain_map(
             .as_ref()
             .is_some_and(|icc| zenpixels::icc::IccIdentification::is_common_srgb(icc))
     {
-        return Err(Error::Removed("ICC profile"));
+        return Err(Error::RemovedSignal(RenderSignal::IccProfile));
     }
     Ok(out)
 }

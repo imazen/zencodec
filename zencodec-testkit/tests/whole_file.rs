@@ -34,8 +34,8 @@ fn one_shot(data: &[u8]) -> Vec<u8> {
         .decode()
         .unwrap();
     let s = out.pixels();
-    let row = s.width() as usize * s.descriptor().bytes_per_pixel();
-    (0..s.rows())
+    let row = s.width() as usize * s.format().layout.bytes_per_pixel();
+    (0..s.height())
         .flat_map(|y| s.row(y)[..row].to_vec())
         .collect()
 }

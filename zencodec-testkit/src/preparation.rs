@@ -40,14 +40,20 @@ fn typed<D: Decode>(mut decoder: D, baseline: &DecodeOutput) -> Conformance {
 
 fn verify(
     path: &str,
-    facts: Option<PixelDescriptor>,
+    facts: Option<PixelFormat>,
     output: DecodeOutput,
     baseline: &DecodeOutput,
 ) -> Conformance {
-    if facts.is_some_and(|descriptor| descriptor != output.pixels().descriptor()) {
+    if facts.is_some_and(|descriptor| &descriptor != output.buffer().format()) {
         return Err(fail(
             CHECK,
             format!("{path} preparation descriptor contradicts actual output"),
+        ));
+    }
+    if output.pixels().facts() != baseline.pixels().facts() {
+        return Err(fail(
+            CHECK,
+            format!("{path} preparation changed sample facts"),
         ));
     }
     if grab(output.pixels()) != grab(baseline.pixels()) {
@@ -59,10 +65,9 @@ fn verify(
     if output.metadata() != baseline.metadata() {
         return Err(fail(CHECK, format!("{path} preparation changed metadata")));
     }
-    if !same_ctx(
-        output.pixels().color_context(),
-        baseline.pixels().color_context(),
-    ) {
+    if output.buffer().origin() != baseline.buffer().origin()
+        || output.buffer().hdr() != baseline.buffer().hdr()
+    {
         return Err(fail(
             CHECK,
             format!("{path} preparation changed color context"),
@@ -75,7 +80,7 @@ fn verify(
 mod tests {
     use super::*;
     use zencodec::ImageInfo;
-    use zenpixels::PixelBuffer;
+    use zenpixels::PixelBuf;
 
     struct Mutant {
         mode: u8,
@@ -83,12 +88,12 @@ mod tests {
     }
     impl Decode for Mutant {
         type Error = core::fmt::Error;
-        fn prepare_output(&mut self) -> Result<Option<PixelDescriptor>, Self::Error> {
+        fn prepare_output(&mut self) -> Result<Option<PixelFormat>, Self::Error> {
             self.prepared = true;
             match self.mode {
                 0 | 3 | 4 | 6 => Ok(None),
-                1 => Ok(Some(PixelDescriptor::RGB8_SRGB)),
-                2 => Ok(Some(PixelDescriptor::RGBA8_SRGB)),
+                1 => Ok(Some(PixelFormat::RGB8_SRGB)),
+                2 => Ok(Some(PixelFormat::RGBA8_SRGB)),
                 _ => Err(core::fmt::Error),
             }
         }
@@ -98,11 +103,11 @@ mod tests {
             } else {
                 vec![1, 2, 3]
             };
-            let mut pixels =
-                PixelBuffer::from_vec(bytes, 1, 1, PixelDescriptor::RGB8_SRGB).unwrap();
+            let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, PixelFormat::RGB8_SRGB).unwrap();
             if self.prepared && self.mode == 6 {
-                pixels =
-                    pixels.with_color_context(Arc::new(ColorContext::from_cicp(Cicp::BT2100_PQ)));
+                pixels = pixels.with_origin(zenpixels::ColorOrigin::from_cicp(
+                    Cicp::BT2100_PQ_YCBCR_FULL,
+                ));
             }
             let mut info = ImageInfo::new(1, 1, ImageFormat::Pnm);
             if self.prepared && self.mode == 4 {

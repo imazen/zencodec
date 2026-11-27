@@ -6,7 +6,7 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, UnsupportedOperation};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 use super::BoxedError;
 use super::dyn_encoding::{
@@ -42,10 +42,9 @@ pub trait EncoderConfig: Clone + Send + Sync {
 
     /// Pixel formats this encoder accepts natively (without internal conversion).
     ///
-    /// Every descriptor in this list is a guarantee: the corresponding
-    /// per-format encode trait is implemented and will work without format
-    /// conversion. Must not be empty.
-    fn supported_descriptors() -> &'static [PixelDescriptor];
+    /// Every pixel format in this list is a guarantee: the encoder accepts this
+    /// format without implicit format conversion. Must not be empty.
+    fn supported_pixel_formats() -> &'static [PixelFormat];
 
     /// Encoder capabilities (metadata support, cancellation, etc.).
     ///
@@ -289,7 +288,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     ///     .with_generic_quality(85.0)
     ///     .encode(pixels)?;
     /// ```
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>
     where
         Self: Sized,
         <Self::Job as EncodeJob>::Enc: Encoder<Error = Self::Error>,
@@ -323,33 +322,12 @@ pub trait EncodeJob: Sized {
     /// thread boundaries (e.g., in pipeline `Sink` implementations).
     type AnimationFrameEnc: Sized + Send + 'static;
 
-    /// Legacy cancellation-only adapter. Prefer the complete operation pulse.
-    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    fn with_stop(self, stop: crate::StopToken) -> Self {
-        self.with_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(stop)))
-    }
-
     /// Retain progress, cancellation, phase planning and sharing for this job.
     /// Codecs must not erase this to a cancellation-only token.
     fn with_pulse(self, pulse: how_far::SharedPulse) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
-
-    /// Set encode security policy (controls metadata embedding, etc.).
-    ///
-    /// # Note
-    ///
-    /// The default implementation is a no-op. This published setter is
-    /// best-effort; static capability flags do not confirm policy enforcement.
-    /// Use [`try_set_policy`](Self::try_set_policy) or
-    /// [`try_with_policy`](Self::try_with_policy) for a required policy.
-    #[deprecated(
-        note = "may silently ignore policy; use try_with_policy or a checked operation request"
-    )]
-    fn with_policy(self, _policy: crate::EncodePolicy) -> Self {
-        self
-    }
 
     /// Apply every specified policy field, or reject without changing this job.
     ///
@@ -463,42 +441,15 @@ pub trait EncodeJob: Sized {
         Ok(self)
     }
 
-    /// Filter metadata by an explicit retention policy, then configure embedding.
-    /// This setter is best-effort, not a checked output-retention guarantee.
-    /// Metadata retention is a privacy decision, so the policy is
-    /// required: [`MetadataPolicy::Web`](crate::MetadataPolicy::Web) is the
-    /// privacy-safe choice (strips GPS/camera/timestamps/thumbnail/XMP, keeps
-    /// orientation + rights + color signaling);
-    /// [`PreserveExact`](crate::MetadataPolicy::PreserveExact) keeps fields in the
-    /// filtered record; unsupported codec carriers can still be omitted.
+    /// Attach raw, unfiltered metadata (ICC, EXIF, XMP) for best-effort
+    /// embedding without policy checks.
     ///
-    /// A *provided* method (no codec change): it filters via
-    /// [`Metadata::filtered`](crate::Metadata::filtered) — which also reconciles
-    /// the embedded EXIF orientation tag — then hands the result to the codec's
-    /// [`with_metadata`](Self::with_metadata). The codec embeds what its format
-    /// supports and skips the rest.
-    #[deprecated(
-        note = "best-effort retention may omit supplied fields; use try_with_metadata_policy or try_set_metadata_policy"
-    )]
-    #[must_use]
-    #[allow(deprecated)] // Published provided method retains its no-zenmeta behavior.
-    fn with_metadata_policy(self, meta: Metadata, policy: crate::MetadataPolicy) -> Self {
-        #[allow(deprecated)]
-        self.with_metadata(meta.filtered(&policy))
-    }
-
-    /// Set metadata (ICC, EXIF, XMP) to embed in the output, **without choosing a
-    /// retention policy**. Codecs implement this (store the bytes); callers should
-    /// prefer [`try_with_metadata_policy`](Self::try_with_metadata_policy) so the
-    /// privacy/retention decision is explicit.
-    ///
-    /// Takes ownership — callers that need to reuse the metadata should `.clone()`
-    /// first (the `Arc<[u8]>` fields make cloning a cheap ref-count bump). The
-    /// codec embeds what the format supports and silently skips the rest.
-    #[deprecated(note = "embeds metadata without an explicit retention policy; use \
-                try_with_metadata_policy(meta, policy) — e.g. MetadataPolicy::Web \
-                (privacy-safe) or MetadataPolicy::PreserveExact")]
-    fn with_metadata(self, meta: Metadata) -> Self;
+    /// **Prefer [`try_with_metadata_policy`](Self::try_with_metadata_policy)**
+    /// whenever policy-checked retention or PII stripping matters. This raw
+    /// primitive embeds only the carriers the format supports and silently
+    /// skips unsupported ones; callers that need to reuse `meta` should
+    /// `.clone()` first (`Arc<[u8]>` makes cloning cheap).
+    fn with_unfiltered_metadata(self, meta: Metadata) -> Self;
 
     /// Set animation canvas dimensions.
     ///
@@ -658,7 +609,7 @@ pub trait EncodeJob: Sized {
     /// the box; never stringify them. Successful planning allocates no error box.
     fn plan_encode(
         &self,
-        _declaration: &crate::encode::EncodeDeclaration<'_>,
+        _declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, super::BoxedError> {
         Err(alloc::boxed::Box::new(
             crate::UnsupportedOperation::EncodePlanning,
@@ -677,7 +628,7 @@ pub trait EncodeJob: Sized {
     /// For streaming row-push or animation, take the encoder yourself with
     /// [`encoder()`](Self::encoder) /
     /// [`animation_frame_encoder()`](Self::animation_frame_encoder).
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>
     where
         Self::Enc: Encoder<Error = Self::Error>,
     {
@@ -717,7 +668,7 @@ pub trait EncodeJob: Sized {
 
     /// Create a type-erased one-shot encoder.
     ///
-    /// Returns a boxed [`DynEncoder`] that accepts any [`PixelSlice`](zenpixels::PixelSlice)
+    /// Returns a boxed [`DynEncoder`] that accepts any [`PixelView`](zenpixels::PixelView)
     /// (type-erased) and produces encoded output. All configuration —
     /// both universal ([`EncoderConfig::with_generic_quality`]) and
     /// codec-specific (methods on the concrete config type) — is

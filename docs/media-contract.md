@@ -150,11 +150,9 @@ Immutable interpretation, timing, frame owners and borrowed plane mappings live
 in `zencodec::frame`; the existing `zencodec_media::frame` import paths name the
 same types. Media retains codec sessions and `OwnedPlanes`, whose accounted
 allocations depend on I/O storage. Core mapping contracts add no driver or
-media dependency. Selected-image adapters and native AV1 now use this shared
-ownership boundary; packed pixels still use `zenpixels`. The existing
-media `SampleEncoding` compatibility type still needs migration to
-`zenpixels::sample::SampleEncoding`; this move does not create a second new
-sample interpretation implementation.
+media dependency. Selected-image adapters and native AV1 now use this shared ownership boundary;
+packed pixels still use `zenpixels`, and sample encodings use
+`zenpixels::sample::SampleEncoding` directly.
 
 - A zero-width mapped plane returns empty rows within its declared height,
   without indexing unused stride or overflowing a row offset. A zero-height

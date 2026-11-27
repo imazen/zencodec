@@ -149,7 +149,7 @@ pub enum InvalidKind {
     /// fault (knobs, quality, scan script, …).
     Parameters,
     /// A caller-supplied pixel buffer has an invalid layout — wrong size, stride,
-    /// alignment, or [`PixelDescriptor`](zenpixels::PixelDescriptor) for the
+    /// alignment, or [`PixelFormat`](zenpixels::PixelFormat) for the
     /// operation. Specifically the pixel-data buffer's geometry.
     Buffer,
     /// The operation was invoked in an invalid state or out of sequence — e.g.

@@ -9,8 +9,11 @@
 #![forbid(unsafe_code)]
 extern crate alloc;
 pub mod geometry;
+#[cfg(feature = "media")]
+pub mod media;
 mod render;
 pub use render::{ColorTarget, RenderFailure, RenderRequest, RenderStage, Renderer};
+pub use zenpixels_convert::{CmsBinding, CmsChoice, ColorServices};
 
 /// Render an existing selection with default sRGB RGBA8 output.
 /// The collection's stored policy runs once on the final rendered image.
@@ -24,10 +27,10 @@ pub use render::{ColorTarget, RenderFailure, RenderRequest, RenderStage, Rendere
 /// ) -> Result<(), Box<dyn core::error::Error>> {
 ///     let renderer = Renderer::new(StorageBudget::new(64 * 1024 * 1024, 32));
 ///     if let Some(first) = renderer.render_first(images)? {
-///         first.with_pixels(|pixels| assert_eq!(pixels.descriptor(), zenpixels::PixelDescriptor::RGBA8_SRGB))?;
+///         first.with_pixels(|pixels| assert_eq!(pixels.format(), &zenpixels::PixelFormat::RGBA8_SRGB))?;
 ///     }
 ///     let image = renderer.render_selected(images, id)?;
-///     image.with_pixels(|pixels| assert_eq!(pixels.descriptor(), zenpixels::PixelDescriptor::RGBA8_SRGB))?;
+///     image.with_pixels(|pixels| assert_eq!(pixels.format(), &zenpixels::PixelFormat::RGBA8_SRGB))?;
 ///     Ok(())
 /// }
 /// ```

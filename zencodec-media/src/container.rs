@@ -25,12 +25,10 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 pub use zencodec::decode::{ByteRange, Input, InputRequest};
-/// Deprecated byte-input request name; use [`InputRequest`].
-#[deprecated(note = "use InputRequest")]
-pub type Request = InputRequest;
-pub use zencodec::source::AccessPattern;
+pub use zencodec::source::{AccessPattern, NativeBound};
 
 use crate::packet::{Packet, RandomAccess};
+use crate::registry::MediaError;
 use crate::session::{ErasedError, SessionError, UnsupportedMedia};
 use crate::track::TrackInfo;
 use zencodec::time::Timestamp;
@@ -203,6 +201,252 @@ pub trait Demuxer {
     }
 }
 
+/// Pre-admission quote for repositioning a [`SeekableDemuxer`] without mutating
+/// demuxer state or issuing any I/O.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SeekOffer {
+    /// Byte access pattern required to reach `target`.
+    pub required_access: AccessPattern,
+    /// Conservative bound on bytes that may be scanned to position the seek.
+    pub max_scan_bytes: NativeBound<u64>,
+    /// Exact or estimated landing point when already known from an in-memory index.
+    pub landing_estimate: Option<SeekResult>,
+    /// Whether this seek requires a container index (e.g. `moov`/`Cues`).
+    pub requires_index: bool,
+}
+
+impl SeekOffer {
+    /// Construct a seek admission offer.
+    #[inline]
+    #[must_use]
+    pub const fn new(required_access: AccessPattern, max_scan_bytes: NativeBound<u64>) -> Self {
+        Self {
+            required_access,
+            max_scan_bytes,
+            landing_estimate: None,
+            requires_index: false,
+        }
+    }
+
+    /// Record a known landing point from an already-parsed index.
+    #[inline]
+    #[must_use]
+    pub const fn with_landing_estimate(mut self, landing: SeekResult) -> Self {
+        self.landing_estimate = Some(landing);
+        self
+    }
+
+    /// Declare whether an index is required to execute this seek.
+    #[inline]
+    #[must_use]
+    pub const fn with_requires_index(mut self, requires_index: bool) -> Self {
+        self.requires_index = requires_index;
+        self
+    }
+}
+
+/// Extension of [`Demuxer`] supporting pre-admission seek quoting and pulse-aware seeking.
+pub trait SeekableDemuxer: Demuxer {
+    /// Inspect what repositioning to `target` requires without mutating the demuxer or reading.
+    fn seek_offer(&self, target: &SeekTarget) -> Result<SeekOffer, SessionError<Self::Error>>;
+
+    /// Begin repositioning to `target` after source admission succeeds.
+    fn begin_seek(
+        &mut self,
+        target: &SeekTarget,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<SeekStatus, SessionError<Self::Error>>;
+}
+
+/// Object-safe demuxer with erased error type and pre-admission seek methods.
+pub trait DynDemuxer: Demuxer<Error = ErasedError> {
+    /// Inspect seek requirements without mutating state.
+    fn seek_offer(&self, target: &SeekTarget) -> Result<SeekOffer, MediaError> {
+        let _ = target;
+        Err(MediaError::Unsupported(UnsupportedMedia::Seek))
+    }
+
+    /// Begin repositioning to `target`.
+    ///
+    /// Defaults to refusing with [`UnsupportedMedia::Seek`] so an unquoted
+    /// [`Demuxer`] cannot bypass [`seek_offer`](Self::seek_offer) via legacy
+    /// [`Demuxer::seek`]. Implement [`SeekableDemuxer`] and wrap with
+    /// [`SeekableDemuxerShim`] / [`erase_seekable_demuxer`] to expose seeking.
+    fn begin_seek(
+        &mut self,
+        target: &SeekTarget,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<SeekStatus, MediaError> {
+        let _ = target;
+        if let Some(p) = pulse {
+            p.check().map_err(MediaError::Cancelled)?;
+        }
+        Err(MediaError::Unsupported(UnsupportedMedia::Seek))
+    }
+}
+
+/// Wrapper erasing a concrete [`Demuxer`]'s error type into [`DynDemuxer`].
+pub struct DemuxerShim<D>(pub D);
+
+impl<D: Demuxer> Demuxer for DemuxerShim<D> {
+    type Error = ErasedError;
+
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<DemuxProgress, SessionError<ErasedError>> {
+        self.0
+            .step(input, pulse)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
+
+    fn requested(&self) -> &[InputRequest] {
+        self.0.requested()
+    }
+
+    fn tracks(&self) -> &[TrackInfo] {
+        self.0.tracks()
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        self.0.access_pattern()
+    }
+
+    fn seek(&mut self, target: &SeekTarget) -> Result<SeekStatus, SessionError<ErasedError>> {
+        self.0
+            .seek(target)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
+}
+
+impl<D: Demuxer> DynDemuxer for DemuxerShim<D> {}
+
+/// Wrapper erasing a [`SeekableDemuxer`] into [`DynDemuxer`] while preserving `seek_offer`
+/// and `begin_seek`.
+pub struct SeekableDemuxerShim<D>(pub D);
+
+impl<D: SeekableDemuxer> Demuxer for SeekableDemuxerShim<D> {
+    type Error = ErasedError;
+
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<DemuxProgress, SessionError<ErasedError>> {
+        self.0
+            .step(input, pulse)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
+
+    fn requested(&self) -> &[InputRequest] {
+        self.0.requested()
+    }
+
+    fn tracks(&self) -> &[TrackInfo] {
+        self.0.tracks()
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        self.0.access_pattern()
+    }
+
+    fn seek(&mut self, target: &SeekTarget) -> Result<SeekStatus, SessionError<ErasedError>> {
+        self.0
+            .seek(target)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
+}
+
+impl<D: SeekableDemuxer> DynDemuxer for SeekableDemuxerShim<D> {
+    fn seek_offer(&self, target: &SeekTarget) -> Result<SeekOffer, MediaError> {
+        self.0.seek_offer(target).map_err(MediaError::from)
+    }
+
+    fn begin_seek(
+        &mut self,
+        target: &SeekTarget,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<SeekStatus, MediaError> {
+        self.0.begin_seek(target, pulse).map_err(MediaError::from)
+    }
+}
+
+/// Erase a concrete [`Demuxer`] into a boxed [`DynDemuxer`].
+pub fn erase_demuxer<D: Demuxer + Send + 'static>(d: D) -> Box<dyn DynDemuxer + Send> {
+    Box::new(DemuxerShim(d))
+}
+
+/// Erase a [`SeekableDemuxer`] into a boxed [`DynDemuxer`], preserving seek admission.
+pub fn erase_seekable_demuxer<D: SeekableDemuxer + Send + 'static>(
+    d: D,
+) -> Box<dyn DynDemuxer + Send> {
+    Box::new(SeekableDemuxerShim(d))
+}
+
+/// Admission quote for a bounded muxer's output schedule, pending buffer, workspace,
+/// and finish trailer size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MuxOffer {
+    /// Streaming vs `AT_FINISH` vs patching behavior.
+    pub timing: MuxTiming,
+    /// Conservative upper bound on unconsumed pending bytes buffered at once.
+    pub maximum_pending: NativeBound<u64>,
+    /// Conservative upper bound on muxer working memory (sample tables, indexes).
+    pub workspace: NativeBound<u64>,
+    /// Conservative upper bound on trailing bytes emitted by `finish`.
+    pub finish_bytes: NativeBound<u64>,
+}
+
+impl MuxOffer {
+    /// Construct a muxer resource/schedule offer.
+    #[inline]
+    #[must_use]
+    pub const fn new(
+        timing: MuxTiming,
+        maximum_pending: NativeBound<u64>,
+        workspace: NativeBound<u64>,
+        finish_bytes: NativeBound<u64>,
+    ) -> Self {
+        Self {
+            timing,
+            maximum_pending,
+            workspace,
+            finish_bytes,
+        }
+    }
+}
+
+/// Outcome of [`BoundedMuxer::try_write_packet`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PacketWrite {
+    /// The packet was taken (`packet` is now `None`) and admitted into pending output.
+    Accepted,
+    /// Pending output must be drained (`pending_output` / `consume_output`) before
+    /// retrying; `packet` was left untouched (`Some(...)`).
+    DrainOutput,
+}
+
+/// Extension of [`DynMuxer`] with bounded output credit backpressure.
+pub trait BoundedMuxer: DynMuxer {
+    /// The admitted output schedule and resource bounds for this live muxer.
+    fn admitted_offer(&self) -> &MuxOffer;
+
+    /// Attempt to write `packet` without exceeding [`MuxOffer::maximum_pending`].
+    ///
+    /// On [`PacketWrite::Accepted`], takes `packet` (leaving `None`). On
+    /// [`PacketWrite::DrainOutput`], leaves `packet` untouched and guarantees
+    /// `pending_output()` is non-empty so the caller can drain and retry.
+    fn try_write_packet(
+        &mut self,
+        packet: &mut Option<Packet>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<PacketWrite, SessionError<ErasedError>>;
+}
+
 /// When a muxer's bytes arrive and whether it must patch earlier bytes at
 /// `finish` (the writer-capability split: seekable fix-ups versus
 /// forward-only emission).
@@ -360,6 +604,16 @@ pub trait DynMuxer {
         self: Box<Self>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<MuxFinish, SessionError<ErasedError>>;
+    /// Borrow the bounded credit-backpressure view when this muxer supports
+    /// [`BoundedMuxer`] writes (`MuxPlan::supports_bounded_writes == true`).
+    fn as_bounded(&self) -> Option<&dyn BoundedMuxer> {
+        None
+    }
+    /// Mutably borrow the bounded credit-backpressure view when this muxer supports
+    /// [`BoundedMuxer`] writes (`MuxPlan::supports_bounded_writes == true`).
+    fn as_bounded_mut(&mut self) -> Option<&mut dyn BoundedMuxer> {
+        None
+    }
 }
 
 /// Shim erasing a muxer's error type (the `DynAnimationFrameEncoder` pattern:
@@ -418,16 +672,60 @@ pub fn erase_muxer<M: Muxer + Send + 'static>(m: M) -> Box<dyn DynMuxer + Send> 
     Box::new(MuxerShim(m))
 }
 
-/// Apply a finish to an in-memory file: append the tail, then patch.
-///
-/// # Errors
-///
-/// See [`MuxFinish::apply_to`].
-#[deprecated(
-    note = "use finish.apply_to(file); use finish.validate(emitted_bytes) before external writes"
-)]
-pub fn apply_finish(file: &mut Vec<u8>, finish: MuxFinish) -> Result<(), PatchError> {
-    finish.apply_to(file)
+/// Wrapper preserving [`BoundedMuxer`] access across [`DynMuxer`] erasure so routed
+/// [`MuxFactory::open`](crate::registry::MuxFactory::open) sessions expose
+/// [`DynMuxer::as_bounded`] / [`DynMuxer::as_bounded_mut`].
+pub struct BoundedMuxerShim<M>(pub M);
+
+impl<M: BoundedMuxer> DynMuxer for BoundedMuxerShim<M> {
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        self.0.begin_exact_timing(tracks, hint)
+    }
+    fn begin(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        self.0.begin(tracks, hint)
+    }
+    fn write_packet(
+        &mut self,
+        packet: Packet,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ErasedError>> {
+        self.0.write_packet(packet, pulse)
+    }
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n)
+    }
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        self.0.take_output(into)
+    }
+    fn finish(
+        self: Box<Self>,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<MuxFinish, SessionError<ErasedError>> {
+        Box::new(self.0).finish(pulse)
+    }
+    fn as_bounded(&self) -> Option<&dyn BoundedMuxer> {
+        Some(&self.0)
+    }
+    fn as_bounded_mut(&mut self) -> Option<&mut dyn BoundedMuxer> {
+        Some(&mut self.0)
+    }
+}
+
+/// Erase a [`BoundedMuxer`] into a boxed [`DynMuxer`], preserving bounded write access
+/// through [`DynMuxer::as_bounded`] and [`DynMuxer::as_bounded_mut`].
+pub fn erase_bounded_muxer<M: BoundedMuxer + Send + 'static>(m: M) -> Box<dyn DynMuxer + Send> {
+    Box::new(BoundedMuxerShim(m))
 }
 
 /// A [`Demuxer`] as a [`ByteStepper`], so every `zencodec-io` cursor drives

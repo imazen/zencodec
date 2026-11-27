@@ -7,11 +7,11 @@ publish = false
 [workspace]
 
 [dependencies]
-zencodec-io = { path = "../../zencodec-io", version = "0.1.0", features = ["std"] }
-zencodec = { path = "../..", version = ">=0.2.0, <0.4.0", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", version = "0.2.0", features = ["std"] }
+zencodec = { path = "../..", version = ">=0.3.0, <0.5.0", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media", features = ["std"] }
-zenpixels = ">=0.2.16, <0.4.0"
-zenpixels-convert = { version = ">=0.2.16, <0.4.0", default-features = false }
+zenpixels = ">=0.5.0, <0.6.0"
+zenpixels-convert = { version = ">=0.5.0, <0.6.0", default-features = false }
 enough = "0.4.4"
 bytemuck = "1.25.2"
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "94116d266299f347cfd10a75d440a5bc3b598d2c", features = ["media-encode", "_dev"] }
@@ -22,14 +22,14 @@ zenwebm = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b2
 
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
-linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
+garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
 zencodec-io = { path = "../../zencodec-io" }
 zencodec-media = { path = "../../zencodec-media" }
 zenmeta = { path = "../../zenmeta" }
 zencodec = { path = "../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "7e9d296c9e037e626234c9f0e8673d48278f83f0" }
 
 [patch."https://github.com/imazen/zencodec"]
@@ -43,5 +43,5 @@ debug = 1
 lto = "thin"
 
 [dev-dependencies]
-zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.1.0" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit", version = "0.2.0" }
 presentation-map-experiment = { path = "../presentation-map" }

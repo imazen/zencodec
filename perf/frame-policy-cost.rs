@@ -1,5 +1,7 @@
 //! Shared workload for wall-clock and fixed-work profiling of the real policy API.
 use std::hint::black_box;
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     frame::{FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole},
     operation::{
@@ -8,8 +10,6 @@ use zencodec::{
     },
     time::{TimeBase, Timestamp},
 };
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 pub struct Workload {
     interpretation: FrameInterpretation,
@@ -19,14 +19,14 @@ impl Workload {
     pub fn new() -> Self {
         let interpretation = FrameInterpretation::new(
             FrameGeometry::full(1920, 1080),
-            zenpixels::plane::PlanarLayout::new(
+            zencodec::plane::PlanarLayout::new(
                 [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr]
                     .into_iter()
                     .map(|role| {
-                        zenpixels::plane::PlaneSpec::new(
+                        zencodec::plane::PlaneSpec::new(
                             role,
-                            zenpixels::plane::PlaneEncoding::Code(
-                                SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap(),
+                            zencodec::plane::PlaneEncoding::Code(
+                                SampleEncoding::new(zenpixels::SampleType::U16, 10, 0).unwrap(),
                             ),
                         )
                     })
@@ -59,7 +59,7 @@ impl Workload {
     }
 
     pub fn record(&self, i: usize) -> DecisionRecord {
-        let mut record = self.seed;
+        let mut record = self.seed.clone();
         record.question = i as u64 + 1;
         if let DecisionContext::Frame(ref mut facts) = record.context {
             facts.timing = Self::timing(i);

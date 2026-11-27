@@ -11,6 +11,20 @@ types (metadata, limits, format detection, color emission) at the root.
 
 [Visual guide](https://imazen.github.io/zencodec/) — consumer, adapter, and implementor journeys, with tested examples and an interactive transport lab. [Guide source and checks](https://github.com/imazen/zencodec/blob/main/docs/SITE.md).
 
+## zenpixels 0.5 integration draft
+
+Import `ImageSpec`, `SampleLayout`, `PixelView`, `PixelViewMut`, and
+`PixelBuf` directly from zenpixels. An image spec describes both its memory
+layout and current color. A decoded owner also carries source provenance
+through `DecodeOutput::buffer()`. Borrow with `PixelBuf::as_view()`.
+Use `PixelBuf::from_bytes` when adopting byte storage and propagate the
+constructor error. Advertise supported specs in an explicit static slice.
+
+Native frame adapters keep chroma siting, code placement, float value mapping,
+and accounted plane owners through `zencodec::plane` and `zencodec::sample`.
+Use the root manifest's four pinned patches in the consuming workspace. The
+native-codec and standalone guide cohorts need separate dependency updates.
+
 ## Quick start
 
 This checkout prepares the unpublished 0.2 API. The examples below use that
@@ -39,8 +53,8 @@ use zencodec::decode::{DecoderConfig, DecodeJob, Decode};
 // 0.0..=100.0 scale (NOT 0.0..=1.0); higher is better. Read it back with
 // `generic_quality()` — `None` means the codec has no quality dial.
 let config = JpegEncoderConfig::new().with_generic_quality(85.0);
-// (assuming pixels: PixelSlice from your pipeline)
-let output = config.job().encoder()?.encode(pixels.as_slice())?;
+// `pixels` is a zenpixels::PixelBuf from your pipeline.
+let output = config.job().encoder()?.encode(pixels.as_view())?;
 let jpeg_bytes = output.into_vec();
 
 // Decode

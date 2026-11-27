@@ -1,6 +1,7 @@
 //! Shared-trait implementer controls, not native codec qualification.
 use super::*;
 use row_encode::{ExactDepthContradiction, Raster, Refusal};
+use zencodec::helpers::codec_spec;
 use zencodec::{
     encode::{EncodeRows, OutputPhase, PullProgress, RowDemand, SourcePasses},
     operation::{DecisionCode, InputAcquisition, OutputSchedule, PolicyFailure, Selection},
@@ -54,10 +55,10 @@ impl EncodeJob for PullJob {
     fn with_limits(self, _: ResourceLimits) -> Self {
         self
     }
-    fn with_metadata(self, _: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, _: Metadata) -> Self {
         self
     }
-    fn plan_encode(&self, _: &EncodeDeclaration<'_>) -> Result<EncodePlan, BoxedError> {
+    fn plan_encode(&self, _: &EncodeDeclaration) -> Result<EncodePlan, BoxedError> {
         event(&self.events, "plan");
         Ok(self.plan.clone())
     }
@@ -83,8 +84,9 @@ impl EncoderConfig for PullConfig {
     fn format() -> ImageFormat {
         ImageFormat::Pnm
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
+        SUPPORTED
     }
     fn job(self) -> Self::Job {
         self.0
@@ -102,20 +104,19 @@ impl Encoder for PullEncoder {
     fn reject(op: UnsupportedOperation) -> Self::Error {
         io::Error::other(op)
     }
-    fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+    fn encode(self, _: PixelView<'_>) -> Result<EncodeOutput, Self::Error> {
         panic!("no fallback")
     }
     fn begin_declared(
         &mut self,
-        declaration: &EncodeDeclaration<'_>,
+        declaration: &EncodeDeclaration,
     ) -> Result<EncodePlan, Self::Error> {
         event(&self.job.events, "start");
         let mut description = Description::new(
             declaration.width,
             declaration.height,
-            declaration.descriptor,
+            declaration.pixel_format.clone(),
         );
-        description.color_context = declaration.color.map(|c| Arc::new(c.clone()));
         description.exact_depth = declaration.exact_depth;
         self.description = Some(description);
         if self.job.behavior == Behavior::StartDrift {
@@ -143,8 +144,8 @@ impl Encoder for PullEncoder {
         }
         let desc = self.description.as_ref().unwrap();
         let count = 2.min(desc.height - self.first);
-        let row_bytes = desc.width as usize * desc.descriptor.bytes_per_pixel();
-        let padding = 3 * desc.descriptor.bytes_per_pixel();
+        let row_bytes = desc.width as usize * desc.descriptor.layout.bytes_per_pixel();
+        let padding = 3 * desc.descriptor.layout.bytes_per_pixel();
         let stride = row_bytes + padding;
         let mut bytes = vec![0xc3; stride * count as usize];
         let repeats = if self.job.behavior == Behavior::DoubleFill {
@@ -153,11 +154,14 @@ impl Encoder for PullEncoder {
             1
         };
         for _ in 0..repeats {
-            let mut rows =
-                PixelSliceMut::new(&mut bytes, desc.width, count, stride, desc.descriptor).unwrap();
-            if let Some(color) = &desc.color_context {
-                rows = rows.with_color_context(color.clone());
-            }
+            let rows = PixelViewMut::new_with_format_cow(
+                &mut bytes,
+                desc.width,
+                count,
+                stride,
+                zenpixels::FormatCow::from_owned(desc.descriptor.clone()),
+            )
+            .unwrap();
             let first = if self.job.behavior == Behavior::SkipRow {
                 self.first + 1
             } else {
@@ -315,7 +319,7 @@ impl Source for ReplaySource {
     fn read_rows(
         &mut self,
         first: u32,
-        mut rows: PixelSliceMut<'_>,
+        mut rows: PixelViewMut<'_>,
         _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         event(&self.inner.events, "read");
@@ -329,14 +333,14 @@ impl Source for ReplaySource {
             assert_eq!(first, self.next);
         }
         let changed = self.mutate && first == 0 && self.reads != 0;
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             rows.row_mut(y).fill(if changed { 8 } else { 7 });
         }
         if self.false_depth {
-            let last = rows.rows() - 1;
+            let last = rows.height() - 1;
             rows.row_mut(last)[0] = 1;
         }
-        self.next = first + rows.rows();
+        self.next = first + rows.height();
         self.reads += 1;
         Ok(())
     }
@@ -415,7 +419,7 @@ fn retained_padded_borrow_replays_actual_samples_in_typed_and_erased_drivers() {
     for erased in [false, true] {
         let s = Setup::new();
         let bytes = [1, 2, 3, 4, 5, 6, 0xee, 0xee, 0xee, 11, 12, 13, 14, 15, 16];
-        let pixels = PixelSlice::new(&bytes, 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelView::new(&bytes, 2, 2, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
         let done = run(
             erased,
             PullJob::new(&s, 2, Some(2)),
@@ -537,8 +541,7 @@ fn native_one_pass_requires_no_snapshot_but_caps_and_exact_multi_pass_stay_stric
 }
 
 #[test]
-#[allow(deprecated)]
-fn bound_and_legacy_requirements_cannot_choose_different_halves_of_a_route() {
+fn conflicting_requirements_cannot_choose_different_halves_of_a_route() {
     for erased in [false, true] {
         let s = Setup::new();
         let failure = run(
@@ -546,9 +549,10 @@ fn bound_and_legacy_requirements_cannot_choose_different_halves_of_a_route() {
             PullJob::new(&s, 2, Some(2)),
             ReplaySource::new(&s, true),
             s.writer(),
-            PolicySet::new().require_exact_replay(true),
-            s.options()
-                .with_policy_set(PolicySet::new().allow_raw_memory_staging(false)),
+            PolicySet::new()
+                .require_exact_replay(true)
+                .allow_raw_memory_staging(false),
+            s.options(),
         )
         .unwrap_err();
         assert_requirement_refusal(&failure);
@@ -649,14 +653,15 @@ fn finite_plan_maximum_cannot_be_exceeded_and_minimum_requires_complete_final_pa
 
 #[test]
 fn exact_depth_is_verified_before_successful_fill_for_every_native_strip() {
-    use zenpixels::{ChannelType, SignalRange, sample::ExactDepth};
+    use zencodec::sample::ExactDepth;
+    use zenpixels::{SampleType, SignalRange};
     for erased in [false, true] {
         for false_depth in [false, true] {
             let s = Setup::new();
-            let claim = ExactDepth::new(ChannelType::U16, SignalRange::Full, 8, 16).unwrap();
+            let claim = ExactDepth::new(SampleType::U16, SignalRange::Full, 8, 16).unwrap();
             {
                 let mut desc = s.description.lock().unwrap();
-                desc.descriptor = PixelDescriptor::RGB16;
+                desc.descriptor = codec_spec(zenpixels::SampleLayout::RGB16);
                 desc.exact_depth = Some(claim);
             }
             let mut source = ReplaySource::new(&s, false);
@@ -846,7 +851,7 @@ impl Source for ClaimedBorrow {
     fn read_rows(
         &mut self,
         first: u32,
-        rows: PixelSliceMut<'_>,
+        rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, pulse)
@@ -881,7 +886,7 @@ impl Source for DropSource {
     fn read_rows(
         &mut self,
         first: u32,
-        rows: PixelSliceMut<'_>,
+        rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, pulse)

@@ -65,7 +65,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::Fidelity;
@@ -77,10 +77,16 @@ use crate::traits::{
 };
 use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
-    ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits, StopToken,
+    ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits,
 };
 
 mod collection;
+pub mod role;
+
+pub use role::{
+    EncodedTransformFactory, EncodedTransformRole, FactoryRole, ImageDecodeRole,
+    ImageEncodeFactory, ImageEncodeRole, NamedFactory, RegistrationError, RegistrationId,
+};
 
 // ===========================================================================
 // Internal entries — shared templates with per-operation config cloning
@@ -88,82 +94,52 @@ mod collection;
 //
 // `DynDecoderConfig` / `DynEncoderConfig` are deliberately left untouched
 // (adding a required method would break any manual implementor). The set
-// instead captures clone/fidelity capability at registration time, where the
-// concrete type — and its `Clone` bound from `DecoderConfig`/`EncoderConfig`
+// instead captures clone/fidelity/Send capability at registration time, where
+// the concrete type — and its `Clone` bound from `DecoderConfig`/`EncoderConfig`
 // — is still known.
 
-trait DecoderEntry: DynDecoderConfig {
-    fn as_dyn(&self) -> &dyn DynDecoderConfig;
-}
+struct LocalImageEncodeFactory<C>(Arc<C>);
 
-impl<C> DecoderEntry for C
-where
-    C: DecoderConfig + 'static,
-{
-    fn as_dyn(&self) -> &dyn DynDecoderConfig {
-        self
-    }
-}
-
-trait EncoderEntry: Send + Sync {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry>;
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry>;
-    fn as_dyn(&self) -> &dyn DynEncoderConfig;
-    fn send_job(
-        &self,
-        _fidelity: Option<Fidelity>,
-    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
-        Err(CodecSetError::EncoderJobNotSend(self.as_dyn().format()))
-    }
-}
-
-impl<C> EncoderEntry for C
+impl<C> ImageEncodeFactory for LocalImageEncodeFactory<C>
 where
     C: EncoderConfig + 'static,
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
-        Box::new(self.clone())
-    }
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
-        Box::new((*self).with_fidelity(fidelity))
-    }
-    fn as_dyn(&self) -> &dyn DynEncoderConfig {
-        self
+    fn config(&self) -> &dyn DynEncoderConfig {
+        &*self.0
     }
 }
 
 // Registration captures Send while the concrete job type is still known.
-// Legacy entries remain available for thread-affine jobs.
-struct SendEncoderEntry<C>(C);
-impl<C> EncoderEntry for SendEncoderEntry<C>
+// Local entries remain available for thread-affine jobs.
+struct SendImageEncodeFactory<C>(Arc<C>);
+
+impl<C> ImageEncodeFactory for SendImageEncodeFactory<C>
 where
     C: EncoderConfig + 'static,
     C::Job: Send,
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
-        Box::new(Self(self.0.clone()))
+    fn config(&self) -> &dyn DynEncoderConfig {
+        &*self.0
     }
-    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
-        Box::new(Self(self.0.with_fidelity(fidelity)))
+
+    fn supports_send_job(&self) -> bool {
+        true
     }
-    fn as_dyn(&self) -> &dyn DynEncoderConfig {
-        &self.0
-    }
+
     fn send_job(
         &self,
         fidelity: Option<Fidelity>,
     ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
         let config = match fidelity {
-            Some(target) => self
-                .0
+            Some(target) => (*self.0)
                 .clone()
                 .try_with_fidelity(target)
                 .map_err(|error| CodecSetError::Codec(Box::new(error)))?,
-            None => self.0.clone(),
+            None => (*self.0).clone(),
         };
         Ok(crate::traits::erase_send_job(config.job()))
     }
@@ -212,7 +188,7 @@ pub enum TranscodeBarrier {
     /// The source contains a gain map or another auxiliary image.
     AuxiliaryImage,
     /// The target cannot accept the decoder's native pixel descriptor.
-    PixelDescriptor,
+    PixelFormat,
 }
 
 impl fmt::Display for CodecSetError {
@@ -255,11 +231,18 @@ impl From<BoxedError> for CodecSetError {
 // CodecSet
 // ===========================================================================
 
+#[derive(Clone)]
+struct RegisteredDecoder {
+    config: Arc<dyn DynDecoderConfig>,
+    admitted_formats: Vec<ImageFormat>,
+}
+
 #[derive(Clone, Default)]
 struct Registrations {
-    decoders: Vec<Arc<dyn DecoderEntry>>,
-    encoders: Vec<Arc<dyn EncoderEntry>>,
+    decoders: Vec<RegisteredDecoder>,
+    encoders: Vec<Arc<dyn ImageEncodeFactory>>,
     collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
+    roles: role::RoleStore,
 }
 
 /// A runtime set of codecs with one entry point per operation.
@@ -269,7 +252,7 @@ struct Registrations {
 /// borrow it, so one registration can be shared across calls.
 ///
 /// Operation defaults ([`with_limits`](Self::with_limits),
-/// [`with_stop`](Self::with_stop), [`with_decode_policy`](Self::with_decode_policy),
+/// [`with_pulse`](Self::with_pulse), [`with_decode_policy`](Self::with_decode_policy),
 /// [`with_encode_policy`](Self::with_encode_policy)) are stamped onto every
 /// job the set creates. Per-operation control (decode hints, metadata,
 /// canvas/loop settings) is available through [`decode_job`](Self::decode_job)
@@ -304,9 +287,13 @@ impl CodecSet {
     /// If several registered decoders claim the same format, the first
     /// registered wins.
     pub fn with_decoder(mut self, config: impl DecoderConfig + 'static) -> Self {
+        let admitted_formats = config.formats().to_vec();
         Arc::make_mut(&mut self.registrations)
             .decoders
-            .push(Arc::new(config));
+            .push(RegisteredDecoder {
+                config: Arc::new(config),
+                admitted_formats,
+            });
         self
     }
 
@@ -324,7 +311,7 @@ impl CodecSet {
     {
         Arc::make_mut(&mut self.registrations)
             .encoders
-            .push(Arc::new(config));
+            .push(Arc::new(LocalImageEncodeFactory(Arc::new(config))));
         self
     }
 
@@ -342,8 +329,237 @@ impl CodecSet {
     {
         Arc::make_mut(&mut self.registrations)
             .encoders
-            .push(Arc::new(SendEncoderEntry(config)));
+            .push(Arc::new(SendImageEncodeFactory(Arc::new(config))));
         self
+    }
+
+    /// Register a typed provider factory under role `R` serving `keys`.
+    ///
+    /// Rejects empty `keys` ([`RegistrationError::EmptyKeys`]) and duplicate
+    /// [`RegistrationId`]s within the same role ([`RegistrationError::DuplicateId`]).
+    /// Repeated keys in a single registration are deduplicated in first-seen order.
+    /// Downstream crates (such as `zencodec-media`) define roles without modifying
+    /// `zencodec`.
+    ///
+    /// When `R` is [`ImageDecodeRole`] or [`ImageEncodeRole`], this method also
+    /// appends the provider to the legacy first-wins decoder/encoder list so
+    /// [`detect`](Self::detect), [`can_decode`](Self::can_decode), and
+    /// [`can_encode`](Self::can_encode) stay synchronized with named registrations.
+    /// Prefer [`with_named_decoder`](Self::with_named_decoder),
+    /// [`with_named_encoder`](Self::with_named_encoder), and
+    /// [`with_named_send_encoder`](Self::with_named_send_encoder) for concrete image
+    /// codec configs so keys always match the config's declared formats.
+    pub fn with_role<R: FactoryRole>(
+        mut self,
+        keys: impl IntoIterator<Item = R::Key>,
+        entry: NamedFactory<R>,
+    ) -> Result<Self, RegistrationError> {
+        let mut collected: Vec<R::Key> = Vec::new();
+        for key in keys {
+            if !collected.contains(&key) {
+                collected.push(key);
+            }
+        }
+        if collected.is_empty() {
+            return Err(RegistrationError::EmptyKeys);
+        }
+
+        // Validate image role keys against each provider's declared formats so ranked
+        // and legacy tables share the exact same admitted format authority.
+        let mirror_decoder = if let Some(dec) =
+            (&entry as &dyn core::any::Any).downcast_ref::<NamedFactory<ImageDecodeRole>>()
+        {
+            let supported = dec.factory.formats();
+            let mut admitted = Vec::with_capacity(collected.len());
+            for key in &collected {
+                let fmt = *(key as &dyn core::any::Any)
+                    .downcast_ref::<ImageFormat>()
+                    .expect("ImageDecodeRole::Key is ImageFormat");
+                if !supported.contains(&fmt) {
+                    return Err(RegistrationError::UnsupportedKey);
+                }
+                admitted.push(fmt);
+            }
+            Some(RegisteredDecoder {
+                config: Arc::clone(&dec.factory),
+                admitted_formats: admitted,
+            })
+        } else {
+            None
+        };
+        let mirror_encoder = if let Some(enc) =
+            (&entry as &dyn core::any::Any).downcast_ref::<NamedFactory<ImageEncodeRole>>()
+        {
+            let supported = enc.factory.config().format();
+            for key in &collected {
+                let fmt = *(key as &dyn core::any::Any)
+                    .downcast_ref::<ImageFormat>()
+                    .expect("ImageEncodeRole::Key is ImageFormat");
+                if fmt != supported {
+                    return Err(RegistrationError::UnsupportedKey);
+                }
+            }
+            Some(Arc::clone(&enc.factory))
+        } else {
+            None
+        };
+
+        let regs = Arc::make_mut(&mut self.registrations);
+        regs.roles.insert::<R>(collected, entry)?;
+        if let Some(dec) = mirror_decoder {
+            regs.decoders.push(dec);
+        }
+        if let Some(enc) = mirror_encoder {
+            regs.encoders.push(enc);
+        }
+        Ok(self)
+    }
+
+    /// Iterate over all named factories registered for `key` under role `R`, in
+    /// registration order.
+    ///
+    /// Clones `key` into the iterator so the returned iterator borrows only `self`.
+    pub fn factories<R: FactoryRole>(
+        &self,
+        key: &R::Key,
+    ) -> impl Iterator<Item = &NamedFactory<R>> + '_ {
+        let target = key.clone();
+        self.registrations
+            .roles
+            .table::<R>()
+            .into_iter()
+            .flat_map(|t| t.entries.iter())
+            .filter(move |(k, _)| k == &target)
+            .map(|(_, entry)| entry)
+    }
+
+    /// Iterate over every `(key, factory)` pair registered under role `R`, in
+    /// registration order.
+    pub fn role_entries<R: FactoryRole>(
+        &self,
+    ) -> impl Iterator<Item = (&R::Key, &NamedFactory<R>)> + '_ {
+        self.registrations
+            .roles
+            .table::<R>()
+            .into_iter()
+            .flat_map(|t| t.entries.iter())
+            .map(|(k, entry)| (k, entry))
+    }
+
+    /// Register a named decoder config both in [`ImageDecodeRole`] for multi-provider
+    /// routing and in the legacy first-wins decoder list.
+    pub fn with_named_decoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: DecoderConfig + 'static,
+    {
+        let keys: Vec<ImageFormat> = config.formats().to_vec();
+        let entry = NamedFactory::<ImageDecodeRole>::new(
+            id,
+            revision,
+            Arc::new(config) as Arc<dyn DynDecoderConfig>,
+        );
+        self.with_role::<ImageDecodeRole>(keys, entry)
+    }
+
+    /// Register a named thread-local encoder config both in [`ImageEncodeRole`] for
+    /// multi-provider routing and in the legacy first-wins encoder list.
+    ///
+    /// The registered [`ImageEncodeFactory`] reports `supports_send_job() == false` and
+    /// refuses [`ImageEncodeFactory::send_job`] with [`CodecSetError::EncoderJobNotSend`].
+    pub fn with_named_encoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: EncoderConfig + 'static,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        let fmt = config.format();
+        let factory: Arc<dyn ImageEncodeFactory> =
+            Arc::new(LocalImageEncodeFactory(Arc::new(config)));
+        let entry = NamedFactory::<ImageEncodeRole>::new(id, revision, factory);
+        self.with_role::<ImageEncodeRole>([fmt], entry)
+    }
+
+    /// Register a named `Send`-job encoder config both in [`ImageEncodeRole`] for
+    /// multi-provider routing and in the legacy first-wins encoder list.
+    ///
+    /// The registered [`ImageEncodeFactory`] preserves `Send` job construction via
+    /// [`ImageEncodeFactory::send_job`] for this specific provider even when it is
+    /// not the first encoder registered for its format.
+    pub fn with_named_send_encoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: EncoderConfig + 'static,
+        C::Job: Send,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        let fmt = config.format();
+        let factory: Arc<dyn ImageEncodeFactory> =
+            Arc::new(SendImageEncodeFactory(Arc::new(config)));
+        let entry = NamedFactory::<ImageEncodeRole>::new(id, revision, factory);
+        self.with_role::<ImageEncodeRole>([fmt], entry)
+    }
+
+    /// Legacy enumeration of all registered decoder configs (anonymous and named)
+    /// serving `format`, in registration order.
+    ///
+    /// For ranked multi-provider routing with stable provider IDs and revisions, use
+    /// [`factories::<ImageDecodeRole>`](Self::factories).
+    pub fn decoders_for(
+        &self,
+        format: ImageFormat,
+    ) -> impl Iterator<Item = &dyn DynDecoderConfig> + '_ {
+        self.registrations
+            .decoders
+            .iter()
+            .filter(move |d| d.admitted_formats.contains(&format))
+            .map(|d| &*d.config)
+    }
+
+    /// Legacy enumeration of all registered encoder configs (anonymous and named)
+    /// serving `format`, in registration order.
+    ///
+    /// Returns bare [`DynEncoderConfig`] templates without `Send`-job construction or
+    /// provider IDs. For ranked multi-provider routing preserving per-provider `Send`
+    /// capability, use [`factories::<ImageEncodeRole>`](Self::factories).
+    pub fn encoders_for(
+        &self,
+        format: ImageFormat,
+    ) -> impl Iterator<Item = &dyn DynEncoderConfig> + '_ {
+        self.registrations
+            .encoders
+            .iter()
+            .filter(move |e| e.config().format() == format)
+            .map(|e| e.config())
+    }
+
+    /// Returns `true` when any operation-level defaults (`limits`, `pulse`,
+    /// `decode_policy`, or `encode_policy`) are stamped on this set.
+    ///
+    /// Engines that require a registration-only [`CodecSet`] (managing per-run
+    /// limits, pulses, and policies externally) check this method to reject
+    /// pre-stamped sets.
+    #[inline]
+    #[must_use]
+    pub fn has_operation_defaults(&self) -> bool {
+        self.limits.is_some()
+            || self.pulse.is_some()
+            || self.decode_policy.is_some()
+            || self.encode_policy.is_some()
     }
 
     // --- Operation defaults -------------------------------------------------
@@ -354,40 +570,27 @@ impl CodecSet {
         self
     }
 
-    /// Add a cancellation-only condition while retaining the operation pulse.
-    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    pub fn with_stop(mut self, stop: StopToken) -> Self {
-        use how_far::Pulse as _;
-        let pulse = self.pulse.take().unwrap_or_default();
-        self.pulse = Some(
-            how_far::WithStop::new(&pulse, stop)
-                .share()
-                .expect("owned SharedPulse and owned cancellation are shareable"),
-        );
-        self
-    }
-
     /// Progress and cancellation pulse stamped onto every job this set creates.
     pub fn with_pulse(mut self, pulse: how_far::SharedPulse) -> Self {
         self.pulse = Some(pulse);
         self
     }
 
-    /// Best-effort decode policy stamped onto every decode job this set creates.
+    /// Checked decode policy stamped onto every decode job this set creates.
     ///
-    /// The codec may ignore this legacy policy setter. For a required policy,
-    /// obtain a job with [`decode_job`](Self::decode_job), then call
-    /// [`DynDecodeJob::try_set_policy`](crate::decode::DynDecodeJob::try_set_policy).
+    /// Enforced via [`DynDecodeJob::try_set_policy`](crate::decode::DynDecodeJob::try_set_policy)
+    /// when a job is created; a decoder that cannot honor the policy refuses
+    /// with an error instead of silently ignoring it.
     pub fn with_decode_policy(mut self, policy: DecodePolicy) -> Self {
         self.decode_policy = Some(policy);
         self
     }
 
-    /// Best-effort encode policy stamped onto every encode job this set creates.
+    /// Checked encode policy stamped onto every encode job this set creates.
     ///
-    /// The codec may ignore this legacy policy setter. For a required policy,
-    /// obtain a job with [`encode_job`](Self::encode_job), then call
-    /// [`DynEncodeJob::try_set_policy`](crate::encode::DynEncodeJob::try_set_policy).
+    /// Enforced via [`DynEncodeJob::try_set_policy`](crate::encode::DynEncodeJob::try_set_policy)
+    /// when a job is created; an encoder that cannot honor the policy refuses
+    /// with an error instead of silently ignoring it.
     pub fn with_encode_policy(mut self, policy: EncodePolicy) -> Self {
         self.encode_policy = Some(policy);
         self
@@ -407,12 +610,12 @@ impl CodecSet {
 
     /// The registered decoder config for `format`, if any.
     pub fn decoder_for(&self, format: ImageFormat) -> Option<&dyn DynDecoderConfig> {
-        self.decoder_entry(format).map(|e| e.as_dyn())
+        self.decoder_entry(format)
     }
 
     /// The registered encoder config for `format`, if any.
     pub fn encoder_for(&self, format: ImageFormat) -> Option<&dyn DynEncoderConfig> {
-        self.encoder_entry(format).map(|e| e.as_dyn())
+        self.encoder_entry(format).map(|e| e.config())
     }
 
     /// Formats with a registered decoder, in registration order.
@@ -422,7 +625,7 @@ impl CodecSet {
         self.registrations
             .decoders
             .iter()
-            .flat_map(|d| d.formats().iter().copied())
+            .flat_map(|d| d.admitted_formats.iter().copied())
     }
 
     /// Formats with a registered encoder, in registration order.
@@ -430,7 +633,7 @@ impl CodecSet {
         self.registrations
             .encoders
             .iter()
-            .map(|e| e.as_dyn().format())
+            .map(|e| e.config().format())
     }
 
     /// Detect the input's format from magic bytes, consulting only formats
@@ -449,7 +652,7 @@ impl CodecSet {
             }
         }
         for decoder in &self.registrations.decoders {
-            for &format in decoder.formats() {
+            for &format in &decoder.admitted_formats {
                 if let ImageFormat::Custom(def) = format
                     && (def.detect)(data)
                 {
@@ -462,8 +665,18 @@ impl CodecSet {
 
     // --- Decode -------------------------------------------------------------
 
+    pub(crate) fn check_input_limit(&self, input_len: usize) -> Result<(), CodecSetError> {
+        if let Some(limits) = self.limits {
+            limits
+                .check_input_size(input_len as u64)
+                .map_err(|e| CodecSetError::Codec(Box::new(e)))?;
+        }
+        Ok(())
+    }
+
     /// Probe image metadata (header parse only) after detecting the format.
     pub fn probe<'a>(&'a self, data: &'a [u8]) -> Result<ImageInfo, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self.decode_job(format)?.probe(data)?)
     }
@@ -471,28 +684,30 @@ impl CodecSet {
     /// Detect the format and decode to owned pixels in the decoder's native
     /// pixel format.
     pub fn decode<'a>(&'a self, data: &'a [u8]) -> Result<DecodeOutput, CodecSetError> {
-        self.decode_preferring(data, &[])
+        self.decode_preferring_formats(data, &[])
     }
 
     /// Detect the format and decode, requesting output in one of the
     /// `preferred` pixel formats (ranked; the decoder picks the first it can
     /// produce without lossy conversion, else its native format).
-    pub fn decode_preferring<'a>(
+    pub fn decode_preferring_formats<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<DecodeOutput, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
-        self.decode_as(format, data, preferred)
+        self.decode_with_format(format, data, preferred)
     }
 
-    /// Decode `data` as `format`, skipping detection.
-    pub fn decode_as<'a>(
+    /// Decode `data` as `format`, skipping magic-byte detection.
+    pub fn decode_with_format<'a>(
         &'a self,
         format: ImageFormat,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<DecodeOutput, CodecSetError> {
+        self.check_input_limit(data.len())?;
         Ok(self
             .decode_job(format)?
             .into_decoder(Cow::Borrowed(data), preferred)?
@@ -505,8 +720,9 @@ impl CodecSet {
         &'a self,
         data: &'a [u8],
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -520,8 +736,9 @@ impl CodecSet {
     pub fn animation_decoder<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -538,8 +755,9 @@ impl CodecSet {
     pub fn streaming_decoder<'a>(
         &'a self,
         data: &'a [u8],
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, CodecSetError> {
+        self.check_input_limit(data.len())?;
         let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
         Ok(self
             .decode_job(format)?
@@ -556,7 +774,7 @@ impl CodecSet {
     /// access pattern among the registered decoders.
     pub fn incremental_decoder(
         &self,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Box<crate::traits::DynIncrementalDecoder> {
         crate::traits::erase_incremental(CodecSetIncrementalDecoder::new(self.clone(), preferred))
     }
@@ -574,8 +792,8 @@ impl CodecSet {
         &self,
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
-    ) -> Result<OutputInfo, BoxedError> {
+        preferred: &[PixelFormat],
+    ) -> Result<OutputInfo, CodecSetError> {
         // A short read (not `len()`) bounds the probe, so a stream-backed
         // source is not consumed to its end before decoding starts.
         let mut probe = alloc::vec![0u8; ImageFormat::RECOMMENDED_PROBE_BYTES + 1024];
@@ -583,13 +801,14 @@ impl CodecSet {
         probe.truncate(n);
         let format = self
             .detect(&probe)
-            .ok_or_else(|| Box::new(CodecSetError::UnrecognizedFormat) as BoxedError)?;
-        self.decode_job(format)
-            .map_err(|e| Box::new(e) as BoxedError)?
-            .push_decoder_from_source(source, sink, preferred)
+            .ok_or(CodecSetError::UnrecognizedFormat)?;
+        Ok(self
+            .decode_job(format)?
+            .push_decoder_from_source(source, sink, preferred)?)
     }
 
-    /// A decode job for `format` with this set's defaults stamped on.
+    /// A decode job for `format` with this set's defaults stamped on and
+    /// checked (`limits`, `pulse`, and `decode_policy` via `try_set_policy`).
     ///
     /// The escape hatch behind every decode convenience: set decode hints
     /// (crop, orientation, gain map, start frame) on the job, then call one of
@@ -598,22 +817,7 @@ impl CodecSet {
         &'a self,
         format: ImageFormat,
     ) -> Result<Box<dyn DynDecodeJob<'a> + 'a>, CodecSetError> {
-        let entry = self
-            .decoder_entry(format)
-            .ok_or(CodecSetError::NoDecoder(format))?;
-        let mut job = entry.dyn_job();
-        if let Some(limits) = self.limits {
-            job.set_limits(limits);
-        }
-        if let Some(pulse) = &self.pulse {
-            job.set_pulse(pulse.clone());
-        }
-        if let Some(policy) = self.decode_policy {
-            // Legacy convenience preserves best-effort behavior.
-            #[allow(deprecated)]
-            job.set_policy(policy);
-        }
-        Ok(job)
+        self.checked_decode_job(format, None)
     }
 
     pub(crate) fn checked_decode_job<'a>(
@@ -643,12 +847,6 @@ impl CodecSet {
         self.pulse.as_ref().map_or(&crate::NoPulse, |pulse| pulse)
     }
 
-    /// Legacy name for the operation control.
-    #[deprecated(note = "use pulse; operation control includes progress and cancellation")]
-    pub fn stop(&self) -> &dyn enough::Stop {
-        self.pulse()
-    }
-
     pub(crate) fn operation_pulse(&self) -> &dyn crate::Pulse {
         self.pulse()
     }
@@ -661,7 +859,7 @@ impl CodecSet {
         self.registrations
             .decoders
             .iter()
-            .map(|d| d.capabilities().access_pattern())
+            .map(|d| d.config.capabilities().access_pattern())
             .fold(crate::source::AccessPattern::Sequential, |a, b| {
                 a.most_demanding(b)
             })
@@ -707,7 +905,7 @@ impl CodecSet {
         let config = self
             .encoder_entry(format)
             .ok_or(CodecSetError::NoEncoder(format))?
-            .as_dyn();
+            .config();
         let mut job = match fidelity {
             Some(target) => config
                 .try_fidelity_job(target)
@@ -754,7 +952,7 @@ impl CodecSet {
     pub fn encode(
         &self,
         format: ImageFormat,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
         Ok(self.encode_job(format)?.encode(pixels)?)
     }
@@ -768,12 +966,13 @@ impl CodecSet {
         &self,
         format: ImageFormat,
         fidelity: Fidelity,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
         Ok(self.encode_job_with(format, fidelity)?.encode(pixels)?)
     }
 
-    /// An encode job for `format` with this set's defaults stamped on.
+    /// An encode job for `format` with this set's defaults stamped on and
+    /// checked (`limits`, `pulse`, and `encode_policy` via `try_set_policy`).
     ///
     /// The escape hatch behind the encode conveniences: set metadata, canvas
     /// size, or loop count on the job, then call
@@ -781,41 +980,25 @@ impl CodecSet {
     /// `push_rows`/`finish` streaming) or
     /// [`into_animation_frame_encoder`](DynEncodeJob::into_animation_frame_encoder).
     pub fn encode_job(&self, format: ImageFormat) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
-        let entry = self
-            .encoder_entry(format)
-            .ok_or(CodecSetError::NoEncoder(format))?;
-        Ok(self.stamped_encode_job(entry.as_dyn()))
+        self.checked_encode_job(format, None, None)
     }
 
-    /// Like [`encode_job`](Self::encode_job), with a per-call [`Fidelity`]
-    /// applied to a clone of the template first.
+    /// Like [`encode_job`](Self::encode_job), with a checked per-call
+    /// [`Fidelity`] applied to a clone of the template first.
+    ///
+    /// Unsupported or substituted fidelity targets refuse instead of falling
+    /// back silently.
     pub fn encode_job_with(
         &self,
         format: ImageFormat,
         fidelity: Fidelity,
     ) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
-        let entry = self
-            .encoder_entry(format)
-            .ok_or(CodecSetError::NoEncoder(format))?;
-        let tuned = entry.clone_entry().with_fidelity_entry(fidelity);
-        Ok(self.stamped_encode_job(tuned.as_dyn()))
+        self.checked_encode_job(format, Some(fidelity), None)
     }
 
     /// Decode `input` and re-encode it to `target` at `fidelity` — the one-call
     /// recompress / reformat, carrying the source's metadata under an explicit
-    /// retention policy and applying a color-emission policy.
-    ///
-    /// The headline proxy operation: `decode → carry source metadata → encode`.
-    /// The source's ICC / EXIF / XMP / CICP / HDR / orientation are read off the
-    /// decode result and offered to the encoder, filtered by `metadata`
-    /// ([`Web`](MetadataPolicy::Web) strips GPS / camera / timestamps / XMP and
-    /// keeps orientation + rights + color; [`PreserveExact`](MetadataPolicy::PreserveExact)
-    /// requests all carriers). An encoder may lack a requested carrier; this
-    /// method does not certify byte-exact metadata preservation. `color`
-    /// ([`ColorEmitPolicy`]) governs how
-    /// color *signaling* (ICC vs CICP) is emitted — it is **not** a pixel-level
-    /// color-space conversion. The color policy merges onto the set-level
-    /// [`EncodePolicy`] (overriding only its color field).
+    /// checked retention policy and applying a checked color-emission policy.
     ///
     /// # Scope and failure modes
     ///
@@ -824,20 +1007,14 @@ impl CodecSet {
     ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
     /// - **No pixel processing** — recompresses at the decoded dimensions and
     ///   pixel format; no resize, crop, or CMS conversion.
-    /// - **No implicit descriptor downgrade** — if the target cannot accept
-    ///   the decoded descriptor, use an explicit pixel conversion or a
+    /// - **No implicit pixel-format downgrade** — if the target cannot accept
+    ///   the decoded pixel format, use an explicit pixel conversion or a
     ///   codec-specific encode path. The registered decoder is not re-run at a
     ///   lower precision behind the caller's back.
-    /// - **Fidelity and carrier support are best-effort** — the existing
-    ///   `with_fidelity`, `with_metadata_policy` and `with_policy` contracts do
-    ///   not report whether every request was honored. Use checked
-    ///   operation APIs when a property is required; capability flags are not admission.
-    ///
-    /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
-    /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
-    /// when `target` has no registered encoder, and forwards any decode or
-    /// encode error.
-    #[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
+    /// - **Checked fidelity, metadata, and color policy** — routes through
+    ///   `try_fidelity_job`, `try_set_metadata_policy`, and `try_set_policy`;
+    ///   an encoder that cannot honor the requested fidelity, retention policy,
+    ///   or color policy refuses with an error.
     pub fn transcode(
         &self,
         input: &[u8],
@@ -846,12 +1023,13 @@ impl CodecSet {
         metadata: MetadataPolicy,
         color: ColorEmitPolicy,
     ) -> Result<EncodeOutput, CodecSetError> {
+        self.check_input_limit(input.len())?;
         let target_inputs = self
             .encoder_for(target)
             .ok_or(CodecSetError::NoEncoder(target))?
-            .supported_descriptors();
+            .supported_pixel_formats();
         // This is a still-image convenience. Reject known source content that
-        // cannot travel through a single PixelSlice before decoding samples.
+        // cannot travel through a single PixelView before decoding samples.
         let format = self
             .detect(input)
             .ok_or(CodecSetError::UnrecognizedFormat)?;
@@ -872,21 +1050,18 @@ impl CodecSet {
             ));
         }
         let decoded = self.decode(input)?;
-        if !target_inputs.contains(&decoded.pixels().descriptor()) {
+        if !target_inputs.contains(decoded.pixels().format()) {
             return Err(CodecSetError::TranscodeRequiresExplicitHandling(
-                TranscodeBarrier::PixelDescriptor,
+                TranscodeBarrier::PixelFormat,
             ));
         }
         let source_metadata = Metadata::from(decoded.info());
-        let mut job = self.encode_job_with(target, fidelity)?;
-        job.set_metadata_policy(source_metadata, metadata);
-        // Legacy transcode preserves best-effort behavior.
-        #[allow(deprecated)]
-        job.set_policy(
-            self.encode_policy
-                .unwrap_or_else(EncodePolicy::none)
-                .with_color(color),
-        );
+        let policy = self
+            .encode_policy
+            .unwrap_or_else(EncodePolicy::none)
+            .with_color(color);
+        let mut job = self.checked_encode_job(target, Some(fidelity), Some(policy))?;
+        job.try_set_metadata_policy(source_metadata, metadata)?;
         Ok(job.encode(decoded.pixels())?)
     }
 
@@ -930,10 +1105,11 @@ impl CodecSet {
     pub fn estimate_encode_of(
         &self,
         format: ImageFormat,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         compute: &ComputeEnvironment,
     ) -> Result<ResourceEstimate, CodecSetError> {
-        let image = ImageCharacteristics::new(pixels.width(), pixels.rows(), pixels.descriptor());
+        let image =
+            ImageCharacteristics::new(pixels.width(), pixels.height(), pixels.format().clone());
         self.estimate_encode(format, &image, compute)
     }
 
@@ -972,7 +1148,7 @@ impl CodecSet {
     /// (same `UnrecognizedFormat` / codec errors), then estimates a still frame
     /// at the probed canvas dimensions in the decoder's native output format —
     /// its first
-    /// [`supported_descriptors`](DynDecoderConfig::supported_descriptors), which
+    /// [`supported_pixel_formats`](DynDecoderConfig::supported_pixel_formats), which
     /// carries the real channel count and bit depth (falling back to RGBA8 /
     /// RGB8 from the probed alpha only if the decoder lists none). Animations
     /// are costed as one canvas frame; for per-frame or full-sequence cost, or
@@ -983,6 +1159,7 @@ impl CodecSet {
         data: &[u8],
         compute: &ComputeEnvironment,
     ) -> Result<ResourceEstimate, CodecSetError> {
+        self.check_input_limit(data.len())?;
         // Key off the *detected* (registration) format, which is what
         // `decoder_for` / `estimate_decode` index on — not `info.format`, the
         // format the decoder *reports*, which can differ (e.g. a decoder
@@ -991,11 +1168,11 @@ impl CodecSet {
         let info = self.decode_job(format)?.probe(data)?;
         let descriptor = self
             .decoder_for(format)
-            .and_then(|d| d.supported_descriptors().first().copied())
+            .and_then(|d| d.supported_pixel_formats().first().cloned())
             .unwrap_or(if info.has_alpha {
-                PixelDescriptor::RGBA8_SRGB
+                PixelFormat::RGBA8_SRGB
             } else {
-                PixelDescriptor::RGB8_SRGB
+                PixelFormat::RGB8_SRGB
             });
         let image = ImageCharacteristics::new(info.width, info.height, descriptor);
         self.estimate_decode(format, &image, compute)
@@ -1003,36 +1180,20 @@ impl CodecSet {
 
     // --- Internals ----------------------------------------------------------
 
-    fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DecoderEntry> {
+    fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DynDecoderConfig> {
         self.registrations
             .decoders
             .iter()
-            .find(|d| d.formats().contains(&format))
-            .map(|b| &**b)
+            .find(|d| d.admitted_formats.contains(&format))
+            .map(|b| &*b.config)
     }
 
-    fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn EncoderEntry> {
+    fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn ImageEncodeFactory> {
         self.registrations
             .encoders
             .iter()
-            .find(|e| e.as_dyn().format() == format)
+            .find(|e| e.config().format() == format)
             .map(|b| &**b)
-    }
-
-    fn stamped_encode_job(&self, config: &dyn DynEncoderConfig) -> Box<dyn DynEncodeJob> {
-        let mut job = config.dyn_job();
-        if let Some(limits) = self.limits {
-            job.set_limits(limits);
-        }
-        if let Some(pulse) = &self.pulse {
-            job.set_pulse(pulse.clone());
-        }
-        if let Some(policy) = self.encode_policy {
-            // Legacy convenience preserves best-effort behavior.
-            #[allow(deprecated)]
-            job.set_policy(policy);
-        }
-        job
     }
 }
 
@@ -1075,14 +1236,14 @@ impl fmt::Debug for CodecSet {
 /// codec's incremental decoder. It never copies input.
 pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
-    preferred: Vec<PixelDescriptor>,
+    preferred: Vec<PixelFormat>,
     inner: Option<Box<crate::traits::DynIncrementalDecoder>>,
     probe: [crate::traits::InputRequest; 1],
 }
 
 impl CodecSetIncrementalDecoder {
     /// Create a new incremental decoder tied to `set`.
-    pub fn new(set: CodecSet, preferred: &[PixelDescriptor]) -> Self {
+    pub fn new(set: CodecSet, preferred: &[PixelFormat]) -> Self {
         Self {
             set,
             preferred: preferred.to_vec(),
@@ -1141,8 +1302,8 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         self.inner.as_mut().and_then(|d| d.take_details())
     }
 
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.inner.as_ref().and_then(|d| d.output_descriptor())
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
+        self.inner.as_ref().and_then(|d| d.output_pixel_format())
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
@@ -1190,9 +1351,9 @@ mod tests {
     }
 
     #[test]
-    fn decode_as_without_decoder_is_no_decoder() {
+    fn decode_with_format_without_decoder_is_no_decoder() {
         let set = CodecSet::new();
-        match set.decode_as(ImageFormat::Jpeg, &[0xFF, 0xD8], &[]) {
+        match set.decode_with_format(ImageFormat::Jpeg, &[0xFF, 0xD8], &[]) {
             Err(CodecSetError::NoDecoder(ImageFormat::Jpeg)) => {}
             other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
         }
@@ -1203,7 +1364,7 @@ mod tests {
         let set = CodecSet::new();
         let bytes = [0u8; 3];
         let pixels =
-            PixelSlice::new(&bytes, 1, 1, 3, PixelDescriptor::RGB8_SRGB).expect("pixel slice");
+            PixelView::new(&bytes, 1, 1, 3, &zenpixels::formats::RGB8_SRGB).expect("pixel slice");
         match set.encode(ImageFormat::Png, pixels) {
             Err(CodecSetError::NoEncoder(ImageFormat::Png)) => {}
             other => panic!("expected NoEncoder(Png), got {other:?}"),

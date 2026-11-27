@@ -1,5 +1,3 @@
-// Keep the legacy writer protocol/fallback regression coverage executable.
-#![allow(deprecated)]
 //! Observational probes for issues 160–162. Values describe behavior; they
 //! deliberately do not turn a known defect into a regression expectation.
 //! Run with `just io-contract-probes`.
@@ -13,16 +11,16 @@ use std::task::{Context, Poll};
 
 use zencodec::decode::{
     BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, OutputInfo, Progress,
-    StepError,
+    RowStrip, StepError,
 };
 use zencodec::encode::{EncodeOutput, Encoder, OutputBuffer, OutputTiming};
 use zencodec::source::{AccessPattern, ReadAt};
 use zencodec::{ImageFormat, ImageInfo, UnsupportedOperation};
 use zencodec_io::tokio_io::{BytesSource, Inline, transcode_async};
-use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, FileReadAt, encode_to_writer};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, FileReadAt};
+use zenpixels::{PixelFormat, PixelView};
 
-const DESC: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+const DESC: PixelFormat = PixelFormat::RGBA8_SRGB;
 const WIDTH: u32 = 256;
 const HEIGHT: u32 = 1024;
 
@@ -46,9 +44,9 @@ impl Encoder for OneShot {
     fn reject(op: UnsupportedOperation) -> Error {
         Error(op)
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         let mut out = Vec::new();
-        for y in 0..pixels.rows() {
+        for y in 0..pixels.height() {
             out.extend_from_slice(pixels.row(y));
         }
         Ok(EncodeOutput::new(out, ImageFormat::Pnm))
@@ -73,14 +71,14 @@ impl Encoder for Raw {
     fn reject(op: UnsupportedOperation) -> Error {
         Error(op)
     }
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Error> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         OneShot.encode(pixels)
     }
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Error> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<OutputTiming, Error> {
         Ok(OutputTiming::streaming(0))
     }
-    fn push_rows(&mut self, pixels: PixelSlice<'_>) -> Result<(), Error> {
-        for y in 0..pixels.rows() {
+    fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Error> {
+        for y in 0..pixels.height() {
             self.out.push(pixels.row(y));
         }
         self.counts
@@ -141,7 +139,7 @@ impl IncrementalDecode for Burst {
         }
         let n = self.band.min(HEIGHT - self.y);
         let mut dst = sink
-            .provide_next_buffer(self.y, n, WIDTH, DESC)
+            .provide_next_buffer(RowStrip::new(self.y, WIDTH, n), DESC)
             .map_err(StepError::Sink)?;
         for r in 0..n {
             dst.row_mut(r).fill((self.y + r) as u8);
@@ -157,7 +155,7 @@ impl IncrementalDecode for Burst {
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+    fn output_pixel_format(&self) -> Option<PixelFormat> {
         Some(DESC)
     }
     fn access_pattern(&self) -> AccessPattern {
@@ -307,14 +305,11 @@ fn file_error_provenance() {
 async fn main() {
     file_error_provenance();
     let data = [7u8; 4];
-    let px = PixelSlice::new(&data, 1, 1, 4, DESC).unwrap();
-    assert_eq!(OneShot.encode(px.clone()).unwrap().data(), data);
-    let mut out = Vec::new();
-    println!(
-        "one_shot_writer result={:?} written={}",
-        encode_to_writer(OneShot, px, &mut out),
-        out.len()
-    );
+    let px = PixelView::new_with_format_cow(&data, 1, 1, 4, zenpixels::FormatCow::from_owned(DESC))
+        .unwrap();
+    let encoded = OneShot.encode(px).unwrap();
+    assert_eq!(encoded.data(), data);
+    println!("one_shot_encode written={}", encoded.len());
     budgets();
     for band in [1, 16, HEIGHT] {
         for read_size in [1, 64 * 1024] {

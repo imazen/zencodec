@@ -3,11 +3,11 @@
 use crate::EncodeOutput;
 use alloc::vec::Vec;
 
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 /// Type-erased single-image encoder.
 ///
-/// Accepts any pixel format at runtime via [`PixelSlice`] (type-erased).
+/// Accepts any pixel format at runtime via [`PixelView`] (type-erased).
 /// The encoder dispatches internally based on the pixel descriptor.
 ///
 /// Mutually exclusive usage paths:
@@ -60,58 +60,27 @@ pub trait Encoder: Sized {
     }
 
     /// Encode a complete image at once (consumes self).
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>;
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Self::Error>;
 
-    /// Encode from sRGB(A) 8-bit pixels provided as raw bytes.
+    /// Encode a complete image at once, permitting destructive in-place
+    /// modification of the caller's pixel buffer (consumes self).
     ///
-    /// Hot-path entry point for RGBA8 data from bitmap sources (e.g.
-    /// imageflow). The buffer is mutable — the encoder may modify it
-    /// in-place for format adaptation (e.g. RGBA→BGRA channel reorder,
-    /// alpha premultiplication, stripping alpha to RGB). Callers must
+    /// Hot-path entry point for callers that already own a mutable buffer
+    /// (for example RGBA8/RGBX8/BGRA8 from an image pipeline) and will discard
+    /// it after encoding. The encoder may mutate pixel bytes in-place for
+    /// zero-allocation format adaptation (e.g. channel swizzle, alpha
+    /// premultiplication, or filling opaque padding channels). Callers must
     /// not rely on the buffer contents after this call returns.
     ///
-    /// The default delegates to [`encode()`](Encoder::encode) by wrapping
-    /// the raw bytes in a [`PixelSlice`] with the appropriate descriptor.
-    /// Codec overrides (e.g. zenjpeg) may bypass `PixelSlice` construction
-    /// for zero-overhead encoding from raw buffers.
+    /// Unlike raw byte-pointer entry points, [`PixelViewMut`] validates
+    /// dimensions, byte stride, buffer length, and alpha semantics
+    /// (`RGBA8_SRGB` vs `RGBX8_SRGB`) fallibly at construction — eliminating
+    /// panics, bare `bool` flags, and pixel-vs-byte stride confusion.
     ///
-    /// # Parameters
-    ///
-    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel (may be mutated).
-    ///   Length must be ≥ `stride_pixels * height * 4`.
-    /// - `make_opaque`: if `true`, treat the alpha channel as padding
-    ///   (enables RGB fast paths in codecs that don't support alpha).
-    ///   Some codecs set all alpha bytes to 255 in-place.
-    /// - `width`, `height`: image dimensions in pixels
-    /// - `stride_pixels`: row stride in **pixels** (not bytes), must be ≥ `width`.
-    ///   Stride in bytes is `stride_pixels * 4`. Callers creating bitmaps
-    ///   for this method should allocate rows with `stride_pixels = width`
-    ///   (contiguous) unless alignment requirements dictate otherwise.
-    ///   Non-contiguous strides (stride > width) are supported but may
-    ///   prevent zero-copy fast paths in some codecs.
-    fn encode_srgba8(
-        self,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
-    ) -> Result<EncodeOutput, Self::Error> {
-        use zenpixels::AlphaMode;
-        let descriptor = if make_opaque {
-            PixelDescriptor::RGBA8_SRGB.with_alpha(Some(AlphaMode::Undefined))
-        } else {
-            PixelDescriptor::RGBA8_SRGB
-        };
-        let stride_bytes = stride_pixels as usize * 4;
-        // PixelSlice::new only fails on dimension/stride/length mismatch,
-        // which is a caller bug (not untrusted input — encoders receive
-        // validated data). Panic is appropriate; UnsupportedOperation::PixelFormat
-        // would mask the real issue and mislead callers.
-        let pixels = PixelSlice::new(data, width, height, stride_bytes, descriptor).expect(
-            "encode_srgba8: data.len() does not match width * height * 4 (stride-adjusted)",
-        );
-        self.encode(pixels)
+    /// The default delegates to [`encode()`](Encoder::encode) without mutating
+    /// the buffer.
+    fn encode_in_place(self, pixels: PixelViewMut<'_>) -> Result<EncodeOutput, Self::Error> {
+        self.encode(pixels.as_view())
     }
 
     /// Declare the image before the first [`push_rows`](Self::push_rows):
@@ -168,7 +137,7 @@ pub trait Encoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: zenpixels::PixelDescriptor,
+        descriptor: zenpixels::PixelFormat,
     ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = (width, height, descriptor);
         Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
@@ -185,7 +154,7 @@ pub trait Encoder: Sized {
     /// legacy `begin_output` cannot establish this complete planning contract.
     fn begin_declared(
         &mut self,
-        _declaration: &crate::encode::EncodeDeclaration<'_>,
+        _declaration: &crate::encode::EncodeDeclaration,
     ) -> Result<crate::encode::EncodePlan, Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::EncodePlanning))
     }
@@ -224,7 +193,7 @@ pub trait Encoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        descriptor: PixelFormat,
         access: crate::output_patch::OutputAccess,
     ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = access;
@@ -281,7 +250,7 @@ pub trait Encoder: Sized {
     /// # Errors
     ///
     /// Default returns [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode).
-    fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
+    fn push_rows(&mut self, _rows: PixelView<'_>) -> Result<(), Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
@@ -305,7 +274,7 @@ pub trait Encoder: Sized {
     /// Default returns [`UnsupportedOperation::PullEncode`](crate::UnsupportedOperation::PullEncode).
     fn encode_from(
         self,
-        _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+        _source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> Result<EncodeOutput, Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::PullEncode))
     }
@@ -316,7 +285,7 @@ pub trait Encoder: Sized {
 /// Accepts composited full-canvas frames and handles format-specific
 /// optimization (disposal, blending, sub-canvas extraction) internally.
 ///
-/// The encoder accepts [`PixelSlice`] frames at runtime — the pixel
+/// The encoder accepts [`PixelView`] frames at runtime — the pixel
 /// descriptor must be consistent across all frames.
 ///
 /// Loop count is set on the [`EncodeJob`](super::EncodeJob) before
@@ -372,7 +341,7 @@ pub trait AnimationFrameEncoder: Sized {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        descriptor: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<crate::encode::AnimationOutputTiming, Self::Error> {
         let _ = (width, height, descriptor, frame_count);
@@ -405,7 +374,7 @@ pub trait AnimationFrameEncoder: Sized {
     /// Pass `None` if cancellation is not needed.
     fn push_frame(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration_ms: u32,
         pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error>;
@@ -421,7 +390,7 @@ pub trait AnimationFrameEncoder: Sized {
     /// clock override this with destination-aware quantization.
     fn push_frame_timed(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration: crate::animation::FrameDuration,
         pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, Self::Error> {
@@ -439,7 +408,7 @@ pub trait AnimationFrameEncoder: Sized {
     /// `push_frame` implementations may silently quantize those values.
     fn push_frame_exact(
         &mut self,
-        _pixels: PixelSlice<'_>,
+        _pixels: PixelView<'_>,
         _duration: crate::animation::FrameDuration,
         _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error> {
@@ -464,7 +433,7 @@ impl AnimationFrameEncoder for () {
 
     fn push_frame(
         &mut self,
-        _: PixelSlice<'_>,
+        _: PixelView<'_>,
         _: u32,
         _: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error> {

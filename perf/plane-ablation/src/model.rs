@@ -1,5 +1,5 @@
 //! Private representation experiment, not a proposed public API.
-use zenpixels::{ChannelType, sample::SampleEncoding};
+use zenpixels::{SampleType, sample::SampleEncoding};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Order {
@@ -28,7 +28,7 @@ pub(crate) enum Error {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Plane<'a> {
     bytes: &'a [u8],
-    channel: ChannelType,
+    channel: SampleType,
     order: Order,
     width: usize,
     height: usize,
@@ -38,7 +38,7 @@ pub(crate) struct Plane<'a> {
 impl<'a> Plane<'a> {
     pub(crate) fn new(
         bytes: &'a [u8],
-        channel: ChannelType,
+        channel: SampleType,
         order: Order,
         width: usize,
         height: usize,
@@ -78,7 +78,7 @@ impl<'a> Plane<'a> {
     pub(crate) fn dimensions(self) -> (usize, usize) {
         (self.width, self.height)
     }
-    pub(crate) fn channel(self) -> ChannelType {
+    pub(crate) fn channel(self) -> SampleType {
         self.channel
     }
     /// Borrow a rectangular sample window, retaining row and component strides.
@@ -140,7 +140,7 @@ impl<'a> Plane<'a> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Row<'a> {
     bytes: &'a [u8],
-    channel: ChannelType,
+    channel: SampleType,
     order: Order,
     width: usize,
     step: usize,
@@ -170,9 +170,9 @@ impl<'a> Row<'a> {
 }
 // Private/sealed candidate: no caller-defined casts or layout promises.
 pub(crate) trait Scalar: bytemuck::Pod {
-    const CHANNEL: ChannelType;
+    const CHANNEL: SampleType;
 }
-macro_rules! scalars { ($($t:ty => $v:ident),*) => { $(impl Scalar for $t { const CHANNEL: ChannelType = ChannelType::$v; })* }; }
+macro_rules! scalars { ($($t:ty => $v:ident),*) => { $(impl Scalar for $t { const CHANNEL: SampleType = SampleType::$v; })* }; }
 scalars!(u8=>U8,u16=>U16,f32=>F32,f64=>F64,i8=>I8,i16=>I16,u32=>U32,i32=>I32,u64=>U64,i64=>I64);
 
 pub(crate) struct Codes<'a> {
@@ -183,8 +183,8 @@ impl Codes<'_> {
     pub(crate) fn code(&self, x: usize, y: usize) -> Result<u16, Error> {
         let bytes = self.plane.row(y)?.sample(x)?;
         let word = match self.encoding.storage() {
-            ChannelType::U8 => u16::from(bytes[0]),
-            ChannelType::U16 => {
+            SampleType::U8 => u16::from(bytes[0]),
+            SampleType::U16 => {
                 let bytes = [bytes[0], bytes[1]];
                 match self.plane.order {
                     Order::Native => u16::from_ne_bytes(bytes),

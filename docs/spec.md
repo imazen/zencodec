@@ -1855,10 +1855,19 @@ deliberately never adds one. `Exif::set_orientation` is the *authoring* path.
 
 ### `OutputInfo`
 
-Predicted decoder output. Fields: `width`, `height`, `native_format: PixelDescriptor`,
-`has_alpha`, `orientation_applied: Orientation`, `crop_applied: Option<[u32; 4]>`.
+Describes predicted output and completed sink delivery. The image fields are
+`width`, `height`, `native_format: ImageSpec`, `has_alpha`,
+`orientation_applied: Orientation` and `crop_applied: Option<[u32; 4]>`.
+Copy-based still delivery takes the applied transform and crop from the job's
+`output_info` and the dimensions and spec from its decoded pixels.
+Animation sink delivery also sets `frame: Option<FrameCompletion>`, with exact
+source duration, display index and optional source PTS. Use `with_frame` in
+native implementations that publish rows directly.
 
-Methods: `full_decode()`, `buffer_size()`, `pixel_count()`.
+`DynAnimationFrameDecoder::render_next_frame` borrows the native canvas.
+`AnimationFrame::try_to_owned_frame` copies the active samples and preserves
+evidence and provenance. The default owned renderer consumes the frame before
+attempting the copy and propagates a copy failure through the codec error.
 
 ### `Cicp`
 
@@ -2295,45 +2304,18 @@ See `zenpixels` documentation for field details.
 
 ## Color emission
 
-`resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`
-— a pure, `no_std`, CMS-free decision of which color carriers an *encode* writes for
-a target. Crate-root re-exports (`CicpEmission`, `ColorEmitFields`, `ColorEmitPlan`,
-`ColorEmitPolicy`, `IccDisposition`, `resolve_color_emit`).
+The no-std resolver accepts the source provenance, current `ColorSpace`,
+target `EncodeCapabilities` and `ColorEmitPolicy`. It returns
+`Result<ColorEmitPlan, ColorEmitError>`. The active model determines ICC class
+and the current interpretation determines CICP. Both fields respect the target's
+declared carriers. An ICC-only target must refuse HLG unless a matching active
+ICC is already available or the caller explicitly converts the pixels.
 
-```rust
-pub fn resolve_color_emit(
-    source: &SourceColor,
-    caps: &EncodeCapabilities,
-    policy: ColorEmitPolicy,
-) -> ColorEmitPlan;
+A codec materializes `IccDisposition::SynthesizeFrom` or
+`IccDisposition::SynthesizeGrayFrom` with its respective
+`zenpixels_convert::icc_profiles::SynthesizedIcc` entry point. A plan works only
+when the required carriers can be materialized. See [color emission](color-emit-model.md).
 
-#[non_exhaustive]
-pub enum ColorEmitPolicy { Compatibility, Balanced, Compact, Verbatim, Custom(ColorEmitFields) }
-
-pub struct ColorEmitPlan { pub cicp: Option<Cicp>, pub icc: IccDisposition }
-
-#[non_exhaustive]
-pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
-```
-
-- **`ColorEmitPolicy`** — `Balanced` (default) writes CICP where it's a *safe sole
-  carrier* and keeps a synthesized ICC companion otherwise (e.g. PNG `cICP`);
-  `Compatibility` favors the widest reader support; `Compact` prefers CICP and drops
-  the ICC; `Verbatim` carries the source's signals unchanged; `Custom(ColorEmitFields)`
-  is explicit (`ColorEmitFields::new`).
-- **`EncodeCapabilities`** carrier methods: `cicp_is_valid_carrier` (the format has a
-  standardized CICP slot — JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier`
-  (CICP alone reaches every measured reader — JXL only; AVIF/HEIC and PNG keep
-  an ICC alongside, imazen/zencodec#132).
-- **`IccDisposition`** — `KeepSource` re-embeds the source ICC; `Drop` emits none;
-  `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
-  CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled
-  `const` profile or a CMS-generated one, never a mis-tagged TRC. The plan never emits
-  a redundant `SynthesizeFrom(sRGB)`.
-
-The emit-direction names can't be confused with the decode-side `SourceColor`. Design
-and rejected alternatives: `docs/color-emit-model.md`; how the framework resolves
-color/orientation/metadata before a codec runs: `docs/correctness-model.md`.
 
 ---
 
@@ -2616,16 +2598,24 @@ pub use how_far::{NoPulse, Pulse, SharedPulse};  // operation control
 
 ### `copy_decode_to_sink()`
 
-Fallback `push_decoder` implementation via one-shot decode + copy to sink.
-For codecs that can't stream natively.
+Fallback `push_decoder` implementation via one-shot decode and strided copy.
+It forwards `RowMetadata` for each strip through
+`DecodeRowSink::provide_buffer_with_metadata`. The payload describes the
+final samples after the loan has been filled. Forwarding sinks preserve
+that evidence and provenance without attaching unverified facts to unwritten pixels.
 
 ### `copy_frame_to_sink()`
 
-Fallback `render_next_frame_to_sink` implementation via `render_next_frame` + copy.
+Fallback `render_next_frame_to_sink` implementation via the borrowed frame.
+It includes `FrameCompletion` and forwards row metadata.
 
 ### `negotiate_pixel_format()` / `best_encode_format()` / `is_format_available()`
 
-Format negotiation helpers for matching preferred descriptors to codec capabilities.
+`negotiate_pixel_format_match` returns the actual available spec plus an exact,
+layout-only or default match. `negotiate_pixel_format` returns only the selected
+spec. `best_encode_format` requires exact spec agreement; `best_encode_layout`
+provides a layout-compatible candidate for explicit conversion or checked
+reinterpretation.
 
 ### Sample-exact output planning
 

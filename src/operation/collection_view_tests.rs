@@ -1,14 +1,15 @@
 //! The collection's view must survive detached output and policy publication.
 extern crate std;
 use super::*;
+use crate::helpers::codec_spec;
 use crate::{
     collection::{CollectionError, Origin, SelectionError},
     image::{ImageGeometry, ImageInterpretation, Rect},
-    operation::{Decision, ImageFacts, Question},
+    operation::{Decision, ImageSummary, Question},
 };
 use alloc::{rc::Rc, vec};
 use core::{cell::Cell, convert::Infallible};
-use zenpixels::{Orientation, PixelBuffer, PixelDescriptor};
+use zenpixels::{Orientation, PixelBuf};
 
 fn image(composition: Option<Composition>) -> ImageOutput {
     let mut interpretation = ImageInterpretation::packed(
@@ -26,7 +27,13 @@ fn image(composition: Option<Composition>) -> ImageOutput {
     );
     interpretation.composition = composition;
     ImageOutput::packed(
-        PixelBuffer::from_vec(vec![13, 37], 2, 1, PixelDescriptor::GRAY8).unwrap(),
+        PixelBuf::from_bytes(
+            vec![13, 37],
+            2,
+            1,
+            codec_spec(zenpixels::SampleLayout::GRAY8),
+        )
+        .unwrap(),
         vec![],
         interpretation,
     )
@@ -121,7 +128,7 @@ fn collection_view_is_bound_before_policy_without_copying_or_relabeling_clones()
                 Some(Orientation::Rotate90)
             );
             assert_eq!(source.interpretation().composition, claim);
-            assert_eq!(ImageFacts::new(&source).composition, claim);
+            assert_eq!(ImageSummary::new(&source).composition, claim);
             assert_eq!(
                 output.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap(),
                 address

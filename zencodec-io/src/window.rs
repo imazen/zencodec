@@ -106,11 +106,8 @@ impl Window {
 
     /// Room for `n` more bytes after the held bytes, to read into; follow
     /// with [`commit`](Self::commit). The contents are stale, not zeroed.
-    pub(crate) fn spare(&mut self, n: usize) -> &mut [u8] {
-        self.try_spare(n, usize::MAX)
-            .expect("input window allocation")
-    }
-
+    ///
+    /// Returns [`InputError`] instead of panicking on limit or allocation failure.
     pub(crate) fn try_spare(&mut self, n: usize, limit: usize) -> Result<&mut [u8], InputError> {
         let needed = self.len().checked_add(n).ok_or(InputError::Limit {
             needed: u64::MAX,
@@ -158,10 +155,12 @@ impl Window {
         self.base = offset;
     }
 
-    /// Append bytes received from elsewhere.
-    #[allow(dead_code)]
+    /// Append bytes received from elsewhere (test helper).
+    #[cfg(test)]
     pub(crate) fn extend(&mut self, bytes: &[u8]) {
-        self.spare(bytes.len()).copy_from_slice(bytes);
+        self.try_spare(bytes.len(), usize::MAX)
+            .expect("test window allocation")
+            .copy_from_slice(bytes);
         self.commit(bytes.len());
     }
 }
@@ -201,6 +200,13 @@ pub enum ProtocolViolation {
         /// The total length the decoder had been given.
         total: u64,
     },
+    /// The stage claimed to consume more bytes than were offered in `Input::bytes`.
+    OverConsumed {
+        /// Bytes the stage claimed to consume.
+        consumed: usize,
+        /// Bytes actually offered in `Input::bytes`.
+        offered: usize,
+    },
 }
 
 impl fmt::Display for ProtocolViolation {
@@ -216,11 +222,28 @@ impl fmt::Display for ProtocolViolation {
                 f,
                 "decoder requested {request:?} past the end of a {total}-byte source"
             ),
+            Self::OverConsumed { consumed, offered } => write!(
+                f,
+                "stage consumed {consumed} bytes, exceeding the {offered}-byte input offered"
+            ),
         }
     }
 }
 
 impl core::error::Error for ProtocolViolation {}
+
+/// Verify that `consumed` never exceeds `offered_len`. Enforced on every step
+/// (not only `Need`) so silent over-consumption clamping cannot hide bugs.
+#[inline]
+pub(crate) fn check_consumed(consumed: usize, offered_len: usize) -> Result<(), ProtocolViolation> {
+    if consumed > offered_len {
+        return Err(ProtocolViolation::OverConsumed {
+            consumed,
+            offered: offered_len,
+        });
+    }
+    Ok(())
+}
 
 /// Check a `Need` against the input that was just offered: requests must
 /// exist, must not ask past a known end, and an input that satisfied one
@@ -275,7 +298,7 @@ mod tests {
         w.extend(&[1, 2, 3, 4]);
         w.consume(1);
         assert_eq!((w.base(), w.bytes()), (1, &[2u8, 3, 4][..]));
-        let s = w.spare(4);
+        let s = w.try_spare(4, usize::MAX).unwrap();
         s[..2].copy_from_slice(&[5, 6]);
         w.commit(2);
         assert_eq!(w.bytes(), &[2, 3, 4, 5, 6]);

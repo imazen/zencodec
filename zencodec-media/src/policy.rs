@@ -90,7 +90,6 @@ impl StdError for Error {
 pub struct PolicyDecoder<D, R> {
     decoder: Option<D>,
     resolver: R,
-    preset: PolicySet,
     report: OperationReport,
 }
 impl<D, R> PolicyDecoder<D, R> {
@@ -101,17 +100,8 @@ impl<D, R> PolicyDecoder<D, R> {
         Self {
             decoder: Some(decoder),
             resolver,
-            preset: PolicySet::new(),
             report: OperationReport::default(),
         }
-    }
-    /// The built-in policy used when this resolver returns `UsePreset`.
-    /// During migration, these requirements and the policy argument
-    /// both apply. A bound policy supplies preferences in place of these.
-    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
-    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
-        self.preset = preset;
-        self
     }
     /// Bounded decision history; also readable after terminal failure.
     pub fn report(&self) -> &OperationReport {
@@ -171,33 +161,19 @@ impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
     fn run<T>(
         &mut self,
         pulse: Option<&dyn zencodec::Pulse>,
-        f: impl FnOnce(
-            &mut D,
-            &mut R,
-            PolicySet,
-            &mut OperationReport,
-        ) -> Result<T, SessionError<Error>>,
+        f: impl FnOnce(&mut D, &mut R, &mut OperationReport) -> Result<T, SessionError<Error>>,
     ) -> Result<T, SessionError<Error>> {
         // Taking ownership before any application/backend call makes unwinding
         // terminal too. The native backend drops with its queues on failure.
         let mut decoder = self.decoder.take().ok_or(SessionError::Finished)?;
         pulse.unwrap_or(&zencodec::NoPulse).check()?;
         // A frame's eventual publication cannot discharge earlier native workspace.
-        // Keep both legacy and bound requirements, without inventing route evidence.
-        for required in [Some(self.preset), self.resolver.requirements()]
-            .into_iter()
-            .flatten()
-        {
+        if let Some(required) = self.resolver.requirements() {
             required.check_workspace(None).map_err(|cause| {
                 SessionError::Codec(Error::new(Stage::Policy, &self.report, cause))
             })?;
         }
-        let output = f(
-            &mut decoder,
-            &mut self.resolver,
-            self.preset,
-            &mut self.report,
-        )?;
+        let output = f(&mut decoder, &mut self.resolver, &mut self.report)?;
         self.decoder = Some(decoder);
         Ok(output)
     }
@@ -215,7 +191,7 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         config: &CodecConfig,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), SessionError<Error>> {
-        self.run(pulse, |decoder, _, _, report| {
+        self.run(pulse, |decoder, _, report| {
             decoder
                 .configure(config, pulse)
                 .map_err(|e| native(e, report))
@@ -226,7 +202,7 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         packet: &mut Packet,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<SendStatus, SessionError<Error>> {
-        self.run(pulse, |decoder, _, _, report| {
+        self.run(pulse, |decoder, _, report| {
             decoder.send(packet, pulse).map_err(|e| native(e, report))
         })
     }
@@ -234,14 +210,14 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
         &mut self,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Receive<Frame>, SessionError<Error>> {
-        self.run(pulse, |decoder, resolver, preset, report| {
+        self.run(pulse, |decoder, resolver, report| {
             let output = decoder.receive(pulse).map_err(|e| native(e, report))?;
             if let Receive::Ready(frame) = &output {
                 match resolve_frame(
                     frame.interpretation(),
                     frame.timing(),
                     resolver,
-                    preset,
+                    PolicySet::new(),
                     pulse,
                 ) {
                     Ok(record) => report.record(record),
@@ -258,14 +234,17 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
             Ok(output)
         })
     }
-    fn end_input(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(None, |decoder, _, _, report| {
-            decoder.end_input().map_err(|e| native(e, report))
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Error>> {
+        self.run(pulse, |decoder, _, report| {
+            decoder.end_input(pulse).map_err(|e| native(e, report))
         })
     }
-    fn reset(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(None, |decoder, _, _, report| {
-            decoder.reset().map_err(|e| native(e, report))
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<Error>> {
+        self.run(pulse, |decoder, _, report| {
+            decoder.reset(pulse).map_err(|e| native(e, report))
         })
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {

@@ -70,34 +70,49 @@ pub fn get(d: &[u8], at: u64, n: u64) -> Option<&[u8]> {
 }
 
 /// Byte order and offset width.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Layout {
-    pub le: bool,
-    pub big: bool,
+    /// Byte order of integer fields in the TIFF/IFD structure.
+    pub byte_order: zencodec::exif::ByteOrder,
+    /// `true` for BigTIFF (64-bit offsets/counts), `false` for classic 32-bit TIFF.
+    pub is_big_tiff: bool,
 }
 
 impl Layout {
-    pub fn u16(self, d: &[u8], at: u64) -> Option<u16> {
-        let b: [u8; 2] = get(d, at, 2)?.try_into().ok()?;
-        Some(if self.le {
+    /// Construct a layout from byte order and BigTIFF flag.
+    pub const fn new(byte_order: zencodec::exif::ByteOrder, is_big_tiff: bool) -> Self {
+        Self {
+            byte_order,
+            is_big_tiff,
+        }
+    }
+
+    /// Whether integer fields are stored little-endian (`II`).
+    pub const fn is_little_endian(self) -> bool {
+        matches!(self.byte_order, zencodec::exif::ByteOrder::Little)
+    }
+
+    pub fn u16(self, data: &[u8], offset: u64) -> Option<u16> {
+        let b: [u8; 2] = get(data, offset, 2)?.try_into().ok()?;
+        Some(if self.is_little_endian() {
             u16::from_le_bytes(b)
         } else {
             u16::from_be_bytes(b)
         })
     }
 
-    pub fn u32(self, d: &[u8], at: u64) -> Option<u32> {
-        let b: [u8; 4] = get(d, at, 4)?.try_into().ok()?;
-        Some(if self.le {
+    pub fn u32(self, data: &[u8], offset: u64) -> Option<u32> {
+        let b: [u8; 4] = get(data, offset, 4)?.try_into().ok()?;
+        Some(if self.is_little_endian() {
             u32::from_le_bytes(b)
         } else {
             u32::from_be_bytes(b)
         })
     }
 
-    pub fn u64(self, d: &[u8], at: u64) -> Option<u64> {
-        let b: [u8; 8] = get(d, at, 8)?.try_into().ok()?;
-        Some(if self.le {
+    pub fn u64(self, data: &[u8], offset: u64) -> Option<u64> {
+        let b: [u8; 8] = get(data, offset, 8)?.try_into().ok()?;
+        Some(if self.is_little_endian() {
             u64::from_le_bytes(b)
         } else {
             u64::from_be_bytes(b)
@@ -105,29 +120,29 @@ impl Layout {
     }
 
     /// An offset field: 4 bytes, 8 in BigTIFF.
-    pub fn offset(self, d: &[u8], at: u64) -> Option<u64> {
-        if self.big {
-            self.u64(d, at)
+    pub fn offset(self, data: &[u8], offset: u64) -> Option<u64> {
+        if self.is_big_tiff {
+            self.u64(data, offset)
         } else {
-            self.u32(d, at).map(u64::from)
+            self.u32(data, offset).map(u64::from)
         }
     }
 
     pub fn header_len(self) -> u64 {
-        if self.big { 16 } else { 8 }
+        if self.is_big_tiff { 16 } else { 8 }
     }
 
     pub fn count_len(self) -> u64 {
-        if self.big { 8 } else { 2 }
+        if self.is_big_tiff { 8 } else { 2 }
     }
 
     pub fn entry_len(self) -> u64 {
-        if self.big { 20 } else { 12 }
+        if self.is_big_tiff { 20 } else { 12 }
     }
 
     /// Bytes a value may occupy inside its entry.
     pub fn inline_cap(self) -> u64 {
-        if self.big { 8 } else { 4 }
+        if self.is_big_tiff { 8 } else { 4 }
     }
 }
 
@@ -190,34 +205,37 @@ pub enum Kind {
 #[derive(Clone, Debug)]
 pub struct Entry {
     /// Absolute offset of the entry.
-    pub at: u64,
+    pub offset: u64,
     pub tag: u16,
-    pub typ: u16,
+    /// TIFF field type code (e.g. `1` = BYTE, `3` = SHORT, `4` = LONG).
+    pub field_type: u16,
     pub count: u64,
     /// Absolute offset of the 4-byte (BigTIFF: 8-byte) value-or-offset field.
-    pub field: u64,
+    pub value_field_offset: u64,
     /// Remarks the walk attached to this entry.
     pub notes: Vec<String>,
 }
 
 /// Where an entry's value lives.
-pub enum Loc {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueLocation {
     /// The field type is not one TIFF defines.
     UnknownType,
     /// `count * size` overflows, or the offset does.
-    Overflow,
+    SizeOverflow,
     /// No value bytes.
     Empty,
     /// Inside the entry.
     Inline,
-    /// Out of line: absolute offset, byte count.
-    At(u64, u64),
+    /// Out of line: absolute offset and byte length.
+    OutOfLine { offset: u64, byte_len: u64 },
 }
 
 /// One directory.
 #[derive(Debug)]
 pub struct Ifd {
-    pub at: u64,
+    /// Absolute offset of the directory.
+    pub offset: u64,
     /// End of the bytes it covers, clipped to the TIFF's limit.
     pub end: u64,
     pub kind: Kind,
@@ -226,7 +244,7 @@ pub struct Ifd {
     pub followed: bool,
     pub entries: Vec<Entry>,
     /// Raw next-IFD pointer (relative to the TIFF's base).
-    pub next: u64,
+    pub next_ifd_offset: u64,
     /// Why the directory could not be read whole.
     pub problem: Option<String>,
     /// Remarks about its next pointer.
@@ -239,9 +257,9 @@ pub struct Ifd {
     pub roles: Vec<(Kind, bool)>,
     /// Index of the last entry with each tag (decoders keeping a map keep
     /// the last of duplicate tags).
-    pub last: BTreeMap<u16, usize>,
+    pub last_entry_by_tag: BTreeMap<u16, usize>,
     /// Index of the first entry with a field type TIFF does not define.
-    pub first_unknown: Option<usize>,
+    pub first_unknown_type_entry: Option<usize>,
     /// Pointer hops from the first directory of the walk (chained IFDs keep
     /// their predecessor's depth), as decoders that cap recursion count.
     pub depth: u8,
@@ -288,10 +306,11 @@ pub fn add_note(notes: &mut Vec<String>, text: String) {
 /// One parsed TIFF.
 pub struct Walk<'a> {
     /// The input up to the TIFF's limit; positions are absolute.
-    pub d: &'a [u8],
+    pub data: &'a [u8],
     /// Offsets stored in the TIFF are relative to this.
     pub base: u64,
-    pub lay: Layout,
+    /// Byte order and classic-vs-BigTIFF offset width.
+    pub layout: Layout,
     /// The TIFF version number from the header (42, 43, or a raw variant).
     pub magic: u16,
     pub header: Range<u64>,
@@ -338,7 +357,7 @@ fn scan_budget(limit: u64) -> Cell<u64> {
 
 impl Walk<'_> {
     pub fn limit(&self) -> u64 {
-        self.d.len() as u64
+        self.data.len() as u64
     }
 
     /// Take `n` bytes from the count-only scan budget; false once it is
@@ -361,16 +380,16 @@ impl Walk<'_> {
         {
             return Some(s);
         }
-        let count = if self.lay.big {
-            self.lay.u64(self.d, at)
+        let count = if self.layout.is_big_tiff {
+            self.layout.u64(self.data, at)
         } else {
-            self.lay.u16(self.d, at).map(u64::from)
+            self.layout.u16(self.data, at).map(u64::from)
         }
         .unwrap_or(0);
         let end = count
-            .saturating_mul(self.lay.entry_len())
+            .saturating_mul(self.layout.entry_len())
             .saturating_add(at)
-            .saturating_add(self.lay.count_len() + self.lay.inline_cap())
+            .saturating_add(self.layout.count_len() + self.layout.inline_cap())
             .min(self.limit());
         // A table at or past the limit is never parsed (and `at + 1` could
         // wrap): nothing to overlap.
@@ -384,62 +403,70 @@ impl Walk<'_> {
     }
 
     /// The absolute position of a TIFF-relative offset.
-    pub fn abs(&self, off: u64) -> Option<u64> {
-        self.base.checked_add(off)
+    pub fn absolute_offset(&self, relative_offset: u64) -> Option<u64> {
+        self.base.checked_add(relative_offset)
     }
 
-    pub fn loc(&self, e: &Entry) -> Loc {
-        let Some(size) = type_size(e.typ) else {
-            return Loc::UnknownType;
+    /// Where an IFD entry's value bytes live.
+    pub fn value_location(&self, entry: &Entry) -> ValueLocation {
+        let Some(size) = type_size(entry.field_type) else {
+            return ValueLocation::UnknownType;
         };
-        let Some(total) = size.checked_mul(e.count) else {
-            return Loc::Overflow;
+        let Some(total) = size.checked_mul(entry.count) else {
+            return ValueLocation::SizeOverflow;
         };
         if total == 0 {
-            Loc::Empty
-        } else if total <= self.lay.inline_cap() {
-            Loc::Inline
+            ValueLocation::Empty
+        } else if total <= self.layout.inline_cap() {
+            ValueLocation::Inline
         } else {
-            match self.lay.offset(self.d, e.field).and_then(|o| self.abs(o)) {
-                Some(off) => Loc::At(off, total),
-                None => Loc::Overflow,
+            match self
+                .layout
+                .offset(self.data, entry.value_field_offset)
+                .and_then(|o| self.absolute_offset(o))
+            {
+                Some(offset) => ValueLocation::OutOfLine {
+                    offset,
+                    byte_len: total,
+                },
+                None => ValueLocation::SizeOverflow,
             }
         }
     }
 
-    /// The value's bytes, when they lie inside the TIFF.
-    pub fn bytes(&self, e: &Entry) -> Option<&[u8]> {
-        match self.loc(e) {
-            Loc::Inline => {
-                let total = type_size(e.typ)?.checked_mul(e.count)?;
-                get(self.d, e.field, total)
+    /// The entry's value bytes, when they lie inside the TIFF.
+    pub fn entry_bytes(&self, entry: &Entry) -> Option<&[u8]> {
+        match self.value_location(entry) {
+            ValueLocation::Inline => {
+                let total = type_size(entry.field_type)?.checked_mul(entry.count)?;
+                get(self.data, entry.value_field_offset, total)
             }
-            Loc::At(off, total) => get(self.d, off, total),
-            Loc::Empty => Some(&[]),
+            ValueLocation::OutOfLine { offset, byte_len } => get(self.data, offset, byte_len),
+            ValueLocation::Empty => Some(&[]),
             _ => None,
         }
     }
 
     /// Unsigned integer values (BYTE, UNDEFINED, SHORT, LONG, IFD, LONG8,
     /// IFD8), at most `max` of them; other types yield nothing.
-    pub fn uints(&self, e: &Entry, max: usize) -> Vec<u64> {
+    pub fn entry_uints(&self, entry: &Entry, max: usize) -> Vec<u64> {
         let mut out = Vec::new();
-        let size = match e.typ {
+        let size = match entry.field_type {
             1 | 7 => 1,
             3 => 2,
             4 | 13 => 4,
             16 | 18 => 8,
             _ => return out,
         };
-        let Some(bytes) = self.bytes(e) else {
+        let Some(bytes) = self.entry_bytes(entry) else {
             return out;
         };
         for chunk in bytes.chunks_exact(size).take(max) {
             let v = match size {
                 1 => u64::from(chunk[0]),
-                2 => u64::from(self.lay.u16(chunk, 0).unwrap_or(0)),
-                4 => u64::from(self.lay.u32(chunk, 0).unwrap_or(0)),
-                _ => self.lay.u64(chunk, 0).unwrap_or(0),
+                2 => u64::from(self.layout.u16(chunk, 0).unwrap_or(0)),
+                4 => u64::from(self.layout.u32(chunk, 0).unwrap_or(0)),
+                _ => self.layout.u64(chunk, 0).unwrap_or(0),
             };
             out.push(v);
         }
@@ -448,66 +475,68 @@ impl Walk<'_> {
 
     /// The single unsigned value of a one-element integer entry.
     #[allow(dead_code)] // not every crate's rules need it
-    pub fn single_uint(&self, e: &Entry) -> Option<u64> {
-        if e.count != 1 {
+    pub fn single_uint(&self, entry: &Entry) -> Option<u64> {
+        if entry.count != 1 {
             return None;
         }
-        self.uints(e, 1).first().copied()
+        self.entry_uints(entry, 1).first().copied()
     }
 
     /// The last entry with `tag` (decoders keeping a map keep the last of
     /// duplicate tags).
-    pub fn find<'i>(&self, ifd: &'i Ifd, tag: u16) -> Option<&'i Entry> {
-        ifd.last.get(&tag).and_then(|&i| ifd.entries.get(i))
+    pub fn find_entry<'i>(&self, ifd: &'i Ifd, tag: u16) -> Option<&'i Entry> {
+        ifd.last_entry_by_tag
+            .get(&tag)
+            .and_then(|&i| ifd.entries.get(i))
     }
 }
 
 /// Parse the directory at absolute offset `at`. `None` when `at` is outside
 /// the TIFF.
 fn parse_ifd(
-    d: &[u8],
-    lay: Layout,
-    at: u64,
+    data: &[u8],
+    layout: Layout,
+    offset: u64,
     kind: Kind,
     name: String,
     followed: bool,
     budget: &mut u64,
 ) -> Option<Ifd> {
-    let len = d.len() as u64;
-    if at >= len {
+    let len = data.len() as u64;
+    if offset >= len {
         return None;
     }
     let mut ifd = Ifd {
-        at,
+        offset,
         end: len,
         kind,
         name,
         followed,
         entries: Vec::new(),
-        next: 0,
+        next_ifd_offset: 0,
         problem: None,
         notes: Vec::new(),
         parent: None,
         roles: alloc::vec![(kind, followed)],
-        last: BTreeMap::new(),
-        first_unknown: None,
+        last_entry_by_tag: BTreeMap::new(),
+        first_unknown_type_entry: None,
         depth: 0,
     };
-    let count = if lay.big {
-        lay.u64(d, at)
+    let count = if layout.is_big_tiff {
+        layout.u64(data, offset)
     } else {
-        lay.u16(d, at).map(u64::from)
+        layout.u16(data, offset).map(u64::from)
     };
     let Some(count) = count else {
         ifd.problem = Some("entry count runs past the end of the data".into());
         return Some(ifd);
     };
     let declared_end = count
-        .checked_mul(lay.entry_len())
-        .and_then(|n| n.checked_add(at))
-        .and_then(|n| n.checked_add(lay.count_len()))
-        .and_then(|n| n.checked_add(lay.inline_cap()));
-    let mut e_at = at + lay.count_len();
+        .checked_mul(layout.entry_len())
+        .and_then(|n| n.checked_add(offset))
+        .and_then(|n| n.checked_add(layout.count_len()))
+        .and_then(|n| n.checked_add(layout.inline_cap()));
+    let mut e_at = offset + layout.count_len();
     let mut i = 0u64;
     while i < count {
         if *budget == 0 {
@@ -517,27 +546,28 @@ fn parse_ifd(
             );
             break;
         }
-        let Some(e_end) = e_at.checked_add(lay.entry_len()) else {
+        let Some(e_end) = e_at.checked_add(layout.entry_len()) else {
             break;
         };
         if e_end > len {
             break;
         }
-        let (Some(tag), Some(typ)) = (lay.u16(d, e_at), lay.u16(d, e_at + 2)) else {
+        let (Some(tag), Some(field_type)) = (layout.u16(data, e_at), layout.u16(data, e_at + 2))
+        else {
             break;
         };
-        let (count_v, field) = if lay.big {
-            (lay.u64(d, e_at + 4), e_at + 12)
+        let (count_v, value_field_offset) = if layout.is_big_tiff {
+            (layout.u64(data, e_at + 4), e_at + 12)
         } else {
-            (lay.u32(d, e_at + 4).map(u64::from), e_at + 8)
+            (layout.u32(data, e_at + 4).map(u64::from), e_at + 8)
         };
         let Some(count_v) = count_v else { break };
         ifd.entries.push(Entry {
-            at: e_at,
+            offset: e_at,
             tag,
-            typ,
+            field_type,
             count: count_v,
-            field,
+            value_field_offset,
             notes: Vec::new(),
         });
         *budget -= 1;
@@ -547,7 +577,7 @@ fn parse_ifd(
     match declared_end {
         Some(end) if end <= len => {
             ifd.end = end;
-            ifd.next = lay.offset(d, end - lay.inline_cap()).unwrap_or(0);
+            ifd.next_ifd_offset = layout.offset(data, end - layout.inline_cap()).unwrap_or(0);
         }
         _ if ifd.problem.is_none() => {
             ifd.problem = Some(format!(
@@ -557,9 +587,9 @@ fn parse_ifd(
         _ => {}
     }
     for (i, e) in ifd.entries.iter().enumerate() {
-        ifd.last.insert(e.tag, i);
-        if ifd.first_unknown.is_none() && type_size(e.typ).is_none() {
-            ifd.first_unknown = Some(i);
+        ifd.last_entry_by_tag.insert(e.tag, i);
+        if ifd.first_unknown_type_entry.is_none() && type_size(e.field_type).is_none() {
+            ifd.first_unknown_type_entry = Some(i);
         }
     }
     Some(ifd)
@@ -569,18 +599,21 @@ fn parse_ifd(
 
 /// A disposition with an optional remark for the detail.
 pub struct Fate {
-    pub d: Disposition,
+    pub disposition: Disposition,
     pub note: Option<Cow<'static, str>>,
 }
 
 impl Fate {
-    pub fn new(d: Disposition) -> Self {
-        Self { d, note: None }
+    pub fn new(disposition: Disposition) -> Self {
+        Self {
+            disposition,
+            note: None,
+        }
     }
 
-    pub fn because(d: Disposition, note: impl Into<Cow<'static, str>>) -> Self {
+    pub fn because(disposition: Disposition, note: impl Into<Cow<'static, str>>) -> Self {
         Self {
-            d,
+            disposition,
             note: Some(note.into()),
         }
     }
@@ -606,7 +639,10 @@ pub fn union_fate(ifd: &Ifd, fate: impl Fn(Kind, bool) -> Fate) -> Fate {
     let mut best: Option<Fate> = None;
     for &(kind, followed) in &ifd.roles {
         let f = fate(kind, followed);
-        if best.as_ref().is_none_or(|b| rank(f.d) > rank(b.d)) {
+        if best
+            .as_ref()
+            .is_none_or(|b| rank(f.disposition) > rank(b.disposition))
+        {
             best = Some(f);
         }
     }
@@ -700,7 +736,7 @@ pub trait Rules {
     /// The TIFF-relative offsets a pointer entry holds, at most `max` of
     /// them (the walk reads only as many as it can still queue).
     fn pointer_offsets(&self, w: &Walk<'_>, e: &Entry, max: usize) -> Vec<u64> {
-        w.uints(e, max)
+        w.entry_uints(e, max)
     }
 
     /// Whether the decode path reads the directory the pointer entry `e` of
@@ -836,7 +872,7 @@ fn jpeg_table_counts(
             if !w.take_scan(16) {
                 return (lengths, true, false);
             }
-            let counts = w.abs(offset).and_then(|at| get(w.d, at, 16));
+            let counts = w.absolute_offset(offset).and_then(|at| get(w.data, at, 16));
             lengths.push(16 + counts.map_or(0, |v| v.iter().map(|&n| u64::from(n)).sum()));
         }
     }
@@ -870,21 +906,21 @@ pub struct ChunkUse {
 
 /// The decoded layout of one strip or tile.
 #[derive(Clone, Copy, Debug)]
-pub struct ChunkGeom {
+pub struct DecodedChunkGeometry {
     /// Decoded bytes of one chunk row (a whole tile row, padding included).
-    pub row: u64,
+    pub row_bytes: u64,
     /// Chunk rows the decoder reads: those inside the image.
-    pub rows_in: u64,
+    pub active_rows: u64,
     /// Chunk rows declared (`TileLength` or `RowsPerStrip`).
-    pub rows: u64,
+    pub declared_rows: u64,
     /// Padding bytes per row past the image's right edge.
     pub pad_per_row: u64,
 }
 
-impl ChunkGeom {
+impl DecodedChunkGeometry {
     /// Decoded bytes the decoder reads from this chunk.
-    pub fn read(&self) -> Option<u64> {
-        self.row.checked_mul(self.rows_in)
+    pub fn active_bytes(&self) -> Option<u64> {
+        self.row_bytes.checked_mul(self.active_rows)
     }
 }
 
@@ -896,10 +932,10 @@ pub fn chunk_geometry(
     ifd: &Ifd,
     tiles: bool,
     chunks: usize,
-) -> Option<Vec<ChunkGeom>> {
+) -> Option<Vec<DecodedChunkGeometry>> {
     let one = |tag: u16| {
-        w.find(ifd, tag)
-            .and_then(|e| w.uints(e, 1).first().copied())
+        w.find_entry(ifd, tag)
+            .and_then(|e| w.entry_uints(e, 1).first().copied())
     };
     if one(262) == Some(6) {
         return None;
@@ -908,8 +944,8 @@ pub fn chunk_geometry(
     let height = one(257)?;
     let spp = one(277).unwrap_or(1).max(1);
     let bps = w
-        .find(ifd, 258)
-        .map(|e| w.uints(e, 64))
+        .find_entry(ifd, 258)
+        .map(|e| w.entry_uints(e, 64))
         .unwrap_or_else(|| alloc::vec![1]);
     let planar = one(284) == Some(2);
     let bits = if planar {
@@ -919,35 +955,35 @@ pub fn chunk_geometry(
     } else {
         bps.first()?.checked_mul(spp)?
     };
-    let row_bytes = |px: u64| px.checked_mul(bits).map(|b| b.div_ceil(8));
+    let row_bytes_fn = |px: u64| px.checked_mul(bits).map(|b| b.div_ceil(8));
     let mut out = Vec::with_capacity(chunks.min(1 << 20));
     if tiles {
         let (tw, tl) = (one(322)?.max(1), one(323)?.max(1));
         let across = width.div_ceil(tw).max(1);
         let per_plane = across.checked_mul(height.div_ceil(tl).max(1))?;
-        let row = row_bytes(tw)?;
+        let row_bytes = row_bytes_fn(tw)?;
         for k in 0..chunks as u64 {
             let i = k % per_plane;
             let (col, down) = (i % across, i / across);
             let cols_in = tw.min(width.saturating_sub(col.saturating_mul(tw)));
-            out.push(ChunkGeom {
-                row,
-                rows_in: tl.min(height.saturating_sub(down.saturating_mul(tl))),
-                rows: tl,
-                pad_per_row: row.saturating_sub(row_bytes(cols_in)?),
+            out.push(DecodedChunkGeometry {
+                row_bytes,
+                active_rows: tl.min(height.saturating_sub(down.saturating_mul(tl))),
+                declared_rows: tl,
+                pad_per_row: row_bytes.saturating_sub(row_bytes_fn(cols_in)?),
             });
         }
         return Some(out);
     }
     let rps = one(278).unwrap_or(height).clamp(1, height.max(1));
     let per_plane = height.div_ceil(rps).max(1);
-    let row = row_bytes(width)?;
+    let row_bytes = row_bytes_fn(width)?;
     for k in 0..chunks as u64 {
-        let rows_in = rps.min(height.saturating_sub((k % per_plane).saturating_mul(rps)));
-        out.push(ChunkGeom {
-            row,
-            rows_in,
-            rows: rows_in,
+        let active_rows = rps.min(height.saturating_sub((k % per_plane).saturating_mul(rps)));
+        out.push(DecodedChunkGeometry {
+            row_bytes,
+            active_rows,
+            declared_rows: active_rows,
             pad_per_row: 0,
         });
     }
@@ -995,8 +1031,8 @@ pub fn default_chunk_use(
     cnts: &[u64],
 ) -> Vec<ChunkUse> {
     let compression = w
-        .find(ifd, 259)
-        .and_then(|e| w.uints(e, 1).first().copied())
+        .find_entry(ifd, 259)
+        .and_then(|e| w.entry_uints(e, 1).first().copied())
         .unwrap_or(1);
     let geom = chunk_geometry(w, ifd, tiles, cnts.len());
     let mut out = Vec::with_capacity(cnts.len().min(1 << 20));
@@ -1007,7 +1043,7 @@ pub fn default_chunk_use(
             out.push(u);
             continue;
         };
-        let below = g.rows_in < g.rows;
+        let below = g.active_rows < g.declared_rows;
         u.tail = if below {
             "rows below the image (edge-tile padding) and any bytes after them; never read"
         } else {
@@ -1023,22 +1059,22 @@ pub fn default_chunk_use(
             // `create_reader` reads uncompressed data straight from the
             // file: by row size, not by the declared count.
             1 => {
-                u.used = g.read();
+                u.used = g.active_bytes();
                 u.past_count = true;
             }
             32773 => {
                 // Count-only PackBits over the bytes present, within the walk's
                 // scan budget (overlapping chunks would rescan the same bytes).
-                let start = offs.get(k).and_then(|&o| w.abs(o));
+                let start = offs.get(k).and_then(|&o| w.absolute_offset(o));
                 let avail = start.map_or(0, |s| n.min(w.limit().saturating_sub(s)));
-                let budget = start.is_some() && g.read().is_some() && w.take_scan(avail);
+                let budget = start.is_some() && g.active_bytes().is_some() && w.take_scan(avail);
                 if !budget {
                     u.unknown = Some(
                         "the count-only scan budget is spent; the decoder may read some or all of these bytes",
                     );
                 }
-                if let (true, Some(s), Some(need)) = (budget, start, g.read())
-                    && let Some(d) = get(w.d, s, avail)
+                if let (true, Some(s), Some(need)) = (budget, start, g.active_bytes())
+                    && let Some(d) = get(w.data, s, avail)
                 {
                     match packbits_end(d, need) {
                         Some(end) => u.used = Some(end),
@@ -1077,17 +1113,23 @@ pub fn default_chunk_use(
 /// Children for the parts of an entry's inline value field nothing reads:
 /// an inline value's tail ([`Rules::value_tail`]) and, when not zero, the
 /// field bytes past the value.
-fn inline_children(w: &Walk<'_>, rules: &dyn Rules, ifd: &Ifd, ei: usize, entry: &mut Cand) {
+fn inline_children(
+    w: &Walk<'_>,
+    rules: &dyn Rules,
+    ifd: &Ifd,
+    ei: usize,
+    entry: &mut PartCandidate,
+) {
     let Some(e) = ifd.entries.get(ei) else { return };
-    let size = match w.loc(e) {
-        Loc::Inline => type_size(e.typ)
+    let size = match w.value_location(e) {
+        ValueLocation::Inline => type_size(e.field_type)
             .and_then(|s| s.checked_mul(e.count))
             .unwrap_or(0),
-        Loc::Empty => 0,
+        ValueLocation::Empty => 0,
         _ => return,
     };
-    let cap = w.lay.inline_cap();
-    let field = e.field..e.field + cap;
+    let cap = w.layout.inline_cap();
+    let field = e.value_field_offset..e.value_field_offset + cap;
     if size > 0
         && let Some((keep, tail)) = rules.value_tail(w, ifd, ei)
         && keep < size
@@ -1096,20 +1138,20 @@ fn inline_children(w: &Walk<'_>, rules: &dyn Rules, ifd: &Ifd, ei: usize, entry:
         if let Some(n) = &tail.note {
             push_note(&mut detail, n);
         }
-        entry.children.push(Cand::new(
+        entry.children.push(PartCandidate::new(
             field.start + keep..field.start + size,
             PartKind::Field,
             PartTag::Code(u32::from(e.tag)),
-            tail.d,
+            tail.disposition,
             detail,
         ));
     }
     let unused = field.start + size..field.end;
     if !unused.is_empty()
-        && get(w.d, unused.start, unused.end - unused.start)
+        && get(w.data, unused.start, unused.end - unused.start)
             .is_some_and(|b| b.iter().any(|&x| x != 0))
     {
-        entry.children.push(Cand::new(
+        entry.children.push(PartCandidate::new(
             unused,
             PartKind::Gap,
             PartTag::None,
@@ -1123,14 +1165,11 @@ fn inline_children(w: &Walk<'_>, rules: &dyn Rules, ifd: &Ifd, ei: usize, entry:
 /// `limit`, following pointers the way `rules` describes.
 pub fn walk<'a>(data: &'a [u8], base: u64, limit: u64, rules: &dyn Rules) -> Walk<'a> {
     let limit = limit.min(data.len() as u64);
-    let d = &data[..usize::try_from(limit).unwrap_or(data.len())];
+    let data = &data[..usize::try_from(limit).unwrap_or(data.len())];
     let mut w = Walk {
-        d,
+        data,
         base,
-        lay: Layout {
-            le: true,
-            big: false,
-        },
+        layout: Layout::new(zencodec::exif::ByteOrder::Little, false),
         magic: 0,
         header: base..base,
         header_ok: false,
@@ -1146,38 +1185,35 @@ pub fn walk<'a>(data: &'a [u8], base: u64, limit: u64, rules: &dyn Rules) -> Wal
         pointer_reads: 0,
     };
     let rest = limit.saturating_sub(base);
-    let lay = match get(d, base, 2) {
-        Some(b"II") => Layout {
-            le: true,
-            big: false,
-        },
-        Some(b"MM") => Layout {
-            le: false,
-            big: false,
-        },
+    let layout = match get(data, base, 2) {
+        Some(b"II") => Layout::new(zencodec::exif::ByteOrder::Little, false),
+        Some(b"MM") => Layout::new(zencodec::exif::ByteOrder::Big, false),
         _ => {
             w.header = base..base + rest.min(2);
             w.fatal = Some("not a TIFF byte-order mark".into());
             return w;
         }
     };
-    let (lay, ifd0) = match lay.u16(d, base + 2) {
+    let (layout, ifd0) = match layout.u16(data, base + 2) {
         Some(43) => {
-            let big = Layout { big: true, ..lay };
+            let big = Layout {
+                is_big_tiff: true,
+                ..layout
+            };
             // Bytesize of offsets (8) and a reserved zero.
-            if big.u16(d, base + 4).is_some_and(|v| v != 8)
-                || big.u16(d, base + 6).is_some_and(|v| v != 0)
+            if big.u16(data, base + 4).is_some_and(|v| v != 8)
+                || big.u16(data, base + 6).is_some_and(|v| v != 0)
             {
                 w.header = base..base + rest.min(8);
                 w.fatal = Some("BigTIFF header with an offset size other than 8".into());
                 return w;
             }
             w.magic = 43;
-            (big, big.u64(d, base + 8))
+            (big, big.u64(data, base + 8))
         }
         Some(m) if m == 42 || rules.magic(m) => {
             w.magic = m;
-            (lay, lay.u32(d, base + 4).map(u64::from))
+            (layout, layout.u32(data, base + 4).map(u64::from))
         }
         Some(m) => {
             w.header = base..base + rest.min(4);
@@ -1190,51 +1226,58 @@ pub fn walk<'a>(data: &'a [u8], base: u64, limit: u64, rules: &dyn Rules) -> Wal
             return w;
         }
     };
-    w.lay = lay;
+    w.layout = layout;
     let Some(ifd0) = ifd0 else {
         w.header = base..limit;
         w.fatal = Some("truncated TIFF header".into());
         return w;
     };
-    w.header = base..base + lay.header_len();
+    w.header = base..base + layout.header_len();
     w.header_ok = true;
     if let Some((extra, fate)) = rules.header_extension(&w)
         && w.header.end + extra <= limit
     {
         let r = w.header.end..w.header.end + extra;
         let detail = fate.note.map(|n| n.into_owned()).unwrap_or_default();
-        w.header_ext = Some((r, fate.d, detail));
+        w.header_ext = Some((r, fate.disposition, detail));
     }
 
-    let first = w.abs(ifd0);
+    let first = w.absolute_offset(ifd0);
     run_queue(&mut w, first, Kind::Page(0), "IFD0".into(), 0, rules);
     w
 }
 
-/// Walk the directories starting at the absolute offset `at`, which has no
-/// TIFF header of its own (a maker-note IFD): offsets inside are relative to
-/// `base`, and `lay` gives the byte order. Every position stays below
-/// `limit`; the first directory is at pointer depth `depth`.
-#[allow(clippy::too_many_arguments, dead_code)] // not every crate walks maker notes
-pub fn walk_ifd<'a>(
-    data: &'a [u8],
-    base: u64,
-    limit: u64,
-    lay: Layout,
-    at: u64,
-    kind: Kind,
-    name: String,
-    depth: u8,
-    rules: &dyn Rules,
-) -> Walk<'a> {
-    let limit = limit.min(data.len() as u64);
-    let d = &data[..usize::try_from(limit).unwrap_or(data.len())];
+/// Configuration for [`walk_ifd`] when walking a headerless directory (such as a MakerNote IFD).
+#[derive(Clone, Debug)]
+pub struct IfdWalkConfig {
+    /// Base offset that relative offsets inside the IFD are measured from.
+    pub base: u64,
+    /// Exclusive byte ceiling within `data`.
+    pub limit: u64,
+    /// Byte order and offset width.
+    pub layout: Layout,
+    /// Absolute offset of the first directory to parse.
+    pub start_offset: u64,
+    /// Role classification for the starting directory.
+    pub kind: Kind,
+    /// Human-readable name for the starting directory.
+    pub name: String,
+    /// Initial pointer recursion depth.
+    pub depth: u8,
+}
+
+/// Walk the directories configured by `config` without a TIFF header of their
+/// own (for example, a maker-note IFD).
+#[allow(dead_code)] // not every crate walks maker notes
+pub fn walk_ifd<'a>(data: &'a [u8], config: IfdWalkConfig, rules: &dyn Rules) -> Walk<'a> {
+    let limit = config.limit.min(data.len() as u64);
+    let data = &data[..usize::try_from(limit).unwrap_or(data.len())];
     let mut w = Walk {
-        d,
-        base,
-        lay,
+        data,
+        base: config.base,
+        layout: config.layout,
         magic: 0,
-        header: at..at,
+        header: config.start_offset..config.start_offset,
         header_ok: true,
         header_ext: None,
         fatal: None,
@@ -1247,7 +1290,14 @@ pub fn walk_ifd<'a>(
         budget_hit: false,
         pointer_reads: 0,
     };
-    run_queue(&mut w, Some(at), kind, name, depth, rules);
+    run_queue(
+        &mut w,
+        Some(config.start_offset),
+        config.kind,
+        config.name,
+        config.depth,
+        rules,
+    );
     w
 }
 
@@ -1279,8 +1329,8 @@ fn run_queue(
     depth: u8,
     rules: &dyn Rules,
 ) {
-    let d = w.d;
-    let lay = w.lay;
+    let d = w.data;
+    let lay = w.layout;
     let mut queue = VecDeque::new();
     queue.push_back(Pending {
         at: first,
@@ -1399,7 +1449,7 @@ fn run_queue(
                 ifd.problem.as_deref().unwrap_or_default()
             ));
         }
-        w.tables.insert(ifd.at, ifd.end);
+        w.tables.insert(ifd.offset, ifd.end);
         let idx = w.ifds.len();
         w.by_at.insert(at, idx);
         let readable = ifd.problem.is_none();
@@ -1441,7 +1491,10 @@ fn enqueue(
         let ptrs = rules.pointer_offsets(w, e, room + 1);
         w.pointer_reads += ptrs.len() as u64;
         if ptrs.is_empty() {
-            let text = format!("{label} pointer of type {} not read", type_name(e.typ));
+            let text = format!(
+                "{label} pointer of type {} not read",
+                type_name(e.field_type)
+            );
             add_note(&mut w.ifds[idx].entries[ei].notes, text);
         }
         let numbered = ptrs.len() > 1 || child_kind == Kind::Sub;
@@ -1461,7 +1514,7 @@ fn enqueue(
                 (false, true) => format!("{label} (nested)"),
             };
             queue.push_back(Pending {
-                at: w.abs(off),
+                at: w.absolute_offset(off),
                 kind: child_kind,
                 name,
                 followed,
@@ -1470,7 +1523,7 @@ fn enqueue(
             });
         }
     }
-    let next = w.ifds[idx].next;
+    let next = w.ifds[idx].next_ifd_offset;
     if next != 0 && queue.len() + w.ifds.len() >= MAX_IFDS {
         w.budget_hit = true;
         add_note(
@@ -1488,7 +1541,7 @@ fn enqueue(
             other => (other, format!("IFD chained after {base_name}")),
         };
         queue.push_back(Pending {
-            at: w.abs(next),
+            at: w.absolute_offset(next),
             kind,
             name,
             followed: followed_next,
@@ -1501,14 +1554,14 @@ fn enqueue(
 // ── Parts before overlap resolution ────────────────────────────────────
 
 /// A part before overlap resolution, with its own children.
-pub struct Cand {
+pub struct PartCandidate {
     pub range: Range<u64>,
     pub kind: PartKind,
     pub tag: PartTag,
     pub label: Option<String>,
-    pub disp: Disposition,
+    pub disposition: Disposition,
     pub detail: String,
-    pub children: Vec<Cand>,
+    pub children: Vec<PartCandidate>,
     /// For a container whose children account for its contents: the range
     /// they tile; uncovered bytes become `Unreferenced` gaps on emission.
     pub body: Option<Range<u64>>,
@@ -1518,12 +1571,12 @@ pub struct Cand {
     notes: usize,
 }
 
-impl Cand {
+impl PartCandidate {
     pub fn new(
         range: Range<u64>,
         kind: PartKind,
         tag: PartTag,
-        disp: Disposition,
+        disposition: Disposition,
         detail: String,
     ) -> Self {
         Self {
@@ -1531,7 +1584,7 @@ impl Cand {
             kind,
             tag,
             label: None,
-            disp,
+            disposition,
             detail,
             children: Vec::new(),
             body: None,
@@ -1557,7 +1610,7 @@ pub fn push_note(detail: &mut String, text: &str) {
     detail.push_str(text);
 }
 
-fn describe(c: &Cand) -> String {
+fn describe(c: &PartCandidate) -> String {
     let head = c.detail.split(';').next().unwrap_or("");
     format!(
         "{} {}..{} ({head})",
@@ -1569,16 +1622,16 @@ fn describe(c: &Cand) -> String {
 
 /// `c` cut to `r`, with its body and children cut the same way; `None`
 /// when they do not meet. A cut child says so when `mark`.
-fn clip(c: &Cand, r: &Range<u64>, mark: bool) -> Option<Cand> {
+fn clip(c: &PartCandidate, r: &Range<u64>, mark: bool) -> Option<PartCandidate> {
     let range = c.range.start.max(r.start)..c.range.end.min(r.end);
     if range.start >= range.end {
         return None;
     }
-    let mut out = Cand::new(
+    let mut out = PartCandidate::new(
         range.clone(),
         c.kind,
         c.tag.clone(),
-        c.disp,
+        c.disposition,
         c.detail.clone(),
     );
     out.label = c.label.clone();
@@ -1607,7 +1660,7 @@ fn clip(c: &Cand, r: &Range<u64>, mark: bool) -> Option<Cand> {
 /// stretches it won.
 #[derive(Default)]
 pub struct Placed {
-    cands: Vec<Cand>,
+    cands: Vec<PartCandidate>,
 }
 
 /// One stretch of a candidate with a single fate.
@@ -1618,12 +1671,12 @@ struct Seg {
 }
 
 /// The fate rank of a container's body bytes no child covers.
-fn gap_rank(c: &Cand) -> u8 {
+fn gap_rank(c: &PartCandidate) -> u8 {
     rank(c.gap.as_ref().map_or(Disposition::Unreferenced, |g| g.0))
 }
 
 /// Split `c` (clipped to `within`) into stretches of one fate each.
-fn segments(c: &Cand, within: &Range<u64>, cand: usize, out: &mut Vec<Seg>) {
+fn segments(c: &PartCandidate, within: &Range<u64>, cand: usize, out: &mut Vec<Seg>) {
     let range = c.range.start.max(within.start)..c.range.end.min(within.end);
     if range.start >= range.end {
         return;
@@ -1639,15 +1692,15 @@ fn segments(c: &Cand, within: &Range<u64>, cand: usize, out: &mut Vec<Seg>) {
         let Some(b) = body else {
             out.push(Seg {
                 range: r,
-                rank: rank(c.disp),
+                rank: rank(c.disposition),
                 cand,
             });
             return;
         };
         let cuts = [
-            (r.start..r.end.min(b.start), rank(c.disp)),
+            (r.start..r.end.min(b.start), rank(c.disposition)),
             (r.start.max(b.start)..r.end.min(b.end), gap_rank(c)),
-            (r.start.max(b.end)..r.end, rank(c.disp)),
+            (r.start.max(b.end)..r.end, rank(c.disposition)),
         ];
         for (r, rank) in cuts {
             if r.start < r.end {
@@ -1659,7 +1712,7 @@ fn segments(c: &Cand, within: &Range<u64>, cand: usize, out: &mut Vec<Seg>) {
             }
         }
     };
-    let mut kids: Vec<&Cand> = c.children.iter().collect();
+    let mut kids: Vec<&PartCandidate> = c.children.iter().collect();
     kids.sort_by_key(|ch| ch.range.start);
     let mut cursor = range.start;
     for ch in kids {
@@ -1683,7 +1736,7 @@ fn beaten(by: &mut [Vec<usize>], loser: usize, winner: usize) {
 
 impl Placed {
     /// Add a candidate. Insertion order breaks ties between equal fates.
-    pub fn insert(&mut self, c: Cand) {
+    pub fn insert(&mut self, c: PartCandidate) {
         if c.range.start < c.range.end {
             self.cands.push(c);
         }
@@ -1692,7 +1745,7 @@ impl Placed {
     /// The parts in file order: each candidate cut to the bytes it won (at
     /// most `MAX_PIECES` pieces), plus an `Unknown` part for each stretch it
     /// won past that cap.
-    pub fn into_sorted(self) -> Vec<Cand> {
+    pub fn into_sorted(self) -> Vec<PartCandidate> {
         use core::cmp::Reverse;
         let mut cands = self.cands;
         let n = cands.len();
@@ -1797,7 +1850,7 @@ impl Placed {
                 if j >= MAX_PIECES {
                     // Past the cap a piece is not listed, but the decoder may
                     // still read its bytes.
-                    parts.push(Cand::new(
+                    parts.push(PartCandidate::new(
                         r,
                         PartKind::Gap,
                         PartTag::None,
@@ -1832,7 +1885,7 @@ impl Placed {
 /// A placed TIFF.
 pub struct Placement {
     /// Parts in file order.
-    pub parts: Vec<Cand>,
+    pub parts: Vec<PartCandidate>,
     /// Furthest byte any part or claim reaches, clipped to the TIFF.
     pub logical_end: u64,
     /// Whether IFD0 was read whole.
@@ -1844,7 +1897,7 @@ pub struct Placement {
 
 /// Turn a walk into non-overlapping parts. `first` are placed right after
 /// the header, ahead of the TIFF's own parts.
-pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement {
+pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<PartCandidate>) -> Placement {
     let limit = w.limit();
     let mut placed = Placed::default();
     let mut logical_end = w.header.end;
@@ -1857,12 +1910,12 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
     }
     if w.header.end > w.header.start {
         let mut c = if w.header_ok {
-            let what = if w.lay.big {
+            let what = if w.layout.is_big_tiff {
                 "BigTIFF header"
             } else {
                 "TIFF header"
             };
-            Cand::new(
+            PartCandidate::new(
                 w.header.clone(),
                 PartKind::Header,
                 PartTag::None,
@@ -1871,7 +1924,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             )
         } else {
             let why = w.fatal.clone().unwrap_or_default();
-            Cand::new(
+            PartCandidate::new(
                 w.header.clone(),
                 PartKind::Header,
                 PartTag::None,
@@ -1887,7 +1940,13 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
         placed.insert(c);
     }
     if let Some((r, d, detail)) = w.header_ext.clone() {
-        placed.insert(Cand::new(r, PartKind::Header, PartTag::None, d, detail));
+        placed.insert(PartCandidate::new(
+            r,
+            PartKind::Header,
+            PartTag::None,
+            d,
+            detail,
+        ));
     }
     for c in first {
         logical_end = logical_end.max(c.range.end);
@@ -1896,7 +1955,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
 
     // Values and extents first, so pointer problems land on entries before
     // the entries become parts.
-    let mut values: Vec<Cand> = Vec::new();
+    let mut values: Vec<PartCandidate> = Vec::new();
     // Extent candidates for the whole TIFF: every listed part covers a byte,
     // so more than the input's length (plus slack) can never be listed.
     let mut extents_left = limit.saturating_add(4096);
@@ -1911,7 +1970,11 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
         }
         let mut notes: Vec<(usize, String)> = Vec::new();
         for (ei, e) in ifd.entries.iter().enumerate() {
-            let Loc::At(off, size) = w.loc(e) else {
+            let ValueLocation::OutOfLine {
+                offset: off,
+                byte_len: size,
+            } = w.value_location(e)
+            else {
                 continue;
             };
             let fate = rules.value(w, ifd, ei);
@@ -1925,14 +1988,14 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                 logical_end = limit;
                 continue;
             }
-            let mut disp = fate.d;
+            let mut disp = fate.disposition;
             if end > limit {
                 push_note(&mut detail, "truncated by the end of the data");
                 disp = Disposition::Malformed;
                 logical_end = limit;
             }
             logical_end = logical_end.max(end.min(limit));
-            let mut c = Cand::new(
+            let mut c = PartCandidate::new(
                 off..end.min(limit),
                 PartKind::Field,
                 PartTag::Code(u32::from(e.tag)),
@@ -1947,18 +2010,18 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                 if let Some(n) = &tail.note {
                     push_note(&mut t, n);
                 }
-                c.children.push(Cand::new(
+                c.children.push(PartCandidate::new(
                     off + keep..end,
                     PartKind::Field,
                     PartTag::Code(u32::from(e.tag)),
-                    tail.d,
+                    tail.disposition,
                     t,
                 ));
             }
             values.push(c);
         }
         for rule in rules.extents(w, ifd) {
-            let Some(oe) = w.find(ifd, rule.offsets) else {
+            let Some(oe) = w.find_entry(ifd, rule.offsets) else {
                 continue;
             };
             if extents_left == 0 {
@@ -1973,15 +2036,15 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                 continue;
             }
             let max = usize::try_from((limit / 4 + 1).min(extents_left)).unwrap_or(usize::MAX);
-            let offs = w.uints(oe, max);
+            let offs = w.entry_uints(oe, max);
             let cnts = match rule.counts {
-                Count::Tag(ct) => match w.find(ifd, ct) {
-                    Some(ce) => w.uints(ce, max),
+                Count::Tag(ct) => match w.find_entry(ifd, ct) {
+                    Some(ce) => w.entry_uints(ce, max),
                     None => continue,
                 },
                 Count::ToEnd => offs
                     .first()
-                    .and_then(|&o| w.abs(o))
+                    .and_then(|&o| w.absolute_offset(o))
                     .map(|a| alloc::vec![limit.saturating_sub(a)])
                     .unwrap_or_default(),
                 Count::Bytes(n) => alloc::vec![n],
@@ -1999,7 +2062,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                 .iter()
                 .rposition(|e| e.tag == rule.offsets)
                 .unwrap_or(0);
-            let pixels = rule.fate.d == Disposition::ImageData
+            let pixels = rule.fate.disposition == Disposition::ImageData
                 && matches!(rule.offsets, STRIP_OFFSETS | TILE_OFFSETS);
             let uses = if pixels {
                 let n = offs.len().min(cnts.len());
@@ -2010,7 +2073,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             let emit = |r: Range<u64>,
                         first: usize,
                         last: usize,
-                        values: &mut Vec<Cand>,
+                        values: &mut Vec<PartCandidate>,
                         notes: &mut Vec<(usize, String)>| {
                 let which = if first == last {
                     format!("{} {first}", rule.what)
@@ -2045,12 +2108,12 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                 {
                     push_note(&mut detail, n);
                 }
-                let mut disp = rule.fate.d;
+                let mut disp = rule.fate.disposition;
                 if r.end > limit {
                     push_note(&mut detail, "truncated by the end of the data");
                     disp = Disposition::Malformed;
                 }
-                values.push(Cand::new(
+                values.push(PartCandidate::new(
                     r.start..r.end.min(limit),
                     rule.kind,
                     PartTag::Code(u32::from(rule.offsets)),
@@ -2061,7 +2124,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             // Merge index-consecutive extents that are also byte-contiguous.
             let mut run: Option<(Range<u64>, usize, usize)> = None;
             for (k, (&o, &n)) in offs.iter().zip(cnts.iter()).enumerate() {
-                let Some(start) = w.abs(o) else {
+                let Some(start) = w.absolute_offset(o) else {
                     notes.push((
                         oi,
                         format!("{} {k}: offset overflows the TIFF base", rule.what),
@@ -2093,8 +2156,8 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                     if values.len() > before
                         && let Some(c) = values.last_mut()
                     {
-                        if c.disp != Disposition::Malformed {
-                            c.disp = fate;
+                        if c.disposition != Disposition::Malformed {
+                            c.disposition = fate;
                         }
                         push_note(&mut c.detail, why);
                     }
@@ -2138,7 +2201,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                         && let Some(c) = values.last_mut()
                     {
                         let what = u.map_or("", |u| u.tail);
-                        c.children.push(Cand::new(
+                        c.children.push(PartCandidate::new(
                             start + used..end,
                             rule.kind,
                             PartTag::Code(u32::from(rule.offsets)),
@@ -2191,11 +2254,11 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
         for n in &ifd.notes {
             push_note(&mut detail, &format!("next IFD: {n}"));
         }
-        let mut c = Cand::new(
-            ifd.at..ifd.end,
+        let mut c = PartCandidate::new(
+            ifd.offset..ifd.end,
             PartKind::Ifd,
             PartTag::None,
-            fate.d,
+            fate.disposition,
             detail,
         );
         logical_end = logical_end.max(ifd.end);
@@ -2211,7 +2274,7 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             let mut detail = format!(
                 "{} {}[{}]",
                 tag_name(ifd.kind, e.tag),
-                type_name(e.typ),
+                type_name(e.field_type),
                 e.count
             );
             if let Some(n) = &fate.note {
@@ -2220,11 +2283,11 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             for n in &e.notes {
                 push_note(&mut detail, n);
             }
-            let mut entry = Cand::new(
-                e.at..e.at + w.lay.entry_len(),
+            let mut entry = PartCandidate::new(
+                e.offset..e.offset + w.layout.entry_len(),
                 PartKind::Field,
                 PartTag::Code(u32::from(e.tag)),
-                fate.d,
+                fate.disposition,
                 detail,
             );
             if ifd.problem.is_none() {
@@ -2250,13 +2313,17 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
 // ── Emission ───────────────────────────────────────────────────────────
 
 /// Push `c` (and its children) under `parent`.
-pub fn emit(inv: &mut Inventory, parent: Option<PartId>, c: Cand) -> Result<(), InventoryError> {
+pub fn emit(
+    inv: &mut Inventory,
+    parent: Option<PartId>,
+    c: PartCandidate,
+) -> Result<(), InventoryError> {
     let body = c
         .body
         .clone()
         .filter(|b| b.start >= c.range.start && b.end <= c.range.end);
     let gap = c.gap.clone();
-    let mut p = Part::new(c.kind, c.tag, c.range, c.disp);
+    let mut p = Part::new(c.kind, c.tag, c.range, c.disposition);
     if let Some(l) = c.label {
         p = p.with_label(l);
     }
@@ -2296,7 +2363,7 @@ pub fn emit(inv: &mut Inventory, parent: Option<PartId>, c: Cand) -> Result<(), 
 pub fn emit_top(
     inv: &mut Inventory,
     data: &[u8],
-    parts: Vec<Cand>,
+    parts: Vec<PartCandidate>,
     logical_end: u64,
     gap: (Disposition, Option<String>),
 ) -> Result<(), InventoryError> {
@@ -2381,9 +2448,9 @@ mod tests {
     /// A random candidate inside `r`: a table with entry children, a value
     /// with a tail child, or a container with a body, children and a gap
     /// fate, nested up to `depth` levels.
-    fn random_cand(rng: &mut Rng, r: Range<u64>, depth: u32) -> Cand {
+    fn random_cand(rng: &mut Rng, r: Range<u64>, depth: u32) -> PartCandidate {
         let disp = FATES[rng.below(FATES.len() as u64) as usize];
-        let mut c = Cand::new(
+        let mut c = PartCandidate::new(
             r.clone(),
             PartKind::Field,
             PartTag::None,
@@ -2431,7 +2498,7 @@ mod tests {
 
     /// The fate rank the inventory gives byte `b` of `c`: its deepest part
     /// there, or its body's gap fate.
-    fn at(c: &Cand, b: u64) -> Option<u8> {
+    fn at(c: &PartCandidate, b: u64) -> Option<u8> {
         if !c.range.contains(&b) {
             return None;
         }
@@ -2442,13 +2509,13 @@ mod tests {
         }
         match &c.body {
             Some(body) if body.contains(&b) => Some(gap_rank(c)),
-            _ => Some(rank(c.disp)),
+            _ => Some(rank(c.disposition)),
         }
     }
 
     /// Children lie inside their parent (and its body) and do not overlap.
-    fn well_formed(c: &Cand) {
-        let mut kids: Vec<&Cand> = c.children.iter().collect();
+    fn well_formed(c: &PartCandidate) {
+        let mut kids: Vec<&PartCandidate> = c.children.iter().collect();
         kids.sort_by_key(|ch| ch.range.start);
         let mut end = c.range.start;
         for ch in kids {
@@ -2468,7 +2535,7 @@ mod tests {
         let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
         for round in 0..4000 {
             let n = 1 + rng.below(8) as usize;
-            let cands: Vec<Cand> = (0..n)
+            let cands: Vec<PartCandidate> = (0..n)
                 .map(|_| {
                     let a = rng.below(SPACE);
                     let b = a + 1 + rng.below(SPACE - a);

@@ -436,6 +436,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn tiff_301_is_the_transfer_function_tag() {
+        assert_eq!(tag_name(Kind::Page(0), 301), "TransferFunction");
+    }
+
+    #[test]
     fn tag_tables_are_sorted() {
         for table in [TIFF_TAGS, GPS_TAGS, INTEROP_TAGS] {
             assert!(table.windows(2).all(|p| p[0].0 < p[1].0));

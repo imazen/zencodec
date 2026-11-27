@@ -29,7 +29,7 @@
 #[cfg(test)]
 use alloc::vec::Vec;
 
-use zencodec::GainMapParams as GainMapMetadata;
+use zencodec::GainMapParams;
 
 /// Apple MakerNote tag IDs (per exiftool `Apple.pm`).
 pub mod tags {
@@ -109,8 +109,7 @@ impl AppleHdrInfo {
     }
 }
 
-/// Map recovered Apple headroom to the canonical [`GainMapMetadata`]
-/// (= `zencodec::GainMapParams`).
+/// Map recovered Apple headroom to the canonical [`GainMapParams`].
 ///
 /// The base image is SDR (`base_hdr_headroom = 0`); the alternate (HDR)
 /// headroom is the computed stops value (already log2-domain, matching
@@ -121,10 +120,10 @@ impl AppleHdrInfo {
 ///
 /// **Note:** the per-channel curve is the documented Apple convention; the
 /// gain-map round-trip test is the authority on fidelity.
-pub fn from_apple_headroom(info: &AppleHdrInfo) -> Option<GainMapMetadata> {
+pub fn from_apple_headroom(info: &AppleHdrInfo) -> Option<GainMapParams> {
     let stops = info.headroom_stops()?;
     // `GainMapParams` is `#[non_exhaustive]`: build via Default + field set.
-    let mut params = GainMapMetadata::default();
+    let mut params = GainMapParams::default();
     params.base_hdr_headroom = 0.0;
     params.alternate_hdr_headroom = stops;
     for ch in &mut params.channels {
@@ -373,6 +372,7 @@ fn parse_makernote_with_mode(maker: &[u8], mode: Interpretation) -> Option<Apple
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // `Compatibility` is exercised by the test-only parity suite
 enum Interpretation {
     Strict,
     Compatibility,
@@ -388,13 +388,10 @@ impl Interpretation {
     }
 }
 
-/// Compatibility with ultrahdr-core 0.6.0's published Apple helpers.
-///
-/// These operations preserve first-match EXIF selection, last-readable-value
-/// MakerNote selection, malformed-entry tolerance, and the historical numeric
-/// interpretation. Use the parent module's strict operations for validation.
-/// No value copies are needed; directory work is bounded by TIFF's u16 count.
-pub mod compatibility {
+/// Compatibility with ultrahdr-core 0.6.0's published Apple helpers (test-only
+/// parity oracle; production callers use the strict module-level functions).
+#[cfg(test)]
+mod compatibility {
     use super::{AppleHdrInfo, Interpretation};
 
     /// Extract using the released helper's tolerant EXIF selection rules.

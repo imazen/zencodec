@@ -47,7 +47,7 @@ impl<'a> Context<'a> {
         Ok(())
     }
     /// Enforce the parsed/expanded packet or regenerated metadata budget.
-    pub fn packet(&self, size: usize) -> Result<(), Error> {
+    pub fn check_metadata_budget(&self, size: usize) -> Result<(), Error> {
         self.check()?;
         if size > self.max_metadata() {
             Err(Error::Limit(zencodec::LimitKind::MetadataSize))
@@ -73,7 +73,7 @@ impl<'a> Context<'a> {
     }
     /// Apply explicitly enabled descriptive XMP editing within packet limits.
     pub fn xmp(&self, xml: &[u8]) -> Result<Option<Vec<u8>>, Error> {
-        self.packet(xml.len())?;
+        self.check_metadata_budget(xml.len())?;
         if !self.edit_xmp() {
             self.check()?;
             return if self.policy().fields().xmp.keeps() {
@@ -90,14 +90,14 @@ impl<'a> Context<'a> {
             .services()?
             .rewrite_xmp(xml, self.max_metadata(), self.pulse())?;
         if let Some(ref bytes) = out {
-            self.packet(bytes.len())?;
+            self.check_metadata_budget(bytes.len())?;
         }
         self.check()?;
         Ok(out)
     }
     /// Normalize a known ICC profile while retaining rendering dependencies.
     pub fn icc(&self, bytes: &[u8]) -> Result<Option<Vec<u8>>, Error> {
-        self.packet(bytes.len())?;
+        self.check_metadata_budget(bytes.len())?;
         if matches!(self.policy().fields().icc, zencodec::IccRetention::Drop) {
             return Err(Error::Unsupported(
                 "removing an ICC profile requires explicit color conversion",
@@ -110,7 +110,7 @@ impl<'a> Context<'a> {
             .services()?
             .normalize_icc(bytes, self.max_metadata(), self.pulse())?;
         if let Some(ref bytes) = out {
-            self.packet(bytes.len())?;
+            self.check_metadata_budget(bytes.len())?;
             if bytes.len() < 128 || bytes.get(36..40) != Some(b"acsp") {
                 return Err(Error::Service("normalizer returned an invalid ICC header"));
             }
@@ -120,17 +120,17 @@ impl<'a> Context<'a> {
     }
     /// Expand a metadata packet through a bounded caller service.
     pub fn decompress(&self, kind: Compression, bytes: &[u8]) -> Result<Vec<u8>, Error> {
-        self.packet(bytes.len())?;
+        self.check_metadata_budget(bytes.len())?;
         let out = self
             .services()?
             .decompress(kind, bytes, self.max_metadata(), self.pulse())?;
-        self.packet(out.len())?;
+        self.check_metadata_budget(out.len())?;
         self.check()?;
         Ok(out)
     }
     /// Validate and filter EXIF while preserving orientation.
     pub fn exif(&self, bytes: &[u8]) -> Result<Vec<u8>, Error> {
-        self.packet(bytes.len())?;
+        self.check_metadata_budget(bytes.len())?;
         exif::validate(self, bytes)?;
         let exif = zencodec::exif::Exif::parse(bytes).ok_or(Error::Malformed("EXIF"))?;
         let orientation = exif.orientation().unwrap_or(Orientation::Identity);
@@ -141,7 +141,7 @@ impl<'a> Context<'a> {
             ));
         }
         let output = crate::exif::serialize(&filtered);
-        self.packet(output.len())?;
+        self.check_metadata_budget(output.len())?;
         Ok(output)
     }
 }

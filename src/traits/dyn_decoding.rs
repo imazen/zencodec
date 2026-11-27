@@ -15,9 +15,9 @@ use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::output::OwnedAnimationFrame;
-use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
+use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits};
 
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 use super::BoxedError;
 use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
@@ -34,7 +34,7 @@ use super::decoding::{DecodeJob, DecoderConfig};
 pub trait DynDecoder {
     /// Optional early output facts from the retained configured decoder.
     /// See [`Decode::prepare_output`]; `None` preserves ordinary execution.
-    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, BoxedError> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelFormat>, BoxedError> {
         Ok(None)
     }
 
@@ -51,7 +51,7 @@ impl core::fmt::Debug for dyn DynDecoder + '_ {
 pub(super) struct DecoderShim<D>(pub(super) D);
 
 impl<D: Decode> DynDecoder for DecoderShim<D> {
-    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelDescriptor>, BoxedError> {
+    fn prepare_output(&mut self) -> Result<Option<zenpixels::PixelFormat>, BoxedError> {
         self.0
             .prepare_output()
             .map_err(|e| Box::new(e) as BoxedError)
@@ -93,6 +93,12 @@ pub trait DynAnimationFrameDecoder: Send {
 
     /// Animation loop count from the container.
     fn loop_count(&self) -> Option<u32>;
+
+    /// Borrow the next frame directly from the decoder's canvas.
+    fn render_next_frame(
+        &mut self,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<Option<crate::decode::AnimationFrame<'_>>, BoxedError>;
 
     /// Render the next frame as an owned copy.
     fn render_next_frame_owned(
@@ -144,6 +150,15 @@ impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder
         self.0.loop_count()
     }
 
+    fn render_next_frame(
+        &mut self,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<Option<crate::decode::AnimationFrame<'_>>, BoxedError> {
+        self.0
+            .render_next_frame(pulse)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
     fn render_next_frame_owned(
         &mut self,
         pulse: Option<&dyn crate::Pulse>,
@@ -174,7 +189,7 @@ impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder
 /// [`DynDecodeJob::into_streaming_decoder`].
 pub trait DynStreamingDecoder: Send {
     /// Pull the next batch of scanlines.
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, BoxedError>;
 
     /// Image metadata, available after construction.
     fn info(&self) -> &ImageInfo;
@@ -190,7 +205,7 @@ impl core::fmt::Debug for dyn DynStreamingDecoder + '_ {
 pub(super) struct StreamingDecoderShim<S>(pub(super) S);
 
 impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> {
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, BoxedError> {
         self.0.next_batch().map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -209,23 +224,11 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 /// [`DynDecoderConfig::dyn_job`]. Use the `set_*` methods to configure,
 /// then call one of the `into_*` methods to create a decoder.
 pub trait DynDecodeJob<'a> {
-    /// Set cooperative cancellation token.
-    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
-    fn set_stop(&mut self, pulse: StopToken) {
-        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
-    }
-
     /// Retain all operation control capabilities through type erasure.
     fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
-
-    /// Legacy best-effort decode policy; unsupported fields may be ignored.
-    #[deprecated(
-        note = "may silently ignore policy; use try_set_policy or a checked operation request"
-    )]
-    fn set_policy(&mut self, policy: crate::DecodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
     ///
@@ -255,7 +258,7 @@ pub trait DynDecodeJob<'a> {
     }
 
     /// Hint: crop to this region in source coordinates.
-    fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
+    fn set_crop_hint(&mut self, crop: crate::image::Rect);
 
     /// Set orientation handling strategy.
     fn set_orientation(&mut self, hint: OrientationHint);
@@ -288,7 +291,7 @@ pub trait DynDecodeJob<'a> {
     fn into_decoder(
         self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError>;
 
     /// Decode into a caller-owned sink (consumes this job).
@@ -296,14 +299,14 @@ pub trait DynDecodeJob<'a> {
         self: Box<Self>,
         data: Cow<'a, [u8]>,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, BoxedError>;
 
     /// Create a streaming decoder (consumes this job).
     fn into_streaming_decoder(
         self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError>;
 
     /// Create a full-frame animation decoder (consumes this job).
@@ -313,13 +316,13 @@ pub trait DynDecodeJob<'a> {
     fn into_animation_frame_decoder(
         self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError>;
 
     /// Create an incremental Sans-I/O decoder (consumes this job).
     fn into_incremental_decoder(
         self: Box<Self>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
         Err(Box::new(
@@ -332,7 +335,7 @@ pub trait DynDecodeJob<'a> {
     /// being used as evidence of mandatory interpretation suspension.
     fn into_controlled_decoder(
         self: Box<Self>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
         storage: crate::storage::StorageBudget,
     ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
         let _ = (preferred, storage);
@@ -344,7 +347,7 @@ pub trait DynDecodeJob<'a> {
         self: Box<Self>,
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, BoxedError> {
         let _ = (source, sink, preferred);
         Err(Box::new(
@@ -404,12 +407,6 @@ where
         self.try_apply(|job| job.with_limits(limits));
     }
 
-    fn set_policy(&mut self, policy: crate::DecodePolicy) {
-        // Preserve the legacy setter behavior; checked callers use try_set_policy.
-        #[allow(deprecated)]
-        self.try_apply(|job| job.with_policy(policy));
-    }
-
     fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
         let Some(job) = self.0.as_mut() else {
             return Err("DecodeJobShim: job already consumed (double take)".into());
@@ -436,8 +433,8 @@ where
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        self.try_apply(|job| job.with_crop_hint(x, y, width, height));
+    fn set_crop_hint(&mut self, crop: crate::image::Rect) {
+        self.try_apply(|job| job.with_crop_hint(crop));
     }
 
     fn set_orientation(&mut self, hint: OrientationHint) {
@@ -473,7 +470,7 @@ where
     fn into_decoder(
         mut self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError> {
         let job = self.take()?;
         let dec = job
@@ -486,7 +483,7 @@ where
         mut self: Box<Self>,
         data: Cow<'a, [u8]>,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, BoxedError> {
         let job = self.take()?;
         job.push_decoder(data, sink, preferred)
@@ -496,7 +493,7 @@ where
     fn into_streaming_decoder(
         mut self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError> {
         let job = self.take()?;
         let dec = job
@@ -508,7 +505,7 @@ where
     fn into_animation_frame_decoder(
         mut self: Box<Self>,
         data: Cow<'a, [u8]>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError> {
         let job = self.take()?;
         let dec = job
@@ -519,7 +516,7 @@ where
 
     fn into_incremental_decoder(
         mut self: Box<Self>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let job = self.take()?;
         job.dyn_incremental_decoder(preferred)
@@ -527,7 +524,7 @@ where
 
     fn into_controlled_decoder(
         mut self: Box<Self>,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
         storage: crate::storage::StorageBudget,
     ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
         self.take()?.dyn_controlled_decoder(preferred, storage)
@@ -537,7 +534,7 @@ where
         mut self: Box<Self>,
         source: &mut dyn crate::source::DynReadAt,
         sink: &mut dyn crate::DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, BoxedError> {
         let job = self.take()?;
         job.push_decoder_from_source(source, sink, preferred)
@@ -576,7 +573,7 @@ pub trait DynDecoderConfig: Send + Sync {
     fn formats(&self) -> &'static [ImageFormat];
 
     /// Pixel formats this decoder can produce natively.
-    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat];
 
     /// Decoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static DecodeCapabilities;
@@ -613,8 +610,8 @@ where
         C::formats()
     }
 
-    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
-        C::supported_descriptors()
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
 
     fn capabilities(&self) -> &'static DecodeCapabilities {

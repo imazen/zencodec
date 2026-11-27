@@ -7,7 +7,7 @@
 //! # Choosing a starting point
 //!
 //! For **untrusted input** (network bytes, user uploads, third-party data),
-//! prefer [`DecodePolicy::strict()`] as the starting point and selectively
+//! prefer [`DecodePolicy::untrusted_minimal()`] as the starting point and selectively
 //! re-enable features the application actually needs. This is the
 //! recommended default for any service that processes bytes it did not
 //! produce itself. Pair this with
@@ -20,7 +20,7 @@
 //!
 //! # Named levels
 //!
-//! - [`DecodePolicy::strict()`] — **recommended for untrusted input.**
+//! - [`DecodePolicy::untrusted_minimal()`] — **recommended for untrusted input.**
 //!   Minimal attack surface: no ICC/EXIF/XMP extraction, no progressive,
 //!   no animation, strict spec parsing, no truncated input.
 //! - [`DecodePolicy::none()`] / [`EncodePolicy::none()`] — all defaults
@@ -29,30 +29,32 @@
 //!   trusted input).
 //!
 //! Individual flags can be overridden after constructing a named level
-//! — e.g. `DecodePolicy::strict().with_allow_icc(true)` for strict-but-with-color.
+//! — e.g. `DecodePolicy::untrusted_minimal().with_allow_icc(true)` for minimal-but-with-color.
 
 /// Decode security policy.
 ///
 /// Controls what features a decoder is permitted to use when processing
-/// untrusted input. Codecs check these flags and skip or reject
-/// accordingly; unrecognized flags are ignored.
+/// untrusted input. Codecs enforce these flags via
+/// [`DecodeJob::try_with_policy`](crate::decode::DecodeJob::try_with_policy) /
+/// [`DecodeJob::try_set_policy`](crate::decode::DecodeJob::try_set_policy)
+/// and reject unsupported flags rather than ignoring them.
 ///
-/// # Recommended: start strict for untrusted input
+/// # Recommended: start minimal for untrusted input
 ///
 /// When decoding bytes from the network, end users, or any third-party
-/// source, use [`DecodePolicy::strict()`] as the starting point and
+/// source, use [`DecodePolicy::untrusted_minimal()`] as the starting point and
 /// selectively enable the features the application actually needs.
 /// `DecodePolicy::default()` returns [`DecodePolicy::none()`] (all
-/// `None` — each codec's own default applies) for backwards compatibility,
-/// but this is **not** the safest choice for untrusted input.
+/// `None` — each codec's own default applies) for convenience on trusted
+/// pipelines, but this is **not** the safest choice for untrusted input.
 ///
 /// # Example
 ///
 /// ```
 /// use zencodec::decode::DecodePolicy;
 ///
-/// // Start strict, then allow ICC (needed for color management)
-/// let policy = DecodePolicy::strict().with_allow_icc(true);
+/// // Start minimal, then allow ICC (needed for color management)
+/// let policy = DecodePolicy::untrusted_minimal().with_allow_icc(true);
 /// assert_eq!(policy.allow_icc, Some(true));
 /// assert_eq!(policy.allow_exif, Some(false));
 /// ```
@@ -98,9 +100,13 @@ impl DecodePolicy {
         }
     }
 
-    /// Minimal attack surface: no metadata extraction, no progressive,
-    /// no animation, strict parsing.
-    pub const fn strict() -> Self {
+    /// Minimal attack surface for untrusted input: denies ICC/EXIF/XMP
+    /// extraction, progressive/interlaced scans, animation, and truncated
+    /// input, and enables strict spec parsing (`strict = Some(true)`).
+    ///
+    /// To enable only strict parsing without turning off metadata/features,
+    /// use `DecodePolicy::none().with_strict(true)`.
+    pub const fn untrusted_minimal() -> Self {
         Self {
             allow_icc: Some(false),
             allow_exif: Some(false),
@@ -234,19 +240,20 @@ impl DecodePolicy {
 ///   [`resolve_color_emit`](crate::resolve_color_emit). `None` defers to the
 ///   codec's default.
 /// - [`embed_icc`](Self::embed_icc) / [`embed_exif`](Self::embed_exif) /
-///   [`embed_xmp`](Self::embed_xmp) — a coarse, best-effort per-channel embed
-///   gate handed to the codec via
-///   [`EncodeJob::with_policy`](crate::encode::EncodeJob::with_policy).
+///   [`embed_xmp`](Self::embed_xmp) — a coarse per-channel embed gate handed
+///   to the codec via
+///   [`EncodeJob::try_with_policy`](crate::encode::EncodeJob::try_with_policy)
+///   or [`EncodeJob::try_set_policy`](crate::encode::EncodeJob::try_set_policy).
 ///   Tri-state (`None` = codec default, `Some(true/false)` = embed/strip),
-///   whole-channel only. Best-effort: the `with_policy` default is a no-op, so a
-///   codec that does not implement it silently ignores this gate.
+///   whole-channel only. Unsupported gates return
+///   [`UnsupportedOperation::EncodePolicy`](crate::UnsupportedOperation::EncodePolicy).
 ///
 /// Field-level metadata filtering is separate: choose a
 /// [`MetadataPolicy`](crate::MetadataPolicy) and apply it at
-/// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy),
-/// which filters the record *before* it reaches the codec. Filtering does not
-/// guarantee that every retained field is embedded. The coarse `embed_*`
-/// gates here are not a substitute — for privacy, set a policy.
+/// [`EncodeJob::try_with_metadata_policy`](crate::encode::EncodeJob::try_with_metadata_policy),
+/// which checks codec support and filters the record *before* it reaches the
+/// codec. The coarse `embed_*` gates here are not a substitute — for privacy,
+/// set a policy.
 ///
 /// # Example
 ///
@@ -301,10 +308,10 @@ impl EncodePolicy {
         }
     }
 
-    /// Coarse, best-effort gate asking the codec to embed no metadata. For
-    /// explicit record filtering choose a [`MetadataPolicy`](crate::MetadataPolicy) at
-    /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy);
-    /// these `embed_*` flags only reach codecs that implement `with_policy`.
+    /// Coarse gate asking the codec to embed no metadata. For explicit record
+    /// filtering choose a [`MetadataPolicy`](crate::MetadataPolicy) at
+    /// [`EncodeJob::try_with_metadata_policy`](crate::encode::EncodeJob::try_with_metadata_policy);
+    /// these `embed_*` flags are checked by codecs via `try_set_policy`.
     pub const fn strip_all() -> Self {
         Self {
             color: None,
@@ -427,8 +434,8 @@ mod tests {
     }
 
     #[test]
-    fn decode_strict_denies_all() {
-        let p = DecodePolicy::strict();
+    fn decode_untrusted_minimal_denies_all() {
+        let p = DecodePolicy::untrusted_minimal();
         assert_eq!(p.allow_icc, Some(false));
         assert_eq!(p.allow_exif, Some(false));
         assert_eq!(p.allow_animation, Some(false));
@@ -445,9 +452,9 @@ mod tests {
 
     #[test]
     fn decode_builder_overrides() {
-        let p = DecodePolicy::strict().with_allow_icc(true);
+        let p = DecodePolicy::untrusted_minimal().with_allow_icc(true);
         assert_eq!(p.allow_icc, Some(true));
-        assert_eq!(p.allow_exif, Some(false)); // still strict
+        assert_eq!(p.allow_exif, Some(false)); // still minimal
     }
 
     #[test]
@@ -456,7 +463,7 @@ mod tests {
         assert!(p.resolve_icc(true));
         assert!(!p.resolve_icc(false));
 
-        let p = DecodePolicy::strict();
+        let p = DecodePolicy::untrusted_minimal();
         assert!(!p.resolve_icc(true)); // explicit false overrides default true
     }
 
@@ -503,7 +510,7 @@ mod tests {
 
     #[test]
     fn static_construction() {
-        static _DECODE: DecodePolicy = DecodePolicy::strict().with_allow_icc(true);
+        static _DECODE: DecodePolicy = DecodePolicy::untrusted_minimal().with_allow_icc(true);
         static _ENCODE: EncodePolicy = EncodePolicy::strip_all().with_embed_icc(true);
     }
 

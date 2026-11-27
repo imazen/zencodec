@@ -1,6 +1,6 @@
 //! Keep a caller-defined immutable packed owner through shared image publication.
 use super::*;
-use zenpixels::{ColorContext, PixelDescriptor};
+use zenpixels::{HdrMetadata, PixelFormat};
 
 /// An immutable owner of scalar auxiliary planes independent of packed color.
 ///
@@ -26,7 +26,7 @@ pub trait AuxiliaryImageOwner: Send + Sync {
 /// [`crate::frame::Picture`] instead.
 pub trait PackedImageOwner: Send + Sync {
     /// Borrow the packed color pixels and their actual color context.
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>>;
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>>;
 
     /// Borrow the scalar values for the supplied auxiliary index. Indices start
     /// at zero and correspond to the roles passed to `from_packed_owner`.
@@ -52,7 +52,7 @@ struct ValueLayout {
     width: u32,
     height: u32,
     stride: usize,
-    channel: ChannelType,
+    channel: SampleType,
     grid: AuxiliaryGrid,
 }
 impl From<ValueSlice<'_>> for ValueLayout {
@@ -72,8 +72,8 @@ struct Held<P> {
     width: u32,
     height: u32,
     stride: usize,
-    descriptor: PixelDescriptor,
-    color: Option<Arc<ColorContext>>,
+    descriptor: PixelFormat,
+    hdr: HdrMetadata,
     extras: Arc<Vec<(Meaning, ValueLayout)>>,
 }
 
@@ -155,13 +155,13 @@ impl ImageOutput {
             return Err(fail(OutputError::Interpretation));
         }
         let pixels = owner.pixels()?;
-        let (width, height) = (pixels.width(), pixels.rows());
+        let (width, height) = (pixels.width(), pixels.height());
         if (width, height) != (g.region.width, g.region.height) {
             return Err(fail(OutputError::Geometry));
         }
-        let descriptor = pixels.descriptor();
-        let stride = pixels.stride();
-        let color = pixels.color_context().cloned();
+        let descriptor = pixels.format().clone();
+        let stride = pixels.stride_bytes();
+        let hdr = pixels.hdr();
         let mut extras = Vec::new();
         extras.try_reserve_exact(auxiliaries.len()).map_err(|e| {
             fail(OutputError::Mapping(crate::frame::MapError::Backend(
@@ -182,7 +182,7 @@ impl ImageOutput {
                 height,
                 stride,
                 descriptor,
-                color,
+                hdr,
                 extras: Arc::new(extras),
             }),
             interpretation: Arc::new(interpretation),
@@ -214,7 +214,7 @@ impl<P: PackedImageOwner> Held<P> {
 
 struct HeldMap<'a, P> {
     held: &'a Held<P>,
-    pixels: PixelSlice<'a>,
+    pixels: PixelView<'a>,
 }
 impl<P: PackedImageOwner> ImageStorage for Held<P> {
     fn auxiliary_source(&self) -> Result<Option<AuxiliarySource>, Failure> {
@@ -232,7 +232,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
     }
     fn facts(&self) -> SampleFacts {
         SampleFacts {
-            packed: Some(self.descriptor),
+            packed: Some(self.descriptor.clone()),
             planes: 1 + self.extras.len(),
             auxiliaries: self.extras.len(),
             applied_spot_colors: self
@@ -255,17 +255,12 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
     }
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
         let pixels = self.owner.pixels()?;
-        if (pixels.width(), pixels.rows(), pixels.stride())
+        if (pixels.width(), pixels.height(), pixels.stride_bytes())
             != (self.width, self.height, self.stride)
         {
             return Err(fail(OutputError::Geometry));
         }
-        let same_color = match (pixels.color_context(), self.color.as_ref()) {
-            (None, None) => true,
-            (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,
-            _ => false,
-        };
-        if pixels.descriptor() != self.descriptor || !same_color {
+        if pixels.format() != &self.descriptor || pixels.hdr() != self.hdr {
             return Err(fail(OutputError::Interpretation));
         }
         for index in 0..self.extras.len() {
@@ -389,29 +384,42 @@ mod tests {
     }
     impl core::error::Error for Backend {}
     impl PackedImageOwner for ChangingOwner {
-        fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+        fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
             let mode = self.mode.load(Ordering::SeqCst);
             if mode == 6 {
                 return Err(fail(OutputError::Mapping(crate::frame::MapError::Backend(
                     Box::new(At::wrap(Backend("private backend payload"))),
                 ))));
             }
-            let descriptor = if mode == 2 {
-                PixelDescriptor::RGB8_SRGB.with_transfer(zenpixels::TransferFunction::Linear)
+            let descriptor = if mode == 3 {
+                let mut icc = [0u8; 132];
+                icc[0..4].copy_from_slice(&132u32.to_be_bytes());
+                icc[12..16].copy_from_slice(b"mntr");
+                icc[16..20].copy_from_slice(b"RGB ");
+                icc[20..24].copy_from_slice(b"XYZ ");
+                icc[36..40].copy_from_slice(b"acsp");
+                PixelFormat::new(
+                    zenpixels::SampleLayout::RGB8,
+                    zenpixels::ColorSpace::Icc {
+                        profile: Arc::from(icc),
+                        color_channels: 3,
+                        alpha: AlphaMode::None,
+                        intent: zenpixels::RenderingIntent::RelativeColorimetric,
+                    },
+                )
+            } else if mode == 2 {
+                PixelFormat::RGB8_SRGB.with_transfer(zenpixels::Transfer::Linear)
             } else {
-                PixelDescriptor::RGB8_SRGB
+                PixelFormat::RGB8_SRGB
             };
-            let mut pixels = PixelSlice::new(
+            let pixels = PixelView::new_with_format_cow(
                 &self.pixels,
                 if mode == 1 { 1 } else { 2 },
                 2,
                 if mode == 7 { 12 } else { 9 },
-                descriptor,
+                zenpixels::FormatCow::from_owned(descriptor),
             )
             .unwrap();
-            if mode == 3 {
-                pixels = pixels.with_color_context(Arc::new(ColorContext::from_icc(vec![1, 2, 3])));
-            }
             Ok(pixels)
         }
         fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
@@ -427,7 +435,7 @@ mod tests {
                 },
                 2,
                 12,
-                ChannelType::F32,
+                SampleType::F32,
             )
             .map(Some)
         }
@@ -436,7 +444,7 @@ mod tests {
         vec![Auxiliary {
             kind: AuxiliaryKind::Depth,
             name: String::new(),
-            source_precision: SourcePrecision::Float {
+            source_sample_format: SourceSampleFormat::Float {
                 bits: 32,
                 exponent_bits: 8,
             },
@@ -508,10 +516,10 @@ mod tests {
             (2, 2, 12, 19),
         ] {
             assert!(
-                ValueSlice::new(&[0; 24][..len], width, height, stride, ChannelType::F32).is_err()
+                ValueSlice::new(&[0; 24][..len], width, height, stride, SampleType::F32).is_err()
             );
         }
-        let values = ValueSlice::new(&[0; 20], 2, 2, 12, ChannelType::F32).unwrap();
+        let values = ValueSlice::new(&[0; 20], 2, 2, 12, SampleType::F32).unwrap();
         assert_eq!(values.as_strided_bytes().len(), 20);
     }
 }

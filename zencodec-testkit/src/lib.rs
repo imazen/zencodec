@@ -83,13 +83,14 @@ mod preparation;
 pub mod pulse;
 
 use std::borrow::Cow;
+#[cfg(test)]
 use std::sync::Arc;
 
 use whereat::At;
 use zencodec::CodecErrorExt;
 use zencodec::decode::{
     AnimationFrameDecoder, Decode, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig,
-    DynDecoderConfig, SinkError, StreamingDecode,
+    DynDecoderConfig, RowStrip, SinkError, StreamingDecode, StripDimensions,
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig, Fidelity};
 use zencodec::exif::Exif;
@@ -103,17 +104,19 @@ use zencodec::{
     UnsupportedOperation,
 };
 use zenpixels::{
-    ColorContext, PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction,
+    AlignedSamples, ByteStorage, ColorSpace, PixelBuf, PixelFormat, PixelStorage, PixelView,
+    PixelViewMut, SampleLayout, Transfer,
 };
 
 mod adversarial;
 mod contracts;
 mod metadata_retention;
 pub use adversarial::{
-    ExpectedError, PrefixCase, PrefixOutcome, TimingCase, check_animation_cases,
-    check_decode_prefix_cases,
+    DisplayFrameCase, ExpectedError, PrefixCase, PrefixOutcome, TimingCase,
+    check_animation_begin_refusal, check_animation_cases, check_animation_delivery,
+    check_decode_preferences, check_decode_prefix_cases,
 };
-pub use metadata_retention::check_metadata_retained;
+pub use metadata_retention::{check_metadata_inspector, check_metadata_retained};
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
 /// tests, so it is compiled only with them.
@@ -173,66 +176,62 @@ fn fail(check: &'static str, detail: impl Into<String>) -> Failure {
 pub struct TestImage {
     width: u32,
     height: u32,
-    desc: PixelDescriptor,
-    data: Vec<u8>,
+    desc: PixelFormat,
+    data: PixelStorage,
 }
 
 impl TestImage {
     /// An RGBA8 image whose channels vary with position, so any row/column
     /// transposition shows up as a pixel diff.
     pub fn rgba8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, 0)
+        Self::gradient(width, height, PixelFormat::RGBA8_SRGB, 4, 0)
     }
 
     /// An RGB8 image with the same gradient pattern.
     pub fn rgb8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3, 0)
+        Self::gradient(width, height, PixelFormat::RGB8_SRGB, 3, 0)
     }
 
     /// An RGBA8 gradient offset by `seed`, so distinct same-size frames (for
     /// animation tests) differ in content and a frame-ordering bug is visible.
     pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, seed)
+        Self::gradient(width, height, PixelFormat::RGBA8_SRGB, 4, seed)
     }
 
     /// An opaque RGB8 gradient offset by `seed`: distinct frames for codecs
     /// whose animations carry no partial transparency (GIF).
     pub fn rgb8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3, seed)
+        Self::gradient(width, height, PixelFormat::RGB8_SRGB, 3, seed)
     }
 
     /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
     /// descriptor such as `RGB16_BT2100_PQ`). Samples span the full 16-bit range
     /// with distinct high and low bytes, so a byte-order bug or an 8-bit
     /// truncation shows up as a pixel diff.
-    pub(crate) fn rgb16_gradient(width: u32, height: u32, desc: PixelDescriptor) -> Self {
+    pub(crate) fn rgb16_gradient(width: u32, height: u32, desc: PixelFormat) -> Self {
         assert!(width > 0 && height > 0, "test image must be non-empty");
         assert_eq!(
-            desc.bytes_per_pixel(),
+            desc.layout.bytes_per_pixel(),
             6,
             "rgb16_gradient needs a U16 RGB descriptor"
         );
-        let mut data = vec![0u8; width as usize * height as usize * 6];
+        let mut data = Vec::with_capacity(width as usize * height as usize * 3);
         for y in 0..height as usize {
             for x in 0..width as usize {
-                let p = (y * width as usize + x) * 6;
-                let r = (x * 1031 + y * 517) as u16;
-                let g = (x * 257 + y * 3079) as u16;
-                let b = ((x ^ y) * 4111 + 12345) as u16;
-                data[p..p + 2].copy_from_slice(&r.to_ne_bytes());
-                data[p + 2..p + 4].copy_from_slice(&g.to_ne_bytes());
-                data[p + 4..p + 6].copy_from_slice(&b.to_ne_bytes());
+                data.push((x * 1031 + y * 517) as u16);
+                data.push((x * 257 + y * 3079) as u16);
+                data.push(((x ^ y) * 4111 + 12345) as u16);
             }
         }
         Self {
             width,
             height,
             desc,
-            data,
+            data: PixelStorage::U16(data),
         }
     }
 
-    fn gradient(width: u32, height: u32, desc: PixelDescriptor, bpp: usize, seed: u8) -> Self {
+    fn gradient(width: u32, height: u32, desc: PixelFormat, bpp: usize, seed: u8) -> Self {
         assert!(width > 0 && height > 0, "test image must be non-empty");
         let s = seed as usize;
         let mut data = vec![0u8; width as usize * height as usize * bpp];
@@ -251,30 +250,30 @@ impl TestImage {
             width,
             height,
             desc,
-            data,
+            data: PixelStorage::U8(data),
         }
     }
 
     fn row_bytes(&self) -> usize {
-        self.width as usize * self.desc.bytes_per_pixel()
+        self.width as usize * self.desc.layout.bytes_per_pixel()
     }
 
-    /// Borrow the whole image as a [`PixelSlice`].
-    pub fn as_slice(&self) -> PixelSlice<'_> {
-        PixelSlice::new(
-            &self.data,
+    /// Borrow the whole image as a [`PixelView`].
+    pub fn as_slice(&self) -> PixelView<'_> {
+        PixelView::new(
+            self.data.as_bytes(),
             self.width,
             self.height,
             self.row_bytes(),
-            self.desc,
+            &self.desc,
         )
         .expect("test image dimensions are valid")
     }
 
-    fn strip(&self, y: u32, h: u32) -> PixelSlice<'_> {
+    fn strip(&self, y: u32, h: u32) -> PixelView<'_> {
         let rb = self.row_bytes();
-        let bytes = &self.data[y as usize * rb..(y as usize + h as usize) * rb];
-        PixelSlice::new(bytes, self.width, h, rb, self.desc).expect("strip dimensions are valid")
+        let bytes = &self.data.as_bytes()[y as usize * rb..(y as usize + h as usize) * rb];
+        PixelView::new(bytes, self.width, h, rb, &self.desc).expect("strip dimensions are valid")
     }
 
     fn pixels(&self) -> Pixels {
@@ -291,7 +290,7 @@ impl TestImage {
 struct Pixels {
     width: u32,
     rows: u32,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     bytes: Vec<u8>,
 }
 
@@ -302,22 +301,22 @@ impl std::fmt::Debug for Pixels {
             "Pixels {{ {}x{} {:?}, {} bytes }}",
             self.width,
             self.rows,
-            self.desc,
+            self.desc.clone(),
             self.bytes.len()
         )
     }
 }
 
-fn grab(ps: PixelSlice<'_>) -> Pixels {
+fn grab(ps: PixelView<'_>) -> Pixels {
     grab_ref(&ps)
 }
 
 /// Apply an EXIF `orientation` to `p`, producing the image a conformant reader
 /// would *display* — orientation is a rendering transform, not a label. Uses
-/// zenpixels' canonical [`Orientation::forward_map`] / `output_dimensions`, so
+/// zenpixels' canonical [`Orientation::map_pixel_coordinates`] / `output_dimensions`, so
 /// the conventions match production exactly.
 fn render(p: &Pixels, orientation: Orientation) -> Pixels {
-    let bpp = p.desc.bytes_per_pixel();
+    let bpp = p.desc.layout.bytes_per_pixel();
     let (w, h) = (p.width, p.rows);
     let (ow, oh) = orientation.output_dimensions(w, h);
     let in_rb = w as usize * bpp;
@@ -325,7 +324,7 @@ fn render(p: &Pixels, orientation: Orientation) -> Pixels {
     let mut bytes = vec![0u8; oh as usize * out_rb];
     for sy in 0..h {
         for sx in 0..w {
-            let (dx, dy) = orientation.forward_map(sx, sy, w, h);
+            let (dx, dy) = orientation.map_pixel_coordinates((sx, sy), (w, h));
             let si = sy as usize * in_rb + sx as usize * bpp;
             let di = dy as usize * out_rb + dx as usize * bpp;
             bytes[di..di + bpp].copy_from_slice(&p.bytes[si..si + bpp]);
@@ -334,23 +333,23 @@ fn render(p: &Pixels, orientation: Orientation) -> Pixels {
     Pixels {
         width: ow,
         rows: oh,
-        desc: p.desc,
+        desc: p.desc.clone(),
         bytes,
     }
 }
 
 /// `grab` for a borrowed slice — e.g. [`AnimationFrame::pixels`], which returns a
 /// reference into the decoder's canvas.
-fn grab_ref(ps: &PixelSlice<'_>) -> Pixels {
-    let rb = ps.width() as usize * ps.descriptor().bytes_per_pixel();
-    let mut bytes = Vec::with_capacity(rb * ps.rows() as usize);
-    for y in 0..ps.rows() {
+fn grab_ref(ps: &PixelView<'_>) -> Pixels {
+    let rb = ps.width() as usize * ps.format().clone().layout.bytes_per_pixel();
+    let mut bytes = Vec::with_capacity(rb * ps.height() as usize);
+    for y in 0..ps.height() {
         bytes.extend_from_slice(&ps.row(y)[..rb]);
     }
     Pixels {
         width: ps.width(),
-        rows: ps.rows(),
-        desc: ps.descriptor(),
+        rows: ps.height(),
+        desc: ps.format().clone(),
         bytes,
     }
 }
@@ -359,62 +358,138 @@ fn grab_ref(ps: &PixelSlice<'_>) -> Pixels {
 // Collecting decode sink
 // ===========================================================================
 
-/// A [`DecodeRowSink`] that gathers all strips into one contiguous buffer.
+/// A conformance sink with aligned, independently checked padded rows.
 #[derive(Default)]
 struct CollectSink {
     width: u32,
     rows: u32,
-    desc: Option<PixelDescriptor>,
-    buf: Vec<u8>,
+    desc: Option<PixelFormat>,
+    stride: usize,
+    next: u32,
+    buf: Option<AlignedSamples>,
+    finished: bool,
+    metadata: Option<zencodec::decode::RowMetadata>,
 }
 
 impl DecodeRowSink for CollectSink {
-    fn begin(
-        &mut self,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<(), SinkError> {
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelFormat) -> Result<(), SinkError> {
+        if self.desc.is_some() {
+            return Err("decoder began more than once".into());
+        }
+        descriptor.validate()?;
+        let active = (width as usize)
+            .checked_mul(descriptor.layout.bytes_per_pixel())
+            .ok_or("conformance row width overflows")?;
+        let stride = active
+            .checked_add(64)
+            .ok_or("conformance stride overflows")?
+            & !63;
+        let len = stride
+            .checked_mul(height as usize)
+            .ok_or("conformance raster overflows")?;
+        let mut buf = AlignedSamples::zeroed_bytes(len)?;
+        buf.as_bytes_mut().fill(0xA7);
         self.width = width;
         self.rows = height;
         self.desc = Some(descriptor);
-        self.buf = vec![0u8; width as usize * height as usize * descriptor.bytes_per_pixel()];
+        self.stride = stride;
+        self.buf = Some(buf);
         Ok(())
     }
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        let stride = width as usize * descriptor.bytes_per_pixel();
-        let end = (y as usize + height as usize) * stride;
-        if self.buf.len() < end {
-            self.buf.resize(end, 0);
+        strip: RowStrip,
+        descriptor: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        let RowStrip { y, width, height } = strip;
+        if self.finished
+            || self.desc.as_ref() != Some(&descriptor)
+            || width != self.width
+            || y != self.next
+            || height == 0
+            || y.checked_add(height).is_none_or(|end| end > self.rows)
+        {
+            return Err(
+                "decoder strip disagrees with declared lifecycle, coordinates or spec".into(),
+            );
         }
-        self.width = width;
-        self.desc = Some(descriptor);
-        self.rows = self.rows.max(y + height);
-        let off = y as usize * stride;
-        // Dimensions and span are exact by construction, so this never fails.
-        Ok(
-            PixelSliceMut::new(&mut self.buf[off..end], width, height, stride, descriptor)
-                .expect("collect sink buffer dimensions are valid"),
-        )
+        let desc = self.desc.as_ref().ok_or("rows requested before begin")?;
+        let buf = self.buf.as_mut().ok_or("rows requested before begin")?;
+        self.next += height;
+        let off = y as usize * self.stride;
+        let end = (y + height) as usize * self.stride;
+        Ok(PixelViewMut::new(
+            &mut buf.as_bytes_mut()[off..end],
+            width,
+            height,
+            self.stride,
+            desc,
+        )?)
+    }
+
+    fn provide_buffer_with_metadata(
+        &mut self,
+        meta: zencodec::decode::BatchMeta,
+        size: StripDimensions,
+        descriptor: PixelFormat,
+        metadata: &zencodec::decode::RowMetadata,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        if !meta.is_final {
+            return Err("unsolicited provisional rows".into());
+        }
+        if let Some(prior) = &mut self.metadata {
+            prior.merge(metadata)?;
+        } else {
+            self.metadata = Some(metadata.clone());
+        }
+        Ok(self
+            .provide_next_buffer(size.at_row(meta.y), descriptor)?
+            .with_hdr(metadata.hdr))
+    }
+
+    fn finish(&mut self) -> Result<(), SinkError> {
+        if self.finished || self.desc.is_none() || self.next != self.rows {
+            return Err("decoder finished early, twice or before begin".into());
+        }
+        self.finished = true;
+        Ok(())
     }
 }
 
 impl CollectSink {
+    fn pixels(&self) -> Result<Pixels, String> {
+        if !self.finished {
+            return Err("decoder did not finish the sink".into());
+        }
+        let desc = self.desc.as_ref().ok_or("sink received no buffers")?;
+        let buf = self.buf.as_ref().ok_or("sink has no storage")?;
+        let active = self.width as usize * desc.layout.bytes_per_pixel();
+        if buf
+            .as_bytes()
+            .chunks_exact(self.stride)
+            .any(|row| row[active..].iter().any(|b| *b != 0xA7))
+        {
+            return Err("decoder overwrote row padding".into());
+        }
+        let view = PixelView::new(buf.as_bytes(), self.width, self.rows, self.stride, desc)
+            .map_err(|e| e.to_string())?;
+        Ok(grab(view))
+    }
+
+    fn verify_completion(&self, info: &zencodec::decode::OutputInfo) -> Result<(), String> {
+        if !self.finished
+            || info.width != self.width
+            || info.height != self.rows
+            || self.desc.as_ref() != Some(&info.native_format)
+        {
+            return Err("decode completion disagrees with actual sink raster".into());
+        }
+        Ok(())
+    }
+
     fn into_pixels(self) -> Result<Pixels, String> {
-        let desc = self.desc.ok_or("sink received no buffers")?;
-        Ok(Pixels {
-            width: self.width,
-            rows: self.rows,
-            desc,
-            bytes: self.buf,
-        })
+        self.pixels()
     }
 }
 
@@ -422,7 +497,6 @@ impl CollectSink {
 // Encode / decode path runners (generic over codec config)
 // ===========================================================================
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_oneshot<E>(
     cfg: &E,
     img: &TestImage,
@@ -436,7 +510,7 @@ where
     let enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(meta, policy)
+        .with_unfiltered_metadata(meta.filtered(&policy))
         .encoder()
         .map_err(|e| e.to_string())?;
     Ok(enc
@@ -445,7 +519,6 @@ where
         .into_vec())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -454,7 +527,7 @@ where
     let mut enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()
         .map_err(|e| e.to_string())?;
     let strip = enc.preferred_strip_height().max(1);
@@ -485,16 +558,25 @@ fn dec_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, Stri
         .streaming_decoder(Cow::Borrowed(bytes), &[])
         .map_err(|e| e.to_string())?;
     let mut width = 0;
-    let mut rows = 0;
+    let mut rows = 0u32;
     let mut desc = None;
     let mut bytes_out = Vec::new();
-    while let Some((_, strip)) = sd.next_batch().map_err(|e| e.to_string())? {
+    while let Some((y, strip)) = sd.next_batch().map_err(|e| e.to_string())? {
         let p = grab(strip);
-        if desc.is_none() {
+        if y != rows || p.rows == 0 {
+            return Err("pull decoder skipped, reordered or repeated rows".into());
+        }
+        if let Some(desc) = &desc {
+            if p.width != width || &p.desc != desc {
+                return Err("pull decoder changed its width or spec".into());
+            }
+        } else {
             width = p.width;
             desc = Some(p.desc);
         }
-        rows += p.rows;
+        rows = rows
+            .checked_add(p.rows)
+            .ok_or("pull decoder row coordinate overflow")?;
         bytes_out.extend_from_slice(&p.bytes);
     }
     Ok(Pixels {
@@ -507,10 +589,12 @@ fn dec_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, Stri
 
 fn dec_push<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Pixels, String> {
     let mut sink = CollectSink::default();
-    cfg.clone()
+    let completion = cfg
+        .clone()
         .job()
         .push_decoder(Cow::Borrowed(bytes), &mut sink, &[])
         .map_err(|e| e.to_string())?;
+    sink.verify_completion(&completion)?;
     sink.into_pixels()
 }
 
@@ -579,13 +663,12 @@ where
 ///   nothing pending.
 /// - After a streaming `begin`, a second `begin` and a one-shot `encode` are
 ///   errors.
-/// - `begin` with a zero width or height is accepted exactly when `encode`
-///   of that size succeeds (or declines as `RowLevelEncode`).
+/// - `begin` refuses zero dimensions, just as the one-shot pixel constructor
+///   rejects empty views. A codec can decline as `RowLevelEncode`.
 /// - A refused `begin` leaves the encoder unchanged: after the first such
 ///   zero-size refusal, `begin` with the real size on the same encoder
 ///   reports the same timing and streams the same file.
 /// - Every run reports the same timing.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -601,7 +684,7 @@ where
         }
         return Ok(());
     }
-    let desc = img.strip(0, 1).descriptor();
+    let desc = img.strip(0, 1).format().clone();
     /// How a run drains `pending_output`.
     #[derive(Clone, Copy, PartialEq)]
     enum Drain {
@@ -626,7 +709,7 @@ where
     let encoder = || {
         enc.clone()
             .job()
-            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(Metadata::none())
             .encoder()
             .map_err(|e| e.to_string())
     };
@@ -634,7 +717,7 @@ where
     // and finish. `Ok(None)`: begin declined row-level encode for this
     // configuration.
     let run_on = |mut e: <E::Job as EncodeJob>::Enc, drain: Drain| -> Result<Option<Run>, String> {
-        let timing = match e.begin(img.width, img.height, desc) {
+        let timing = match e.begin(img.width, img.height, desc.clone()) {
             Ok(t) => t,
             Err(err)
                 if err.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode) =>
@@ -819,46 +902,36 @@ where
     }
     // Protocol: one declaration per encode, and no one-shot encode after it.
     let mut e = encoder().map_err(|e| fail(CHECK, e))?;
-    e.begin(img.width, img.height, desc)
+    e.begin(img.width, img.height, desc.clone())
         .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
-    if e.begin(img.width, img.height, desc).is_ok() {
+    if e.begin(img.width, img.height, desc.clone()).is_ok() {
         return Err(fail(CHECK, "a second begin was accepted"));
     }
     let mut e = encoder().map_err(|e| fail(CHECK, e))?;
-    e.begin(img.width, img.height, desc)
+    e.begin(img.width, img.height, desc.clone())
         .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
     if e.encode(img.strip(0, img.height)).is_ok() {
         return Err(fail(CHECK, "encode after a streaming begin was accepted"));
     }
-    // A zero width or height: `begin` answers as `encode` of that size does.
-    // A refused `begin` leaves the encoder unchanged, so the real declaration
-    // that follows on the same encoder streams the same file.
-    let bpp = desc.bytes_per_pixel();
+    // zenpixels refuses empty views before the encoder can receive them.
+    // Row startup must reject those same dimensions without poisoning the job.
     let mut refusal_checked = false;
     for (w, h) in [(0, img.height), (img.width, 0)] {
-        let empty = vec![0u8; w as usize * bpp * h as usize];
-        let slice = PixelSlice::new(&empty, w, h, w as usize * bpp, desc)
-            .map_err(|e| fail(CHECK, format!("{w}x{h} slice: {e}")))?;
-        let encoded = encoder().map_err(|e| fail(CHECK, e))?.encode(slice).is_ok();
+        let stride = w as usize * desc.layout.bytes_per_pixel();
+        if PixelView::new(&[], w, h, stride, &desc).is_ok() {
+            return Err(fail(CHECK, format!("{w}x{h} empty view was accepted")));
+        }
         let mut e = encoder().map_err(|e| fail(CHECK, e))?;
-        let begun = e.begin(w, h, desc);
+        let begun = e.begin(w, h, desc.clone());
         if let Err(err) = &begun
             && err.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode)
         {
             continue;
         }
-        if begun.is_ok() != encoded {
+        if begun.is_ok() {
             return Err(fail(
                 CHECK,
-                format!(
-                    "begin({w}, {h}) {} but encode of a {w}x{h} image {}",
-                    if begun.is_ok() {
-                        "was accepted"
-                    } else {
-                        "was refused"
-                    },
-                    if encoded { "succeeds" } else { "fails" }
-                ),
+                format!("begin({w}, {h}) accepted an empty image"),
             ));
         }
         if begun.is_err() && !refusal_checked {
@@ -918,7 +991,7 @@ where
         let Ok(mut e) = enc.clone().job().encoder() else {
             break;
         };
-        let Ok(timing) = e.begin(40, height, PixelDescriptor::RGBA8_SRGB) else {
+        let Ok(timing) = e.begin(40, height, PixelFormat::RGBA8_SRGB) else {
             break;
         };
         let Some(lag) = timing.lag_rows() else {
@@ -1013,7 +1086,6 @@ where
     Ok(())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn encode_animation<E>(cfg: &E, frames: &[TestImage], meta: Metadata) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -1022,7 +1094,7 @@ where
     let mut a = cfg
         .clone()
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(meta)
         .with_loop_count(Some(0))
         .animation_frame_encoder()
         .map_err(|e| e.to_string())?;
@@ -1033,7 +1105,17 @@ where
     Ok(a.finish(None).map_err(|e| e.to_string())?.into_vec())
 }
 
-fn decode_anim_borrowed<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+#[derive(PartialEq)]
+struct AnimationObservation {
+    timing: zencodec::decode::FrameCompletion,
+    pixels: Pixels,
+    metadata: zencodec::decode::RowMetadata,
+}
+
+fn decode_anim_borrowed<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1042,12 +1124,23 @@ fn decode_anim_borrowed<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<P
     let mut out = Vec::new();
     // The borrowed frame is invalidated by the next call, so copy before looping.
     while let Some(frame) = d.render_next_frame(None).map_err(|e| e.to_string())? {
-        out.push(grab_ref(frame.pixels()));
+        out.push(AnimationObservation {
+            timing: zencodec::decode::FrameCompletion {
+                duration: frame.duration(),
+                frame_index: frame.frame_index(),
+                pts: frame.pts(),
+            },
+            pixels: grab_ref(frame.pixels()),
+            metadata: zencodec::decode::RowMetadata::from_view(frame.pixels()),
+        });
     }
     Ok(out)
 }
 
-fn decode_anim_owned<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+fn decode_anim_owned<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1055,12 +1148,24 @@ fn decode_anim_owned<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixe
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     while let Some(frame) = d.render_next_frame_owned(None).map_err(|e| e.to_string())? {
-        out.push(grab(frame.pixels()));
+        let pixels = frame.pixels();
+        out.push(AnimationObservation {
+            timing: zencodec::decode::FrameCompletion {
+                duration: frame.duration(),
+                frame_index: frame.frame_index(),
+                pts: frame.pts(),
+            },
+            pixels: grab_ref(&pixels),
+            metadata: zencodec::decode::RowMetadata::from_view(&pixels),
+        });
     }
     Ok(out)
 }
 
-fn decode_anim_sink<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+fn decode_anim_sink<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+) -> Result<Vec<AnimationObservation>, String> {
     let mut d = cfg
         .clone()
         .job()
@@ -1073,8 +1178,18 @@ fn decode_anim_sink<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixel
             .render_next_frame_to_sink(None, &mut sink)
             .map_err(|e| e.to_string())?
         {
-            Some(_info) => out.push(sink.into_pixels()?),
-            None => break,
+            Some(info) => {
+                sink.verify_completion(&info)?;
+                out.push(AnimationObservation {
+                    timing: info
+                        .frame
+                        .ok_or("animation sink completion omitted timing")?,
+                    pixels: sink.pixels()?,
+                    metadata: sink.metadata.unwrap_or_default(),
+                });
+            }
+            None if sink.desc.is_none() => break,
+            None => return Err("end of animation had sink effects".into()),
         }
     }
     Ok(out)
@@ -1113,62 +1228,38 @@ where
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
 
-    // Keep timing in the published one-call suite too, without adding the
-    // static bounds needed by erased-dispatch conformance checks.
-    let mut borrowed = dec
-        .clone()
-        .job()
-        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
-        .map_err(|e| fail(CHECK, e.to_string()))?;
-    let mut owned = dec
-        .clone()
-        .job()
-        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
-        .map_err(|e| fail(CHECK, e.to_string()))?;
-    for index in 0..frames.len() {
-        let expected = zencodec::animation::FrameDuration::from_millis(40 + index as u32 * 10);
-        let a = borrowed
-            .render_next_frame(None)
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .ok_or_else(|| fail(CHECK, "missing borrowed frame"))?;
-        let b = owned
-            .render_next_frame_owned(None)
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .ok_or_else(|| fail(CHECK, "missing owned frame"))?;
-        if a.duration() != expected || b.duration() != expected {
-            return Err(fail(
-                CHECK,
-                format!(
-                    "frame {index} lost timing: {:?}/{:?}, expected {expected:?}",
-                    a.duration(),
-                    b.duration()
-                ),
-            ));
-        }
-    }
-
-    let paths = [
-        ("render_next_frame", decode_anim_borrowed(&dec, &bytes)),
-        ("render_next_frame_owned", decode_anim_owned(&dec, &bytes)),
-        ("render_next_frame_to_sink", decode_anim_sink(&dec, &bytes)),
-    ];
-    for (name, res) in paths {
+    let baseline = decode_anim_borrowed(&dec, &bytes).map_err(|e| fail(CHECK, e))?;
+    for (name, res) in [
+        ("borrowed", decode_anim_borrowed(&dec, &bytes)),
+        ("owned", decode_anim_owned(&dec, &bytes)),
+        ("sink", decode_anim_sink(&dec, &bytes)),
+    ] {
         let got = res.map_err(|e| fail(CHECK, format!("{name}: {e}")))?;
         if got.len() != want.len() {
             return Err(fail(
                 CHECK,
                 format!(
-                    "{name} produced {} frames, expected {}",
+                    "{name} delivered {} frames, expected {}",
                     got.len(),
                     want.len()
                 ),
             ));
         }
-        for (i, (g, w)) in got.iter().zip(&want).enumerate() {
-            if g != w {
+        if got != baseline {
+            return Err(fail(
+                CHECK,
+                format!("{name} changed pixels, PTS, duration, or evidence"),
+            ));
+        }
+        for (i, (frame, pixels)) in got.iter().zip(&want).enumerate() {
+            let expected = zencodec::animation::FrameDuration::from_millis(40 + i as u32 * 10);
+            if frame.timing.frame_index != i as u32
+                || frame.timing.duration != expected
+                || frame.pixels != *pixels
+            {
                 return Err(fail(
                     CHECK,
-                    format!("{name} frame {i} pixels differ from the input"),
+                    format!("{name} frame {i} differs from its original content or timing"),
                 ));
             }
         }
@@ -1199,7 +1290,6 @@ where
 /// Skipped (returns `Ok`) when the encoder does not advertise animation.
 /// `begin` may decline with an [`UnsupportedOperation`]; any other error
 /// fails the check.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_animation_streaming_output_honesty<E, D>(
     enc: E,
     dec: D,
@@ -1219,12 +1309,12 @@ where
         return Err(fail(CHECK, "no frames supplied"));
     };
     let (width, height) = (first.width, first.height);
-    let desc = first.strip(0, 1).descriptor();
+    let desc = first.strip(0, 1).format().clone();
     let count = frames.len() as u32;
     let encoder = || {
         enc.clone()
             .job()
-            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(Metadata::none())
             .with_loop_count(Some(0))
             .animation_frame_encoder()
             .map_err(|e| e.to_string())
@@ -1246,7 +1336,7 @@ where
                   declare: Option<u32>,
                   drain: Drain|
      -> Result<Option<Run>, String> {
-        let timing = match a.begin(width, height, desc, declare) {
+        let timing = match a.begin(width, height, desc.clone(), declare) {
             Ok(t) => t,
             Err(err) if err.unsupported_operation().is_some() => return Ok(None),
             Err(err) => return Err(format!("begin: {err}")),
@@ -1407,14 +1497,14 @@ where
             }
         }
         let mut a = encoder().map_err(|e| fail(CHECK, e))?;
-        a.begin(width, height, desc, declare)
+        a.begin(width, height, desc.clone(), declare)
             .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
-        if a.begin(width, height, desc, declare).is_ok() {
+        if a.begin(width, height, desc.clone(), declare).is_ok() {
             return Err(fail(CHECK, format!("{label}: a second begin was accepted")));
         }
         // A refused `begin` leaves the encoder unchanged.
         let mut a = encoder().map_err(|e| fail(CHECK, e))?;
-        if let Err(err) = a.begin(0, height, desc, declare)
+        if let Err(err) = a.begin(0, height, desc.clone(), declare)
             && err.unsupported_operation().is_none()
         {
             let after = run_on(a, declare, Drain::All)
@@ -1445,7 +1535,7 @@ where
         }
         if declare.is_some() {
             let mut a = encoder().map_err(|e| fail(CHECK, e))?;
-            a.begin(width, height, desc, declare)
+            a.begin(width, height, desc.clone(), declare)
                 .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
             for (i, f) in frames[..frames.len() - 1].iter().enumerate() {
                 a.push_frame(f.as_slice(), 40 + i as u32 * 10, None)
@@ -1480,10 +1570,7 @@ where
             .with_loop_count(Some(0))
             .animation_frame_encoder()
             .ok()
-            .and_then(|mut a| {
-                a.begin(24, 16, PixelDescriptor::RGBA8_SRGB, Some(count))
-                    .ok()
-            })
+            .and_then(|mut a| a.begin(24, 16, PixelFormat::RGBA8_SRGB, Some(count)).ok())
             .and_then(|t| t.lag_frames());
         match lag {
             Some(lag) if count <= lag + 1 => count = (lag + 4).min(200),
@@ -1521,11 +1608,14 @@ where
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
 {
     const CHECK: &str = "metadata_no_leak";
+    let (cll, md) = hdr_envelope();
     let rich = Metadata::none()
         .with_exif(fixtures::rich_exif_le())
         .with_xmp(fixtures::sample_xmp())
         .with_icc(fixtures::sample_icc())
-        .with_cicp(Cicp::SRGB);
+        .with_cicp(Cicp::SRGB)
+        .with_content_light_level(cll)
+        .with_mastering_display(md);
 
     let policies = [
         ("Web", MetadataPolicy::Web),
@@ -1548,8 +1638,19 @@ where
     ];
 
     for (name, policy) in policies {
-        #[allow(deprecated)] // The published codec wrapper still uses this compatibility path.
-        let expected = rich.clone().filtered(&policy);
+        // These are the fixture's authored expectations. Deriving them through the
+        // production filter would let the same privacy error occur on both sides.
+        let discard_all = name == "Custom(DISCARD_ALL)";
+        let preserve = name == "PreserveExact";
+        let expect_camera_time = name == "Web + camera/timestamps";
+        let mut expected = if discard_all {
+            Metadata::none()
+        } else {
+            rich.clone()
+        };
+        if !preserve {
+            expected.xmp = None;
+        }
         let bytes = enc_oneshot(&enc, img, rich.clone(), policy)
             .map_err(|e| fail(CHECK, format!("[{name}] encode: {e}")))?;
         let (_, decoded) =
@@ -1562,6 +1663,31 @@ where
         let (_, intrinsic) = dec_oneshot(&dec, &clean)
             .map_err(|e| fail(CHECK, format!("[{name}] clean decode: {e}")))?;
         assert_no_leak(CHECK, name, &decoded, &expected, &intrinsic)?;
+        if !preserve {
+            if bytes.windows(4).any(|bytes| bytes == b"PII\0") {
+                return Err(fail(
+                    CHECK,
+                    format!("[{name}] raw identifier canary survived"),
+                ));
+            }
+            if let Some(exif) = decoded.exif.as_deref().and_then(Exif::parse) {
+                let leaks = exif.has_gps()
+                    || exif.has_thumbnail()
+                    || exif.has_device_ids()
+                    || exif.has_camera_owner()
+                    || exif.has_image_unique_id()
+                    || exif.has_time_offsets()
+                    || (!expect_camera_time && (exif.has_camera() || exif.has_datetimes()))
+                    || (name == "ColorAndRotation"
+                        && (exif.artist().is_some() || exif.copyright().is_some()));
+                if leaks {
+                    return Err(fail(
+                        CHECK,
+                        format!("[{name}] forbidden EXIF field survived"),
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -1820,7 +1946,7 @@ fn mastering_display_matches(got: &MasteringDisplay, want: &MasteringDisplay) ->
 /// Skipped (`Ok`) unless **both** ends declare
 /// [`hdr`](zencodec::encode::EncodeCapabilities::hdr). For each transfer:
 ///
-/// - encodes `Cicp::BT2100_PQ` / `Cicp::BT2100_HLG` with `ContentLightLevel(1000, 400)`
+/// - encodes `Cicp::BT2100_PQ_YCBCR_FULL` / `Cicp::BT2100_HLG_YCBCR_FULL` with `ContentLightLevel(1000, 400)`
 ///   and `MasteringDisplay::HDR10_REFERENCE`, using a 16-bit RGB gradient when both
 ///   ends declare `native_16bit` (the 8-bit RGB gradient otherwise — the
 ///   signaling path is exercised either way);
@@ -1856,22 +1982,28 @@ where
     let cases = [
         (
             "PQ",
-            Cicp::BT2100_PQ,
-            PixelDescriptor::RGB16_BT2100_PQ,
-            TransferFunction::Pq,
+            Cicp::BT2100_PQ_YCBCR_FULL,
+            PixelFormat::RGB16_BT2100_PQ,
+            Transfer::Pq,
         ),
         (
             "HLG",
-            Cicp::BT2100_HLG,
-            PixelDescriptor::RGB16_BT2100_HLG,
-            TransferFunction::Hlg,
+            Cicp::BT2100_HLG_YCBCR_FULL,
+            PixelFormat::RGB16_BT2100_HLG_SCENE,
+            Transfer::Hlg(zenpixels::HlgMode::Scene),
         ),
     ];
     for (name, cicp, desc16, transfer) in cases {
         let img = if sixteen {
-            TestImage::rgb16_gradient(20, 14, desc16)
+            TestImage::rgb16_gradient(20, 14, desc16.clone())
         } else {
-            TestImage::rgb8_gradient(20, 14)
+            TestImage::gradient(
+                20,
+                14,
+                PixelFormat::new(SampleLayout::RGB8, desc16.color.clone()),
+                3,
+                0,
+            )
         };
         let meta = Metadata::none()
             .with_cicp(cicp)
@@ -1896,20 +2028,23 @@ where
             ));
         }
         let desc = got_px.desc;
-        if desc.transfer() != transfer {
+        if sample_transfer(&desc.color) != transfer {
             return Err(fail(
                 CHECK,
                 format!(
                     "[{name}] the decoded buffer is labelled {:?}, not {transfer:?} — the descriptor \
                      must describe the current pixels; stamp it from the file's CICP",
-                    desc.transfer()
+                    sample_transfer(&desc.color)
                 ),
             ));
         }
-        if sixteen && desc != desc16 {
+        if desc != want_px.desc {
             return Err(fail(
                 CHECK,
-                format!("[{name}] 16-bit decode descriptor is {desc:?}, expected {desc16:?}"),
+                format!(
+                    "[{name}] decode spec is {desc:?}, expected {:?}",
+                    want_px.desc
+                ),
             ));
         }
 
@@ -2023,6 +2158,21 @@ fn gain_map_params(case: GainMapCase) -> GainMapParams {
     p
 }
 
+fn gain_map_spec(channels: u8) -> PixelFormat {
+    let layout = if channels == 1 {
+        SampleLayout::GRAY8
+    } else {
+        SampleLayout::RGB8
+    };
+    PixelFormat::new(
+        layout,
+        ColorSpace::Untagged {
+            total_channels: channels,
+            alpha: zenpixels::AlphaMode::None,
+        },
+    )
+}
+
 /// Deterministic 8-bit gain-map pixels: a smooth ramp per channel (a gain map
 /// is a low-frequency control signal), offset per channel so channel order is
 /// observable.
@@ -2040,23 +2190,19 @@ fn gain_map_pixels(case: GainMapCase) -> Pixels {
     Pixels {
         width: GAIN_MAP_W,
         rows: GAIN_MAP_H,
-        desc: if c == 1 {
-            PixelDescriptor::GRAY8
-        } else {
-            PixelDescriptor::RGB8
-        },
+        desc: gain_map_spec(case.channels),
         bytes,
     }
 }
 
 /// The alternate rendition's colour: PQ, as an UltraHDR/AVIF map usually says.
-const GAIN_MAP_ALTERNATE_CICP: Cicp = Cicp::BT2100_PQ;
+const GAIN_MAP_ALTERNATE_CICP: Cicp = Cicp::BT2100_PQ_YCBCR_FULL;
 
 /// Build the encode-input fixture for one case. Built fresh each time
 /// ([`DecodedGainMap`] is consumed by `with_gain_map_pixels`).
 fn gain_map_fixture(case: GainMapCase) -> DecodedGainMap {
     let px = gain_map_pixels(case);
-    let buf = PixelBuffer::from_vec(px.bytes, px.width, px.rows, px.desc)
+    let buf = PixelBuf::from_bytes(px.bytes, px.width, px.rows, px.desc)
         .expect("gain-map fixture dimensions are valid");
     let info = GainMapInfo::new(gain_map_params(case), GAIN_MAP_W, GAIN_MAP_H, case.channels)
         .with_alternate_cicp(GAIN_MAP_ALTERNATE_CICP);
@@ -2073,7 +2219,6 @@ fn foreign_format<E: EncoderConfig>() -> ImageFormat {
 }
 
 /// Encode `img` with `gm` attached via `with_gain_map_pixels` (one-shot path).
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_with_gain_map<E>(cfg: &E, img: &TestImage, gm: DecodedGainMap) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
@@ -2082,7 +2227,7 @@ where
     let enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .with_gain_map_pixels(gm)
         .map_err(|e| format!("with_gain_map_pixels: {e}"))?
         .encoder()
@@ -2096,7 +2241,6 @@ where
 /// Encode `img` with `gm` attached, through the incremental `push_rows` +
 /// `finish` path — a separate code path in real codecs, where a job-level
 /// setting is easy to leave behind.
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn enc_push_rows_with_gain_map<E>(
     cfg: &E,
     img: &TestImage,
@@ -2109,7 +2253,7 @@ where
     let mut enc = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .with_gain_map_pixels(gm)
         .map_err(|e| format!("with_gain_map_pixels: {e}"))?
         .encoder()
@@ -2146,7 +2290,7 @@ struct GainMapObserved {
 impl GainMapObserved {
     fn of(gm: &DecodedGainMap) -> Self {
         Self {
-            pixels: grab(gm.pixels.as_slice()),
+            pixels: grab(gm.pixels.as_view()),
             info: gm.metadata.clone(),
         }
     }
@@ -2189,7 +2333,7 @@ fn compare_gain_map(
             got.pixels.width, got.pixels.rows, want_px.width, want_px.rows
         ));
     }
-    let got_ch = got.pixels.desc.channels() as u8;
+    let got_ch = got.pixels.desc.layout.channels() as u8;
     if got_ch != want_info.channels {
         return Err(format!(
             "{what}: gain map has {got_ch} channels ({:?}), expected {}",
@@ -2221,7 +2365,14 @@ fn compare_gain_map(
             got.info.alternate_cicp, want_info.alternate_cicp
         ));
     }
-    if got.pixels.desc.bytes_per_pixel() != want_px.desc.bytes_per_pixel() {
+    if got.pixels.desc != want_px.desc
+        || got.info.bit_depth != want_info.bit_depth
+        || got.info.alternate_icc != want_info.alternate_icc
+        || want_info
+            .params
+            .iso_channel_count()
+            .is_some_and(|count| got.info.params.iso_channel_count() != Some(count))
+    {
         return Err(format!(
             "{what}: gain map came back as {:?}, expected an 8-bit {}-channel layout",
             got.pixels.desc, want_info.channels
@@ -2523,17 +2674,17 @@ where
         };
         match dec_render(&dec, &bytes, recon) {
             Ok(out) => {
-                let desc = out.pixels().descriptor();
+                let desc = out.pixels().format().clone();
                 let hdr_labelled = matches!(
-                    desc.transfer(),
-                    TransferFunction::Pq | TransferFunction::Hlg | TransferFunction::Linear
+                    sample_transfer(&desc.color),
+                    Transfer::Pq | Transfer::Hlg(_) | Transfer::Linear
                 );
                 if dc.reconstructs_hdr() {
                     if !hdr_labelled {
                         v.push(format!(
                             "[{name}] reconstructs_hdr is declared, but ReconstructHdr produced a \
                              buffer labelled {:?} — the output must be an HDR pixel format",
-                            desc.transfer()
+                            sample_transfer(&desc.color)
                         ));
                     }
                     let sc = &out.info().source_color;
@@ -2545,14 +2696,14 @@ where
                         ));
                     }
                 } else if matches!(
-                    desc.transfer(),
-                    TransferFunction::Pq | TransferFunction::Hlg
+                    sample_transfer(&desc.color),
+                    Transfer::Pq | Transfer::Hlg(_)
                 ) {
                     v.push(format!(
                         "[{name}] reconstructs_hdr is NOT declared, yet ReconstructHdr returned a \
                          buffer labelled {:?} — an SDR base must not be relabelled HDR; surface \
                          Components or fail with UnsupportedOperation",
-                        desc.transfer()
+                        sample_transfer(&desc.color)
                     ));
                 }
             }
@@ -2638,9 +2789,12 @@ where
 /// plus sRGB CICP. `SourceColor`'s default authority is ICC, so a faithful
 /// decoder's drop-dupe context carries the ICC alone.
 fn color_context_metadata() -> Metadata {
+    let (cll, md) = hdr_envelope();
     Metadata::none()
         .with_icc(fixtures::sample_icc())
         .with_cicp(Cicp::SRGB)
+        .with_content_light_level(cll)
+        .with_mastering_display(md)
 }
 
 fn dec_output<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<DecodeOutput, String> {
@@ -2652,91 +2806,62 @@ fn dec_output<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<DecodeOutput, S
         .map_err(|e| e.to_string())
 }
 
-fn describe_ctx(ctx: Option<&ColorContext>) -> String {
-    match ctx {
-        None => "no ColorContext".into(),
-        Some(c) => format!(
-            "ColorContext {{ icc: {}, cicp: {:?} }}",
-            c.icc
-                .as_ref()
-                .map_or("none".to_string(), |i| format!("{} bytes", i.len())),
-            c.cicp
+fn sample_transfer(color: &ColorSpace) -> Transfer {
+    match color {
+        ColorSpace::Rgb { transfer, .. } | ColorSpace::Gray { transfer, .. } => *transfer,
+        ColorSpace::Icc { profile, .. } => Cicp::from_icc(profile)
+            .and_then(|cicp| Transfer::from_cicp(cicp.transfer_characteristics))
+            .or_else(|| zenpixels::icc::IccIdentification::from_icc(profile).map(|id| id.transfer))
+            .unwrap_or(Transfer::Unknown),
+        _ => Transfer::Unknown,
+    }
+}
+
+fn active_icc(color: &ColorSpace) -> Option<&[u8]> {
+    match color {
+        ColorSpace::Icc { profile, .. } => Some(profile),
+        ColorSpace::Cmyk { icc, .. } => icc.as_deref(),
+        _ => None,
+    }
+}
+
+fn icc_fits(class: zenpixels::IccColorSpace, layout: zenpixels::SampleLayout) -> bool {
+    use zenpixels::IccColorSpace;
+    match class {
+        IccColorSpace::Rgb => layout.order.is_rgb_family(),
+        IccColorSpace::Gray => layout.order.is_gray_family(),
+        IccColorSpace::Cmyk => layout.order.is_cmyk_family(),
+        IccColorSpace::Xyz => layout.order.is_xyz_family(),
+        IccColorSpace::Lab => matches!(
+            layout.order,
+            zenpixels::ChannelOrder::Perceptual3 | zenpixels::ChannelOrder::Perceptual4
         ),
+        _ => false,
     }
 }
 
-fn same_ctx(a: Option<&Arc<ColorContext>>, b: Option<&Arc<ColorContext>>) -> bool {
-    a.map(|x| &**x) == b.map(|x| &**x)
-}
-
-/// The two rules every *attached* context must satisfy, for one emitted
-/// buffer or slice. `None` (nothing attached) is always acceptable here.
-///
-/// 1. **Non-empty** — a context with neither ICC nor CICP is noise; attach
-///    nothing instead.
-/// 2. **Class gate** — an ICC rides a buffer only when its device class (header
-///    bytes 16..20) matches the buffer's colour model: `RGB ` ↔ Rgb/Rgba/Bgra,
-///    `GRAY` ↔ Gray/GrayAlpha, `CMYK` ↔ Cmyk. Crosswise pairing is invalid
-///    signaling (libpng rejects it); an unreadable class is not valid for any
-///    layout.
-fn validate_buffer_context(
-    ctx: Option<&ColorContext>,
-    desc: PixelDescriptor,
-) -> Result<(), String> {
-    let Some(ctx) = ctx else {
-        return Ok(());
-    };
-    if ctx.icc.is_none() && ctx.cicp.is_none() {
-        return Err(
-            "an attached ColorContext carries neither ICC nor CICP — attach nothing rather \
-             than an empty description"
-                .into(),
-        );
-    }
-    if let Some(icc) = &ctx.icc {
-        let model = desc.color_model();
-        match zenpixels::ColorModel::from_icc(icc) {
-            Some(class) if class == model => {}
+fn validate_buffer_context(spec: &PixelFormat) -> Result<(), String> {
+    if let Some(icc) = active_icc(&spec.color) {
+        match zenpixels::IccColorSpace::from_icc(icc) {
+            Some(class) if icc_fits(class, spec.layout) => {}
             Some(class) => {
                 return Err(format!(
-                    "an ICC of device class {class:?} is attached to a {model:?} buffer ({desc:?}) — \
-                     an ICC only rides a layout its class describes (RGB ↔ Rgb/Rgba/Bgra, GRAY ↔ \
-                     Gray/GrayAlpha); derive its CICP and carry that alone, or emit a layout the \
-                     profile describes"
+                    "ICC device class {class:?} is incompatible with {:?}",
+                    spec.layout
                 ));
             }
-            None => {
-                return Err(format!(
-                    "an ICC whose device class (header bytes 16..20) is unreadable is attached to a \
-                     {model:?} buffer — it is not class-valid for any layout; do not attach it"
-                ));
-            }
+            None => return Err("ICC device class is unreadable".into()),
         }
     }
-    Ok(())
+    spec.validate().map_err(|error| error.to_string())
 }
 
-/// Whatever [`ColorContext`] a decoder attaches to its output pixels is
-/// class-valid and the same on every decode path.
+/// Check whether the actual color description is valid and consistent across
+/// one-shot, streamed, borrowed animation, and owned animation outputs.
+/// ICC profiles must describe the declared device-space channel order.
 ///
-/// The decoded-buffer convention (zencodec `docs/IMPLEMENTING.md`, "Colour on the
-/// decoded buffer"): a decoder SHOULD attach `SourceColor::to_color_context()` to
-/// the buffers it emits, class-gated so an ICC only rides a layout its device
-/// class describes. This check enforces the two invariants that hold whether or
-/// not a codec has adopted the convention yet:
-///
-/// - **Class-valid and non-empty** — see the rules on the ICC device class in the
-///   module docs; an attached context must describe *these* pixels.
-/// - **Path equivalence** — the one-shot buffer, every streaming strip (when
-///   streaming is advertised), and every animation frame on both the borrowed and
-///   the owned path (when animation is advertised) carry *identical* contexts. Strip
-///   and scratch buffers are rebuilt per batch and are where a context silently
-///   dies; a probe-era vs frame-era CICP divergence between paths shows up here too.
-///
-/// It does **not** require a context to be attached — a codec that attaches
-/// nothing passes (the pixels stay described by `ImageInfo.source_color`). Run
-/// [`check_color_context_attached`] for the strict positive direction once the
-/// codec has adopted the convention. Part of [`check_all`].
+/// Run [`check_color_context_attached`] to require the codec to carry the
+/// file's authoritative color into the active output spec.
 pub fn check_color_context_consistency<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -2749,11 +2874,26 @@ where
     let bytes = enc_oneshot(&enc, img, meta.clone(), MetadataPolicy::PreserveExact)
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
-    let desc = out.pixels().descriptor();
-    let oneshot = out.into_buffer().color_context().cloned();
-    validate_buffer_context(oneshot.as_deref(), desc)
-        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+    use zencodec::decode::RowMetadata;
+    let oneshot = out.buffer().format();
+    let oneshot_metadata = RowMetadata::from_view(&out.pixels());
+    validate_buffer_context(oneshot).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
 
+    let mut sink = CollectSink::default();
+    let completion = dec
+        .clone()
+        .job()
+        .push_decoder(Cow::Borrowed(&bytes), &mut sink, &[])
+        .map_err(|e| fail(CHECK, format!("push decode: {e}")))?;
+    sink.verify_completion(&completion)
+        .map_err(|e| fail(CHECK, e))?;
+    if completion.native_format != *oneshot || sink.metadata.unwrap_or_default() != oneshot_metadata
+    {
+        return Err(fail(
+            CHECK,
+            "push decode changed active spec, HDR, or source evidence",
+        ));
+    }
     if D::capabilities().streaming() {
         let mut sd = dec
             .clone()
@@ -2764,16 +2904,13 @@ where
             .next_batch()
             .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?
         {
-            validate_buffer_context(strip.color_context().map(|c| &**c), strip.descriptor())
+            validate_buffer_context(strip.format())
                 .map_err(|e| fail(CHECK, format!("streaming strip at y={y}: {e}")))?;
-            if !same_ctx(strip.color_context(), oneshot.as_ref()) {
+            if strip.format() != oneshot || RowMetadata::from_view(&strip) != oneshot_metadata {
                 return Err(fail(
                     CHECK,
                     format!(
-                        "streaming strip at y={y} carries {} but the one-shot decode carries {} — \
-                         strip/scratch buffers must re-attach the context at emission",
-                        describe_ctx(strip.color_context().map(|c| &**c)),
-                        describe_ctx(oneshot.as_deref())
+                        "streaming strip at y={y} changed active spec, HDR, or source evidence"
                     ),
                 ));
             }
@@ -2789,22 +2926,10 @@ where
             .map_err(|e| fail(CHECK, format!("animation encode: {e}")))?;
         let primary = dec_output(&dec, &anim)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
-        let pdesc = primary.pixels().descriptor();
-        let primary_ctx = primary.into_buffer().color_context().cloned();
-        validate_buffer_context(primary_ctx.as_deref(), pdesc)
+        let primary_spec = primary.buffer().format();
+        let primary_metadata = RowMetadata::from_view(&primary.pixels());
+        validate_buffer_context(primary_spec)
             .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
-
-        let mismatch = |path: &str, i: u32, got: Option<&Arc<ColorContext>>| {
-            fail(
-                CHECK,
-                format!(
-                    "{path} frame {i} carries {} but the one-shot decode of the same file carries {} — \
-                     every frame must carry the context its pixels are described by",
-                    describe_ctx(got.map(|c| &**c)),
-                    describe_ctx(primary_ctx.as_deref())
-                ),
-            )
-        };
 
         let mut d = dec
             .clone()
@@ -2817,10 +2942,15 @@ where
         {
             let i = frame.frame_index();
             let px = frame.pixels();
-            validate_buffer_context(px.color_context().map(|c| &**c), px.descriptor())
-                .map_err(|e| fail(CHECK, format!("render_next_frame frame {i}: {e}")))?;
-            if !same_ctx(px.color_context(), primary_ctx.as_ref()) {
-                return Err(mismatch("render_next_frame", i, px.color_context()));
+            validate_buffer_context(px.format())
+                .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
+            if px.format() != primary_spec || RowMetadata::from_view(px) != primary_metadata {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "render_next_frame_owned frame {i} changed active spec, HDR, or source evidence"
+                    ),
+                ));
             }
         }
 
@@ -2835,33 +2965,27 @@ where
         {
             let i = frame.frame_index();
             let px = frame.pixels();
-            validate_buffer_context(px.color_context().map(|c| &**c), px.descriptor())
+            validate_buffer_context(px.format())
                 .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
-            if !same_ctx(px.color_context(), primary_ctx.as_ref()) {
-                return Err(mismatch("render_next_frame_owned", i, px.color_context()));
+            if px.format() != primary_spec || RowMetadata::from_view(&px) != primary_metadata {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "render_next_frame_owned frame {i} changed active spec, HDR, or source evidence"
+                    ),
+                ));
             }
         }
     }
     Ok(())
 }
 
-/// A decoder that read colour back attaches it to the output buffer — the
-/// strict, positive direction of the decoded-buffer convention.
+/// Require the decoded spec to describe the source color the decoder read.
+/// Class-valid authoritative ICC bytes remain active. Authoritative CICP
+/// contributes its mapped transfer and, for RGB, its primaries. A mismatched
+/// ICC needs a usable, class-valid description of the emitted pixels.
 ///
-/// Encodes with an RGB-class ICC + sRGB CICP under `PreserveExact`, decodes, and
-/// looks at what the decoder reported in `ImageInfo.source_color`. If it read
-/// back neither ICC nor CICP there is nothing to attach and the check passes
-/// (whether it *should* have read them is [`check_capability_honesty`]'s job).
-/// Otherwise the output buffer must carry a [`ColorContext`], and it must carry
-/// the **authoritative** field: under [`ColorAuthority::Icc`] with a class-valid
-/// profile, the ICC bytes ride as-is (rank 1 of the convention); under
-/// [`ColorAuthority::Cicp`], the CICP. A class-invalid ICC only has to be
-/// replaced by *some* description (the derived-CICP fallback), which the
-/// class-gate rules in [`check_color_context_consistency`] verify. When streaming
-/// is advertised, the first strip must carry a context too.
-///
-/// Opt-in — **not** part of [`check_all`] — because the convention is a SHOULD
-/// that codecs adopt one at a time; run it once yours does.
+/// This opt-in check also verifies the first streaming strip's current color.
 pub fn check_color_context_attached<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -2878,70 +3002,45 @@ where
     .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
     let src = out.info().source_color.clone();
-    let desc = out.pixels().descriptor();
-    let ctx = out.into_buffer().color_context().cloned();
-
-    if src.icc_profile.is_none() && src.cicp.is_none() {
-        return Ok(()); // the decoder read no colour back — nothing to attach
+    let spec = out.buffer().format();
+    let source = src.authoritative_origin();
+    if source.kind == zenpixels::OriginKind::Assumed {
+        return Ok(());
     }
-    let Some(ctx) = ctx else {
-        return Err(fail(
-            CHECK,
-            format!(
-                "the decoder read colour back into ImageInfo.source_color (icc: {}, cicp: {:?}) \
-                 but attached no ColorContext to the output buffer — attach \
-                 SourceColor::to_color_context(), class-gated, after the descriptor is final",
-                src.icc_profile
-                    .as_ref()
-                    .map_or("none".to_string(), |i| format!("{} bytes", i.len())),
-                src.cicp
-            ),
-        ));
-    };
-    validate_buffer_context(Some(&ctx), desc)
-        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
-
-    let src_icc_class_valid = src
-        .icc_profile
-        .as_deref()
-        .is_some_and(|icc| zenpixels::ColorModel::from_icc(icc) == Some(desc.color_model()));
-    // Older admitted zenpixels versions had an exhaustive two-variant enum.
-    #[allow(unreachable_patterns)]
-    match src.color_authority {
-        ColorAuthority::Icc if src_icc_class_valid => {
-            if ctx.icc.as_deref() != src.icc_profile.as_deref() {
-                return Err(fail(
-                    CHECK,
-                    format!(
-                        "ICC is the authority and the source profile is class-valid for the {:?} \
-                         output, so the buffer context must carry those ICC bytes as-is; it carries {}",
-                        desc.color_model(),
-                        describe_ctx(Some(&ctx))
-                    ),
-                ));
-            }
-        }
-        ColorAuthority::Cicp if src.cicp.is_some() => {
-            if ctx.cicp != src.cicp {
-                return Err(fail(
-                    CHECK,
-                    format!(
-                        "CICP is the authority ({:?}) but the buffer context carries {}",
-                        src.cicp,
-                        describe_ctx(Some(&ctx))
-                    ),
-                ));
-            }
-        }
-        // Authority field absent, or an ICC the output layout can't carry: any
-        // non-empty, class-valid description (already validated) is acceptable.
-        ColorAuthority::Icc | ColorAuthority::Cicp => {}
-        authority => {
+    validate_buffer_context(spec).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+    if let Some(profile) = &source.icc
+        && zenpixels::IccColorSpace::from_icc(profile)
+            .is_some_and(|class| icc_fits(class, spec.layout))
+    {
+        if active_icc(&spec.color) != Some(profile.as_ref()) {
             return Err(fail(
                 CHECK,
-                format!("unrecognized source color authority: {authority:?}"),
+                "class-compatible ICC must carry the original profile bytes",
             ));
         }
+    } else if let Some(cicp) = source.cicp {
+        let transfer =
+            Transfer::from_cicp(cicp.transfer_characteristics).unwrap_or(Transfer::Unknown);
+        if active_icc(&spec.color).is_some() || sample_transfer(&spec.color) != transfer {
+            return Err(fail(
+                CHECK,
+                "current color does not match the authoritative CICP transfer",
+            ));
+        }
+        if let ColorSpace::Rgb { primaries, .. } = spec.color
+            && zenpixels::Primaries::from_cicp(cicp.color_primaries) != Some(primaries)
+        {
+            return Err(fail(
+                CHECK,
+                "current primaries do not match authoritative CICP",
+            ));
+        }
+    } else if active_icc(&spec.color).is_none() && sample_transfer(&spec.color) == Transfer::Unknown
+    {
+        return Err(fail(
+            CHECK,
+            "no usable current description for the source color",
+        ));
     }
 
     if D::capabilities().streaming() {
@@ -2954,14 +3053,11 @@ where
             .next_batch()
             .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?;
         if let Some((y, strip)) = first
-            && strip.color_context().is_none()
+            && strip.format().color != spec.color
         {
             return Err(fail(
                 CHECK,
-                format!(
-                    "the one-shot buffer carries a ColorContext but the streaming strip at y={y} \
-                     carries none — re-attach the context on every emitted strip"
-                ),
+                format!("streaming strip at y={y} changed current color"),
             ));
         }
     }
@@ -2988,6 +3084,27 @@ where
 /// | Radiance HDR | scene-linear BT.709 has no ICC carrier: `Cicp` when the codec expressed it as CICP, else `Icc` |
 /// | JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | ICC (or an sRGB assumption): always `Icc` |
 ///
+/// Which color-signaling carriers a decoded image actually carried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ColorSignalPresence {
+    /// Whether the decoded source carried a CICP color tag.
+    pub has_cicp: bool,
+    /// Whether the decoded source carried an embedded ICC profile.
+    pub has_icc: bool,
+}
+
+impl ColorSignalPresence {
+    /// Construct signal presence flags from a decoded [`SourceColor`].
+    pub const fn from_source_color(sc: &SourceColor) -> Self {
+        Self {
+            has_cicp: sc.cicp.is_some(),
+            has_icc: sc.icc_profile.is_some(),
+        }
+    }
+}
+
+/// Expected [`ColorAuthority`] for `format` given which color signals were read.
+///
 /// Returns `None` where no rule is recorded — [`Custom`](ImageFormat::Custom),
 /// [`Unknown`](ImageFormat::Unknown), and the formats the audit did not cover
 /// (EXR, JPEG 2000, SVG) — so a check over those passes rather than inventing a
@@ -2995,11 +3112,10 @@ where
 /// invariant: codecs only set `Cicp` when `cicp` is populated).
 pub fn expected_color_authority(
     format: ImageFormat,
-    has_cicp: bool,
-    has_icc: bool,
+    signals: ColorSignalPresence,
 ) -> Option<ColorAuthority> {
     use ImageFormat::*;
-    let cicp_first = if has_cicp {
+    let cicp_first = if signals.has_cicp {
         ColorAuthority::Cicp
     } else {
         ColorAuthority::Icc
@@ -3007,7 +3123,7 @@ pub fn expected_color_authority(
     Some(match format {
         Png | Jxl | Heic | Hdr => cicp_first,
         Avif => {
-            if has_icc {
+            if signals.has_icc {
                 ColorAuthority::Icc
             } else {
                 cicp_first
@@ -3032,12 +3148,12 @@ pub fn expected_color_authority(
 ///
 /// This is the "shared test helper" the issue #11 audit asked for: the
 /// authority-mismatch class of bug (HEIC naming `Icc` for an `nclx`-only file,
-/// so the CICP was dropped by `SourceColor::to_color_context()` and the pixels
+/// so the CICP was dropped by `SourceColor::authoritative_origin()` and the pixels
 /// fell back to sRGB) is invisible to a pixel round trip and only shows up
 /// downstream in the CMS.
 pub fn check_source_color_authority(format: ImageFormat, sc: &SourceColor) -> Conformance {
     const CHECK: &str = "source_color_authority";
-    let Some(want) = expected_color_authority(format, sc.cicp.is_some(), sc.icc_profile.is_some())
+    let Some(want) = expected_color_authority(format, ColorSignalPresence::from_source_color(sc))
     else {
         return Ok(());
     };
@@ -3056,6 +3172,25 @@ pub fn check_source_color_authority(format: ImageFormat, sc: &SourceColor) -> Co
             sc.color_authority
         ),
     ))
+}
+
+/// Require exact source carrier presence, values and authority from an independent fixture.
+pub fn check_source_color_fixture(
+    actual: &SourceColor,
+    expected_cicp: Option<Cicp>,
+    expected_icc: Option<&[u8]>,
+    authority: ColorAuthority,
+) -> Conformance {
+    if actual.cicp != expected_cicp
+        || actual.icc_profile.as_deref() != expected_icc
+        || actual.color_authority != authority
+    {
+        return Err(fail(
+            "source color fixture",
+            "source carrier presence, payload or authority differs from the fixture",
+        ));
+    }
+    Ok(())
 }
 
 /// Decoded colour authority follows the format spec on every metadata mix.
@@ -3095,6 +3230,19 @@ where
     }
     let mut v: Vec<String> = Vec::new();
     for (name, meta) in mixes {
+        let supplied = meta.clone();
+        let verify = |source: &SourceColor| {
+            if D::capabilities().cicp() && supplied.cicp.is_some() && source.cicp != supplied.cicp {
+                return Err(fail(CHECK, "fixture CICP was lost or changed"));
+            }
+            if D::capabilities().icc()
+                && supplied.icc_profile.is_some()
+                && source.icc_profile != supplied.icc_profile
+            {
+                return Err(fail(CHECK, "fixture ICC was lost or changed"));
+            }
+            check_source_color_authority(format, source)
+        };
         let bytes = match enc_oneshot(&enc, img, meta, MetadataPolicy::PreserveExact) {
             Ok(b) => b,
             Err(e) => {
@@ -3105,7 +3253,7 @@ where
         match dec_output(&dec, &bytes) {
             Err(e) => v.push(format!("{name}: decode failed: {e}")),
             Ok(out) => {
-                if let Err(f) = check_source_color_authority(format, &out.info().source_color) {
+                if let Err(f) = verify(&out.info().source_color) {
                     v.push(format!("{name}, decode: {}", f.detail));
                 }
             }
@@ -3113,7 +3261,7 @@ where
         match dec.clone().job().probe(&bytes) {
             Err(e) => v.push(format!("{name}: probe failed: {e}")),
             Ok(info) => {
-                if let Err(f) = check_source_color_authority(format, &info.source_color) {
+                if let Err(f) = verify(&info.source_color) {
                     v.push(format!("{name}, probe: {}", f.detail));
                 }
             }
@@ -3153,7 +3301,6 @@ where
     }
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
@@ -3162,7 +3309,7 @@ where
     let mut e = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()?;
     let strip = e.preferred_strip_height().max(1);
     let mut y = 0;
@@ -3174,7 +3321,6 @@ where
     Ok(e.finish()?.into_vec())
 }
 
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 fn run_encode_from<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
@@ -3183,20 +3329,20 @@ where
     let e = cfg
         .clone()
         .job()
-        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(Metadata::none())
         .encoder()?;
     let rb = img.row_bytes();
     let mut next = 0u32;
-    let mut src = |_y: u32, mut buf: PixelSliceMut<'_>| -> usize {
+    let mut src = |_y: u32, mut buf: PixelViewMut<'_>| -> usize {
         if next >= img.height {
             return 0;
         }
-        let want = buf.rows().min(img.height - next);
+        let want = buf.height().min(img.height - next);
         for r in 0..want {
             let s = (next + r) as usize * rb;
             let dst = buf.row_mut(r);
             let n = dst.len().min(rb);
-            dst[..n].copy_from_slice(&img.data[s..s + n]);
+            dst[..n].copy_from_slice(&img.data.as_bytes()[s..s + n]);
         }
         next += want;
         want as usize
@@ -3451,11 +3597,14 @@ fn check_metadata_channel_honesty(
         if !dec_reads {
             continue; // not observable through this decoder
         }
+        let expected = metadata.clone();
         match roundtrip(metadata) {
             Err(e) => violations.push(format!("{name}: metadata-channel round trip failed: {e}")),
-            Ok(actual) if enc_writes && !present(&actual) => violations.push(format!(
-                "{name}: declared by encoder+decoder, but did not survive a PreserveExact round trip"
-            )),
+            Ok(actual) if enc_writes => {
+                if let Err(error) = check_metadata_retained(&expected, &actual) {
+                    violations.push(format!("{name}: requested value did not survive PreserveExact ({error})"));
+                }
+            }
             Ok(actual) if !enc_writes && present(&actual) => violations.push(format!(
                 "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
             )),
@@ -3810,21 +3959,20 @@ where
             dyn_cfg
                 .dyn_job()
                 .push_decode(Cow::Borrowed(truncated), &mut sink, &[])
+                .map(|completion| {
+                    sink.verify_completion(&completion)
+                        .and_then(|()| sink.into_pixels().map(|_| ()))
+                })
         }));
 
         match outcome {
             Err(_panic) => violations.push(format!(
                 "decode panicked on truncation at {n}/{len} bytes — truncated input must never panic"
             )),
-            Ok(Ok(_output)) => {
-                if n <= len / 4 {
-                    violations.push(format!(
-                        "decode SUCCEEDED on a truncated header ({n} of {len} bytes) — a truncated \
-                         valid image must not silently decode (pixels are sacred)"
-                    ));
-                }
-                // n > len/4: trailing-marker / already-complete-payload leniency — tolerated.
-            }
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => violations.push(format!(
+                "recovery at {n}/{len} bytes returned an invalid sink completion: {error}"
+            )),
             Ok(Err(erased)) => match erased.error_category() {
                 None => {
                     // Pattern A: the category is unrecoverable once erased. Report it
@@ -4267,7 +4415,11 @@ mod tests {
     /// asks of an undeclared encoder.
     #[test]
     fn minimal_gain_map_roundtrip() {
-        check_gain_map_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+        check_gain_map_roundtrip(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The fixture's ISO 21496-1 values are all dyadic, so the wire format
@@ -4279,7 +4431,8 @@ mod tests {
         for case in GAIN_MAP_CASES {
             let p = gain_map_params(case);
             for fmt in [Iso21496Format::JxlJhgm, Iso21496Format::AvifTmap] {
-                let back = parse_iso21496_fmt(&serialize_iso21496_fmt(&p, fmt), fmt).unwrap();
+                let back =
+                    parse_iso21496_fmt(&serialize_iso21496_fmt(&p, fmt).unwrap(), fmt).unwrap();
                 assert_eq!(back, p, "{} via {fmt:?}", case.name);
             }
         }
@@ -4298,7 +4451,7 @@ mod tests {
             .job()
             .encoder()
             .unwrap()
-            .encode(fixture.pixels.as_slice())
+            .encode(fixture.pixels.as_view())
             .unwrap()
             .into_vec();
         let src = GainMapSource::new(gm_img, ImageFormat::Pnm, fixture.metadata.clone());
@@ -4390,7 +4543,7 @@ mod tests {
 
         // Drive the minimal codec entirely through the dyn surface; its
         // `At<CodecError>` is erased to `Box<dyn Error>` by the shim.
-        let cfg = MinimalDecoderConfig::new();
+        let cfg = MinimalDecoderConfig::default();
         let dyn_min: &dyn DynDecoderConfig = &cfg;
         let erased = dyn_min
             .dyn_job()
@@ -4429,7 +4582,7 @@ mod tests {
         use zencodec::decode::{DecodeJob, DecoderConfig};
         use zencodec::{CodecErrorExt, ErrorCategory};
 
-        let err = MinimalDecoderConfig::new()
+        let err = MinimalDecoderConfig::default()
             .job()
             .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
             .expect_err("malformed header must fail");
@@ -4457,8 +4610,8 @@ mod tests {
     #[test]
     fn minimal_capability_honesty() {
         check_capability_honesty(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
@@ -4480,13 +4633,13 @@ mod tests {
     #[test]
     fn minimal_fidelity_honesty() {
         check_fidelity_honesty(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
         assert_eq!(
-            MinimalEncoderConfig::new()
+            MinimalEncoderConfig::default()
                 .with_fidelity(Fidelity::Lossless)
                 .resolved_target_fidelity(),
             None
@@ -4496,8 +4649,8 @@ mod tests {
     #[test]
     fn minimal_color_authority_spec() {
         check_color_authority_spec(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
@@ -4516,7 +4669,9 @@ mod tests {
     fn expected_color_authority_table() {
         use ColorAuthority::{Cicp as C, Icc as I};
         use ImageFormat::*;
-        let e = expected_color_authority;
+        let e = |f, has_cicp, has_icc| {
+            expected_color_authority(f, ColorSignalPresence { has_cicp, has_icc })
+        };
         // CICP outranks ICC.
         for f in [Png, Jxl, Heic, Hdr] {
             assert_eq!(e(f, true, true), Some(C), "{f:?}");
@@ -4549,7 +4704,7 @@ mod tests {
     /// trip, caught here.
     #[test]
     fn source_color_authority_catches_nclx_only_default_authority() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let f = check_source_color_authority(ImageFormat::Heic, &sc).unwrap_err();
         assert_eq!(f.check, "source_color_authority");
         assert!(f.detail.contains("Cicp"), "{f}");
@@ -4581,7 +4736,10 @@ mod tests {
     /// every optional path with `UnsupportedOperation`.
     #[test]
     fn minimal_one_shot_roundtrip_and_pixels() {
-        let (e, d) = (MinimalEncoderConfig::new(), MinimalDecoderConfig::new());
+        let (e, d) = (
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        );
         check_pixel_roundtrip(e, d, &TestImage::rgb8_gradient(10, 7)).unwrap();
     }
 
@@ -4593,7 +4751,7 @@ mod tests {
     fn minimal_decode_error_envelope_survives_erasure() {
         // 16 bytes of garbage: fails `parse_header` (short / bad magic) →
         // RefError::Invalid → At<CodecError>{MalformedImage, "zencodec-testkit/minimal"}.
-        check_decode_error_envelope(MinimalDecoderConfig::new(), &[0xABu8; 16]).unwrap();
+        check_decode_error_envelope(MinimalDecoderConfig::default(), &[0xABu8; 16]).unwrap();
     }
 
     /// The negative case proves the check has teeth. `reference` is Pattern A
@@ -4742,20 +4900,20 @@ mod tests {
     fn minimal_passes_truncation_series() {
         let img = TestImage::rgba8_gradient(9, 6);
         let valid = enc_oneshot(
-            &MinimalEncoderConfig::new(),
+            &MinimalEncoderConfig::default(),
             &img,
             Metadata::none(),
             MetadataPolicy::PreserveExact,
         )
         .unwrap();
-        check_decode_truncation_series(MinimalDecoderConfig::new(), &valid).unwrap();
+        check_decode_truncation_series(MinimalDecoderConfig::default(), &valid).unwrap();
     }
 
     /// A too-short `valid` is rejected up front — the check needs a real encoded
     /// image to truncate, not a stray byte.
     #[test]
     fn truncation_series_rejects_tiny_valid() {
-        let err = check_decode_truncation_series(MinimalDecoderConfig::new(), &[0x00])
+        let err = check_decode_truncation_series(MinimalDecoderConfig::default(), &[0x00])
             .expect_err("a 1-byte `valid` cannot be a real encoded image");
         assert_eq!(err.check, "decode_truncation_series");
     }
@@ -4837,8 +4995,8 @@ mod tests {
         // Minimal declares animation=false, so the check is not applicable and passes.
         let frames = [TestImage::rgba8_gradient_seeded(8, 8, 0)];
         check_animation_cross_path_equivalence(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &frames,
         )
         .unwrap();
@@ -4858,8 +5016,11 @@ mod tests {
     /// An SDR-only codec (no `hdr`) is out of scope, not a failure.
     #[test]
     fn minimal_native_hdr_roundtrip_skipped() {
-        check_native_hdr_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new())
-            .unwrap();
+        check_native_hdr_roundtrip(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The 16-bit HDR decode is labelled exactly `RGB16_BT2100_PQ` — the
@@ -4868,11 +5029,11 @@ mod tests {
     #[test]
     fn reference_hdr_decode_is_labelled_pq() {
         let (e, d) = ref_codecs();
-        let img = TestImage::rgb16_gradient(6, 5, PixelDescriptor::RGB16_BT2100_PQ);
-        let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ);
+        let img = TestImage::rgb16_gradient(6, 5, PixelFormat::RGB16_BT2100_PQ);
+        let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let bytes = enc_oneshot(&e, &img, meta, MetadataPolicy::PreserveExact).unwrap();
         let out = dec_output(&d, &bytes).unwrap();
-        assert_eq!(out.pixels().descriptor(), PixelDescriptor::RGB16_BT2100_PQ);
+        assert_eq!(out.pixels().format().clone(), PixelFormat::RGB16_BT2100_PQ);
         assert_eq!(grab(out.pixels()), img.pixels());
     }
 
@@ -4919,14 +5080,14 @@ mod tests {
     fn minimal_color_context_checks_pass_without_color() {
         let img = TestImage::rgba8_gradient(8, 6);
         check_color_context_consistency(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &img,
         )
         .unwrap();
         check_color_context_attached(
-            MinimalEncoderConfig::new(),
-            MinimalDecoderConfig::new(),
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
             &img,
         )
         .unwrap();
@@ -4937,26 +5098,40 @@ mod tests {
     /// rejected — while class-matching and CICP-only contexts pass.
     #[test]
     fn buffer_context_class_gate() {
-        use zenpixels::PixelDescriptor as P;
-        let rgb_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"RGB "));
-        let gray_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"GRAY"));
-        let junk_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"????"));
-        let cicp_only = ColorContext::from_cicp(Cicp::BT2100_PQ);
+        use zenpixels::{RenderingIntent, SampleLayout};
+        let rgb: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"RGB "));
+        let gray: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"GRAY"));
+        let junk: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"????"));
+        let icc = |profile: Arc<[u8]>, spec: PixelFormat, color_channels| {
+            PixelFormat::new(
+                spec.layout,
+                ColorSpace::Icc {
+                    profile,
+                    color_channels,
+                    alpha: spec.color.alpha(),
+                    intent: RenderingIntent::RelativeColorimetric,
+                },
+            )
+        };
 
-        assert!(validate_buffer_context(None, P::RGB8_SRGB).is_ok());
-        assert!(validate_buffer_context(Some(&rgb_icc), P::RGB8_SRGB).is_ok());
-        assert!(validate_buffer_context(Some(&rgb_icc), P::RGBA8_SRGB).is_ok());
-        assert!(validate_buffer_context(Some(&gray_icc), P::GRAY8_SRGB).is_ok());
-        assert!(validate_buffer_context(Some(&cicp_only), P::GRAY8_SRGB).is_ok());
+        assert!(validate_buffer_context(&PixelFormat::RGB8_SRGB).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), PixelFormat::RGB8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(rgb.clone(), PixelFormat::RGBA8_SRGB, 3)).is_ok());
+        assert!(validate_buffer_context(&icc(gray.clone(), PixelFormat::GRAY8_SRGB, 1)).is_ok());
+        assert!(
+            validate_buffer_context(&PixelFormat::GRAY8_SRGB.with_transfer(Transfer::Pq)).is_ok()
+        );
 
-        let e = validate_buffer_context(Some(&gray_icc), P::RGB8_SRGB).unwrap_err();
+        let e = validate_buffer_context(&icc(gray, PixelFormat::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("device class Gray"), "{e}");
-        let e = validate_buffer_context(Some(&rgb_icc), P::GRAY8_SRGB).unwrap_err();
+        let e = validate_buffer_context(&icc(rgb, PixelFormat::GRAY8_SRGB, 1)).unwrap_err();
         assert!(e.contains("device class Rgb"), "{e}");
-        let e = validate_buffer_context(Some(&junk_icc), P::RGB8_SRGB).unwrap_err();
+        let e = validate_buffer_context(&icc(junk, PixelFormat::RGB8_SRGB, 3)).unwrap_err();
         assert!(e.contains("unreadable"), "{e}");
-        let e = validate_buffer_context(Some(&ColorContext::default()), P::RGB8_SRGB).unwrap_err();
-        assert!(e.contains("neither ICC nor CICP"), "{e}");
+        let e =
+            validate_buffer_context(&icc(Arc::from([]), PixelFormat::RGB8_SRGB, 3)).unwrap_err();
+        assert!(e.contains("unreadable"), "{e}");
+        assert_eq!(PixelFormat::RGB8_SRGB.layout, SampleLayout::RGB8);
     }
 
     /// The reference's worked-example gate: a class-matching ICC rides as-is
@@ -4966,7 +5141,7 @@ mod tests {
     #[test]
     fn reference_class_gate_ranks_the_fallbacks() {
         use zencodec::decode::SourceColor;
-        use zenpixels::ColorModel;
+        use zenpixels::IccColorSpace;
 
         let rgb = Arc::<[u8]>::from(fixtures::sample_icc_with_class(b"RGB "));
         let gray = Arc::<[u8]>::from(fixtures::sample_icc_with_class(b"GRAY"));
@@ -4974,7 +5149,8 @@ mod tests {
         let both = SourceColor::default()
             .with_icc_profile(rgb.clone())
             .with_cicp(Cicp::SRGB);
-        let ctx = crate::reference::class_gated_context(&both, ColorModel::Rgb).expect("attached");
+        let ctx =
+            crate::reference::class_gated_context(&both, IccColorSpace::Rgb).expect("attached");
         assert_eq!(
             ctx.icc.as_deref(),
             Some(&*rgb),
@@ -4985,7 +5161,7 @@ mod tests {
         let mismatched = SourceColor::default()
             .with_icc_profile(gray.clone())
             .with_cicp(Cicp::SRGB);
-        let ctx = crate::reference::class_gated_context(&mismatched, ColorModel::Rgb)
+        let ctx = crate::reference::class_gated_context(&mismatched, IccColorSpace::Rgb)
             .expect("falls back to a CICP-only description");
         assert_eq!(
             ctx.icc, None,
@@ -4995,11 +5171,11 @@ mod tests {
 
         let underivable = SourceColor::default().with_icc_profile(gray);
         assert!(
-            crate::reference::class_gated_context(&underivable, ColorModel::Rgb).is_none(),
+            crate::reference::class_gated_context(&underivable, IccColorSpace::Rgb).is_none(),
             "nothing describable → no context (not an empty one)"
         );
         assert!(
-            crate::reference::class_gated_context(&SourceColor::default(), ColorModel::Rgb)
+            crate::reference::class_gated_context(&SourceColor::default(), IccColorSpace::Rgb)
                 .is_none()
         );
     }
@@ -5012,7 +5188,11 @@ mod tests {
 
     #[test]
     fn minimal_check_all() {
-        check_all(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+        check_all(
+            MinimalEncoderConfig::default(),
+            MinimalDecoderConfig::default(),
+        )
+        .unwrap();
     }
 
     /// The reference inventory covers every section of a file carrying all the
@@ -5074,14 +5254,14 @@ mod tests {
     #[test]
     fn undeclared_inventory_is_unsupported() {
         let bytes = enc_oneshot(
-            &MinimalEncoderConfig::new(),
+            &MinimalEncoderConfig::default(),
             &TestImage::rgba8_gradient(5, 3),
             Metadata::none(),
             MetadataPolicy::PreserveExact,
         )
         .unwrap();
         assert!(!<MinimalDecoderConfig as DecoderConfig>::capabilities().inventory());
-        check_inventory_dispatch(MinimalDecoderConfig::new(), &bytes).unwrap();
+        check_inventory_dispatch(MinimalDecoderConfig::default(), &bytes).unwrap();
     }
 
     /// The reference round-trips metadata faithfully, so under PreserveExact the
@@ -5141,7 +5321,7 @@ mod tests {
 
         // A real codec error, located inside the codec module (the `?` site in
         // minimal.rs) by the bridge's track-caller `start_at` — exactly one frame.
-        let origin: At<CodecError> = MinimalDecoderConfig::new()
+        let origin: At<CodecError> = MinimalDecoderConfig::default()
             .job()
             .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
             .expect_err("malformed header must fail");

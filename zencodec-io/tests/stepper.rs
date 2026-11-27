@@ -163,7 +163,7 @@ mod async_cursor {
             use zencodec::source::AccessPattern;
             use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
             use zencodec_io::{CollectSink, ControlledEvent, ControlledStepper};
-            use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+            use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
             struct Counted {
                 source: Trickle,
@@ -181,7 +181,7 @@ mod async_cursor {
             // Preparation happens only after the final boundary becomes available.
             struct Destination(Option<CollectSink>);
             impl DecodeRowSink for Destination {
-                fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+                fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), SinkError> {
                     self.0
                         .as_mut()
                         .expect("destination is not prepared")
@@ -189,18 +189,16 @@ mod async_cursor {
                 }
                 fn provide_next_buffer(
                     &mut self,
-                    y: u32,
-                    h: u32,
-                    w: u32,
-                    d: PixelDescriptor,
-                ) -> Result<PixelSliceMut<'_>, SinkError> {
-                    self.0.as_mut().unwrap().provide_next_buffer(y, h, w, d)
+                    strip: zencodec::decode::RowStrip,
+                    d: PixelFormat,
+                ) -> Result<PixelViewMut<'_>, SinkError> {
+                    self.0.as_mut().unwrap().provide_next_buffer(strip, d)
                 }
                 fn finish(&mut self) -> Result<(), SinkError> {
                     self.0.as_mut().unwrap().finish()
                 }
             }
-            let d = PixelDescriptor::RGBA8_SRGB;
+            let d = PixelFormat::RGBA8_SRGB;
             let native = CoroutineDecoder::controlled(
                 32,
                 AccessPattern::RandomAccess,
@@ -208,11 +206,11 @@ mod async_cursor {
                     let mut header = [0];
                     ctx.read_exact_at(0, &mut header).await?;
                     ctx.set_info(zencodec::ImageInfo::new(2, 2, zencodec::ImageFormat::Qoi));
-                    ctx.set_output_descriptor(d);
+                    ctx.set_output_pixel_format(d.clone());
                     ctx.interpretation(InterpretationFacts::new(
                         2,
                         2,
-                        Some(d),
+                        Some(d.clone()),
                         InterpretationState::Final,
                     ))
                     .await?;
@@ -220,7 +218,7 @@ mod async_cursor {
                     ctx.read_exact_at(1, &mut rows).await?;
                     ctx.write_rows(
                         BatchMeta::final_rows(0),
-                        &PixelSlice::new(&rows, 2, 2, 12, d).unwrap(),
+                        &PixelView::new(&rows, 2, 2, 12, &d).unwrap(),
                     )
                     .await?;
                     Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, d))

@@ -1,14 +1,14 @@
 //! Decide on an actual prepared frame-encoding route before accepting its input.
 use super::{
-    DecisionContext, DecisionRecord, FrameFacts, OperationPolicy, PolicyFailure, PolicySet,
+    DecisionContext, DecisionRecord, FrameSummary, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
+use crate::sample::ChromaSiting;
 use crate::{
     At,
     encode::Fidelity,
     frame::{FrameInterpretation, FrameTiming},
 };
-use zenpixels::sample::ChromaSiting;
 
 /// Output continuity supplied by a prepared adapter route. This does not grant
 /// permission to change an already published representation or container.
@@ -27,8 +27,8 @@ pub enum FrameRoute {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FrameRouteFacts {
-    /// Facts of the exact held incoming frame.
-    pub input: FrameFacts,
+    /// Summary of the exact held incoming frame.
+    pub input: FrameSummary,
     /// Output operation state before accepting the incoming frame.
     pub output: FrameRouteState,
 }
@@ -39,7 +39,7 @@ pub struct FrameRouteFacts {
 #[non_exhaustive]
 pub struct FrameRouteState {
     /// Last frame accepted by this output operation, if any.
-    pub previous: Option<FrameFacts>,
+    pub previous: Option<FrameSummary>,
     /// Segments already completed by the adapter, whether staged or published.
     pub completed_segments: u64,
     /// Whether any output representation/header/body has escaped private
@@ -165,7 +165,7 @@ impl FrameRouteOffer {
 pub struct FrameConversionOffer {
     /// Interpretation and timing actually delivered to the encoder. Original
     /// input facts remain in the question; output epochs are independent.
-    pub encoder_input: FrameFacts,
+    pub encoder_input: FrameSummary,
     /// True only for a qualified sample-preserving route; false includes
     /// arithmetic, quantization, clipping and unknown preservation.
     pub preserves_samples: bool,
@@ -179,8 +179,8 @@ pub struct FrameConversionOffer {
     pub admitted_bytes: usize,
 }
 impl FrameConversionOffer {
-    /// Target facts with preservation unqualified until the adapter proves it.
-    pub const fn new(encoder_input: FrameFacts) -> Self {
+    /// Target summary with preservation unqualified until the adapter proves it.
+    pub const fn new(encoder_input: FrameSummary) -> Self {
         Self {
             encoder_input,
             preserves_samples: false,
@@ -210,7 +210,7 @@ pub fn resolve_frame_route<R: OperationPolicy + ?Sized>(
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let pulse = pulse.unwrap_or(&crate::NoPulse);
     let facts = FrameRouteFacts {
-        input: FrameFacts::new(interpretation, timing),
+        input: FrameSummary::new(interpretation, timing),
         output,
     };
     policy::choose(

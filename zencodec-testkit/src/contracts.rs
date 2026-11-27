@@ -96,7 +96,7 @@ pub fn check_animation_durations<D: DecoderConfig + 'static>(
 pub fn check_animation_timing<E, D>(
     enc: E,
     dec: D,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     exact: bool,
     cases: &[(FrameDuration, Option<FrameDuration>)],
 ) -> Conformance
@@ -127,17 +127,17 @@ where
         }
         let a = if exact {
             generic
-                .push_frame_exact(pixels.sub_rows(0, pixels.rows()), *requested, None)
+                .push_frame_exact(pixels.clone(), *requested, None)
                 .map(|()| *requested)
         } else {
-            generic.push_frame_timed(pixels.sub_rows(0, pixels.rows()), *requested, None)
+            generic.push_frame_timed(pixels.clone(), *requested, None)
         };
         let b = if exact {
             erased
-                .push_frame_exact(pixels.sub_rows(0, pixels.rows()), *requested, None)
+                .push_frame_exact(pixels.clone(), *requested, None)
                 .map(|()| *requested)
         } else {
-            erased.push_frame_timed(pixels.sub_rows(0, pixels.rows()), *requested, None)
+            erased.push_frame_timed(pixels.clone(), *requested, None)
         };
         for (path, result) in [
             ("generic", a.map_err(|e| e.to_string())),
@@ -218,11 +218,10 @@ pub fn check_inventory_input_limit<D: DecoderConfig + 'static>(
 /// of treating a successful setter as proof of delivery. `metadata` is the
 /// unfiltered input. Color/fidelity observations remain codec-specific.
 #[allow(clippy::too_many_arguments)]
-#[allow(deprecated)] // Retain the established best-effort metadata compatibility path.
 pub fn check_encode_policy_admission<E, D>(
     enc: E,
     dec: D,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     metadata: Metadata,
     initial: EncodePolicy,
     request: EncodePolicy,
@@ -239,11 +238,11 @@ where
     let mut job = enc
         .clone()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.clone())
         .try_with_policy(initial)
         .map_err(|e| fail(CHECK, format!("initial: {e}")))?;
     let mut dynamic = enc.dyn_job();
-    dynamic.set_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact);
+    dynamic.set_unfiltered_metadata(metadata.clone());
     dynamic
         .try_set_policy(initial)
         .map_err(|e| fail(CHECK, format!("erased initial: {e}")))?;
@@ -263,7 +262,7 @@ where
     let builder = enc
         .clone()
         .job()
-        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.clone())
         .try_with_policy(initial)
         .map_err(|e| fail(CHECK, e.to_string()))?
         .try_with_policy(request);
@@ -274,20 +273,20 @@ where
         Ok(job) => job,
         Err(UnsupportedOperation::EncodePolicy) => enc
             .job()
-            .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+            .with_unfiltered_metadata(metadata)
             .try_with_policy(initial)
             .map_err(|e| fail(CHECK, e.to_string()))?,
         Err(e) => return Err(fail(CHECK, format!("wrong builder rejection: {e}"))),
     }
-    .encode(pixels.sub_rows(0, pixels.rows()))
+    .encode(pixels.clone())
     .map_err(|e| fail(CHECK, e.to_string()))?;
     let (baseline_pixels, baseline_metadata) =
         dec_oneshot(&dec, baseline.data()).map_err(|e| fail(CHECK, e))?;
     let a = job
-        .encode(pixels.sub_rows(0, pixels.rows()))
+        .encode(pixels.clone())
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let b = dynamic
-        .encode(pixels.sub_rows(0, pixels.rows()))
+        .encode(pixels.clone())
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let (pa, ma) = dec_oneshot(&dec, a.data()).map_err(|e| fail(CHECK, e))?;
     let (pb, mb) = dec_oneshot(&dec, b.data()).map_err(|e| fail(CHECK, e))?;
@@ -482,7 +481,7 @@ pub fn check_metadata_rewrite<'a>(
 pub fn check_animation_timing_unsupported<E, D>(
     enc: E,
     dec: D,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
 ) -> Conformance
 where
     E: EncoderConfig + 'static,
@@ -515,17 +514,17 @@ where
         ] {
             for exact in [true, false] {
                 let a = if exact {
-                    generic.push_frame_exact(pixels.sub_rows(0, pixels.rows()), duration, None)
+                    generic.push_frame_exact(pixels.clone(), duration, None)
                 } else {
                     generic
-                        .push_frame_timed(pixels.sub_rows(0, pixels.rows()), duration, None)
+                        .push_frame_timed(pixels.clone(), duration, None)
                         .map(|_| ())
                 };
                 let b = if exact {
-                    dynamic.push_frame_exact(pixels.sub_rows(0, pixels.rows()), duration, None)
+                    dynamic.push_frame_exact(pixels.clone(), duration, None)
                 } else {
                     dynamic
-                        .push_frame_timed(pixels.sub_rows(0, pixels.rows()), duration, None)
+                        .push_frame_timed(pixels.clone(), duration, None)
                         .map(|_| ())
                 };
                 let a = a
@@ -542,10 +541,10 @@ where
             }
         }
         generic
-            .push_frame(pixels.sub_rows(0, pixels.rows()), delay, None)
+            .push_frame(pixels.clone(), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
         dynamic
-            .push_frame(pixels.sub_rows(0, pixels.rows()), delay, None)
+            .push_frame(pixels.clone(), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
     }
     let a = generic
@@ -619,13 +618,13 @@ pub fn check_read_at_contract(
     Ok(())
 }
 
-fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, PixelDescriptor, Vec<u8>) {
+fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, PixelFormat, Vec<u8>) {
     let ps = out.pixels();
     let mut bytes = Vec::new();
-    for y in 0..ps.rows() {
+    for y in 0..ps.height() {
         bytes.extend_from_slice(ps.row(y));
     }
-    (ps.width(), ps.rows(), ps.descriptor(), bytes)
+    (ps.width(), ps.height(), ps.format().clone(), bytes)
 }
 
 /// Verify the `seekable` capability flag in both directions. A decoder
@@ -649,7 +648,7 @@ pub fn check_seekable_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) 
                 .and_then(|d| d.decode())
                 .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
             let (w, h, desc, bytes) = pixels_of(&reference);
-            if (info.width, info.height) != (w, h) || sink.descriptor() != Some(desc) {
+            if (info.width, info.height) != (w, h) || sink.descriptor() != Some(desc.clone()) {
                 return Err(fail(
                     CHECK,
                     format!(
@@ -719,24 +718,17 @@ struct OrderSink {
 }
 
 impl zencodec::decode::DecodeRowSink for OrderSink {
-    fn begin(
-        &mut self,
-        w: u32,
-        h: u32,
-        d: PixelDescriptor,
-    ) -> Result<(), zencodec::decode::SinkError> {
+    fn begin(&mut self, w: u32, h: u32, d: PixelFormat) -> Result<(), zencodec::decode::SinkError> {
         self.began += 1;
         self.inner.begin(w, h, d)
     }
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-        self.final_ys.push((y, height));
-        self.inner.provide_next_buffer(y, height, width, descriptor)
+        strip: zencodec::decode::RowStrip,
+        descriptor: PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+        self.final_ys.push((strip.y, strip.height));
+        self.inner.provide_next_buffer(strip, descriptor)
     }
     fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
         self.inner.finish()
@@ -748,19 +740,19 @@ impl zencodec::decode::DecodeRowSink for OrderSink {
 #[derive(Default)]
 struct PassSink {
     batches: Vec<(zencodec::decode::BatchMeta, u32, Vec<u8>)>,
-    current: Option<(zencodec::decode::BatchMeta, zenpixels::PixelBuffer)>,
+    current: Option<(zencodec::decode::BatchMeta, zenpixels::PixelBuf)>,
     final_through_pass: u32,
 }
 
 impl PassSink {
     fn ship(&mut self) {
         if let Some((meta, buf)) = self.current.take() {
-            let s = buf.as_slice();
+            let s = buf.as_view();
             let mut packed = Vec::new();
-            for r in 0..s.rows() {
+            for r in 0..s.height() {
                 packed.extend_from_slice(s.row(r));
             }
-            self.batches.push((meta, s.rows(), packed));
+            self.batches.push((meta, s.height(), packed));
         }
     }
 }
@@ -768,17 +760,15 @@ impl PassSink {
 impl zencodec::decode::DecodeRowSink for PassSink {
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        strip: zencodec::decode::RowStrip,
+        descriptor: PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.ship();
         let (_, buf) = self.current.insert((
-            zencodec::decode::BatchMeta::final_rows(y),
-            zenpixels::PixelBuffer::new(width, height, descriptor),
+            zencodec::decode::BatchMeta::final_rows(strip.y),
+            zenpixels::PixelBuf::new(strip.width, strip.height, descriptor)?,
         ));
-        Ok(buf.as_slice_mut())
+        Ok(buf.as_view_mut())
     }
     fn accepts_provisional(&self) -> bool {
         true
@@ -786,18 +776,18 @@ impl zencodec::decode::DecodeRowSink for PassSink {
     fn provide_pass_buffer(
         &mut self,
         meta: zencodec::decode::BatchMeta,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        size: zencodec::decode::StripDimensions,
+        descriptor: PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         if meta.is_final {
             self.final_through_pass += 1;
         }
         self.ship();
-        let (_, buf) = self
-            .current
-            .insert((meta, zenpixels::PixelBuffer::new(width, height, descriptor)));
-        Ok(buf.as_slice_mut())
+        let (_, buf) = self.current.insert((
+            meta,
+            zenpixels::PixelBuf::new(size.width, size.height, descriptor)?,
+        ));
+        Ok(buf.as_view_mut())
     }
     fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
         self.ship();
@@ -812,23 +802,16 @@ struct UntouchedSink {
 }
 
 impl zencodec::decode::DecodeRowSink for UntouchedSink {
-    fn begin(
-        &mut self,
-        _: u32,
-        _: u32,
-        _: PixelDescriptor,
-    ) -> Result<(), zencodec::decode::SinkError> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), zencodec::decode::SinkError> {
         self.calls += 1;
         Ok(())
     }
 
     fn provide_next_buffer(
         &mut self,
-        _: u32,
-        _: u32,
-        _: u32,
-        _: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        _: zencodec::decode::RowStrip,
+        _: PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;
         Err("pre-cancelled decoder requested rows".into())
     }
@@ -845,10 +828,9 @@ impl zencodec::decode::DecodeRowSink for UntouchedSink {
     fn provide_pass_buffer(
         &mut self,
         _: zencodec::decode::BatchMeta,
-        _: u32,
-        _: u32,
-        _: PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        _: zencodec::decode::StripDimensions,
+        _: PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
         self.calls += 1;
         Err("pre-cancelled decoder requested provisional rows".into())
     }
@@ -998,7 +980,7 @@ where
                 ),
             ));
         }
-        if sink.inner.descriptor() != Some(desc) {
+        if sink.inner.descriptor() != Some(desc.clone()) {
             return Err(fail(
                 CHECK,
                 format!(

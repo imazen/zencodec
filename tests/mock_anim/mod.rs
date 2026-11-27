@@ -25,7 +25,7 @@ use zencodec::{
 
 use enough::{Stop, StopReason};
 use zencodec::decode::{DecodeRowSink, SinkError};
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelBuf, PixelFormat, PixelView, PixelViewMut};
 
 // =========================================================================
 // Error
@@ -90,12 +90,12 @@ impl From<zencodec::LimitExceeded> for MockError {
 
 const HEADER_SIZE: usize = 4 + 4 + 4 + 4 + 1;
 
-fn encode_mock_data(frames: &[(PixelSlice<'_>, u32)]) -> Vec<u8> {
+fn encode_mock_data(frames: &[(PixelView<'_>, u32)]) -> Vec<u8> {
     assert!(!frames.is_empty());
     let (first, _) = &frames[0];
     let w = first.width();
-    let h = first.rows();
-    let bpp = first.descriptor().bytes_per_pixel();
+    let h = first.height();
+    let bpp = first.format().clone().layout.bytes_per_pixel();
     let frame_count = frames.len() as u32;
 
     let mut data = Vec::new();
@@ -107,7 +107,7 @@ fn encode_mock_data(frames: &[(PixelSlice<'_>, u32)]) -> Vec<u8> {
 
     for (ps, duration_ms) in frames {
         data.extend_from_slice(&duration_ms.to_le_bytes());
-        for y in 0..ps.rows() {
+        for y in 0..ps.height() {
             data.extend_from_slice(ps.row(y));
         }
     }
@@ -128,10 +128,10 @@ fn parse_mock_header(data: &[u8]) -> Result<(u32, u32, u32, u8), MockError> {
     Ok((w, h, fc, bpp))
 }
 
-fn descriptor_for_bpp(bpp: u8) -> PixelDescriptor {
+fn descriptor_for_bpp(bpp: u8) -> PixelFormat {
     match bpp {
-        3 => PixelDescriptor::RGB8_SRGB,
-        4 => PixelDescriptor::RGBA8_SRGB,
+        3 => PixelFormat::RGB8_SRGB,
+        4 => PixelFormat::RGBA8_SRGB,
         _ => unreachable!(),
     }
 }
@@ -159,8 +159,9 @@ impl DecoderConfig for MockDecoderConfig {
         &[ImageFormat::Pnm]
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
+        SUPPORTED
     }
 
     fn capabilities() -> &'static DecodeCapabilities {
@@ -190,6 +191,33 @@ pub struct MockDecodeJob {
     pub ext: MockDecodeExtensions,
 }
 
+impl MockDecodeJob {
+    fn still_geometry(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<([u32; 4], zencodec::Orientation), MockError> {
+        let [x, y, w, h] = self
+            .crop
+            .map_or([0, 0, width, height], |(x, y, w, h)| [x, y, w, h]);
+        if w == 0
+            || h == 0
+            || x.checked_add(w).is_none_or(|end| end > width)
+            || y.checked_add(h).is_none_or(|end| end > height)
+        {
+            return Err(MockError::InvalidData("crop outside mock image".into()));
+        }
+        let orientation = match self.orientation {
+            Some(
+                zencodec::OrientationHint::CorrectAndTransform(o)
+                | zencodec::OrientationHint::ExactTransform(o),
+            ) => o,
+            _ => zencodec::Orientation::Identity,
+        };
+        Ok(([x, y, w, h], orientation))
+    }
+}
+
 impl<'a> DecodeJob<'a> for MockDecodeJob {
     type Error = MockError;
     type Dec = MockDec<'a>;
@@ -206,13 +234,16 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
         self
     }
 
-    fn with_policy(mut self, policy: zencodec::decode::DecodePolicy) -> Self {
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::decode::DecodePolicy,
+    ) -> Result<(), UnsupportedOperation> {
         self.policy = Some(policy);
-        self
+        Ok(())
     }
 
-    fn with_crop_hint(mut self, x: u32, y: u32, width: u32, height: u32) -> Self {
-        self.crop = Some((x, y, width, height));
+    fn with_crop_hint(mut self, crop: zencodec::Rect) -> Self {
+        self.crop = Some((crop.x, crop.y, crop.width, crop.height));
         self
     }
 
@@ -250,27 +281,39 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
 
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, MockError> {
         let (w, h, _fc, bpp) = parse_mock_header(data)?;
-        Ok(OutputInfo::full_decode(w, h, descriptor_for_bpp(bpp)))
+        let (crop, orientation) = self.still_geometry(w, h)?;
+        let (w, h) = orientation.output_dimensions(crop[2], crop[3]);
+        let mut info = OutputInfo::full_decode(w, h, descriptor_for_bpp(bpp))
+            .with_orientation_applied(orientation);
+        if self.crop.is_some() {
+            info = info.with_crop_applied(crop);
+        }
+        Ok(info)
     }
 
     fn decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[PixelFormat],
     ) -> Result<MockDec<'a>, MockError> {
         let (w, h, _, _) = parse_mock_header(&data)?;
         self.limits.check_dimensions(w, h)?;
         if let Some(ref stop) = self.stop {
             stop.check()?;
         }
-        Ok(MockDec { data })
+        let (crop, orientation) = self.still_geometry(w, h)?;
+        Ok(MockDec {
+            data,
+            crop,
+            orientation,
+        })
     }
 
     fn push_decoder(
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn DecodeRowSink,
-        preferred: &[PixelDescriptor],
+        preferred: &[PixelFormat],
     ) -> Result<OutputInfo, MockError> {
         zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, MockError::Sink)
     }
@@ -278,7 +321,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
     fn streaming_decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[PixelFormat],
     ) -> Result<MockStreamDec<'a>, MockError> {
         let (w, h, _, bpp) = parse_mock_header(&data)?;
         self.limits.check_dimensions(w, h)?;
@@ -294,7 +337,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
     fn animation_frame_decoder(
         self,
         data: Cow<'a, [u8]>,
-        _preferred: &[PixelDescriptor],
+        _preferred: &[PixelFormat],
     ) -> Result<MockAnimationFrameDec, MockError> {
         let (w, h, fc, bpp) = parse_mock_header(&data)?;
         self.limits.check_dimensions(w, h)?;
@@ -315,6 +358,8 @@ impl<'a> DecodeJob<'a> for MockDecodeJob {
 #[derive(Debug)]
 pub struct MockDec<'a> {
     data: Cow<'a, [u8]>,
+    crop: [u32; 4],
+    orientation: zencodec::Orientation,
 }
 
 impl<'a> zencodec::decode::Decode for MockDec<'a> {
@@ -329,8 +374,20 @@ impl<'a> zencodec::decode::Decode for MockDec<'a> {
             return Err(MockError::InvalidData("truncated frame data".into()));
         }
         let pixels = &self.data[data_start..data_start + frame_size];
-        let buf = PixelBuffer::from_vec(pixels.to_vec(), w, h, desc)
+        let [cx, cy, cw, ch] = self.crop;
+        let (dw, dh) = self.orientation.output_dimensions(cw, ch);
+        let mut buf = PixelBuf::new(dw, dh, desc)
             .map_err(|e| MockError::InvalidData(format!("buffer: {e}")))?;
+        let mut output = buf.as_view_mut();
+        let bpp = bpp as usize;
+        for y in 0..ch {
+            for x in 0..cw {
+                let (dx, dy) = self.orientation.map_pixel_coordinates((x, y), (cw, ch));
+                let src = ((cy + y) as usize * w as usize + (cx + x) as usize) * bpp;
+                let dst = dx as usize * bpp;
+                output.row_mut(dy)[dst..dst + bpp].copy_from_slice(&pixels[src..src + bpp]);
+            }
+        }
         let info = ImageInfo::new(w, h, ImageFormat::Pnm);
         Ok(DecodeOutput::new(buf, info))
     }
@@ -349,7 +406,7 @@ pub struct MockStreamDec<'a> {
 impl<'a> StreamingDecode for MockStreamDec<'a> {
     type Error = MockError;
 
-    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, MockError> {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelView<'_>)>, MockError> {
         if self.current_row >= self.height {
             return Ok(None);
         }
@@ -361,8 +418,14 @@ impl<'a> StreamingDecode for MockStreamDec<'a> {
         }
         let desc = descriptor_for_bpp(self.bpp);
         let row_data = &self.data[offset..offset + row_bytes];
-        let ps = PixelSlice::new(row_data, self.width, 1, row_bytes, desc)
-            .map_err(|e| MockError::InvalidData(format!("slice: {e}")))?;
+        let ps = PixelView::new_with_format_cow(
+            row_data,
+            self.width,
+            1,
+            row_bytes,
+            zenpixels::FormatCow::from_owned(desc),
+        )
+        .map_err(|e| MockError::InvalidData(format!("slice: {e}")))?;
         let y = self.current_row;
         self.current_row += 1;
         Ok(Some((y, ps)))
@@ -384,6 +447,13 @@ pub struct MockAnimationFrameDec {
     frame_count: u32,
     bpp: u8,
     current_frame: u32,
+}
+
+impl MockAnimationFrameDec {
+    pub fn pixel_address(&self, index: usize) -> *const u8 {
+        let span = self.width as usize * self.height as usize * self.bpp as usize;
+        self.data[HEADER_SIZE + 4 + index * (4 + span)..].as_ptr()
+    }
 }
 
 impl AnimationFrameDecoder for MockAnimationFrameDec {
@@ -442,16 +512,36 @@ impl AnimationFrameDecoder for MockAnimationFrameDec {
         let desc = descriptor_for_bpp(self.bpp);
         let row_bytes = self.width as usize * self.bpp as usize;
 
-        let ps = PixelSlice::new(
+        let ps = PixelView::new_with_format_cow(
             &self.data[pixel_start..pixel_end],
             self.width,
             self.height,
             row_bytes,
-            desc,
+            zenpixels::FormatCow::from_owned(desc),
         )
         .map_err(|e| MockError::InvalidData(format!("frame slice: {e}")))?;
 
-        let frame = AnimationFrame::new(ps, duration_ms, self.current_frame);
+        let frame = match duration_ms {
+            // Reserved fixture markers encode distinct rational source timings.
+            0xFFFF_FFF0 | 0xFFFF_FFF1 => {
+                use zencodec::{
+                    animation::FrameDuration,
+                    time::{TimeBase, Timestamp},
+                };
+                let (numerator, denominator, ticks) = if duration_ms == 0xFFFF_FFF0 {
+                    (1, 24, 17)
+                } else {
+                    (7, 120, 22)
+                };
+                AnimationFrame::with_duration(
+                    ps,
+                    FrameDuration::new(numerator, denominator).unwrap(),
+                    self.current_frame,
+                )
+                .with_pts(Some(Timestamp::new(ticks, TimeBase::new(1, 120).unwrap())))
+            }
+            _ => AnimationFrame::new(ps, duration_ms, self.current_frame),
+        };
         self.current_frame += 1;
         Ok(Some(frame))
     }
@@ -526,8 +616,9 @@ impl EncoderConfig for MockEncoderConfig {
         ImageFormat::Pnm
     }
 
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        static SUPPORTED: &[PixelFormat] = &[PixelFormat::RGB8_SRGB, PixelFormat::RGBA8_SRGB];
+        SUPPORTED
     }
 
     fn capabilities() -> &'static EncodeCapabilities {
@@ -608,12 +699,24 @@ impl EncodeJob for MockEncodeJob {
         self
     }
 
-    fn with_policy(mut self, policy: zencodec::encode::EncodePolicy) -> Self {
+    fn try_set_policy(
+        &mut self,
+        policy: zencodec::encode::EncodePolicy,
+    ) -> Result<(), UnsupportedOperation> {
         self.policy = Some(policy);
-        self
+        Ok(())
     }
 
-    fn with_metadata(mut self, meta: Metadata) -> Self {
+    fn try_set_metadata_policy(
+        &mut self,
+        meta: Metadata,
+        policy: zencodec::MetadataPolicy,
+    ) -> Result<(), zencodec::encode::BoxedError> {
+        self.metadata = Some(meta.filtered(&policy));
+        Ok(())
+    }
+
+    fn with_unfiltered_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = Some(meta);
         self
     }
@@ -659,7 +762,7 @@ pub struct MockEnc {
     accumulated: Vec<u8>,
     width: Option<u32>,
     height: Option<u32>,
-    desc: Option<PixelDescriptor>,
+    desc: Option<PixelFormat>,
 }
 
 impl Encoder for MockEnc {
@@ -673,20 +776,20 @@ impl Encoder for MockEnc {
         4
     }
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, MockError> {
+    fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, MockError> {
         let frame = (pixels, 0u32);
         let data = encode_mock_data(&[frame]);
         Ok(EncodeOutput::new(data, ImageFormat::Pnm))
     }
 
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), MockError> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), MockError> {
         if self.width.is_none() {
             self.width = Some(rows.width());
             self.height = Some(0);
-            self.desc = Some(rows.descriptor());
+            self.desc = Some(rows.format().clone());
         }
         let h = self.height.as_mut().unwrap();
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             self.accumulated.extend_from_slice(rows.row(y));
             *h += 1;
         }
@@ -699,9 +802,9 @@ impl Encoder for MockEnc {
             .ok_or(MockError::InvalidData("no rows pushed".into()))?;
         let h = self.height.unwrap();
         let desc = self.desc.unwrap();
-        let buf = PixelBuffer::from_vec(self.accumulated, w, h, desc)
+        let buf = PixelBuf::from_bytes(self.accumulated, w, h, desc)
             .map_err(|e| MockError::InvalidData(format!("buffer: {e}")))?;
-        let ps = buf.as_slice();
+        let ps = buf.as_view();
         let frame = (ps, 0u32);
         let data = encode_mock_data(&[frame]);
         Ok(EncodeOutput::new(data, ImageFormat::Pnm))
@@ -709,7 +812,7 @@ impl Encoder for MockEnc {
 
     fn encode_from(
         self,
-        source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> Result<EncodeOutput, MockError> {
         // Pull rows one at a time using a fixed 4-row strip
         let strip_height = 4u32;
@@ -717,15 +820,21 @@ impl Encoder for MockEnc {
         let mut y = 0u32;
         let mut total_h = 0u32;
         let w = 4u32; // fixed for simplicity
-        let desc = PixelDescriptor::RGB8_SRGB;
-        let bpp = desc.bytes_per_pixel();
+        let desc = PixelFormat::RGB8_SRGB;
+        let bpp = desc.layout.bytes_per_pixel();
         let row_bytes = w as usize * bpp;
 
         loop {
             let mut strip_buf = vec![0u8; strip_height as usize * row_bytes];
             let rows_written = {
-                let ps = PixelSliceMut::new(&mut strip_buf, w, strip_height, row_bytes, desc)
-                    .map_err(|e| MockError::InvalidData(format!("pull buf: {e}")))?;
+                let ps = PixelViewMut::new_with_format_cow(
+                    &mut strip_buf,
+                    w,
+                    strip_height,
+                    row_bytes,
+                    zenpixels::FormatCow::from_owned(desc.clone()),
+                )
+                .map_err(|e| MockError::InvalidData(format!("pull buf: {e}")))?;
                 source(y, ps)
             };
             if rows_written == 0 {
@@ -735,13 +844,12 @@ impl Encoder for MockEnc {
             total_h += rows_written as u32;
             y += rows_written as u32;
         }
-
         if total_h == 0 {
             return Err(MockError::InvalidData("no rows from source".into()));
         }
-        let buf = PixelBuffer::from_vec(all_data, w, total_h, desc)
+        let buf = PixelBuf::from_bytes(all_data, w, total_h, desc)
             .map_err(|e| MockError::InvalidData(format!("buffer: {e}")))?;
-        let ps = buf.as_slice();
+        let ps = buf.as_view();
         let data = encode_mock_data(&[(ps, 0)]);
         Ok(EncodeOutput::new(data, ImageFormat::Pnm))
     }
@@ -750,7 +858,7 @@ impl Encoder for MockEnc {
 // --- Full-frame animation encoder ---
 
 pub struct MockAnimationFrameEnc {
-    frames: Vec<(Vec<u8>, u32, u32, u32, PixelDescriptor)>, // data, w, h, duration, desc
+    frames: Vec<(Vec<u8>, u32, u32, u32, PixelFormat)>, // data, w, h, duration, desc
     #[allow(dead_code)]
     loop_count: Option<u32>,
 }
@@ -764,7 +872,7 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
 
     fn push_frame(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration_ms: u32,
         stop: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), MockError> {
@@ -772,9 +880,9 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
             s.check()?;
         }
         let w = pixels.width();
-        let h = pixels.rows();
-        let desc = pixels.descriptor();
-        let mut data = Vec::with_capacity(w as usize * h as usize * desc.bytes_per_pixel());
+        let h = pixels.height();
+        let desc = pixels.format().clone();
+        let mut data = Vec::with_capacity(w as usize * h as usize * desc.layout.bytes_per_pixel());
         for y in 0..h {
             data.extend_from_slice(pixels.row(y));
         }
@@ -791,17 +899,17 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
         }
 
         // Build slices for encode_mock_data
-        let bufs: Vec<PixelBuffer> = self
+        let bufs: Vec<PixelBuf> = self
             .frames
             .iter()
             .map(|(data, w, h, _, desc)| {
-                PixelBuffer::from_vec(data.clone(), *w, *h, *desc).unwrap()
+                PixelBuf::from_bytes(data.clone(), *w, *h, desc.clone()).unwrap()
             })
             .collect();
-        let frame_refs: Vec<(PixelSlice<'_>, u32)> = bufs
+        let frame_refs: Vec<(PixelView<'_>, u32)> = bufs
             .iter()
             .zip(self.frames.iter())
-            .map(|(buf, (_, _, _, dur, _))| (buf.as_slice(), *dur))
+            .map(|(buf, (_, _, _, dur, _))| (buf.as_view(), *dur))
             .collect();
 
         let data = encode_mock_data(&frame_refs);

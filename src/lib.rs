@@ -46,6 +46,7 @@ extern crate std;
 
 whereat::define_at_crate_info!();
 
+pub mod advanced;
 pub mod animation;
 mod capabilities;
 pub mod collection;
@@ -69,11 +70,6 @@ mod frame_storage;
 pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
-/// Lightweight ICC profile inspection (tag extraction, no full parse).
-// Kept `pub` — privatizing it removes `zencodec::icc` from the public API, a
-// breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
-// a future major; do not ship it in a patch/minor.
-pub mod icc;
 pub mod image;
 mod info;
 pub mod inventory;
@@ -88,7 +84,10 @@ mod output;
 mod output_buffer;
 /// Shared sans-I/O finish patches for image and container output.
 pub mod output_patch;
+pub mod plane;
 mod policy;
+pub mod resources;
+pub mod sample;
 mod set;
 mod sink;
 pub mod source;
@@ -101,7 +100,7 @@ mod traits;
 // =========================================================================
 
 pub use color::{
-    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
+    CicpEmission, ColorEmitError, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
     resolve_color_emit,
 };
 // `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
@@ -114,20 +113,24 @@ pub use gainmap::{
     GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
     ISO_21496_1_PRIMARY_APP2_BODY, ISO_21496_1_URN, Iso21496Format,
 };
-#[allow(deprecated)]
-pub use icc::icc_extract_cicp;
+pub use image::Rect;
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
 };
 mod resolution;
+pub use info::ColorAuthority;
 pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
 pub use resolution::ResolutionError;
-pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
-pub use zenpixels::ColorAuthority;
+pub use resources::JobResources;
+pub use set::{
+    CodecSet, CodecSetError, CodecSetIncrementalDecoder, EncodedTransformFactory,
+    EncodedTransformRole, FactoryRole, ImageDecodeRole, ImageEncodeFactory, ImageEncodeRole,
+    NamedFactory, RegistrationError, RegistrationId, TranscodeBarrier,
+};
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;
@@ -218,7 +221,7 @@ pub mod encode {
     pub use crate::fidelity::{
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };
-    pub use crate::negotiate::best_encode_format;
+    pub use crate::negotiate::{best_encode_format, best_encode_layout};
     pub use crate::output::{AnimationOutputTiming, EncodeOutput, OutputTiming};
     pub use crate::output_buffer::OutputBuffer;
     pub use crate::policy::{EncodeOrientation, EncodePolicy};
@@ -243,9 +246,6 @@ pub mod encode {
 /// Codec implementors implement the generic traits. Dispatch callers
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
-    #[allow(deprecated)]
-    pub use crate::traits::Request;
-
     pub use crate::traits::{
         BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
         DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
@@ -254,25 +254,28 @@ pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, ErasedError, Event,
-        Fused, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
-        StreamingDecode, erase_incremental,
+        FusedIncrementalDecoder, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress,
+        StepError, StreamingDecode, erase_incremental,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynIncrementalDecoder, DynStreamingDecoder, IncrementalDecoderShim,
+        DynIncrementalDecoder, DynStreamingDecoder, ErasedIncrementalDecoder,
     };
 
     // Types
     pub use crate::capabilities::DecodeCapabilities;
-    pub use crate::cost::OutputInfo;
+    pub use crate::cost::{FrameCompletion, OutputInfo};
     pub use crate::output::{AnimationFrame, DecodeDetails, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
-    pub use crate::sink::{DecodeRowSink, SinkError};
+    pub use crate::sink::{DecodeRowSink, RowMetadata, RowStrip, SinkError, StripDimensions};
     pub use crate::traits::ByteRange;
 
-    pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
+    pub use crate::negotiate::{
+        FormatMatch, NegotiatedFormat, is_format_available, negotiate_pixel_format,
+        negotiate_pixel_format_match,
+    };
 
     // Source encoding detection
     pub use crate::detect::SourceEncodingDetails;

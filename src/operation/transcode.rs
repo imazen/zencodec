@@ -8,7 +8,7 @@ use crate::{
     decode::{BoundaryAction, DecodeBoundary},
     operation::policy,
 };
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 /// Treatment of source descriptive metadata in a pixel transcode.
 /// Color interpretation is a separate obligation; this is not a certificate
@@ -29,13 +29,13 @@ pub enum MetadataTransfer {
 /// the callback. These are facts for choosing that route, not instructions to
 /// reconstruct it after selection. Execution may still fail; it never retries
 /// another route after selection.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct TranscodeOffer {
     /// Confirmed configuration of the retained encoder job.
     pub encoder: EncodeOffer,
     /// Samples and interpretation delivered to that encoder after conversion.
-    pub output: PixelDescriptor,
+    pub output: PixelFormat,
     /// Descriptive source metadata treatment.
     pub metadata: MetadataTransfer,
     /// Whether the output retains an opaque source color profile. Preserving
@@ -63,7 +63,7 @@ impl TranscodeOffer {
     /// be filled in by its executing adapter. Unknown storage stays unknown.
     pub const fn new(
         encoder: EncodeOffer,
-        output: PixelDescriptor,
+        output: PixelFormat,
         metadata: MetadataTransfer,
     ) -> Self {
         Self {
@@ -101,8 +101,11 @@ pub fn resolve_transcode<R: OperationPolicy + ?Sized>(
     };
     policy::choose(
         offers,
-        super::DecisionContext::Transcode(facts),
-        |choices| super::Question::Transcode { facts, choices },
+        super::DecisionContext::Transcode(facts.clone()),
+        |choices| super::Question::Transcode {
+            facts: facts.clone(),
+            choices,
+        },
         super::Selection::Transcode,
         resolver,
         preset,
@@ -124,7 +127,7 @@ mod tests {
         DecodeBoundary::new(InterpretationFacts::new(
             97,
             65,
-            Some(PixelDescriptor::RGB8_SRGB),
+            Some(PixelFormat::RGB8_SRGB),
             state,
         ))
         .unwrap()
@@ -137,7 +140,7 @@ mod tests {
                 preference_index: 0,
                 resolution: None,
             },
-            PixelDescriptor::RGB8_SRGB,
+            PixelFormat::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
         );
         offer.retains_opaque_profile = Some(false);
@@ -149,12 +152,12 @@ mod tests {
         let unknown = TranscodeOffer::new(known.encoder, known.output, known.metadata);
         assert_eq!(unknown.retains_opaque_profile, None);
         for retention in [None, Some(true), Some(false)] {
-            let mut candidate = unknown;
+            let mut candidate = unknown.clone();
             candidate.retains_opaque_profile = retention;
             for allowed in [false, true] {
                 let result = resolve_transcode(
                     boundary(InterpretationState::Final),
-                    &[candidate],
+                    &[candidate.clone()],
                     &mut PolicySet::new().allow_opaque_profiles(allowed),
                     PolicySet::new(),
                     Some(&crate::how_far::NoPulse),
@@ -248,7 +251,7 @@ mod tests {
         let mut called = false;
         let error = resolve_transcode(
             boundary(InterpretationState::Final),
-            &[offer(); 65],
+            &core::array::from_fn::<_, 65, _>(|_| offer()),
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 called = true;
                 Ok(Decision::UsePreset)

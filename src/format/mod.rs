@@ -1208,29 +1208,26 @@ mod tests {
 
     #[test]
     fn scan_compat_brands_box_size_one_extended() {
-        // box_size=1 → 64-bit extended size at offset 8.
-        // ISOBMFF layout: [4:size=1][4:type][8:ext_size][4:major][4:minor][brands...]
-        //
-        // Note: detect_avif/detect_heic always read data[8..12] as the major
-        // brand. For box_size=1, data[8..15] is the extended size, so the
-        // "major brand" read is actually the high bytes of the extended size.
-        // We encode the extended size so its high bytes spell "mif1" to trigger
-        // the compat brand scan path. This tests scan_compat_brands correctly
-        // reads brands starting at offset 24.
         let mut data = Vec::new();
-        data.extend_from_slice(&1u32.to_be_bytes()); // box_size = 1
+        data.extend_from_slice(&1u32.to_be_bytes());
         data.extend_from_slice(b"ftyp");
-        // Extended size: high 4 bytes = "mif1" (read as major by detect_*),
-        // low 4 bytes = actual size
-        let mut ext = [0u8; 8];
-        ext[0..4].copy_from_slice(b"mif1");
-        ext[4..8].copy_from_slice(&36u32.to_be_bytes());
-        data.extend_from_slice(&ext);
-        data.extend_from_slice(b"mif1"); // actual major brand (offset 16, ignored)
-        data.extend_from_slice(&[0u8; 4]); // minor version (offset 20)
-        data.extend_from_slice(b"avif"); // compat brand (offset 24)
-        data.resize(36, 0); // pad to declared extended size
+        data.extend_from_slice(&28u64.to_be_bytes());
+        data.extend_from_slice(b"mif1");
+        data.extend_from_slice(&[0; 4]);
+        data.extend_from_slice(b"avif");
         assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
+        data[24..28].copy_from_slice(b"heix");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
+        data[16..20].copy_from_slice(b"avis");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
+        data[16..20].copy_from_slice(b"heic");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
+        data[16..20].copy_from_slice(b"none");
+        data[8..12].copy_from_slice(b"avif");
+        assert_eq!(reg().detect(&data), None);
+        data[8..16].copy_from_slice(&20u64.to_be_bytes());
+        data[16..20].copy_from_slice(b"heic");
+        assert_eq!(reg().detect(&data), None);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorModel};
+use zenpixels::{Cicp, ColorSpace, HlgMode, IccColorSpace, Primaries, SignalRange, Transfer};
 
 use crate::capabilities::EncodeCapabilities;
 use crate::info::{AuthoritativeColor, SourceColor};
@@ -45,26 +45,13 @@ use crate::metadata::IccRetention;
 ///
 /// A codec (or the pipeline) lowers a [`ColorEmitPlan`] to the bytes it writes.
 /// The lowering is **per-codec and by convention**: each codec maps the plan's
-/// fields onto its own container carriers as listed below. No type-enforced
-/// atomic step ties the emitted color to the pixel buffer — the `SourceColor`
-/// handed to [`resolve_color_emit`] comes from the caller's `Metadata`, a
-/// separate input from the pixels, and is not cross-checked against the
-/// buffer's descriptor or `ColorContext`. Keeping the two in agreement is the
-/// caller's job (the pipeline builds `Metadata` from the same decode that
-/// produced the pixels); a mislabeled source is emitted faithfully wrong.
+/// fields onto its container carriers. The caller supplies source metadata
+/// describing the current samples and their active color model.
 ///
-/// - [`ColorEmitPlan::cicp`] → the format's native CICP carrier (JXL enum color,
-///   AVIF/HEIC `nclx`, PNG `cICP`).
-/// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes unchanged.
-/// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → lower through
-///   `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
-///   **transfer-aware** (it won't hand a BT.2020-PQ source the SDR-TRC Rec.2020
-///   profile) and returns a typed `SynthesizedIcc`: embed the bytes on `Profile`;
-///   on `NotNeeded`/`NeedsCms`/`CmsUnsupported` embed no ICC and let
-///   [`ColorEmitPlan::cicp`] carry the color. Coverage is best-effort — the
-///   bundled `const` set (no CMS) reaches Display-P3 and SDR BT.2020; the
-///   `cms-moxcms` feature generates the rest, including PQ/HLG. See
-///   [`SynthesizeFrom`](IccDisposition::SynthesizeFrom) for the full contract.
+/// - [`ColorEmitPlan::cicp`] maps to the format's native CICP carrier.
+/// - [`IccDisposition::KeepSource`] embeds the supplied ICC bytes unchanged.
+/// - [`IccDisposition::SynthesizeFrom`] and [`IccDisposition::SynthesizeGrayFrom`]
+///   require a matching RGB or GRAY profile from the converter before embedding.
 /// - [`IccDisposition::Drop`] → emit no ICC.
 ///
 /// Orientation/EXIF reconciliation is separate: when a pipeline bakes orientation
@@ -180,29 +167,11 @@ impl ColorEmitPolicy {
 pub enum IccDisposition {
     /// Embed the source ICC bytes verbatim.
     KeepSource,
-    /// Embed an ICC synthesized from this CICP (target has no CICP carrier, or
-    /// the policy wants an ICC alongside). The caller materializes the bytes —
-    /// this `no_std`, CMS-less crate only states the intent.
-    ///
-    /// **Recommended lowering:** `zenpixels_convert::icc_profiles`'s
-    /// `synthesize_icc_for_cicp(cicp)`, which is transfer-aware and returns a typed
-    /// `SynthesizedIcc`:
-    /// - `Profile(bytes)` — embed them (bundled `&'static`, or `cms-moxcms`-generated).
-    /// - `NotNeeded` — the CICP is the sRGB/BT.709 default; embed nothing. (The
-    ///   resolver won't normally emit `SynthesizeFrom(sRGB)`, so this is rare.)
-    /// - `NeedsCms` — no bundled profile matches and the `cms-moxcms` feature is
-    ///   off; embed nothing.
-    /// - `CmsUnsupported` — the CMS can't represent this CICP; embed nothing.
-    ///
-    /// **Synthesis is best-effort.** Bundled coverage (no CMS) is Display-P3 and
-    /// SDR BT.2020; `cms-moxcms` extends it to anything moxcms recognizes,
-    /// including PQ/HLG. On any non-`Profile` outcome the lowering must **not**
-    /// fabricate or mis-tag a profile — it embeds no ICC and relies on
-    /// [`ColorEmitPlan::cicp`] to carry the color. For a target with no CICP
-    /// carrier, that means a caller without `cms-moxcms` may lose a wide-gamut
-    /// description it can't bundle; prefer a CICP-carrying format or enable the
-    /// feature when exact wide-gamut/HDR color must survive.
+    /// Materialize an RGB profile with `SynthesizedIcc::for_cicp`.
+    /// A missing profile requires a valid emitted CICP or a checked refusal.
     SynthesizeFrom(Cicp),
+    /// Materialize a GRAY profile with `SynthesizedIcc::for_gray_cicp`.
+    SynthesizeGrayFrom(Cicp),
     /// Emit no ICC profile.
     Drop,
 }
@@ -222,60 +191,128 @@ pub struct ColorEmitPlan {
     pub icc: IccDisposition,
 }
 
-/// The CICP that describes this source's color as code points, if any.
-///
-/// Authority-aware (per [`ColorAuthority`](zenpixels::ColorAuthority)): when the **ICC** is authoritative and
-/// present, the emittable CICP must *describe that ICC* — derived from its `cicp`
-/// tag, then the corpus — **not** a co-existing CICP, which the spec treats as a
-/// backwards-compat round-trip companion that "should NOT override the TRC." If the
-/// ICC isn't identifiable as code points, this returns `None`, so the resolver keeps
-/// the authoritative ICC rather than dropping it for a CICP that doesn't represent
-/// it (precision loss / mis-tag on a sole-safe carrier). When CICP is authoritative
-/// (or ICC is absent), the explicit CICP wins, then the ICC-derived fallback.
-fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
-    let from_icc = |icc_bytes: &[u8]| -> Option<Cicp> {
-        Cicp::from_icc(icc_bytes)
-            .or_else(|| icc::IccIdentification::from_icc(icc_bytes).and_then(|id| id.to_cicp()))
-    };
-    match src.authoritative()? {
-        AuthoritativeColor::Icc(icc_bytes) => from_icc(icc_bytes),
-        AuthoritativeColor::Cicp(cicp) => Some(cicp),
+fn icc_as_cicp(profile: &[u8]) -> Option<Cicp> {
+    Cicp::from_icc(profile).or_else(|| icc::IccIdentification::from_icc(profile)?.to_cicp())
+}
+
+/// The available carriers and policy cannot express the current color.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ColorEmitError {
+    /// The profile does not match the active color model.
+    ProfileModel,
+    /// No supported carrier can express the supplied color under this policy.
+    Unrepresentable,
+}
+
+impl core::fmt::Display for ColorEmitError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::ProfileModel => "ICC profile does not match the active color model",
+            Self::Unrepresentable => "target carriers cannot express the supplied color",
+        })
     }
 }
 
-/// Reconcile a source's color description against a target's capabilities under
-/// a [`ColorEmitPolicy`], returning what to emit.
-///
-/// Pure and `no_std`. Decides ICC vs CICP emission, including the grayscale /
-/// CMYK terminal states (where CICP is inapplicable and the ICC must be kept).
+impl core::error::Error for ColorEmitError {}
+
+/// Reconcile the current samples' color description and model with a target.
 pub fn resolve_color_emit(
     src: &SourceColor,
+    color: &ColorSpace,
     target: &EncodeCapabilities,
     policy: ColorEmitPolicy,
-) -> ColorEmitPlan {
+) -> Result<ColorEmitPlan, ColorEmitError> {
     let fields = policy.fields();
-    let src_has_icc = src.icc_profile.is_some();
-
-    // Grayscale / CMYK: CICP is RGB-centric and cannot describe these. Keep the
-    // ICC (the only valid color description) and suppress CICP — emitting an RGB
-    // CICP over gray/CMYK pixels would recolor them.
-    let model = src.icc_profile.as_deref().and_then(ColorModel::from_icc);
-    let is_gray = matches!(model, Some(ColorModel::Gray)) || src.channel_count == Some(1);
-    let is_cmyk = matches!(model, Some(ColorModel::Cmyk));
-    if is_gray || is_cmyk {
-        return ColorEmitPlan {
-            cicp: None,
-            icc: if src_has_icc {
-                IccDisposition::KeepSource
-            } else {
-                IccDisposition::Drop
-            },
-        };
+    let profile = src.icc_profile.as_deref();
+    let model = match color {
+        ColorSpace::Rgb { .. } => IccColorSpace::Rgb,
+        ColorSpace::Gray { .. } => IccColorSpace::Gray,
+        ColorSpace::Cmyk { .. } => IccColorSpace::Cmyk,
+        ColorSpace::Icc {
+            profile: active, ..
+        } => {
+            if profile != Some(active.as_ref()) {
+                return Err(ColorEmitError::ProfileModel);
+            }
+            IccColorSpace::from_icc(active).ok_or(ColorEmitError::ProfileModel)?
+        }
+        _ => return Err(ColorEmitError::Unrepresentable),
+    };
+    let is_gray = model == IccColorSpace::Gray;
+    let active_icc = matches!(
+        color,
+        ColorSpace::Icc { .. } | ColorSpace::Cmyk { icc: Some(_), .. }
+    );
+    if let ColorSpace::Cmyk {
+        icc: Some(active), ..
+    } = color
+        && profile != Some(active.as_ref())
+    {
+        return Err(ColorEmitError::ProfileModel);
     }
-
-    let repr_cicp = representable_cicp(src);
+    // CICP describes the sample coding. Diffuse white lives outside the tuple.
+    let repr_cicp = match color {
+        ColorSpace::Rgb {
+            transfer: Transfer::Hlg(HlgMode::Display(_)),
+            ..
+        }
+        | ColorSpace::Gray {
+            transfer: Transfer::Hlg(HlgMode::Display(_)),
+            ..
+        } => None,
+        ColorSpace::Rgb {
+            primaries: Primaries::Unknown,
+            range,
+            ..
+        }
+        | ColorSpace::Rgb {
+            transfer: Transfer::Unknown,
+            range,
+            ..
+        } => match src.authoritative() {
+            Some(AuthoritativeColor::Cicp(c))
+                if c.matrix_coefficients == 0 && c.full_range == (*range == SignalRange::Full) =>
+            {
+                Some(c)
+            }
+            _ => None,
+        },
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range,
+            alpha,
+            ..
+        } => ColorSpace::Rgb {
+            primaries: *primaries,
+            transfer: *transfer,
+            range: *range,
+            alpha: *alpha,
+            white: None,
+        }
+        .project_cicp()
+        .ok(),
+        ColorSpace::Gray {
+            transfer, range, ..
+        } => transfer
+            .to_cicp()
+            .map(|tc| Cicp::new(1, tc, 0, *range == SignalRange::Full)),
+        ColorSpace::Icc { .. } if model == IccColorSpace::Rgb => profile.and_then(icc_as_cicp),
+        _ => None,
+    };
+    let src_has_icc = profile.is_some_and(|profile| {
+        IccColorSpace::from_icc(profile) == Some(model)
+            && (active_icc
+                || match repr_cicp {
+                    Some(cicp) => {
+                        icc_as_cicp(profile).is_some_and(|icc| cicp_equivalent(icc, cicp))
+                    }
+                    None => icc_matches_active_color(profile, color),
+                })
+    });
     let cicp_represents = repr_cicp.is_some();
-    let has_carrier = target.cicp();
+    let has_carrier = target.cicp() && model == IccColorSpace::Rgb;
     let is_valid_carrier = target.cicp_is_valid_carrier();
     let sole_safe = target.cicp_safe_sole_carrier();
     let icc_is_srgb = src
@@ -285,7 +322,13 @@ pub fn resolve_color_emit(
 
     // Whether to emit CICP.
     let emit_cicp = match policy {
-        ColorEmitPolicy::Verbatim => has_carrier && src.cicp.is_some(),
+        ColorEmitPolicy::Verbatim => {
+            has_carrier
+                && src
+                    .cicp
+                    .zip(repr_cicp)
+                    .is_some_and(|(src, repr)| cicp_equivalent(src, repr))
+        }
         _ => match fields.cicp {
             CicpEmission::Never => false,
             CicpEmission::WhereValidCarrier => has_carrier && is_valid_carrier && cicp_represents,
@@ -331,42 +374,88 @@ pub fn resolve_color_emit(
         (matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 2 | 13))
             || (c.color_primaries == 2 && c.transfer_characteristics == 1)
     };
-    let synth_worthwhile = repr_cicp.is_some_and(|c| !is_assumed_default(&c));
-
-    let icc = if src_has_icc {
-        if drop_icc {
-            IccDisposition::Drop
+    let can_synthesize = |c: Cicp| {
+        // ICC export describes full-range RGB or gray samples. CICP's matrix and
+        // narrow-range coding cannot be baked into that profile.
+        c.matrix_coefficients == 0
+            && c.full_range
+            && (is_gray || c.color_primaries != 10)
+            && (matches!(
+                c.color_primaries,
+                1 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 22
+            ) || (is_gray && c.color_primaries == 2))
+            && matches!(c.transfer_characteristics, 1 | 4..=17)
+            && !is_assumed_default(&c)
+    };
+    let synthesize = repr_cicp.filter(|&c| {
+        target.icc()
+            && fields.icc != IccRetention::Drop
+            && policy != ColorEmitPolicy::Verbatim
+            && can_synthesize(c)
+            && (!emit_cicp
+                || policy == ColorEmitPolicy::Compatibility
+                || (policy == ColorEmitPolicy::Balanced && !sole_safe))
+    });
+    let icc = if target.icc() && src_has_icc && !drop_icc {
+        IccDisposition::KeepSource
+    } else if let Some(c) = synthesize {
+        if is_gray {
+            IccDisposition::SynthesizeGrayFrom(c)
         } else {
-            IccDisposition::KeepSource
+            IccDisposition::SynthesizeFrom(c)
         }
-    } else if !emit_cicp && synth_worthwhile && policy != ColorEmitPolicy::Verbatim {
-        // No source ICC and CICP isn't carrying the color (target is ICC-only):
-        // synthesize an ICC so the (non-default) color isn't lost.
-        IccDisposition::SynthesizeFrom(repr_cicp.expect("synth_worthwhile"))
-    } else if synth_worthwhile
-        && (matches!(policy, ColorEmitPolicy::Compatibility)
-            || (matches!(policy, ColorEmitPolicy::Balanced) && !sole_safe))
-    {
-        // Compatibility always wants an ICC alongside CICP; Balanced synthesizes a
-        // companion when the CICP carrier isn't sole-safe (PNG cICP, AVIF/HEIC nclx)
-        // so the color survives decoders that ignore the carrier — symmetric with
-        // keeping a source ICC there. Compact accepts CICP-only (smallest); Verbatim
-        // derives nothing. (non-sRGB only — see `synth_worthwhile`.)
-        IccDisposition::SynthesizeFrom(repr_cicp.expect("synth_worthwhile"))
     } else {
         IccDisposition::Drop
     };
 
-    ColorEmitPlan {
+    let cicp_carries_color = cicp_out
+        .zip(repr_cicp)
+        .is_some_and(|(out, repr)| cicp_equivalent(out, repr));
+    let color_is_default = repr_cicp
+        .is_some_and(|c| c.full_range && c.matrix_coefficients == 0 && is_assumed_default(&c));
+    if !cicp_carries_color && icc == IccDisposition::Drop && !color_is_default {
+        return Err(ColorEmitError::Unrepresentable);
+    }
+    Ok(ColorEmitPlan {
         cicp: cicp_out,
         icc,
+    })
+}
+
+fn cicp_equivalent(a: Cicp, b: Cicp) -> bool {
+    let is_bt709_transfer = |code| matches!(code, 1 | 6 | 14 | 15);
+    a.color_primaries == b.color_primaries
+        && a.matrix_coefficients == b.matrix_coefficients
+        && a.full_range == b.full_range
+        && (a.transfer_characteristics == b.transfer_characteristics
+            || (is_bt709_transfer(a.transfer_characteristics)
+                && is_bt709_transfer(b.transfer_characteristics)))
+}
+
+fn icc_matches_active_color(profile: &[u8], color: &ColorSpace) -> bool {
+    let Some(id) = icc::IccIdentification::from_icc(profile) else {
+        return false;
+    };
+    match color {
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range: SignalRange::Full,
+            ..
+        } => id.primaries == *primaries && id.transfer == *transfer,
+        ColorSpace::Gray {
+            transfer,
+            range: SignalRange::Full,
+            ..
+        } => id.transfer == *transfer,
+        _ => false,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::ColorAuthority;
+    use crate::ColorAuthority;
 
     // Capability fixtures matching the 2026 reliability findings.
     fn caps_jxl() -> EncodeCapabilities {
@@ -406,6 +495,171 @@ mod tests {
             .with_channel_count(3)
     }
 
+    fn current_color(source: &SourceColor) -> ColorSpace {
+        match source.authoritative() {
+            Some(AuthoritativeColor::Icc(profile)) => ColorSpace::Icc {
+                profile: profile.clone(),
+                color_channels: 3,
+                alpha: zenpixels::AlphaMode::None,
+                intent: zenpixels::RenderingIntent::RelativeColorimetric,
+            },
+            Some(AuthoritativeColor::Cicp(c)) => c
+                .to_color_space(zenpixels::AlphaMode::None)
+                .unwrap_or_else(|_| {
+                    crate::helpers::codec_spec(zenpixels::SampleLayout::RGB8).color
+                }),
+            None => ColorSpace::SRGB,
+        }
+    }
+
+    fn rgb_profile(cicp: Cicp) -> alloc::vec::Vec<u8> {
+        use zenpixels_convert::icc_profiles::SynthesizedIcc;
+        let SynthesizedIcc::Profile(profile) = SynthesizedIcc::for_cicp(cicp) else {
+            panic!("test requires a real RGB profile");
+        };
+        profile.into_owned()
+    }
+
+    #[test]
+    fn decoded_png_pq_with_diffuse_white_emits_avif_cicp() {
+        use zenpixels::{DiffuseWhite, SampleLayout};
+        let mut source = src_cicp(Cicp::BT2100_PQ_RGB);
+        source.diffuse_white = Some(DiffuseWhite::BT2408);
+        let spec =
+            crate::helpers::pixel_format_for_decoded_pixels(SampleLayout::RGB16, &source, None)
+                .unwrap();
+        assert_eq!(spec.color.white(), Some(DiffuseWhite::BT2408));
+        let plan = resolve_color_emit(&source, &spec.color, &caps_avif(), ColorEmitPolicy::Compact)
+            .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::new(9, 16, 0, true)));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn reconstructed_gain_map_linear_color_emits_avif_cicp() {
+        use zenpixels::{AlphaMode, DiffuseWhite, PixelBuf, PixelFormat, SampleLayout};
+        use zenpixels_convert::DualLayerHdrView;
+        use zenpixels_convert::gainmap::{GainMapApplyConfig, apply_gain_map_with};
+
+        let base = PixelBuf::new(1, 1, PixelFormat::RGB8_SRGB).unwrap();
+        let gain = PixelBuf::new(
+            1,
+            1,
+            PixelFormat::new(
+                SampleLayout::GRAY8,
+                ColorSpace::Untagged {
+                    total_channels: 1,
+                    alpha: AlphaMode::None,
+                },
+            ),
+        )
+        .unwrap();
+        let dual = DualLayerHdrView::new(
+            base.as_view(),
+            gain.as_view(),
+            zenpixels::GainMapMetadata::sdr_to_hdr_stops(3.0).unwrap(),
+            None,
+            zenpixels::Orientation::Identity,
+        )
+        .unwrap();
+        let hdr = apply_gain_map_with(
+            &dual,
+            &GainMapApplyConfig::alternate_rendition(),
+            &enough::Unstoppable,
+        )
+        .unwrap();
+        assert_eq!(hdr.format().color.white(), Some(DiffuseWhite::BT2408));
+        let plan = resolve_color_emit(
+            &src_cicp(Cicp::SRGB),
+            &hdr.format().color,
+            &caps_avif(),
+            ColorEmitPolicy::Compact,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::new(1, 8, 0, true)));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn anchored_gray_color_can_synthesize_gray_icc() {
+        let gray = ColorSpace::Gray {
+            transfer: Transfer::Linear,
+            range: SignalRange::Full,
+            alpha: zenpixels::AlphaMode::None,
+            white: Some(zenpixels::DiffuseWhite::BT2408),
+        };
+        let plan = resolve_color_emit(
+            &SourceColor::default(),
+            &gray,
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, None);
+        assert_eq!(
+            plan.icc,
+            IccDisposition::SynthesizeGrayFrom(Cicp::new(1, 8, 0, true))
+        );
+    }
+
+    #[test]
+    fn jpeg_keeps_matching_adobe_rgb_profile() {
+        use zenpixels_convert::icc_profiles::ADOBE_RGB;
+        let source = SourceColor::default().with_icc_profile(ADOBE_RGB);
+        let jpeg_plan = |transfer, range| {
+            resolve_color_emit(
+                &source,
+                &ColorSpace::Rgb {
+                    primaries: Primaries::AdobeRgb,
+                    transfer,
+                    range,
+                    alpha: zenpixels::AlphaMode::None,
+                    white: None,
+                },
+                &caps_jpeg(),
+                ColorEmitPolicy::Balanced,
+            )
+        };
+        let plan = jpeg_plan(Transfer::AdobeRgb, SignalRange::Full).unwrap();
+        assert_eq!(plan.icc, IccDisposition::KeepSource);
+        assert_eq!(plan.cicp, None);
+        assert_eq!(
+            jpeg_plan(Transfer::Linear, SignalRange::Full),
+            Err(ColorEmitError::Unrepresentable)
+        );
+        assert_eq!(
+            jpeg_plan(Transfer::AdobeRgb, SignalRange::Narrow),
+            Err(ColorEmitError::Unrepresentable)
+        );
+    }
+
+    #[test]
+    fn verbatim_preserves_bt709_transfer_aliases() {
+        let active = Cicp::new(9, 1, 0, true)
+            .to_color_space(zenpixels::AlphaMode::None)
+            .unwrap();
+        let plan = |raw| {
+            resolve_color_emit(
+                &src_cicp(raw),
+                &active,
+                &caps_avif(),
+                ColorEmitPolicy::Verbatim,
+            )
+        };
+        for tc in [1, 6, 14, 15] {
+            let raw = Cicp::new(9, tc, 0, true);
+            assert_eq!(plan(raw).unwrap().cicp, Some(raw));
+        }
+        for raw in [
+            Cicp::new(1, 14, 0, true),
+            Cicp::new(9, 14, 9, true),
+            Cicp::new(9, 14, 0, false),
+            Cicp::new(9, 13, 0, true),
+        ] {
+            assert_eq!(plan(raw), Err(ColorEmitError::Unrepresentable));
+        }
+    }
+
     #[test]
     fn jxl_balanced_strips_representable_icc() {
         // JXL (sole-safe) with CICP declared authoritative + a redundant ICC
@@ -413,10 +667,16 @@ mod tests {
         // default). Dropping is safe because CICP is the *declared* truth here.
         let src = SourceColor::default()
             .with_cicp(Cicp::SRGB)
-            .with_icc_profile(alloc::vec![0u8; 132])
+            .with_icc_profile(rgb_profile(Cicp::DISPLAY_P3))
             .with_color_authority(ColorAuthority::Cicp)
             .with_channel_count(3);
-        let plan = resolve_color_emit(&src, &caps_jxl(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_jxl(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::SRGB));
         assert_eq!(plan.icc, IccDisposition::Drop);
     }
@@ -428,12 +688,21 @@ mod tests {
         // NOT be dropped on a sole-safe target in favor of that CICP — doing so
         // mis-tags / precision-loses when the CICP doesn't represent the ICC. Here
         // the ICC isn't identifiable as code points, so no CICP can stand in for it.
+        let mut opaque_profile = alloc::vec![0; 132];
+        opaque_profile[16..20].copy_from_slice(b"RGB ");
+        opaque_profile[36..40].copy_from_slice(b"acsp");
         let src = SourceColor::default()
             .with_cicp(Cicp::SRGB)
-            .with_icc_profile(alloc::vec![0u8; 132]) // present, unidentifiable, authoritative
+            .with_icc_profile(opaque_profile) // present, unidentifiable, authoritative
             .with_color_authority(ColorAuthority::Icc)
             .with_channel_count(3);
-        let plan = resolve_color_emit(&src, &caps_jxl(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_jxl(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(
             plan.icc,
             IccDisposition::KeepSource,
@@ -441,7 +710,7 @@ mod tests {
         );
         assert_eq!(
             plan.cicp, None,
-            "no CICP can represent the unidentifiable authoritative ICC"
+            "an unidentified authoritative profile has no equivalent CICP"
         );
     }
 
@@ -450,8 +719,14 @@ mod tests {
         // AVIF nclx is not sole-safe (vips and ImageMagick act only on the ICC,
         // imazen/zencodec#132): a non-sRGB ICC is kept next to the nclx under
         // Balanced. The sole-safe drop is JXL's (`jxl_balanced_strips_representable_icc`).
-        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
-        let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
+        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_avif(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::KeepSource);
     }
@@ -460,7 +735,13 @@ mod tests {
     fn jpeg_synthesizes_icc_from_cicp() {
         // CICP-only source → JPEG (no CICP carrier): synthesize an ICC.
         let src = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&src, &caps_jpeg(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_jpeg(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, None);
         assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
     }
@@ -469,8 +750,14 @@ mod tests {
     fn compact_strips_icc_on_avif() {
         // Compact drops the ICC wherever CICP represents the color, even on AVIF
         // (where vips and ImageMagick then show sRGB: the documented cost).
-        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
-        let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Compact);
+        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_avif(),
+            ColorEmitPolicy::Compact,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::Drop);
     }
@@ -479,27 +766,140 @@ mod tests {
     fn compatibility_always_keeps_or_synthesizes_icc() {
         // CICP-only source, AVIF, Compatibility → CICP emitted AND an ICC synthesized.
         let src = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&src, &caps_avif(), ColorEmitPolicy::Compatibility);
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_avif(),
+            ColorEmitPolicy::Compatibility,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
     }
 
     #[test]
-    fn grayscale_keeps_icc_suppresses_cicp() {
-        // A 1-channel source: CICP is inapplicable; keep ICC, suppress CICP.
-        let src = SourceColor::default()
-            .with_icc_profile(alloc::vec![0u8; 132])
-            .with_channel_count(1);
-        let plan = resolve_color_emit(&src, &caps_avif(), ColorEmitPolicy::Balanced);
-        assert_eq!(plan.cicp, None);
-        assert_eq!(plan.icc, IccDisposition::KeepSource);
+    fn gray_and_gray_alpha_require_gray_profiles() {
+        use zenpixels::{AlphaMode, Transfer};
+        use zenpixels_convert::icc_profiles::SynthesizedIcc;
+        let source = src_cicp(Cicp::new(1, 8, 0, true));
+        for alpha in [AlphaMode::None, AlphaMode::Straight] {
+            let color = ColorSpace::Gray {
+                transfer: Transfer::Linear,
+                alpha,
+                range: SignalRange::Full,
+                white: None,
+            };
+            let plan = resolve_color_emit(&source, &color, &caps_png(), ColorEmitPolicy::Balanced)
+                .unwrap();
+            assert_eq!(plan.cicp, None);
+            let IccDisposition::SynthesizeGrayFrom(cicp) = plan.icc else {
+                panic!("expected GRAY profile")
+            };
+            let SynthesizedIcc::Profile(icc) = SynthesizedIcc::for_gray_cicp(cicp) else {
+                panic!("GRAY profile unavailable")
+            };
+            assert_eq!(&icc[16..20], b"GRAY");
+        }
+    }
+
+    #[test]
+    fn unsupported_carriers_require_refusal_or_native_cicp() {
+        use zenpixels_convert::icc_profiles::SynthesizedIcc;
+        let no_carrier = EncodeCapabilities::new();
+        for policy in [
+            ColorEmitPolicy::Balanced,
+            ColorEmitPolicy::Compact,
+            ColorEmitPolicy::Compatibility,
+            ColorEmitPolicy::Verbatim,
+        ] {
+            for source in [
+                src_cicp(Cicp::DISPLAY_P3),
+                src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3)),
+            ] {
+                assert_eq!(
+                    resolve_color_emit(&source, &current_color(&source), &no_carrier, policy),
+                    Err(ColorEmitError::Unrepresentable)
+                );
+            }
+        }
+        let hlg = src_cicp(Cicp::BT2100_HLG_RGB);
+        assert_eq!(
+            SynthesizedIcc::for_cicp(Cicp::BT2100_HLG_RGB),
+            SynthesizedIcc::Unsupported
+        );
+        assert_eq!(
+            resolve_color_emit(
+                &hlg,
+                &current_color(&hlg),
+                &caps_jpeg(),
+                ColorEmitPolicy::Balanced
+            ),
+            Err(ColorEmitError::Unrepresentable)
+        );
+        let plan = resolve_color_emit(
+            &hlg,
+            &current_color(&hlg),
+            &caps_png(),
+            ColorEmitPolicy::Compatibility,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::BT2100_HLG_RGB));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+        let drop = ColorEmitPolicy::Custom(ColorEmitFields::new(
+            IccRetention::Drop,
+            CicpEmission::Never,
+        ));
+        assert_eq!(
+            resolve_color_emit(
+                &src_cicp(Cicp::DISPLAY_P3),
+                &current_color(&src_cicp(Cicp::DISPLAY_P3)),
+                &caps_png(),
+                drop
+            ),
+            Err(ColorEmitError::Unrepresentable)
+        );
+
+        let plan = resolve_color_emit(
+            &src_cicp(Cicp::DISPLAY_P3),
+            &current_color(&src_cicp(Cicp::DISPLAY_P3)),
+            &caps_jpeg(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
+        let IccDisposition::SynthesizeFrom(cicp) = plan.icc else {
+            panic!("expected RGB profile")
+        };
+        let SynthesizedIcc::Profile(icc) = SynthesizedIcc::for_cicp(cicp) else {
+            panic!("RGB profile unavailable")
+        };
+        assert_eq!(&icc[16..20], b"RGB ");
+    }
+
+    #[test]
+    fn corrected_pixels_do_not_reuse_conflicting_source_profile() {
+        let source = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(
+            &source,
+            &ColorSpace::SRGB,
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
+        assert_eq!(plan.cicp, Some(Cicp::SRGB));
+        assert_eq!(plan.icc, IccDisposition::Drop);
     }
 
     #[test]
     fn verbatim_passes_source_through() {
         // Verbatim keeps both, derives nothing.
-        let src = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
-        let plan = resolve_color_emit(&src, &caps_avif(), ColorEmitPolicy::Verbatim);
+        let src = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_avif(),
+            ColorEmitPolicy::Verbatim,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::KeepSource);
     }
@@ -514,8 +914,14 @@ mod tests {
         // PNG: standardized cICP carrier but not sole-safe → emit cICP AND keep
         // iCCP. Regression for the missing valid-carrier tier — a non-authority
         // carrier must still emit CICP under Balanced.
-        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
-        let plan = resolve_color_emit(&p3, &caps_png(), ColorEmitPolicy::Balanced);
+        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::KeepSource);
     }
@@ -525,7 +931,13 @@ mod tests {
         // CICP-only sRGB → JPEG (no carrier): sRGB is the assumed default and the
         // canned table has no sRGB profile → drop, never SynthesizeFrom(sRGB).
         let src = src_cicp(Cicp::SRGB);
-        let plan = resolve_color_emit(&src, &caps_jpeg(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &src,
+            &current_color(&src),
+            &caps_jpeg(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, None);
         assert_eq!(plan.icc, IccDisposition::Drop);
     }
@@ -536,7 +948,13 @@ mod tests {
         // from sRGB, so a target with no CICP carrier needs a profile for it.
         // (1, 13) and (2, 1) stay the assumed default.
         let bt709 = src_cicp(Cicp::new(1, 1, 0, true));
-        let plan = resolve_color_emit(&bt709, &caps_jpeg(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &bt709,
+            &current_color(&bt709),
+            &caps_jpeg(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(
             plan.icc,
             IccDisposition::SynthesizeFrom(Cicp::new(1, 1, 0, true))
@@ -546,7 +964,13 @@ mod tests {
             Cicp::new(2, 1, 0, true),
             Cicp::new(2, 2, 0, true),
         ] {
-            let plan = resolve_color_emit(&src_cicp(c), &caps_jpeg(), ColorEmitPolicy::Balanced);
+            let plan = resolve_color_emit(
+                &src_cicp(c),
+                &current_color(&src_cicp(c)),
+                &caps_jpeg(),
+                ColorEmitPolicy::Balanced,
+            )
+            .unwrap();
             assert_eq!(plan.icc, IccDisposition::Drop, "{c:?}");
         }
     }
@@ -558,8 +982,8 @@ mod tests {
             IccRetention::Keep,
             CicpEmission::Never,
         ));
-        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
-        let plan = resolve_color_emit(&p3, &caps_avif(), policy);
+        let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(rgb_profile(Cicp::DISPLAY_P3));
+        let plan = resolve_color_emit(&p3, &current_color(&p3), &caps_avif(), policy).unwrap();
         assert_eq!(plan.cicp, None); // CicpEmission::Never
         assert_eq!(plan.icc, IccDisposition::KeepSource); // IccRetention::Keep
     }
@@ -569,7 +993,13 @@ mod tests {
         // CICP-only (no source ICC) → PNG under Balanced: cICP is a valid but NOT
         // sole-safe carrier, so synthesize a companion ICC rather than ship cICP alone.
         let p3 = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&p3, &caps_png(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
     }
@@ -580,7 +1010,13 @@ mod tests {
         // so a CICP-only source gets a synthesized ICC next to the nclx, as PNG
         // does. Only JXL ships CICP alone (`jxl_balanced_cicp_only_needs_no_companion`).
         let p3 = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_avif(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
     }
@@ -590,7 +1026,13 @@ mod tests {
         // Compact is "smallest": it accepts cICP-only even on a non-sole-safe carrier,
         // so it must NOT synthesize a companion (guards against over-synth).
         let p3 = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&p3, &caps_png(), ColorEmitPolicy::Compact);
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_png(),
+            ColorEmitPolicy::Compact,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::Drop);
     }
@@ -600,7 +1042,13 @@ mod tests {
         // sRGB is the assumed default and the canned table has no sRGB ICC, so even on
         // a non-sole-safe carrier Balanced must not synthesize a redundant companion.
         let srgb = src_cicp(Cicp::SRGB);
-        let plan = resolve_color_emit(&srgb, &caps_png(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &srgb,
+            &current_color(&srgb),
+            &caps_png(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.icc, IccDisposition::Drop);
     }
 
@@ -608,7 +1056,13 @@ mod tests {
     fn jxl_balanced_cicp_only_needs_no_companion() {
         // JXL enum color IS sole-safe → a CICP-only source needs no companion ICC.
         let p3 = src_cicp(Cicp::DISPLAY_P3);
-        let plan = resolve_color_emit(&p3, &caps_jxl(), ColorEmitPolicy::Balanced);
+        let plan = resolve_color_emit(
+            &p3,
+            &current_color(&p3),
+            &caps_jxl(),
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
         assert_eq!(plan.icc, IccDisposition::Drop);
     }

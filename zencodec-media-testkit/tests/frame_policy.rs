@@ -10,6 +10,8 @@ use std::{
     },
 };
 use zencodec::how_far::NoPulse;
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     At,
     frame::{FrameGeometry, FrameInterpretation, FrameTiming, PlaneRole},
@@ -27,31 +29,29 @@ use zencodec_media::{
     session::{CodecConfig, Receive, SendStatus, SessionError, VideoDecoder, VideoStreamInfo},
     track::CodecId,
 };
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
 
 fn frame(budget: &StorageBudget, i: u16) -> Frame {
     let mut words = budget.words(8).unwrap();
     words
         .as_mut_slice()
         .copy_from_slice(&[i, 512, 1023, 60000, i + 1, 511, 1022, 60001]);
-    let encoding = SampleEncoding::new(zenpixels::ChannelType::U16, 10, 0).unwrap();
+    let encoding = SampleEncoding::new(zenpixels::SampleType::U16, 10, 0).unwrap();
     let picture = OwnedPlanes::new(
         vec![OwnedPlane::AccountedU16(
-            zenpixels::plane::Plane::new(words.freeze(), 3, 2, (8) / 2).unwrap(),
+            zencodec::plane::Plane::new(words.freeze(), 3, 2, (8) / 2).unwrap(),
         )],
         encoding,
     )
     .unwrap();
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(3, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(encoding),
+                        zencodec::plane::PlaneEncoding::Code(encoding),
                     )
                 })
                 .collect(),
@@ -191,10 +191,15 @@ impl VideoDecoder for Queued {
             .pop_front()
             .map_or(Receive::EndOfStream, Receive::Ready))
     }
-    fn end_input(&mut self) -> Result<(), SessionError<Native>> {
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(3)
     }
-    fn reset(&mut self) -> Result<(), SessionError<Native>> {
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(4)?;
         self.frames.clear();
         Ok(())
@@ -303,10 +308,10 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
         let mapping = output.map().unwrap();
         let plane = mapping.plane(0).unwrap();
         assert!(
-            matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [i as u16, 512, 1023])
+            matches!(plane, zencodec::plane::AnyPlane::U16(p) if p.row(0).unwrap() == [i as u16, 512, 1023])
         );
         assert!(
-            matches!(plane, zenpixels::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [i as u16 + 1, 511, 1022])
+            matches!(plane, zencodec::plane::AnyPlane::U16(p) if p.row(1).unwrap() == [i as u16 + 1, 511, 1022])
         );
     }
     assert_eq!(decoder.report().decisions().count(), 16);
@@ -341,8 +346,14 @@ fn assert_finished<R: zencodec::operation::OperationPolicy>(
         decoder.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
-    assert!(matches!(decoder.end_input(), Err(SessionError::Finished)));
-    assert!(matches!(decoder.reset(), Err(SessionError::Finished)));
+    assert!(matches!(
+        decoder.end_input(Some(&NoPulse)),
+        Err(SessionError::Finished)
+    ));
+    assert!(matches!(
+        decoder.reset(Some(&NoPulse)),
+        Err(SessionError::Finished)
+    ));
     assert_eq!(packet.bytes(), &[1]);
 }
 
@@ -382,7 +393,7 @@ fn stale_policy_choice_publishes_no_second_frame_and_releases_all_native_owners(
     );
     assert_finished(&mut decoder);
     assert_eq!(
-        zenpixels::sample::CodePlane::new(
+        zencodec::image::ComponentCodePlane::new(
             old.map().unwrap().plane(0).unwrap(),
             old.interpretation()
                 .uniform_code_encoding()
@@ -500,8 +511,8 @@ fn native_failure_in_every_work_method_is_terminal_with_original_cause() {
             0 => decoder.configure(&config(), Some(&NoPulse)),
             1 => decoder.send(&mut packet, Some(&NoPulse)).map(|_| ()),
             2 => decoder.receive(Some(&NoPulse)).map(|_| ()),
-            3 => decoder.end_input(),
-            _ => decoder.reset(),
+            3 => decoder.end_input(Some(&NoPulse)),
+            _ => decoder.reset(Some(&NoPulse)),
         }
         .unwrap_err();
         assert_eq!(zencodec::find_cause::<Native>(&error).unwrap().0, method);
@@ -530,7 +541,7 @@ fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_e
     use zencodec::{
         encode::Fidelity,
         operation::{
-            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+            FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, FrameSummary,
             Selection, resolve_frame_route,
         },
     };
@@ -539,7 +550,7 @@ fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_e
     let mut unknown = FrameRouteOffer::new(FrameRoute::Continue);
     unknown.fidelity = Some(Fidelity::Lossless);
     let mut clipping = unknown;
-    clipping.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
+    clipping.conversion = Some(FrameConversionOffer::new(FrameSummary::new(
         held.interpretation(),
         held.timing(),
     )));
@@ -604,7 +615,7 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
     use zencodec::{
         encode::Fidelity,
         operation::{
-            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+            FrameConversionOffer, FrameRoute, FrameRouteOffer, FrameRouteState, FrameSummary,
             resolve_frame_route,
         },
     };
@@ -614,7 +625,7 @@ fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_ev
     encoder_only.fidelity = Some(Fidelity::Lossless);
     encoder_only.workspace_upper_bound = Some(16);
     let mut changes_samples = encoder_only;
-    changes_samples.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
+    changes_samples.conversion = Some(FrameConversionOffer::new(FrameSummary::new(
         held.interpretation(),
         held.timing(),
     )));
@@ -663,62 +674,52 @@ fn required_unknown_workspace_refuses_every_native_entry_before_effects() {
     use zencodec::operation::{
         BoundPolicy, PolicyRequirement, RequirementEvidence, UnmetRequirements,
     };
-    for bound in [false, true] {
-        for entry in 0..5 {
-            let budget = StorageBudget::new(16, 1);
-            let held = frame(&budget, 0);
-            let owner = Arc::downgrade(held.picture());
-            let native = Queued::new([held]);
-            let calls = native.calls.clone();
-            let decisions = Arc::new(AtomicUsize::new(0));
-            let observed = decisions.clone();
-            let required = PolicySet::new().with_workspace_limit(u64::MAX);
-            let policy = BoundPolicy::new(
-                if bound { required } else { PolicySet::new() },
-                move |_: Question<'_>| -> Result<Decision, At<Infallible>> {
-                    observed.fetch_add(1, Ordering::SeqCst);
-                    Ok(Decision::UsePreset)
-                },
-            );
-            let mut decoder = PolicyDecoder::new(native, policy).with_policy_set(if bound {
-                PolicySet::new()
-            } else {
-                required
-            });
-            let error = match entry {
-                0 => decoder.configure(&config(), None),
-                1 => decoder
-                    .send(&mut Packet::from_vec(vec![1]).unwrap(), None)
-                    .map(|_| ()),
-                2 => decoder.receive(None).map(|_| ()),
-                3 => decoder.end_input(),
-                _ => decoder.reset(),
-            }
-            .unwrap_err();
-            assert_eq!(
-                calls.load(Ordering::SeqCst),
-                0,
-                "entry {entry}, bound {bound}"
-            );
-            assert_eq!(decisions.load(Ordering::SeqCst), 0);
-            let SessionError::Codec(error) = error else {
-                panic!("missing policy error")
-            };
-            assert_eq!(error.stage(), Stage::Policy);
-            let unmet = error
-                .source()
-                .unwrap()
-                .downcast_ref::<UnmetRequirements>()
-                .unwrap();
-            assert_eq!(
-                unmet.iter().collect::<Vec<_>>(),
-                vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
-            );
-            assert!(decoder.is_failed());
-            assert!(owner.upgrade().is_none());
-            assert_eq!(budget.reserved_bytes(), 0);
-            assert!(matches!(decoder.receive(None), Err(SessionError::Finished)));
+    for entry in 0..5 {
+        let budget = StorageBudget::new(16, 1);
+        let held = frame(&budget, 0);
+        let owner = Arc::downgrade(held.picture());
+        let native = Queued::new([held]);
+        let calls = native.calls.clone();
+        let decisions = Arc::new(AtomicUsize::new(0));
+        let observed = decisions.clone();
+        let required = PolicySet::new().with_workspace_limit(u64::MAX);
+        let policy = BoundPolicy::new(
+            required,
+            move |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                observed.fetch_add(1, Ordering::SeqCst);
+                Ok(Decision::UsePreset)
+            },
+        );
+        let mut decoder = PolicyDecoder::new(native, policy);
+        let error = match entry {
+            0 => decoder.configure(&config(), None),
+            1 => decoder
+                .send(&mut Packet::from_vec(vec![1]).unwrap(), None)
+                .map(|_| ()),
+            2 => decoder.receive(None).map(|_| ()),
+            3 => decoder.end_input(None),
+            _ => decoder.reset(None),
         }
+        .unwrap_err();
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "entry {entry}");
+        assert_eq!(decisions.load(Ordering::SeqCst), 0);
+        let SessionError::Codec(error) = error else {
+            panic!("missing policy error")
+        };
+        assert_eq!(error.stage(), Stage::Policy);
+        let unmet = error
+            .source()
+            .unwrap()
+            .downcast_ref::<UnmetRequirements>()
+            .unwrap();
+        assert_eq!(
+            unmet.iter().collect::<Vec<_>>(),
+            vec![(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+        );
+        assert!(decoder.is_failed());
+        assert!(owner.upgrade().is_none());
+        assert_eq!(budget.reserved_bytes(), 0);
+        assert!(matches!(decoder.receive(None), Err(SessionError::Finished)));
     }
 }
 

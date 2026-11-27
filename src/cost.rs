@@ -3,7 +3,18 @@
 //! [`OutputInfo`] describes what a decode will produce given current hints.
 
 use crate::Orientation;
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
+
+/// Exact timing of a successfully delivered animation frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameCompletion {
+    /// Duration as stored by the source.
+    pub duration: crate::animation::FrameDuration,
+    /// Zero-based display index.
+    pub frame_index: u32,
+    /// Source presentation timestamp, when available.
+    pub pts: Option<crate::time::Timestamp>,
+}
 
 /// Predicted output from a decode operation.
 ///
@@ -33,9 +44,9 @@ pub struct OutputInfo {
     /// Pixel format the decoder will produce natively (for `decode()`).
     ///
     /// For `decode_into()`, use any format from
-    /// [`supported_descriptors()`](crate::decode::DecoderConfig::supported_descriptors) —
+    /// [`supported_pixel_formats()`](crate::decode::DecoderConfig::supported_pixel_formats) —
     /// this field tells you what the codec would pick if you let it choose.
-    pub native_format: PixelDescriptor,
+    pub native_format: PixelFormat,
     /// Whether the output has an alpha channel.
     pub has_alpha: bool,
     /// Orientation the decoder will apply internally.
@@ -54,18 +65,21 @@ pub struct OutputInfo {
     /// May differ from the crop hint due to block alignment (JPEG MCU
     /// boundaries, AV1 superblock alignment, etc.). `None` if no crop.
     pub crop_applied: Option<[u32; 4]>,
+    /// Timing of an animation frame delivered to a sink.
+    pub frame: Option<FrameCompletion>,
 }
 
 impl OutputInfo {
     /// Create an `OutputInfo` for a simple full-frame decode (no hints applied).
-    pub fn full_decode(width: u32, height: u32, native_format: PixelDescriptor) -> Self {
+    pub fn full_decode(width: u32, height: u32, native_format: PixelFormat) -> Self {
         Self {
             width,
             height,
+            has_alpha: crate::helpers::has_alpha(&native_format),
             native_format,
-            has_alpha: native_format.has_alpha(),
             orientation_applied: Orientation::Identity,
             crop_applied: None,
+            frame: None,
         }
     }
 
@@ -87,12 +101,18 @@ impl OutputInfo {
         self
     }
 
+    /// Attach exact timing for a completed animation frame.
+    pub fn with_frame(mut self, frame: FrameCompletion) -> Self {
+        self.frame = Some(frame);
+        self
+    }
+
     /// Minimum buffer size in bytes for the native format (no padding).
     ///
     /// This is `width * height * bytes_per_pixel`. For aligned/strided
-    /// buffers, use [`PixelDescriptor::aligned_stride()`] instead.
+    /// buffers, use [`zenpixels::SampleLayout::aligned_stride()`] instead.
     pub fn buffer_size(&self) -> u64 {
-        self.width as u64 * self.height as u64 * self.native_format.bytes_per_pixel() as u64
+        self.width as u64 * self.height as u64 * self.native_format.layout.bytes_per_pixel() as u64
     }
 
     /// Pixel count (`width * height`).
@@ -104,11 +124,11 @@ impl OutputInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::PixelDescriptor;
+    use zenpixels::PixelFormat;
 
     #[test]
     fn output_info_full_decode() {
-        let info = OutputInfo::full_decode(10, 5, PixelDescriptor::RGBA8_SRGB);
+        let info = OutputInfo::full_decode(10, 5, PixelFormat::RGBA8_SRGB);
         assert_eq!(info.buffer_size(), 200); // 10*5*4
         assert_eq!(info.pixel_count(), 50); // 10*5
         assert!(info.has_alpha); // RGBA8 has alpha

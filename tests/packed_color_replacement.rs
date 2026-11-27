@@ -3,22 +3,22 @@ use std::sync::{
     Arc,
     atomic::{AtomicU8, Ordering},
 };
+use zencodec::sample::SampleEncoding;
+use zencodec::sample::{ChromaSiting, ChromaSubsampling};
 use zencodec::{
     At,
     frame::MapError,
     image::{
         Auxiliary, AuxiliaryImageOwner, AuxiliaryKind, ImageGeometry, ImageInterpretation,
-        ImageOutput, Meaning, OutputError, PackedImageOwner, Rect, Samples, SourcePrecision,
+        ImageOutput, Meaning, OutputError, PackedImageOwner, Rect, Samples, SourceSampleFormat,
         ValueSlice,
     },
     operation::{
-        Decision, Decline, ImageFacts, PolicySet, PublicationOffer, Question, resolve_image,
+        Decision, Decline, ImageSummary, PolicySet, PublicationOffer, Question, resolve_image,
     },
     storage::{SharedStorage, StorageBudget},
 };
-use zenpixels::sample::SampleEncoding;
-use zenpixels::sample::{ChromaSiting, ChromaSubsampling};
-use zenpixels::{ChannelType, ColorContext, Orientation, PixelDescriptor, PixelSlice};
+use zenpixels::{ColorSpace, Orientation, PixelFormat, PixelView, SampleType};
 
 #[derive(Debug)]
 struct NativeMapFailure;
@@ -35,21 +35,35 @@ struct Owner {
     mode: Arc<AtomicU8>,
 }
 impl PackedImageOwner for Owner {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         let mode = self.mode.load(Ordering::SeqCst);
-        let pixels = PixelSlice::new(
+        let pixels = PixelView::new_with_format_cow(
             self.pixels.as_slice(),
             if mode == 1 { 1 } else { 2 },
             2,
             9,
-            PixelDescriptor::RGB8_SRGB,
+            if mode == 3 {
+                use zenpixels_convert::icc_profiles::SynthesizedIcc;
+                let SynthesizedIcc::Profile(profile) =
+                    SynthesizedIcc::for_cicp(zencodec::Cicp::DISPLAY_P3)
+                else {
+                    panic!("expected a real RGB profile");
+                };
+                zenpixels::FormatCow::from_owned(PixelFormat::new(
+                    zenpixels::SampleLayout::RGB8,
+                    ColorSpace::Icc {
+                        profile: Arc::from(profile.as_ref()),
+                        color_channels: 3,
+                        alpha: zenpixels::AlphaMode::None,
+                        intent: zenpixels::RenderingIntent::RelativeColorimetric,
+                    },
+                ))
+            } else {
+                zenpixels::FormatCow::Borrowed(&zenpixels::formats::RGB8_SRGB)
+            },
         )
         .unwrap();
-        Ok(if mode == 3 {
-            pixels.with_color_context(Arc::new(ColorContext::from_icc(vec![1, 2, 3])))
-        } else {
-            pixels
-        })
+        Ok(pixels)
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
         if self.mode.load(Ordering::SeqCst) == 2 {
@@ -58,7 +72,7 @@ impl PackedImageOwner for Owner {
             )))));
         }
         match (&self.auxiliary, index) {
-            (Some(data), 0) => ValueSlice::new(data.as_slice(), 2, 2, 3, ChannelType::U8).map(Some),
+            (Some(data), 0) => ValueSlice::new(data.as_slice(), 2, 2, 3, SampleType::U8).map(Some),
             _ => Ok(None),
         }
     }
@@ -83,7 +97,7 @@ fn image_from(owner: impl PackedImageOwner + 'static, extras: bool) -> ImageOutp
         vec![Auxiliary {
             kind: AuxiliaryKind::Depth,
             name: "source depth".to_owned(),
-            source_precision: SourcePrecision::Integer {
+            source_sample_format: SourceSampleFormat::Integer {
                 bits: 7,
                 signed: false,
             },
@@ -127,16 +141,16 @@ impl AuxiliaryImageOwner for SeparateAuxiliary {
         }
         match self.mode.load(Ordering::SeqCst) {
             1 => Ok(None),
-            2 => ValueSlice::new(self.values.as_slice(), 1, 2, 3, ChannelType::U8).map(Some),
+            2 => ValueSlice::new(self.values.as_slice(), 1, 2, 3, SampleType::U8).map(Some),
             3 => Err(At::wrap(OutputError::Mapping(MapError::Backend(Box::new(
                 At::wrap(NativeMapFailure).at_named("separate auxiliary mapping"),
             ))))),
-            _ => ValueSlice::new(self.values.as_slice(), 2, 2, 3, ChannelType::U8).map(Some),
+            _ => ValueSlice::new(self.values.as_slice(), 2, 2, 3, SampleType::U8).map(Some),
         }
     }
 }
 impl PackedImageOwner for Separable {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
         self.packed.pixels()
     }
     fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
@@ -199,7 +213,7 @@ fn separate_auxiliary_releases_old_color_but_respects_original_clones_and_repeat
     let last = first.replace_packed_color(color).unwrap();
     assert_eq!(charges(&pool), (24, 2));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
-    let facts = ImageFacts::new(&last);
+    let facts = ImageSummary::new(&last);
     assert_eq!((facts.planes, facts.auxiliaries), (2, 1));
     {
         let mapped = last.map().unwrap();
@@ -332,7 +346,7 @@ fn packed_color_replacement_retains_auxiliary_addresses_and_flattens_repeated_re
     assert_eq!(charges(&pool), (60, 4));
     let last = first.replace_packed_color(color).unwrap();
     assert_eq!(charges(&pool), (42, 3)); // intermediate color is gone
-    let facts = ImageFacts::new(&last);
+    let facts = ImageSummary::new(&last);
     assert_eq!((facts.planes, facts.auxiliaries), (2, 1));
     {
         let map = last.map().unwrap();
@@ -388,14 +402,14 @@ fn packed_color_replacement_refuses_component_codes_without_mapping_them() {
     }
     let interpretation = FrameInterpretation::new(
         FrameGeometry::full(2, 2),
-        zenpixels::plane::PlanarLayout::new(
+        zencodec::plane::PlanarLayout::new(
             (vec![PlaneRole::Luma])
                 .into_iter()
                 .map(|role| {
-                    zenpixels::plane::PlaneSpec::new(
+                    zencodec::plane::PlaneSpec::new(
                         role,
-                        zenpixels::plane::PlaneEncoding::Code(
-                            SampleEncoding::new(ChannelType::U8, 8, 0).unwrap(),
+                        zencodec::plane::PlaneEncoding::Code(
+                            SampleEncoding::new(SampleType::U8, 8, 0).unwrap(),
                         ),
                     )
                 })

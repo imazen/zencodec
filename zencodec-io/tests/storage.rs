@@ -11,7 +11,7 @@ fn subviews_keep_the_backing_charge_until_the_last_owner_drops() {
     let tail = shared.slice(20..24).unwrap();
     let nested = tail.slice(1..3).unwrap();
     assert_eq!(nested.as_slice(), &[21, 22]);
-    assert_eq!(nested.charged_bytes(), 24);
+    assert_eq!(nested.backing_allocation_bytes(), 24);
     assert_eq!(budget.reserved_bytes(), 24);
     assert_eq!(budget.reserved_objects(), 1);
     drop(shared);
@@ -47,11 +47,11 @@ fn typed_storage_charges_words_and_padding_and_never_infers_logical_pixels() {
     assert_eq!(floats.as_slice(), &[0.0; 4]);
     assert_eq!(budget.reserved_bytes(), 32);
     let words = words.freeze();
-    assert_eq!(words.charged_bytes(), 16);
+    assert_eq!(words.backing_allocation_bytes(), 16);
     assert_eq!(words.as_slice(), &[0, 1023, 512, 7, 65535, 2048, 9, 10]);
     drop(floats);
     assert_eq!(budget.reserved_bytes(), 16);
-    assert_eq!(words.slice(7..8).unwrap().charged_bytes(), 16);
+    assert_eq!(words.slice(7..8).unwrap().backing_allocation_bytes(), 16);
 }
 
 #[test]

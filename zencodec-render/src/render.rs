@@ -10,8 +10,14 @@ use zencodec::{
     },
     storage::{SharedStorage, StorageBudget, StorageError},
 };
-use zenpixels::{Cicp, ColorContext, ColorOrigin, PixelDescriptor, PixelSlice, PixelSliceMut};
-use zenpixels_convert::{ConvertOptions, OutputPlan, OutputProfile, cms::PluggableCms};
+use zenpixels::{
+    Cicp, ColorOrigin, ColorSpace, FormatCow, HdrMetadata, PixelFormat, PixelView, Primaries,
+    RenderingIntent, SignalRange, Transfer,
+};
+use zenpixels_convert::{
+    CmsBackend, CmsBinding, CmsChoice, CmsQuote, ColorServices, ConvertError, ConvertPolicy,
+    RowPlan,
+};
 
 /// Current means current samples, not the original file's pre-transform space.
 /// Explicit targets never consult opaque source extensions for color authority.
@@ -29,31 +35,31 @@ pub enum ColorTarget {
 pub struct RenderRequest {
     /// Required output color space.
     pub target: ColorTarget,
-    /// Required packed pixel descriptor, including alpha interpretation.
-    pub required: PixelDescriptor,
+    /// Required packed pixel format, including layout and alpha interpretation.
+    pub required: PixelFormat,
     /// Oriented canvas coordinates. None requests the full oriented canvas.
     pub region: Option<Rect>,
     /// Explicit conversion behavior, including clipping and channel loss.
-    pub conversion: ConvertOptions,
+    pub conversion: ConvertPolicy,
 }
 impl Default for RenderRequest {
     fn default() -> Self {
         Self {
             target: ColorTarget::Named(Cicp::new(1, 13, 0, true)),
-            required: PixelDescriptor::RGBA8_SRGB,
+            required: PixelFormat::RGBA8_SRGB,
             region: None,
-            conversion: ConvertOptions::permissive(),
+            conversion: ConvertPolicy::permissive(),
         }
     }
 }
 impl RenderRequest {
-    /// Require a descriptor in the current sample color space.
-    pub fn new(required: PixelDescriptor) -> Self {
+    /// Require a pixel format in the current sample color space.
+    pub fn new(required: PixelFormat) -> Self {
         Self {
             target: ColorTarget::Current,
             required,
             region: None,
-            conversion: ConvertOptions::retain_channels(),
+            conversion: ConvertPolicy::lossless(),
         }
     }
     /// Set an explicit output color space.
@@ -67,7 +73,7 @@ impl RenderRequest {
         self
     }
     /// Set explicit conversion behavior.
-    pub fn with_conversion(mut self, conversion: ConvertOptions) -> Self {
+    pub fn with_conversion(mut self, conversion: ConvertPolicy) -> Self {
         self.conversion = conversion;
         self
     }
@@ -125,38 +131,46 @@ struct Color {
     width: u32,
     rows: u32,
     stride: usize,
-    descriptor: PixelDescriptor,
-    context: Arc<ColorContext>,
+    format: PixelFormat,
+    origin: Option<ColorOrigin>,
+    hdr: HdrMetadata,
 }
 impl PackedImageOwner for Color {
-    fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
-        PixelSlice::new(
+    fn pixels(&self) -> Result<PixelView<'_>, At<OutputError>> {
+        let mut pixels = PixelView::new_with_format_cow(
             bytemuck::cast_slice(self.data.as_slice()),
             self.width,
             self.rows,
             self.stride,
-            self.descriptor,
+            FormatCow::Borrowed(&self.format),
         )
-        .map(|pixels| pixels.with_color_context(self.context.clone()))
         .map_err(|cause| {
             At::wrap(OutputError::Mapping(zencodec::frame::MapError::Backend(
                 Box::new(cause),
             )))
-        })
+        })?
+        .with_hdr(self.hdr);
+        if let Some(origin) = &self.origin {
+            pixels = pixels.with_origin(origin);
+        }
+        Ok(pixels)
     }
 }
 
 /// RenderRequest configuration and the admitted destination pool can be reused; a
-/// fresh OutputPlan binds each exact held source. Never cache by item/epoch alone.
-pub struct Renderer<'a> {
+/// fresh RowPlan binds each exact held source. Never cache by item/epoch alone.
+pub struct Renderer {
     /// Reusable requested presentation.
     pub request: RenderRequest,
     /// Managed output budget; excludes native codec and CMS workspace.
     pub storage: StorageBudget,
-    /// Optional color-management implementation. Unsupported conversions fail.
-    pub cms: Option<&'a dyn PluggableCms>,
+    /// Optional legacy CMS handle. Prefer [`color_services`](Self::color_services) for
+    /// named CMS bindings, strict no-ICC mode, and shared tone mapping.
+    pub cms: Option<Arc<dyn CmsBackend>>,
+    /// Shared color-management and tone-mapping service bundle.
+    pub color_services: ColorServices,
 }
-impl<'a> Renderer<'a> {
+impl Renderer {
     /// Render to sRGB RGBA8 over the full oriented canvas by default.
     /// Color conversion rounds depth reduction and clips to the display range.
     /// Use an explicit request for higher precision or extended-range output.
@@ -165,6 +179,7 @@ impl<'a> Renderer<'a> {
             request: RenderRequest::default(),
             storage,
             cms: None,
+            color_services: ColorServices::inherit(),
         }
     }
     /// Replace the reusable output requirements.
@@ -173,8 +188,16 @@ impl<'a> Renderer<'a> {
         self
     }
     /// Supply a CMS for profile conversions that require one.
-    pub fn with_cms(mut self, cms: &'a dyn PluggableCms) -> Self {
+    pub fn with_cms(mut self, cms: Arc<dyn CmsBackend>) -> Self {
+        let binding = CmsBinding::new("custom.cms", "unknown", cms.clone(), CmsQuote::new());
+        self.color_services = self.color_services.with_cms(CmsChoice::Use(binding));
         self.cms = Some(cms);
+        self
+    }
+    /// Supply explicit [`ColorServices`] (named CMS binding, `StrictNoIcc`, and/or tone mapper).
+    pub fn with_color_services(mut self, services: ColorServices) -> Self {
+        self.cms = services.cms.binding().map(|b| b.backend().clone());
+        self.color_services = services;
         self
     }
 
@@ -215,32 +238,15 @@ impl<'a> Renderer<'a> {
         policy: &mut R,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
-        self.admit(policy, PolicySet::new(), pulse)?;
+        self.admit(policy, pulse)?;
         let output = self.apply(image, pulse)?;
         resolve_image(output, policy, PolicySet::new(), pulse)
-            .map_err(|e| fail(RenderStage::Publication, e))
-    }
-
-    /// Compatibility entry point for separately configured presets.
-    /// Both sets of requirements apply; bound policy preferences take priority.
-    #[deprecated(note = "use render with a PolicySet or BoundPolicy")]
-    pub fn render_with_preset<R: OperationPolicy + ?Sized>(
-        &self,
-        image: ImageOutput,
-        resolver: &mut R,
-        preset: PolicySet,
-        pulse: Option<&dyn zencodec::Pulse>,
-    ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
-        self.admit(resolver, preset, pulse)?;
-        let output = self.apply(image, pulse)?;
-        resolve_image(output, resolver, preset, pulse)
             .map_err(|e| fail(RenderStage::Publication, e))
     }
 
     fn admit<R: OperationPolicy + ?Sized>(
         &self,
         policy: &R,
-        preset: PolicySet,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), At<RenderFailure>> {
         check(pulse.unwrap_or(&zencodec::NoPulse)).map_err(|e| fail(RenderStage::ColorPlan, e))?;
@@ -249,8 +255,62 @@ impl<'a> Renderer<'a> {
             .requirements()
             .unwrap_or_default()
             .check_workspace(None)
-            .and_then(|()| preset.check_workspace(None))
             .map_err(|e| fail(RenderStage::ColorPlan, e))
+    }
+
+    fn resolve_target_format(&self, source: &PixelFormat) -> Result<PixelFormat, Cause> {
+        let alpha = self.request.required.color.alpha();
+        let layout = self.request.required.layout;
+        let color = match &self.request.target {
+            ColorTarget::Current => source.color.clone().with_alpha(alpha),
+            ColorTarget::Named(cicp) => {
+                if cicp.matrix_coefficients != 0 {
+                    return Err(Box::new(At::wrap(ConvertError::UnsupportedRoute)));
+                }
+                let transfer = Transfer::from_cicp(cicp.transfer_characteristics)
+                    .ok_or_else(|| Box::new(At::wrap(ConvertError::UnsupportedRoute)))?;
+                let range = if cicp.full_range {
+                    SignalRange::Full
+                } else {
+                    SignalRange::Narrow
+                };
+                if layout.order.is_gray_family() {
+                    ColorSpace::Gray {
+                        transfer,
+                        alpha,
+                        range,
+                        white: None,
+                    }
+                } else {
+                    let primaries = Primaries::from_cicp(cicp.color_primaries)
+                        .ok_or_else(|| Box::new(At::wrap(ConvertError::UnsupportedRoute)))?;
+                    ColorSpace::Rgb {
+                        primaries,
+                        transfer,
+                        alpha,
+                        range,
+                        white: None,
+                    }
+                }
+            }
+            ColorTarget::Icc(profile) => ColorSpace::Icc {
+                profile: profile.clone(),
+                color_channels: if layout.order.is_gray_family() {
+                    1
+                } else if layout.order.is_cmyk_family() {
+                    4
+                } else {
+                    3
+                },
+                alpha,
+                intent: RenderingIntent::RelativeColorimetric,
+            },
+        };
+        let format = PixelFormat::new(layout, color);
+        format
+            .validate()
+            .map_err(|_| Box::new(At::wrap(ConvertError::UnsupportedRoute)) as Cause)?;
+        Ok(format)
     }
 
     fn apply(
@@ -260,23 +320,22 @@ impl<'a> Renderer<'a> {
     ) -> Result<ImageOutput, At<RenderFailure>> {
         let control = pulse.unwrap_or(&zencodec::NoPulse);
         check(control).map_err(|e| fail(RenderStage::ColorPlan, e))?;
+        let mut policy = self
+            .request
+            .conversion
+            .clone()
+            .with_color_services(&self.color_services);
+        if matches!(self.color_services.cms, CmsChoice::Inherit)
+            && let Some(cms) = &self.cms
+        {
+            policy = policy.with_cms(cms.clone());
+        }
         // Prepare the actual transform before allocating projected samples.
-        let mut plan = image
-            .with_pixels(|pixels| {
-                let target = match &self.request.target {
-                    ColorTarget::Current => OutputProfile::SameAsOrigin,
-                    ColorTarget::Named(cicp) => OutputProfile::Named(*cicp),
-                    ColorTarget::Icc(icc) => OutputProfile::Icc(icc.clone()),
-                };
-                OutputPlan::new_with_descriptor(
-                    pixels.descriptor(),
-                    pixels.color_context().cloned(),
-                    &ColorOrigin::assumed(),
-                    target,
-                    self.request.required,
-                    &self.request.conversion,
-                    self.cms,
-                )
+        let (target_format, plan) = image
+            .with_pixels(|pixels| -> Result<(PixelFormat, RowPlan), Cause> {
+                let target_format = self.resolve_target_format(pixels.format())?;
+                let plan = RowPlan::build(pixels.format(), &target_format, &policy, None)?;
+                Ok((target_format, plan))
             })
             .map_err(|e| fail(RenderStage::ColorPlan, e))?
             .map_err(|e| fail(RenderStage::ColorPlan, e))?;
@@ -286,21 +345,13 @@ impl<'a> Renderer<'a> {
         // replacement. Independently held caller clones remain charged.
         drop(image);
         let unchanged = projected
-            .with_pixels(|pixels| {
-                plan.borrow_rows(pixels.clone()).map(|borrowed| {
-                    borrowed.is_some_and(|view| {
-                        view.descriptor() == pixels.descriptor()
-                            && view.color_context() == pixels.color_context()
-                    })
-                })
-            })
-            .map_err(|e| fail(RenderStage::Color, e))?
+            .with_pixels(|pixels| plan.is_identity() && pixels.format() == &target_format)
             .map_err(|e| fail(RenderStage::Color, e))?;
         let output = if unchanged {
             projected
         } else {
             let color = projected
-                .with_pixels(|pixels| self.convert(pixels, &mut plan, control))
+                .with_pixels(|pixels| self.convert(pixels, &target_format, &plan, control))
                 .map_err(|e| fail(RenderStage::Color, e))?
                 .map_err(|e| fail(RenderStage::Color, e))?;
             projected
@@ -312,48 +363,49 @@ impl<'a> Renderer<'a> {
 
     fn convert(
         &self,
-        source: PixelSlice<'_>,
-        plan: &mut OutputPlan,
+        source: PixelView<'_>,
+        target_format: &PixelFormat,
+        plan: &RowPlan,
         pulse: &dyn zencodec::Pulse,
     ) -> Result<Color, Cause> {
-        let descriptor = plan.output_descriptor();
-        let (width, rows) = (source.width(), source.rows());
+        let (width, rows) = (source.width(), source.height());
+        let bpp = target_format.layout.bytes_per_pixel();
+        let row_bytes = (width as usize)
+            .checked_mul(bpp)
+            .ok_or(StorageError::SizeOverflow)?;
         let stride = (width as usize)
             .checked_add(8)
             .map(|n| n & !7)
-            .and_then(|n| n.checked_mul(descriptor.bytes_per_pixel()))
+            .and_then(|n| n.checked_mul(bpp))
             .ok_or(StorageError::SizeOverflow)?;
         let bytes = stride
             .checked_mul(rows as usize)
             .ok_or(StorageError::SizeOverflow)?;
         check(pulse)?;
-        plan.prepare(width)?;
-        check(pulse)?;
         let mut data = self.storage.filled(bytes / 8, 0xa5a5_a5a5_a5a5_a5a5u64)?;
-        let mut context = None;
         // Check cancellation between rows. Partially written storage remains
         // private and drops on failure; no resolver observes a partial image.
         for y in 0..rows {
             check(pulse)?;
             let offset = y as usize * stride;
-            let destination = PixelSliceMut::new(
-                &mut bytemuck::cast_slice_mut(data.as_mut_slice())[offset..offset + stride],
-                width,
-                1,
-                stride,
-                descriptor,
-            )?;
-            let converted = plan.convert_rows(source.crop_view(0, y, width, 1), destination)?;
-            context = converted.color_context().cloned();
+            let dst_row =
+                &mut bytemuck::cast_slice_mut(data.as_mut_slice())[offset..offset + row_bytes];
+            plan.convert_row_at(y, source.row(y), dst_row, width)?;
         }
         check(pulse)?;
+        let hdr = if target_format.can_represent_hdr() {
+            source.hdr()
+        } else {
+            HdrMetadata::default()
+        };
         Ok(Color {
             data: data.freeze(),
             width,
             rows,
             stride,
-            descriptor,
-            context: context.ok_or(OutputError::MissingPlane)?,
+            format: target_format.clone(),
+            origin: source.origin().cloned(),
+            hdr,
         })
     }
 }

@@ -6,8 +6,8 @@ use std::sync::{
 use zencodec::decode::*;
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
-const DESC: PixelDescriptor = PixelDescriptor::GRAY8_SRGB;
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
+const DESC: PixelFormat = PixelFormat::GRAY8_SRGB;
 struct Owner(Arc<AtomicUsize>);
 impl Drop for Owner {
     fn drop(&mut self) {
@@ -30,17 +30,15 @@ struct Sink {
 impl DecodeRowSink for Sink {
     fn provide_next_buffer(
         &mut self,
-        _: u32,
-        rows: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        Ok(PixelSliceMut::new(
+        strip: RowStrip,
+        descriptor: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        Ok(PixelViewMut::new_with_format_cow(
             &mut self.bytes,
-            width,
-            rows,
+            strip.width,
+            strip.height,
             1,
-            descriptor,
+            zenpixels::FormatCow::from_owned(descriptor),
         )?)
     }
     fn finish(&mut self) -> Result<(), SinkError> {
@@ -58,13 +56,15 @@ fn producer(
 ) -> impl IncrementalDecode<Error = CoroutineError> {
     CoroutineDecoder::new(move |mut ctx| async move {
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-        ctx.set_output_descriptor(DESC);
+        ctx.set_output_pixel_format(DESC);
         let mut result = details(drops);
         if wrong_geometry {
             result.info.width = 2;
         }
         ctx.set_details(result);
-        let rows = PixelSlice::new(&[17], 1, 1, 1, DESC).unwrap();
+        let rows =
+            PixelView::new_with_format_cow(&[17], 1, 1, 1, zenpixels::FormatCow::from_owned(DESC))
+                .unwrap();
         ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
         Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
     })
@@ -194,7 +194,7 @@ fn cancelled_resume_discards_pending_details_without_adoption() {
         zencodec::source::AccessPattern::Sequential,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.set_details(details(owned));
             ctx.interpretation(InterpretationFacts::new(
                 1,
@@ -237,7 +237,7 @@ fn terminal_details_cannot_change_adopted_interpretation() {
         zencodec::source::AccessPattern::Sequential,
         move |mut ctx| async move {
             ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-            ctx.set_output_descriptor(DESC);
+            ctx.set_output_pixel_format(DESC);
             ctx.interpretation(InterpretationFacts::new(
                 1,
                 1,
@@ -248,7 +248,14 @@ fn terminal_details_cannot_change_adopted_interpretation() {
             let mut result = details(owned);
             result.info.width = 2;
             ctx.set_details(result);
-            let rows = PixelSlice::new(&[17], 1, 1, 1, DESC).unwrap();
+            let rows = PixelView::new_with_format_cow(
+                &[17],
+                1,
+                1,
+                1,
+                zenpixels::FormatCow::from_owned(DESC),
+            )
+            .unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &rows).await?;
             Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
         },
@@ -297,14 +304,12 @@ fn sink_stop_prevents_completion_and_releases_details() {
     impl DecodeRowSink for StoppingSink {
         fn provide_next_buffer(
             &mut self,
-            _: u32,
-            _: u32,
-            _: u32,
-            _: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            _: RowStrip,
+            _: PixelFormat,
+        ) -> Result<PixelViewMut<'_>, SinkError> {
             panic!("completion-only producer has no row callback");
         }
-        fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
+        fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<(), SinkError> {
             if self.at_begin {
                 self.signal.store(true, Ordering::SeqCst);
                 if self.fail {
@@ -329,7 +334,7 @@ fn sink_stop_prevents_completion_and_releases_details() {
                 let owner = drops.clone();
                 let mut decoder = CoroutineDecoder::new(move |mut ctx| async move {
                     ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
-                    ctx.set_output_descriptor(DESC);
+                    ctx.set_output_pixel_format(DESC);
                     ctx.set_details(details(owner));
                     Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, DESC))
                 });
@@ -417,4 +422,74 @@ fn native_error_remains_primary_when_poll_also_signals_stop() {
             Err(StepError::Finished)
         ));
     }
+}
+
+#[test]
+fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
+    use zenpixels::{AlphaMode, ColorSpace, RenderingIntent, SampleLayout};
+    let profile = |id| {
+        let mut bytes = [0u8; 132];
+        bytes[0..4].copy_from_slice(&132u32.to_be_bytes());
+        bytes[12..16].copy_from_slice(b"mntr");
+        bytes[16..20].copy_from_slice(b"GRAY");
+        bytes[20..24].copy_from_slice(b"XYZ ");
+        bytes[36..40].copy_from_slice(b"acsp");
+        bytes[82] = id;
+        PixelFormat::new(
+            SampleLayout::GRAY8,
+            ColorSpace::Icc {
+                profile: Arc::from(bytes),
+                color_channels: 1,
+                alpha: AlphaMode::None,
+                intent: RenderingIntent::RelativeColorimetric,
+            },
+        )
+    };
+    let first = profile(17);
+    let changed = profile(53);
+    first.validate().unwrap();
+    changed.validate().unwrap();
+    let mut decoder = CoroutineDecoder::controlled(
+        16,
+        zencodec::source::AccessPattern::Sequential,
+        move |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
+            ctx.set_output_pixel_format(first.clone());
+            ctx.interpretation(InterpretationFacts::new(
+                1,
+                1,
+                Some(first),
+                InterpretationState::Final,
+            ))
+            .await?;
+            ctx.set_output_pixel_format(changed.clone());
+            let pixels = PixelView::new_with_format_cow(
+                &[81],
+                1,
+                1,
+                1,
+                zenpixels::FormatCow::from_owned(changed.clone()),
+            )
+            .unwrap();
+            ctx.write_rows(BatchMeta::final_rows(0), &pixels).await?;
+            Ok::<_, CoroutineError>(OutputInfo::full_decode(1, 1, changed))
+        },
+    );
+    let mut sink = Sink::default();
+    let ControlledProgress::Suspended { boundary, .. } = decoder
+        .step_controlled(Input::empty(), &mut sink, None)
+        .unwrap()
+    else {
+        panic!("expected boundary")
+    };
+    decoder
+        .resume(boundary.id(), BoundaryAction::AdoptInterpretation, None)
+        .unwrap();
+    assert!(matches!(
+        decoder.step_controlled(Input::empty(), &mut sink, None),
+        Err(StepError::Control(ControlError::FinalInterpretationChanged))
+    ));
+    assert_eq!(sink.bytes, [0]);
+    assert!(!sink.finished);
+    assert!(decoder.take_details().is_none());
 }

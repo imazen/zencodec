@@ -3,16 +3,16 @@ use std::sync::Arc;
 use zencodec::{
     frame::{Frame, FrameGeometry, FrameInterpretation, FrameTiming, Presentation},
     image::{ImageOutput, OutputError, Row, Samples},
-    operation::ImageFacts,
+    operation::ImageSummary,
 };
-use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
-use zenpixels::{
-    ChannelType,
+use zencodec::{
     plane::{FloatEncoding, PlanarLayout, Plane, PlaneEncoding, PlaneRole, PlaneSpec},
     sample::{ChromaSiting, ChromaSubsampling, SampleEncoding},
 };
+use zencodec_media::frame::{OwnedPlane, OwnedPlanes};
+use zenpixels::SampleType;
 
-fn code(storage: ChannelType, bits: u8, shift: u8) -> PlaneEncoding {
+fn code(storage: SampleType, bits: u8, shift: u8) -> PlaneEncoding {
     PlaneEncoding::Code(SampleEncoding::new(storage, bits, shift).unwrap())
 }
 fn image(
@@ -32,8 +32,8 @@ fn image(
 
 #[test]
 fn mixed_depth_alpha_keeps_native_words_and_no_false_uniform_depth() {
-    let y = code(ChannelType::U16, 10, 6);
-    let a = code(ChannelType::U8, 8, 0);
+    let y = code(SampleType::U16, 10, 6);
+    let a = code(SampleType::U8, 8, 0);
     let data = vec![
         0u16,
         512 << 6,
@@ -58,7 +58,7 @@ fn mixed_depth_alpha_keeps_native_words_and_no_false_uniform_depth() {
         ],
         ChromaSubsampling::Mono,
     );
-    assert_eq!(ImageFacts::new(&output).frame.unwrap().encoding, None);
+    assert_eq!(ImageSummary::new(&output).frame.unwrap().encoding, None);
     let mapped = output.map().unwrap();
     let luma = mapped.plane(0).unwrap().unwrap();
     let Samples::Codes(luma) = luma.samples else {
@@ -77,7 +77,7 @@ fn mixed_depth_alpha_keeps_native_words_and_no_false_uniform_depth() {
     assert_eq!(row, &[1, 127, 254]);
     assert_eq!(
         alpha.samples.code_encoding(),
-        Some(SampleEncoding::new(ChannelType::U8, 8, 0).unwrap())
+        Some(SampleEncoding::new(SampleType::U8, 8, 0).unwrap())
     );
 }
 
@@ -93,7 +93,7 @@ fn float_mapping_keeps_scale_offset_excursions_and_nan_bits_without_conversion()
         vec![PlaneSpec::new(PlaneRole::Luma, e)],
         ChromaSubsampling::Mono,
     );
-    assert!(ImageFacts::new(&output).frame.unwrap().encoding.is_none());
+    assert!(ImageSummary::new(&output).frame.unwrap().encoding.is_none());
     let mapped = output.map().unwrap();
     let sample = mapped.plane(0).unwrap().unwrap();
     assert_eq!(sample.samples.stride_bytes(), 16);
@@ -125,7 +125,7 @@ fn float_mapping_keeps_scale_offset_excursions_and_nan_bits_without_conversion()
 #[test]
 fn odd_width_semiplanar_chroma_counts_components_and_retains_order() {
     for role in [PlaneRole::CbCr, PlaneRole::CrCb] {
-        let e = code(ChannelType::U8, 8, 0);
+        let e = code(SampleType::U8, 8, 0);
         let output = image(
             vec![
                 (OwnedPlane::U8(Plane::new(vec![0; 6], 3, 2, 3).unwrap()), e),
@@ -158,8 +158,8 @@ fn odd_width_semiplanar_chroma_counts_components_and_retains_order() {
 
 #[test]
 fn per_plane_owner_encoding_contradiction_is_a_typed_refusal() {
-    let actual = code(ChannelType::U16, 10, 0);
-    let claimed = code(ChannelType::U16, 12, 0);
+    let actual = code(SampleType::U16, 10, 0);
+    let claimed = code(SampleType::U16, 12, 0);
     let output = image(
         vec![(
             OwnedPlane::U16(Plane::new(vec![0; 6], 3, 2, 3).unwrap()),
@@ -189,8 +189,8 @@ fn per_plane_owner_encoding_contradiction_is_a_typed_refusal() {
 fn policy_facts_distinguish_mixed_depth_and_plane_order() {
     let make = |bits, reversed| {
         let mut specs = vec![
-            PlaneSpec::new(PlaneRole::Luma, code(ChannelType::U16, bits, 0)),
-            PlaneSpec::new(PlaneRole::Alpha, code(ChannelType::U8, 8, 0)),
+            PlaneSpec::new(PlaneRole::Luma, code(SampleType::U16, bits, 0)),
+            PlaneSpec::new(PlaneRole::Alpha, code(SampleType::U8, 8, 0)),
         ];
         if reversed {
             specs.reverse();
@@ -199,7 +199,7 @@ fn policy_facts_distinguish_mixed_depth_and_plane_order() {
             FrameGeometry::full(3, 2),
             PlanarLayout::new(specs, ChromaSubsampling::Mono, ChromaSiting::Unknown).unwrap(),
         );
-        zencodec::operation::FrameFacts::new(&interpretation, FrameTiming::default())
+        zencodec::operation::FrameSummary::new(&interpretation, FrameTiming::default())
     };
     assert_eq!(make(10, false).encoding, None);
     assert_eq!(make(12, false).encoding, None);
@@ -210,8 +210,8 @@ fn policy_facts_distinguish_mixed_depth_and_plane_order() {
 #[test]
 fn gray_renderer_refuses_alpha_only_before_writing() {
     use zencodec_media::adapt::{Gray8, RenderFrame};
-    use zenpixels::{PixelDescriptor, PixelSliceMut};
-    let encoding = code(ChannelType::U8, 8, 0);
+    use zenpixels::PixelViewMut;
+    let encoding = code(SampleType::U8, 8, 0);
     let frame = Frame::new(
         Arc::new(
             OwnedPlanes::from_encoded_planes(vec![(
@@ -233,7 +233,61 @@ fn gray_renderer_refuses_alpha_only_before_writing() {
         Presentation::default(),
     );
     let mut bytes = [99u8; 2];
-    let mut canvas = PixelSliceMut::new(&mut bytes, 2, 1, 2, PixelDescriptor::GRAY8_SRGB).unwrap();
+    let mut canvas =
+        PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::formats::GRAY8_SRGB).unwrap();
     assert!(Gray8::default().render(&frame, &mut canvas).is_err());
     assert_eq!(bytes, [99, 99]);
+}
+
+#[test]
+fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
+    use zencodec::frame::{ColorClaim, Rect};
+    use zencodec_media::adapt::{Gray8, RenderFrame};
+    use zenpixels::{Cicp, PixelViewMut};
+    let encoding = code(SampleType::U8, 8, 0);
+    let samples = Arc::new(
+        OwnedPlanes::from_encoded_planes(vec![(
+            OwnedPlane::U8(Plane::new(vec![17, 223], 2, 1, 2).unwrap()),
+            encoding,
+        )])
+        .unwrap(),
+    );
+    let layout = PlanarLayout::new(
+        vec![PlaneSpec::new(PlaneRole::Luma, encoding)],
+        ChromaSubsampling::Mono,
+        ChromaSiting::Unknown,
+    )
+    .unwrap();
+    for (color, crop, success) in [
+        (Cicp::SRGB, false, true),
+        (Cicp::new(1, 13, 0, false), false, false),
+        (Cicp::BT2100_PQ_YCBCR_FULL, false, false),
+        (Cicp::SRGB, true, false),
+    ] {
+        let mut geometry = FrameGeometry::full(2, 1);
+        if crop {
+            geometry.crop = Rect {
+                x: 1,
+                y: 0,
+                width: 1,
+                height: 1,
+            };
+        }
+        let interp = FrameInterpretation::new(geometry, layout.clone())
+            .with_color(ColorClaim::new(Some(color), None, Some(color)));
+        let frame = Frame::new(
+            samples.clone(),
+            Arc::new(interp),
+            FrameTiming::default(),
+            Presentation::default(),
+        );
+        let mut bytes = [99; 2];
+        let mut canvas =
+            PixelViewMut::new(&mut bytes, 2, 1, 2, &zenpixels::formats::GRAY8_SRGB).unwrap();
+        assert_eq!(
+            Gray8::default().render(&frame, &mut canvas).is_ok(),
+            success
+        );
+        assert_eq!(bytes, if success { [17, 223] } else { [99, 99] });
+    }
 }

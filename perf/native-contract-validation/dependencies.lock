@@ -123,9 +123,10 @@ checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
 
 [[package]]
 name = "zencodec"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "almost-enough",
+ "bytemuck",
  "enough",
  "how-far",
  "libm",
@@ -136,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "zencodec-io"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "enough",
  "how-far",
@@ -146,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "zencodec-media"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "enough",
  "zencodec",
@@ -156,14 +157,24 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+version = "0.5.0"
+source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"
 dependencies = [
  "bytemuck",
  "whereat",
 ]
 
 [[patch.unused]]
+name = "garb"
+version = "0.2.9"
+source = "git+https://github.com/imazen/garb?rev=457ff8b9153e9d675a39dc098052b2ffeb6206fa#457ff8b9153e9d675a39dc098052b2ffeb6206fa"
+
+[[patch.unused]]
+name = "linear-srgb"
+version = "0.6.13"
+source = "git+https://github.com/imazen/linear-srgb?rev=ae83f19426737635fee3dd16f228681019f52585#ae83f19426737635fee3dd16f228681019f52585"
+
+[[patch.unused]]
 name = "zenpixels-convert"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=5bf81d640752793454802d7a94346c3c1e97c81e#5bf81d640752793454802d7a94346c3c1e97c81e"
+version = "0.5.0"
+source = "git+https://github.com/imazen/zenpixels?rev=0f0ad4c019fd827de2ee24f0c08e577fb2af6852#0f0ad4c019fd827de2ee24f0c08e577fb2af6852"

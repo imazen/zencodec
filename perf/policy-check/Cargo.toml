@@ -11,16 +11,16 @@ default = ["full-zencodec"]
 full-zencodec = ["dep:zencodec"]
 
 [dependencies]
-zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", default-features = false, optional = true }
+zencodec = { path = "../..", version = ">=0.3.0, <0.5.0", default-features = false, optional = true }
 whereat = { version = "0.1.5", default-features = false }
 enough = { version = "0.4.4", default-features = false }
 how-far = { version = "0.1.0", default-features = false }
-zenpixels = { version = ">=0.2.16, <0.4.0", default-features = false }
+zenpixels = { version = ">=0.5.0, <0.6.0", default-features = false }
 
 # Paired precision verifier; release requires these APIs in published zenpixels.
 [patch.crates-io]
 # Transitive workspace patches from the pinned zenpixels cohort must be repeated here.
-garb = { git = "https://github.com/imazen/garb", rev = "605276d717ea0b31a1cd2a36ae05301383c7b8b5" }
-linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "52896f4b24664315586bd60e5f048253b1f69052" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "fde59b96632557592cffa9b7301acd8db96ed078" }
+garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9686936bfa49df370a1e71666b252b9f48f744b4" }

@@ -278,13 +278,13 @@ mod tests {
         operation::{Decision, EncodeOffer, MetadataTransfer, TranscodeOffer, resolve_transcode},
     };
     use core::convert::Infallible;
-    use zenpixels::PixelDescriptor;
+    use zenpixels::PixelFormat;
 
     fn boundary() -> DecodeBoundary {
         DecodeBoundary::new(InterpretationFacts::new(
             3,
             2,
-            Some(PixelDescriptor::RGB8_SRGB),
+            Some(PixelFormat::RGB8_SRGB),
             InterpretationState::Final,
         ))
         .unwrap()
@@ -297,7 +297,7 @@ mod tests {
                 preference_index: 0,
                 resolution: None,
             },
-            PixelDescriptor::RGB8_SRGB,
+            PixelFormat::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
         );
         offer.retains_opaque_profile = Some(false);
@@ -324,7 +324,7 @@ mod tests {
                     let mut callbacks = 0;
                     let joint = resolve_transcode(
                         boundary(),
-                        &[candidate],
+                        &[candidate.clone()],
                         &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
                             callbacks += 1;
                             let Question::Transcode { choices, .. } = question else {
@@ -379,7 +379,7 @@ mod tests {
         candidate.metadata = MetadataTransfer::PreserveReported;
         let error = resolve_transcode(
             boundary(),
-            &[candidate],
+            &[candidate.clone()],
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 panic!("workspace success must not clear metadata requirements")
             },
@@ -434,7 +434,7 @@ mod tests {
     }
     #[test]
     fn callback_only_sees_admitted_original_indices_including_bit_63() {
-        let mut offers = [offer(); 64];
+        let mut offers: [_; 64] = core::array::from_fn(|_| offer());
         for offer in &mut offers[..63] {
             offer.retains_opaque_profile = None;
         }
@@ -474,7 +474,7 @@ mod tests {
     }
     #[test]
     fn all_excluded_refuses_before_callback_and_names_competing_failures() {
-        let mut offers = [offer(); 2];
+        let mut offers: [_; 2] = core::array::from_fn(|_| offer());
         offers[0].metadata = MetadataTransfer::PreserveReported;
         offers[0].workspace_upper_bound = None;
         offers[1].retains_opaque_profile = None;
@@ -519,7 +519,7 @@ mod tests {
     }
     #[test]
     fn lossless_preference_does_not_constrain_direct_selection() {
-        let mut offers = [offer(); 2];
+        let mut offers: [_; 2] = core::array::from_fn(|_| offer());
         offers[0].encoder.fidelity = Some(Fidelity::codec_quality(80.0));
         let preset = requirements().prefer_lossless(true);
         let (index, _) = resolve_transcode(

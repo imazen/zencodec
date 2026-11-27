@@ -1,5 +1,31 @@
 # zencodec
 
+## Known Bugs: anchored color emission and gain-map direction (fixed)
+
+Diffuse-white-anchored PQ and reconstructed linear samples previously failed
+CICP emission. The emitter projects their sample coding while the image spec
+retains the anchor. Recognized ICC profiles can carry colors without CICP
+codes, and verbatim CICP keeps the original BT.709 transfer alias. The checked
+gain-map projection derives reverse rendering for HDR-base headrooms with a
+clear backward bit and refuses contradictory set bits. ISO transport preserves
+the wire flag independently of rendering admission.
+
+## Known Bugs: zenpixels 0.5 codec boundary integration
+
+- Keep separate exact color and alpha grids at startup and row delivery, including
+  narrow-range color. Aggregate evidence for different strips by finding a common
+  representable grid. An intersection of claims about the same samples cannot
+  establish a combined raster's lower-depth representation.
+- Copy-based decode must carry the applied crop and orientation into completion.
+  Native animation sink implementations must also report exact source duration,
+  display index and PTS. Source color provenance remains independent of the active
+  pixel interpretation and may contain opaque ICC bytes. Keep those bytes out of
+  retained decisions and default diagnostics.
+- Binary ISO 21496-1 transport preserves unreduced fractions and record arity.
+  Numerical equality alone cannot establish wire equality. Check the gain-map
+  sample spec before ingestion and qualify XMP's supported SDR-base subset before
+  serializing.
+
 ## Known Bugs: edited video presentation (2026-10-30)
 
 Native MP4 controls reproduce identical edit offsets for different segment
@@ -26,6 +52,20 @@ Shared traits and types for zen* image codecs.
   even though the pre-precision manifest admits it. The precision draft raises
   the floor to the paired 0.2.17 and pins the unpublished verifier; release
   still requires published dependency contents that provide those APIs.
+
+## Known Bugs in the zenpixels 0.5 draft
+
+The generic `PixelBuf::from_vec` accepts inferred `Vec<i32>` on byte-shaped
+fixtures and reads native-endian word bytes as pixels. The migration uses
+`from_bytes` for existing byte buffers. Two unchanged byte assertions caught
+the difference. The exact 64-bit `DecodeOutput` layout assertion is now 512
+bytes, up from 368 at the base revision.
+
+The pinned converter can report an integer transfer conversion as lossless.
+Its depth scan also uses full-range byte replication for narrow U16 samples.
+The draft retains range-aware verification with independent color and alpha
+grids. The old empty-view preflight now validates the spec directly because
+0.5 refuses all zero-size views.
 
 ## Workspace Layout
 

@@ -1,25 +1,26 @@
 //! Policy before executing a retained image conversion route.
 use super::{
-    DecisionContext, DecisionRecord, ImageFacts, OperationPolicy, PolicyFailure, PolicySet,
+    DecisionContext, DecisionRecord, ImageSummary, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
+use crate::sample::ChromaSiting;
 use crate::{
     At,
     image::{ImageGeometry, ImageOutput},
 };
-use zenpixels::{Orientation, PixelDescriptor, sample::ChromaSiting};
+use zenpixels::{Orientation, PixelFormat};
 
 /// Effects of one prepared conversion of the exact held image.
 ///
 /// The adapter retains its input, conversion mechanism, and destination/scratch reservations
 /// while policy runs. This is neither a capability advertisement nor permission
 /// to rebuild a different plan after selection. Execution can still fail.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ImageConversionOffer {
     /// Actual output pixel representation and compact color interpretation.
     /// Profiles/context must also satisfy the caller's configured target.
-    pub output: PixelDescriptor,
+    pub output: PixelFormat,
     /// Stored output extent, before residual orientation.
     pub geometry: ImageGeometry,
     /// Residual orientation after this conversion; no inferred rotation.
@@ -44,7 +45,7 @@ impl ImageConversionOffer {
     /// Describe the target; assumptions must be explicit and resource/extended
     /// range guarantees start unqualified until supplied by the prepared adapter.
     pub const fn new(
-        output: PixelDescriptor,
+        output: PixelFormat,
         geometry: ImageGeometry,
         orientation: Orientation,
     ) -> Self {
@@ -75,10 +76,10 @@ pub fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
     pulse: Option<&dyn crate::Pulse>,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let pulse = pulse.unwrap_or(&crate::NoPulse);
-    let facts = ImageFacts::new(image);
+    let facts = ImageSummary::new(image);
     policy::choose(
         offers,
-        DecisionContext::ImageConversion(facts),
+        DecisionContext::ImageConversion(facts.clone()),
         |choices| Question::ImageConversion {
             image,
             facts: &facts,

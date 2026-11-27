@@ -105,8 +105,8 @@ encoder, then write. Required live output is offered only for an actual
 streaming configuration. Unknown required wait-memory bounds refuse. Errors
 retain decisions, original causes and confirmed partial writes.
 
-`encode_to_writer` is deprecated. Use the row driver for explicit scheduling,
-or `Encoder::encode` followed by writing its output for a one-shot encoder.
+Use `row_encode::encode` for explicit streaming scheduling, or `Encoder::encode`
+followed by writing its output for a one-shot encoder.
 The row driver rejects unsupported row mode; it never allocates a complete
 raster as a fallback. Managed payload limits exclude native workspace and
 queue bookkeeping. `Options::with_disk_staging` supplies a distinct owned file
