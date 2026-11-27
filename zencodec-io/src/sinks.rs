@@ -70,10 +70,10 @@ impl CollectSink {
     pub fn as_pixel_slice(&self) -> Option<PixelView<'_>> {
         let parts = self.data.as_ref()?;
         let view = PixelView::new(
-            &parts.storage.as_bytes()[parts.offset..],
+            &parts.storage.as_bytes()[parts.byte_offset..],
             parts.width,
             parts.height,
-            parts.stride,
+            parts.stride_bytes,
             &parts.format,
         )
         .ok()?;
@@ -187,12 +187,12 @@ impl DecodeRowSink for CollectSink {
                     self.height
                 ))
             })?;
-        let start = y as usize * parts.stride;
+        let start = y as usize * parts.stride_bytes;
         let rows = PixelViewMut::new(
             &mut parts.storage.as_bytes_mut()[start..],
             width,
             height,
-            parts.stride,
+            parts.stride_bytes,
             &parts.format,
         )?;
         if height != 0 {
@@ -365,7 +365,7 @@ mod metadata_tests {
         let spec = PixelFormat::GRAY16_SRGB;
         let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
         let hdr = HdrMetadata {
-            cll: Some(zencodec::ContentLightLevel::new(1111, 227)),
+            content_light_level: Some(zencodec::ContentLightLevel::new(1111, 227)),
             mastering: None,
         };
         let mut sink = CollectSink::new();

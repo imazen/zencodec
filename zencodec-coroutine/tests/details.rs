@@ -443,7 +443,7 @@ fn distinct_icc_interpretation_after_adoption_fails_before_rows() {
             SampleLayout::GRAY8,
             ColorSpace::Icc {
                 profile: Arc::from(bytes),
-                channels: 1,
+                color_channels: 1,
                 alpha: AlphaMode::None,
                 intent: RenderingIntent::RelativeColorimetric,
             },

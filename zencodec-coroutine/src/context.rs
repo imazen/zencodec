@@ -361,7 +361,7 @@ impl CoroutineContext {
             };
         }
         let width = rows.width();
-        let count = rows.rows();
+        let count = rows.height();
         let descriptor = rows.format().clone();
         let size = (width as usize)
             .checked_mul(descriptor.layout.bytes_per_pixel())

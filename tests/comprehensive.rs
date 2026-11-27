@@ -283,7 +283,7 @@ fn animation_encode_decode_roundtrip() {
     assert_eq!(f0.frame_index(), 0);
     assert_eq!(f0.duration_ms(), 100);
     assert_eq!(f0.pixels().width(), 4);
-    assert_eq!(f0.pixels().rows(), 4);
+    assert_eq!(f0.pixels().height(), 4);
     // Verify pixel data matches
     for y in 0..4 {
         assert_eq!(f0.pixels().row(y), frame1_check.as_view().row(y));
@@ -409,7 +409,7 @@ fn streaming_decode_row_by_row() {
     let mut rows_received = 0u32;
     while let Some((y, strip)) = stream.next_batch().unwrap() {
         assert_eq!(y, rows_received);
-        assert_eq!(strip.rows(), 1);
+        assert_eq!(strip.height(), 1);
         assert_eq!(strip.width(), 4);
         // Verify pixel data matches
         assert_eq!(strip.row(0), buf.as_view().row(y));
@@ -964,9 +964,9 @@ fn animation_frame_to_owned_strips_padding() {
 
     // Owned should have tight stride (no padding)
     let owned_ps = owned.pixels();
-    assert_eq!(owned_ps.stride(), row_bytes);
+    assert_eq!(owned_ps.stride_bytes(), row_bytes);
     assert_eq!(owned_ps.width(), w);
-    assert_eq!(owned_ps.rows(), h);
+    assert_eq!(owned_ps.height(), h);
 
     // Verify pixel data survived
     for y in 0..h {

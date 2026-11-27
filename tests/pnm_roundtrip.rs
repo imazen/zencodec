@@ -87,9 +87,9 @@ fn concrete_encode_decode_rgb8_roundtrip() {
     let orig = pixels.as_view();
     let result = decoded.pixels();
     assert_eq!(orig.width(), result.width());
-    assert_eq!(orig.rows(), result.rows());
+    assert_eq!(orig.height(), result.height());
     assert_eq!(orig.format().clone(), result.format().clone());
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -116,7 +116,7 @@ fn concrete_encode_decode_gray8_roundtrip() {
     let orig = pixels.as_view();
     let result = decoded.pixels();
     assert_eq!(orig.format().clone(), result.format().clone());
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -164,8 +164,8 @@ fn dyn_encode_decode_rgb8_roundtrip() {
     let orig = test_rgb8_pixels();
     let result = decoded.pixels();
     assert_eq!(orig.as_view().width(), result.width());
-    assert_eq!(orig.as_view().rows(), result.rows());
-    for y in 0..result.rows() {
+    assert_eq!(orig.as_view().height(), result.height());
+    for y in 0..result.height() {
         assert_eq!(orig.as_view().row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -197,7 +197,7 @@ fn dyn_encode_decode_gray8_roundtrip() {
     let orig = pixels.as_view();
     let result = decoded.pixels();
     assert_eq!(orig.format().clone(), result.format().clone());
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -237,7 +237,7 @@ fn codec_agnostic_roundtrip() {
 
     let orig = pixels.as_view();
     let result = decoded.as_view();
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -853,22 +853,22 @@ fn borrow_rows(
     height: u32,
     spec: PixelFormat,
 ) -> Result<PixelViewMut<'_>, SinkError> {
-    let offset = parts.offset + y as usize * parts.stride;
+    let offset = parts.byte_offset + y as usize * parts.stride_bytes;
     Ok(PixelViewMut::new_with_format_cow(
         &mut parts.storage.as_bytes_mut()[offset..],
         parts.width,
         height,
-        parts.stride,
+        parts.stride_bytes,
         zenpixels::FormatCow::from_owned(spec),
     )?)
 }
 
 fn pixels_from_parts(parts: &PixelBufParts) -> PixelView<'_> {
     PixelView::new_with_format_cow(
-        &parts.storage.as_bytes()[parts.offset..],
+        &parts.storage.as_bytes()[parts.byte_offset..],
         parts.width,
         parts.height,
-        parts.stride,
+        parts.stride_bytes,
         zenpixels::FormatCow::from_owned(parts.format.clone()),
     )
     .unwrap()
@@ -951,7 +951,7 @@ fn sink_completion_aware() {
     let output = sink.output.expect("begin() should have allocated");
     let orig = pixels.as_view();
     let result = pixels_from_parts(&output);
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }
@@ -1207,7 +1207,7 @@ fn sink_deferred_allocation() {
     // Verify data
     let orig = pixels.as_view();
     let result = pixels_from_parts(&buf);
-    for y in 0..orig.rows() {
+    for y in 0..orig.height() {
         assert_eq!(orig.row(y), result.row(y), "row {y} mismatch");
     }
 }

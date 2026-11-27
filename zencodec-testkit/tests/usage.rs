@@ -148,7 +148,7 @@ fn stream_decode_by_strip() {
     let mut dec = codecs.streaming_decoder(file.data(), &[]).unwrap();
     let mut rows = 0;
     while let Some((_y, strip)) = dec.next_batch().unwrap() {
-        rows += strip.rows();
+        rows += strip.height();
     }
     assert_eq!(rows, H);
 }

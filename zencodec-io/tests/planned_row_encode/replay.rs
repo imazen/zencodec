@@ -333,14 +333,14 @@ impl Source for ReplaySource {
             assert_eq!(first, self.next);
         }
         let changed = self.mutate && first == 0 && self.reads != 0;
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             rows.row_mut(y).fill(if changed { 8 } else { 7 });
         }
         if self.false_depth {
-            let last = rows.rows() - 1;
+            let last = rows.height() - 1;
             rows.row_mut(last)[0] = 1;
         }
-        self.next = first + rows.rows();
+        self.next = first + rows.height();
         self.reads += 1;
         Ok(())
     }

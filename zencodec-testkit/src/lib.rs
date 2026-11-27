@@ -313,7 +313,7 @@ fn grab(ps: PixelView<'_>) -> Pixels {
 
 /// Apply an EXIF `orientation` to `p`, producing the image a conformant reader
 /// would *display* — orientation is a rendering transform, not a label. Uses
-/// zenpixels' canonical [`Orientation::forward_map`] / `output_dimensions`, so
+/// zenpixels' canonical [`Orientation::map_pixel_coordinates`] / `output_dimensions`, so
 /// the conventions match production exactly.
 fn render(p: &Pixels, orientation: Orientation) -> Pixels {
     let bpp = p.desc.layout.bytes_per_pixel();
@@ -324,7 +324,7 @@ fn render(p: &Pixels, orientation: Orientation) -> Pixels {
     let mut bytes = vec![0u8; oh as usize * out_rb];
     for sy in 0..h {
         for sx in 0..w {
-            let (dx, dy) = orientation.forward_map(sx, sy, w, h);
+            let (dx, dy) = orientation.map_pixel_coordinates((sx, sy), (w, h));
             let si = sy as usize * in_rb + sx as usize * bpp;
             let di = dy as usize * out_rb + dx as usize * bpp;
             bytes[di..di + bpp].copy_from_slice(&p.bytes[si..si + bpp]);
@@ -342,13 +342,13 @@ fn render(p: &Pixels, orientation: Orientation) -> Pixels {
 /// reference into the decoder's canvas.
 fn grab_ref(ps: &PixelView<'_>) -> Pixels {
     let rb = ps.width() as usize * ps.format().clone().layout.bytes_per_pixel();
-    let mut bytes = Vec::with_capacity(rb * ps.rows() as usize);
-    for y in 0..ps.rows() {
+    let mut bytes = Vec::with_capacity(rb * ps.height() as usize);
+    for y in 0..ps.height() {
         bytes.extend_from_slice(&ps.row(y)[..rb]);
     }
     Pixels {
         width: ps.width(),
-        rows: ps.rows(),
+        rows: ps.height(),
         desc: ps.format().clone(),
         bytes,
     }
@@ -1953,7 +1953,7 @@ fn mastering_display_matches(got: &MasteringDisplay, want: &MasteringDisplay) ->
 /// Skipped (`Ok`) unless **both** ends declare
 /// [`hdr`](zencodec::encode::EncodeCapabilities::hdr). For each transfer:
 ///
-/// - encodes `Cicp::BT2100_PQ` / `Cicp::BT2100_HLG` with `ContentLightLevel(1000, 400)`
+/// - encodes `Cicp::BT2100_PQ_YCBCR_FULL` / `Cicp::BT2100_HLG_YCBCR_FULL` with `ContentLightLevel(1000, 400)`
 ///   and `MasteringDisplay::HDR10_REFERENCE`, using a 16-bit RGB gradient when both
 ///   ends declare `native_16bit` (the 8-bit RGB gradient otherwise — the
 ///   signaling path is exercised either way);
@@ -1989,13 +1989,13 @@ where
     let cases = [
         (
             "PQ",
-            Cicp::BT2100_PQ,
+            Cicp::BT2100_PQ_YCBCR_FULL,
             PixelFormat::RGB16_BT2100_PQ,
             Transfer::Pq,
         ),
         (
             "HLG",
-            Cicp::BT2100_HLG,
+            Cicp::BT2100_HLG_YCBCR_FULL,
             PixelFormat::RGB16_BT2100_HLG_SCENE,
             Transfer::Hlg(zenpixels::HlgMode::Scene),
         ),
@@ -2174,7 +2174,7 @@ fn gain_map_spec(channels: u8) -> PixelFormat {
     PixelFormat::new(
         layout,
         ColorSpace::Untagged {
-            channels,
+            total_channels: channels,
             alpha: zenpixels::AlphaMode::None,
         },
     )
@@ -2203,7 +2203,7 @@ fn gain_map_pixels(case: GainMapCase) -> Pixels {
 }
 
 /// The alternate rendition's colour: PQ, as an UltraHDR/AVIF map usually says.
-const GAIN_MAP_ALTERNATE_CICP: Cicp = Cicp::BT2100_PQ;
+const GAIN_MAP_ALTERNATE_CICP: Cicp = Cicp::BT2100_PQ_YCBCR_FULL;
 
 /// Build the encode-input fixture for one case. Built fresh each time
 /// ([`DecodedGainMap`] is consumed by `with_gain_map_pixels`).
@@ -3328,7 +3328,7 @@ where
         if next >= img.height {
             return 0;
         }
-        let want = buf.rows().min(img.height - next);
+        let want = buf.height().min(img.height - next);
         for r in 0..want {
             let s = (next + r) as usize * rb;
             let dst = buf.row_mut(r);
@@ -4689,7 +4689,7 @@ mod tests {
     /// trip, caught here.
     #[test]
     fn source_color_authority_catches_nclx_only_default_authority() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let f = check_source_color_authority(ImageFormat::Heic, &sc).unwrap_err();
         assert_eq!(f.check, "source_color_authority");
         assert!(f.detail.contains("Cicp"), "{f}");
@@ -5009,7 +5009,7 @@ mod tests {
     fn reference_hdr_decode_is_labelled_pq() {
         let (e, d) = ref_codecs();
         let img = TestImage::rgb16_gradient(6, 5, PixelFormat::RGB16_BT2100_PQ);
-        let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ);
+        let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let bytes = enc_oneshot(&e, &img, meta, MetadataPolicy::PreserveExact).unwrap();
         let out = dec_output(&d, &bytes).unwrap();
         assert_eq!(out.pixels().format().clone(), PixelFormat::RGB16_BT2100_PQ);
@@ -5081,12 +5081,12 @@ mod tests {
         let rgb: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"RGB "));
         let gray: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"GRAY"));
         let junk: Arc<[u8]> = Arc::from(fixtures::sample_icc_with_class(b"????"));
-        let icc = |profile: Arc<[u8]>, spec: PixelFormat, channels| {
+        let icc = |profile: Arc<[u8]>, spec: PixelFormat, color_channels| {
             PixelFormat::new(
                 spec.layout,
                 ColorSpace::Icc {
                     profile,
-                    channels,
+                    color_channels,
                     alpha: spec.color.alpha(),
                     intent: RenderingIntent::RelativeColorimetric,
                 },

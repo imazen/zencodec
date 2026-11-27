@@ -244,7 +244,7 @@ impl Source for Samples {
         _: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         event(&self.inner.events, "read");
-        for row in 0..rows.rows() {
+        for row in 0..rows.height() {
             // Repeated byte 7 is canonical eight-bit U16 value 7 * 257.
             rows.row_mut(row).fill(7);
             if self.bad_row == Some(first + row) {
@@ -847,7 +847,7 @@ fn full_range_color_and_alpha_depth_reach_native_begin_and_rows_independently() 
     pixels.assume_facts(facts);
     let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);
     let hdr = zenpixels::HdrMetadata {
-        cll: Some(zencodec::ContentLightLevel::new(997, 197)),
+        content_light_level: Some(zencodec::ContentLightLevel::new(997, 197)),
         mastering: None,
     };
     let pixels = pixels.with_origin(origin).with_hdr(hdr);

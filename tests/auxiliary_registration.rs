@@ -192,7 +192,7 @@ fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
     let spec = PixelFormat::new(
         SampleLayout::GRAY16.with_packing(BitPacking::Lsb { bits: 10 }),
         ColorSpace::Untagged {
-            channels: 1,
+            total_channels: 1,
             alpha: AlphaMode::None,
         },
     );
@@ -243,8 +243,8 @@ fn checked_gain_map_ingestion_uses_native_shape_depth_and_shared_orientation() {
         [0u16.to_ne_bytes(), 1023u16.to_ne_bytes()].concat()
     );
     assert!(DualLayerHdrBuf::from_parts(parts).is_ok());
-    assert!(zenpixels::GainMapMetadata::try_symmetric(2.0).is_some());
-    assert!(zenpixels::GainMapMetadata::try_symmetric(f32::NAN).is_none());
+    assert!(zenpixels::GainMapMetadata::sdr_to_hdr_stops(2.0).is_some());
+    assert!(zenpixels::GainMapMetadata::sdr_to_hdr_stops(f32::NAN).is_none());
 
     let rgba = PixelBuf::new(2, 1, PixelFormat::RGBA8_SRGB).unwrap();
     assert!(matches!(

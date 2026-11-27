@@ -175,7 +175,7 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         })
     }
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), RefError> {
-        let n = rows.rows();
+        let n = rows.height();
         self.inner.push_rows(rows)?;
         self.rows += n;
         // HONEST_LAG holds back everything until `lag` rows have arrived,

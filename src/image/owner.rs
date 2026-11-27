@@ -155,12 +155,12 @@ impl ImageOutput {
             return Err(fail(OutputError::Interpretation));
         }
         let pixels = owner.pixels()?;
-        let (width, height) = (pixels.width(), pixels.rows());
+        let (width, height) = (pixels.width(), pixels.height());
         if (width, height) != (g.region.width, g.region.height) {
             return Err(fail(OutputError::Geometry));
         }
         let descriptor = pixels.format().clone();
-        let stride = pixels.stride();
+        let stride = pixels.stride_bytes();
         let hdr = pixels.hdr();
         let mut extras = Vec::new();
         extras.try_reserve_exact(auxiliaries.len()).map_err(|e| {
@@ -255,7 +255,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
     }
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
         let pixels = self.owner.pixels()?;
-        if (pixels.width(), pixels.rows(), pixels.stride())
+        if (pixels.width(), pixels.height(), pixels.stride_bytes())
             != (self.width, self.height, self.stride)
         {
             return Err(fail(OutputError::Geometry));
@@ -402,7 +402,7 @@ mod tests {
                     zenpixels::SampleLayout::RGB8,
                     zenpixels::ColorSpace::Icc {
                         profile: Arc::from(icc),
-                        channels: 3,
+                        color_channels: 3,
                         alpha: AlphaMode::None,
                         intent: zenpixels::RenderingIntent::RelativeColorimetric,
                     },

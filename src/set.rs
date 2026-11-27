@@ -934,7 +934,7 @@ impl CodecSet {
         compute: &ComputeEnvironment,
     ) -> Result<ResourceEstimate, CodecSetError> {
         let image =
-            ImageCharacteristics::new(pixels.width(), pixels.rows(), pixels.format().clone());
+            ImageCharacteristics::new(pixels.width(), pixels.height(), pixels.format().clone());
         self.estimate_encode(format, &image, compute)
     }
 

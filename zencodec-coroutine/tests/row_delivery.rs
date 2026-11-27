@@ -282,7 +282,7 @@ fn split_wide_rows_keep_bits_metadata_and_destination_padding() {
             )
         };
         let hdr = HdrMetadata {
-            cll: Some(zencodec::ContentLightLevel::new(900, 200)),
+            content_light_level: Some(zencodec::ContentLightLevel::new(900, 200)),
             ..HdrMetadata::default()
         };
         let origin = ColorOrigin::from_cicp(zencodec::Cicp::DISPLAY_P3);

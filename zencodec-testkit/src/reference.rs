@@ -226,14 +226,14 @@ impl GainMapWire {
             )));
         }
         let mut pixels =
-            Vec::with_capacity(ps.width() as usize * ps.rows() as usize * channels as usize);
+            Vec::with_capacity(ps.width() as usize * ps.height() as usize * channels as usize);
         let rb = ps.width() as usize * channels as usize;
-        for y in 0..ps.rows() {
+        for y in 0..ps.height() {
             pixels.extend_from_slice(&ps.row(y)[..rb]);
         }
         let mut info = gm.metadata;
         info.width = ps.width();
-        info.height = ps.rows();
+        info.height = ps.height();
         info.channels = channels;
         info.bit_depth = 8;
         Ok(Self { info, pixels })
@@ -783,14 +783,14 @@ pub(crate) fn encode_single(
     write_header(
         &mut out,
         pixels.width(),
-        pixels.rows(),
+        pixels.height(),
         1,
         bpp,
         meta,
         gain_map,
     )?;
     push_u32(&mut out, 0); // duration
-    for y in 0..pixels.rows() {
+    for y in 0..pixels.height() {
         out.extend_from_slice(pixels.row(y));
     }
     Ok(out)
@@ -1115,7 +1115,7 @@ impl Encoder for RefEnc {
             ));
         }
         if let Some(h) = self.declared_height
-            && self.rows.saturating_add(rows.rows()) > h
+            && self.rows.saturating_add(rows.height()) > h
         {
             return Err(RefError::Invalid(format!(
                 "push_rows: more than the {h} rows declared at begin"
@@ -1125,7 +1125,7 @@ impl Encoder for RefEnc {
             Some(_) => self.out.vec_mut(),
             None => &mut self.accumulated,
         };
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             dest.extend_from_slice(rows.row(y));
             self.rows += 1;
         }
@@ -1210,7 +1210,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
         if let Some(s) = stop {
             s.check()?;
         }
-        let (w, h, desc) = (pixels.width(), pixels.rows(), pixels.format().clone());
+        let (w, h, desc) = (pixels.width(), pixels.height(), pixels.format().clone());
         if let Some(st) = &mut self.streaming {
             if (w, h, desc) != (st.width, st.height, st.desc.clone()) {
                 return Err(RefError::Unsupported(UnsupportedOperation::PixelFormat));
@@ -1683,7 +1683,7 @@ fn row_metadata(info: &ImageInfo) -> zencodec::decode::RowMetadata {
     if origin.kind != zenpixels::OriginKind::Assumed {
         metadata.origin = Some(origin);
     }
-    metadata.hdr.cll = info.source_color.content_light_level;
+    metadata.hdr.content_light_level = info.source_color.content_light_level;
     metadata.hdr.mastering = info.source_color.mastering_display;
     metadata
 }
@@ -1982,7 +1982,9 @@ impl AnimationFrameDecoder for RefAnimDec {
             let bytes = usize::from(self.bpp);
             for y in 0..self.height {
                 for x in 0..self.width {
-                    let (tx, ty) = self.applied.forward_map(x, y, self.width, self.height);
+                    let (tx, ty) = self
+                        .applied
+                        .map_pixel_coordinates((x, y), (self.width, self.height));
                     let start = x as usize * bytes;
                     let dest = tx as usize * bytes;
                     view.row_mut(ty)[dest..dest + bytes]

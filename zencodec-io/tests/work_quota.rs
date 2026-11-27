@@ -172,7 +172,7 @@ impl Encoder for Raw {
         Ok(OutputTiming::streaming(0))
     }
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), Failed> {
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             self.bytes.extend_from_slice(rows.row(y));
         }
         Ok(())

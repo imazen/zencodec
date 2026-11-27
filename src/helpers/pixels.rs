@@ -47,7 +47,7 @@ pub const fn codec_spec(layout: SampleLayout) -> PixelFormat {
         ColorSpace::Oklab { alpha }
     } else {
         ColorSpace::Untagged {
-            channels: order.channels() as u8,
+            total_channels: order.channels() as u8,
             alpha,
         }
     };
@@ -73,7 +73,7 @@ pub(crate) fn redacted_spec(spec: &PixelFormat) -> PixelFormat {
     match &mut public.color {
         ColorSpace::Icc { alpha, .. } => {
             public.color = ColorSpace::Untagged {
-                channels: public.layout.channels() as u8,
+                total_channels: public.layout.channels() as u8,
                 alpha: *alpha,
             };
         }

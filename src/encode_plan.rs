@@ -398,7 +398,7 @@ mod tests {
     fn default_diagnostics_do_not_dump_opaque_profiles() {
         let context = ColorSpace::Icc {
             profile: Arc::from([88; 2048]),
-            channels: 3,
+            color_channels: 3,
             alpha: zenpixels::AlphaMode::None,
             intent: zenpixels::RenderingIntent::RelativeColorimetric,
         };
@@ -511,9 +511,9 @@ mod orientation_tests {
                     let mut same = output.output_dimensions(w, h) == input.output_dimensions(3, 2);
                     for y in 0..2 {
                         for x in 0..3 {
-                            let (sx, sy) = applied.forward_map(x, y, 3, 2);
-                            same &=
-                                output.forward_map(sx, sy, w, h) == input.forward_map(x, y, 3, 2);
+                            let (sx, sy) = applied.map_pixel_coordinates((x, y), (3, 2));
+                            same &= output.map_pixel_coordinates((sx, sy), (w, h))
+                                == input.map_pixel_coordinates((x, y), (3, 2));
                         }
                     }
                     assert_eq!(plan.validate().is_ok(), same, "{plan:?}");

@@ -95,7 +95,7 @@ mod tests {
                 max_frame_average_light_level: 400,
             })
             .with_mastering_display(zencodec::MasteringDisplay::HDR10_REFERENCE)
-            .with_diffuse_white(zenpixels::hdr::DiffuseWhite::new(100.0));
+            .with_diffuse_white(zenpixels::hdr::DiffuseWhite::new(100.0).unwrap());
         check_metadata_retained(&expected, &expected).unwrap();
         let failure = check_metadata_retained(&expected, &Metadata::none()).unwrap_err();
         for field in [
@@ -126,7 +126,7 @@ mod tests {
                 m.mastering_display.as_mut().unwrap().max_luminance += 1.0
             }),
             ("diffuse white", |m| {
-                m.diffuse_white = Some(zenpixels::hdr::DiffuseWhite::new(101.0))
+                m.diffuse_white = Some(zenpixels::hdr::DiffuseWhite::new(101.0).unwrap())
             }),
         ];
         for (field, substitute) in substitutions {

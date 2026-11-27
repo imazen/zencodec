@@ -48,7 +48,7 @@ fn main() {
                         bench.iter(|| {
                             let slice = source.as_view();
                             let mut sum = 0u64;
-                            for y in 0..slice.rows() {
+                            for y in 0..slice.height() {
                                 sum += u64::from(slice.row(y)[0]);
                             }
                             black_box(sum)

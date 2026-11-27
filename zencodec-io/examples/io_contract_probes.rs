@@ -48,7 +48,7 @@ impl Encoder for OneShot {
     }
     fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, Error> {
         let mut out = Vec::new();
-        for y in 0..pixels.rows() {
+        for y in 0..pixels.height() {
             out.extend_from_slice(pixels.row(y));
         }
         Ok(EncodeOutput::new(out, ImageFormat::Pnm))
@@ -80,7 +80,7 @@ impl Encoder for Raw {
         Ok(OutputTiming::streaming(0))
     }
     fn push_rows(&mut self, pixels: PixelView<'_>) -> Result<(), Error> {
-        for y in 0..pixels.rows() {
+        for y in 0..pixels.height() {
             self.out.push(pixels.row(y));
         }
         self.counts

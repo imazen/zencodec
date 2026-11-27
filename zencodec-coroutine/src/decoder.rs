@@ -630,7 +630,7 @@ fn copy_rows(
         &rows.metadata,
     )?;
     if destination.width() != rows.width
-        || destination.rows() != count
+        || destination.height() != count
         || destination.format() != &rows.descriptor
     {
         return Err("sink returned a buffer with a different geometry or descriptor".into());

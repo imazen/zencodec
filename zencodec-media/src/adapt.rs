@@ -127,7 +127,7 @@ impl RenderFrame for Gray8 {
         {
             return Err(convert_error("Gray8 renders 8-bit monochrome frames only"));
         }
-        let geometry = FrameGeometry::full(canvas.width(), canvas.rows());
+        let geometry = FrameGeometry::full(canvas.width(), canvas.height());
         let color = interp.color;
         let exact_color = match color.resolved {
             Some(cicp) => cicp == zencodec::Cicp::SRGB,
@@ -145,7 +145,7 @@ impl RenderFrame for Gray8 {
         let plane = mapped
             .plane(0)
             .ok_or_else(|| convert_error("frame has no plane"))?;
-        if plane.width() != canvas.width() as usize || plane.height() != canvas.rows() as usize {
+        if plane.width() != canvas.width() as usize || plane.height() != canvas.height() as usize {
             return Err(convert_error("frame size differs from the canvas"));
         }
         let zencodec::plane::AnyPlane::U8(plane) = plane else {
@@ -174,7 +174,7 @@ impl CaptureFrame for Gray8 {
         timing: FrameTiming,
     ) -> Result<Frame, BoxedError> {
         self.validate_input(pixels.format(), config)?;
-        let (w, h) = (pixels.width(), pixels.rows());
+        let (w, h) = (pixels.width(), pixels.height());
         if config
             .video
             .is_some_and(|v| (v.coded_width, v.coded_height) != (w, h))
@@ -667,7 +667,12 @@ where
                 return Err(AdaptError::Unsupported(UnsupportedOperation::PixelFormat));
             }
         } else {
-            self.begin_inner(pixels.width(), pixels.rows(), pixels.format().clone(), None)?;
+            self.begin_inner(
+                pixels.width(),
+                pixels.height(),
+                pixels.format().clone(),
+                None,
+            )?;
         }
         let cfg = self.enc.output_config().ok_or(AdaptError::Shape)?.clone();
         let frame = self

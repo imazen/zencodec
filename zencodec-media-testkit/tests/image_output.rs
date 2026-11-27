@@ -239,7 +239,7 @@ fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
         .with_pixels(|pixels| {
             assert_eq!(pixels.row(0), &[1, 2, 3]);
             assert_eq!(pixels.row(1), &[4, 5, 6]);
-            assert_eq!(pixels.stride(), 3);
+            assert_eq!(pixels.stride_bytes(), 3);
         })
         .unwrap();
     let mut detached = image.interpretation().clone();

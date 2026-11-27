@@ -64,8 +64,8 @@ impl Encoder for Raw {
         if self.begun {
             return Err(EncErr::Invalid);
         }
-        let mut v = header(pixels.width(), pixels.rows()).to_vec();
-        for y in 0..pixels.rows() {
+        let mut v = header(pixels.width(), pixels.height()).to_vec();
+        for y in 0..pixels.height() {
             v.extend_from_slice(pixels.row(y));
         }
         Ok(EncodeOutput::new(v, ImageFormat::Pnm))
@@ -80,7 +80,7 @@ impl Encoder for Raw {
     }
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
         self.strips += 1;
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             self.out.push(rows.row(y));
         }
         Ok(())

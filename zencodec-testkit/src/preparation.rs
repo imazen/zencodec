@@ -105,7 +105,9 @@ mod tests {
             };
             let mut pixels = PixelBuf::from_bytes(bytes, 1, 1, PixelFormat::RGB8_SRGB).unwrap();
             if self.prepared && self.mode == 6 {
-                pixels = pixels.with_origin(zenpixels::ColorOrigin::from_cicp(Cicp::BT2100_PQ));
+                pixels = pixels.with_origin(zenpixels::ColorOrigin::from_cicp(
+                    Cicp::BT2100_PQ_YCBCR_FULL,
+                ));
             }
             let mut info = ImageInfo::new(1, 1, ImageFormat::Pnm);
             if self.prepared && self.mode == 4 {

@@ -108,7 +108,7 @@ pub fn encode_to_writer<E: Encoder>(
     pixels: PixelView<'_>,
     w: &mut impl Write,
 ) -> Result<EncodeWriteReport, EncodeWriteError<E::Error>> {
-    let (width, height, desc) = (pixels.width(), pixels.rows(), pixels.format().clone());
+    let (width, height, desc) = (pixels.width(), pixels.height(), pixels.format().clone());
     let timing = match enc.begin(width, height, desc) {
         Ok(t) => t,
         Err(e) if is_row_level_refusal(&e) => {

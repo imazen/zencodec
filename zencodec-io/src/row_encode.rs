@@ -186,7 +186,7 @@ impl Source for Raster<'_> {
     fn description(&self) -> Description {
         let mut metadata = RowMetadata::from_view(&self.0);
         metadata.facts.depth = self.1;
-        let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.format().clone());
+        let mut desc = Description::new(self.0.width(), self.0.height(), self.0.format().clone());
         if metadata != RowMetadata::default() {
             desc = desc.with_pixel_metadata(metadata);
         }
@@ -208,15 +208,15 @@ impl Source for Raster<'_> {
         if rows.width() != self.0.width()
             || rows.format() != self.0.format()
             || first
-                .checked_add(rows.rows())
-                .is_none_or(|end| end > self.0.rows())
+                .checked_add(rows.height())
+                .is_none_or(|end| end > self.0.height())
         {
             return Err(zencodec::CodecError::new(
                 None,
                 zencodec::InvalidKind::Buffer.into(),
             ));
         }
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             pulse
                 .check()
                 .map_err(|r| zencodec::CodecError::new(None, r.into()))?;
@@ -977,7 +977,7 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 // Check untagged rows written through the mutable source view.
                 // Per-row checks retain the first contradictory absolute row;
                 // nothing in this strip reaches the encoder until all pass.
-                for row in 0..pixels.rows() {
+                for row in 0..pixels.height() {
                     check(control)?;
                     if !exact.holds_for(&pixels.sub_rows(row, 1)?)? {
                         return Err(ExactDepthContradiction {

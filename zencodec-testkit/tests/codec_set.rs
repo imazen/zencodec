@@ -68,7 +68,7 @@ fn encode_then_decode_as_roundtrips_pixels() {
     assert_eq!(decoded.height(), H);
     let out = decoded.pixels();
     let mut round = Vec::new();
-    for y in 0..out.rows() {
+    for y in 0..out.height() {
         round.extend_from_slice(out.row(y));
     }
     assert_eq!(round, PIXELS);
@@ -253,7 +253,7 @@ fn transcode_roundtrips_pixels_and_carries_metadata() {
     assert_eq!((decoded.width(), decoded.height()), (W, H));
     let mut round = Vec::new();
     let px = decoded.pixels();
-    for y in 0..px.rows() {
+    for y in 0..px.height() {
         round.extend_from_slice(px.row(y));
     }
     assert_eq!(round, PIXELS);
@@ -479,7 +479,7 @@ fn streaming_decoder_borrowing_the_set() {
     let mut rows_seen = 0;
     while let Some((y, strip)) = dec.next_batch().expect("batch") {
         assert_eq!(y, rows_seen);
-        rows_seen += strip.rows();
+        rows_seen += strip.height();
     }
     assert_eq!(rows_seen, H);
 }
@@ -629,7 +629,7 @@ fn registered_custom_formats_survive_exact_allowlists_and_decode_pixels() {
     assert!(candidates(Some(&[custom])).contains(&detected));
     let decoded = set.decode_as(detected, encoded.data(), &[]).unwrap();
     let pixels = decoded.pixels();
-    let actual: Vec<_> = (0..pixels.rows())
+    let actual: Vec<_> = (0..pixels.height())
         .flat_map(|y| pixels.row(y).iter().copied())
         .collect();
     assert_eq!(actual, PIXELS);

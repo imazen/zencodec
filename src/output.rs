@@ -965,7 +965,7 @@ mod tests {
         );
         assert_eq!(frame.frame_index(), 0);
         assert_eq!(frame.pixels().width(), 4);
-        assert_eq!(frame.pixels().rows(), 4);
+        assert_eq!(frame.pixels().height(), 4);
     }
 
     #[test]
@@ -980,7 +980,7 @@ mod tests {
         );
         assert_eq!(owned.frame_index(), 3);
         assert_eq!(owned.pixels().width(), 2);
-        assert_eq!(owned.pixels().rows(), 2);
+        assert_eq!(owned.pixels().height(), 2);
     }
 
     #[test]

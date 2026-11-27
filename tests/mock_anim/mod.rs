@@ -94,7 +94,7 @@ fn encode_mock_data(frames: &[(PixelView<'_>, u32)]) -> Vec<u8> {
     assert!(!frames.is_empty());
     let (first, _) = &frames[0];
     let w = first.width();
-    let h = first.rows();
+    let h = first.height();
     let bpp = first.format().clone().layout.bytes_per_pixel();
     let frame_count = frames.len() as u32;
 
@@ -107,7 +107,7 @@ fn encode_mock_data(frames: &[(PixelView<'_>, u32)]) -> Vec<u8> {
 
     for (ps, duration_ms) in frames {
         data.extend_from_slice(&duration_ms.to_le_bytes());
-        for y in 0..ps.rows() {
+        for y in 0..ps.height() {
             data.extend_from_slice(ps.row(y));
         }
     }
@@ -379,7 +379,7 @@ impl<'a> zencodec::decode::Decode for MockDec<'a> {
         let bpp = bpp as usize;
         for y in 0..ch {
             for x in 0..cw {
-                let (dx, dy) = self.orientation.forward_map(x, y, cw, ch);
+                let (dx, dy) = self.orientation.map_pixel_coordinates((x, y), (cw, ch));
                 let src = ((cy + y) as usize * w as usize + (cx + x) as usize) * bpp;
                 let dst = dx as usize * bpp;
                 output.row_mut(dy)[dst..dst + bpp].copy_from_slice(&pixels[src..src + bpp]);
@@ -774,7 +774,7 @@ impl Encoder for MockEnc {
             self.desc = Some(rows.format().clone());
         }
         let h = self.height.as_mut().unwrap();
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             self.accumulated.extend_from_slice(rows.row(y));
             *h += 1;
         }
@@ -865,7 +865,7 @@ impl AnimationFrameEncoder for MockAnimationFrameEnc {
             s.check()?;
         }
         let w = pixels.width();
-        let h = pixels.rows();
+        let h = pixels.height();
         let desc = pixels.format().clone();
         let mut data = Vec::with_capacity(w as usize * h as usize * desc.layout.bytes_per_pixel());
         for y in 0..h {

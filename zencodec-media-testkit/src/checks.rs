@@ -992,7 +992,7 @@ where
                 .is_none_or(|pts| !pts.same_instant(Timestamp::new(expected_tick, clock)))
             || f.pixels().format() != want.format()
             || f.pixels().width() != w
-            || f.pixels().rows() != h
+            || f.pixels().height() != h
         {
             return Err(fail(
                 CHECK,

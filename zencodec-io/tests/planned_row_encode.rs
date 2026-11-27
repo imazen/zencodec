@@ -193,7 +193,7 @@ impl Encoder for Enc {
                 }
             ));
         }
-        for row in 0..pixels.rows() {
+        for row in 0..pixels.height() {
             if let Some(pointers) = &self.row_pointers {
                 pointers
                     .lock()
@@ -249,7 +249,7 @@ impl Source for Rows {
             assert!(pulse.is_none(), "source keeps the absent per-call control");
         }
         event(&self.events, "read");
-        for row in 0..pixels.rows() {
+        for row in 0..pixels.height() {
             pixels.row_mut(row).fill(7);
         }
         Ok(())

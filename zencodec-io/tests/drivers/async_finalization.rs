@@ -45,7 +45,7 @@ impl zencodec::encode::Encoder for FinalizationProbe {
         ))
     }
     fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
-        self.remaining -= rows.rows();
+        self.remaining -= rows.height();
         if self.remaining == 0 {
             self.pending.extend_from_slice(b"prefix");
         }

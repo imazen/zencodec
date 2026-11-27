@@ -53,7 +53,7 @@ pub trait Decode: Sized {
 /// let info = job.output_info(data)?;
 /// let mut dec = job.streaming_decoder(&[], data)?;
 /// while let Some((y, strip)) = dec.next_batch()? {
-///     // process strip.rows() scanlines starting at row y
+///     // process strip.height() scanlines starting at row y
 /// }
 /// ```
 pub trait StreamingDecode {

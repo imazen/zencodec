@@ -81,12 +81,12 @@ pub fn descriptor_for_decoded_pixels_v2(
             Some(IccColorSpace::Gray) if order.is_gray_family() => Some(1),
             _ => None,
         };
-        if let Some(channels) = channels {
+        if let Some(color_channels) = channels {
             return checked(PixelFormat::new(
                 layout,
                 ColorSpace::Icc {
                     profile: profile.clone(),
-                    channels,
+                    color_channels,
                     alpha: base.color.alpha(),
                     intent: RenderingIntent::RelativeColorimetric,
                 },
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn cicp_pq_sets_descriptor() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let desc = descriptor_for_decoded_pixels(
             SampleLayout::RGBAF32,
             &sc,
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn cicp_hlg_sets_descriptor() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
         let desc = descriptor_for_decoded_pixels(
             SampleLayout::RGBF32,
             &sc,
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn corrected_to_preserves_format() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let desc = descriptor_for_decoded_pixels(
             SampleLayout::BGRA8,
             &sc,
@@ -612,7 +612,7 @@ mod tests {
             (
                 "png_hdr_pq",
                 SampleLayout::RGBA16,
-                sc_cicp(Cicp::BT2100_PQ),
+                sc_cicp(Cicp::BT2100_PQ_YCBCR_FULL),
                 None,
                 TF::Pq,
                 CP::Bt2020,
@@ -644,7 +644,7 @@ mod tests {
             (
                 "avif_hdr10",
                 SampleLayout::RGBAF32,
-                sc_cicp(Cicp::BT2100_PQ),
+                sc_cicp(Cicp::BT2100_PQ_YCBCR_FULL),
                 None,
                 TF::Pq,
                 CP::Bt2020,
@@ -652,7 +652,7 @@ mod tests {
             (
                 "avif_hlg",
                 SampleLayout::RGBF32,
-                sc_cicp(Cicp::BT2100_HLG),
+                sc_cicp(Cicp::BT2100_HLG_YCBCR_FULL),
                 None,
                 TF::Hlg(zenpixels::HlgMode::Scene),
                 CP::Bt2020,
@@ -692,7 +692,7 @@ mod tests {
             (
                 "heic_hdr10",
                 SampleLayout::RGBAF32,
-                sc_cicp(Cicp::BT2100_PQ),
+                sc_cicp(Cicp::BT2100_PQ_YCBCR_FULL),
                 None,
                 TF::Pq,
                 CP::Bt2020,
@@ -760,7 +760,10 @@ mod tests {
             (SourceColor::default(), None),
             (SourceColor::default().with_cicp(Cicp::SRGB), None),
             (SourceColor::default().with_cicp(Cicp::DISPLAY_P3), None),
-            (SourceColor::default().with_cicp(Cicp::BT2100_PQ), None),
+            (
+                SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL),
+                None,
+            ),
             (SourceColor::default(), Some(&Cicp::SRGB)),
         ];
         for (sc, corrected) in cases {
@@ -803,7 +806,7 @@ mod checked_class_tests {
             assert_eq!(correct.layout, valid);
             let ColorSpace::Icc {
                 profile: actual,
-                channels: count,
+                color_channels: count,
                 alpha,
                 intent,
             } = correct.color

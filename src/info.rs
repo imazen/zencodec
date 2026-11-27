@@ -972,8 +972,8 @@ mod tests {
     fn cicp_constants() {
         assert_eq!(Cicp::SRGB.color_primaries, 1);
         assert_eq!(Cicp::SRGB.transfer_characteristics, 13);
-        assert_eq!(Cicp::BT2100_PQ.transfer_characteristics, 16);
-        assert_eq!(Cicp::BT2100_HLG.transfer_characteristics, 18);
+        assert_eq!(Cicp::BT2100_PQ_YCBCR_FULL.transfer_characteristics, 16);
+        assert_eq!(Cicp::BT2100_HLG_YCBCR_FULL.transfer_characteristics, 18);
         const { assert!(Cicp::SRGB.full_range) };
     }
 
@@ -997,10 +997,10 @@ mod tests {
             0.005,
         );
         let info = ImageInfo::new(3840, 2160, ImageFormat::Avif)
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_content_light_level(clli)
             .with_mastering_display(mdcv);
-        assert_eq!(info.source_color.cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(info.source_color.cicp, Some(Cicp::BT2100_PQ_YCBCR_FULL));
         assert_eq!(
             info.source_color
                 .content_light_level
@@ -1021,10 +1021,12 @@ mod tests {
         let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::SRGB);
         assert_eq!(info.transfer_function(), Transfer::Srgb);
 
-        let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_PQ);
+        let info =
+            ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         assert_eq!(info.transfer_function(), Transfer::Pq);
 
-        let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_HLG);
+        let info =
+            ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
         assert_eq!(
             info.transfer_function(),
             Transfer::Hlg(zenpixels::HlgMode::Scene)
@@ -1056,7 +1058,10 @@ mod tests {
 
     #[test]
     fn cicp_display_bt2100_pq() {
-        let s = alloc::format!("{}", crate::helpers::CicpDisplay(Cicp::BT2100_PQ));
+        let s = alloc::format!(
+            "{}",
+            crate::helpers::CicpDisplay(Cicp::BT2100_PQ_YCBCR_FULL)
+        );
         assert_eq!(s, "BT.2020 / PQ (HDR) / BT.2020 NCL (full range)");
     }
 
@@ -1131,13 +1136,13 @@ mod tests {
 
     #[test]
     fn has_hdr_transfer_cicp_pq() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         assert!(sc.has_hdr_transfer());
     }
 
     #[test]
     fn has_hdr_transfer_cicp_hlg() {
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
         assert!(sc.has_hdr_transfer());
     }
 
@@ -1202,7 +1207,7 @@ mod tests {
         // CICP is explicitly selected over the SDR ICC.
         let icc = build_icc_with_cicp(1, 13, 0, true);
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_icc_profile(icc)
             .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
@@ -1212,7 +1217,11 @@ mod tests {
     fn has_hdr_transfer_chooses_authority_in_both_directions() {
         let cases = [
             (Cicp::SRGB, build_icc_with_cicp(9, 16, 0, true), false),
-            (Cicp::BT2100_PQ, build_icc_with_cicp(1, 13, 0, true), true),
+            (
+                Cicp::BT2100_PQ_YCBCR_FULL,
+                build_icc_with_cicp(1, 13, 0, true),
+                true,
+            ),
         ];
         for (cicp, icc, cicp_is_hdr) in cases {
             let sc = SourceColor::default()
@@ -1235,7 +1244,7 @@ mod tests {
         assert_eq!(source.transfer_function(), Transfer::Unknown);
         assert_eq!(source.color_primaries(), Primaries::Bt709);
 
-        let source = source.with_cicp(Cicp::BT2100_PQ);
+        let source = source.with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         assert_eq!(source.transfer_function(), Transfer::Pq);
         assert_eq!(source.color_primaries(), Primaries::Bt2020);
         assert!(!source.has_hdr_transfer());
@@ -1246,7 +1255,7 @@ mod tests {
         // CICP says PQ → first check matches → returns true immediately.
         // Even garbage ICC doesn't prevent detection.
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_icc_profile(alloc::vec![0xFF; 10])
             .with_color_authority(ColorAuthority::Cicp);
         assert!(sc.has_hdr_transfer());
@@ -1283,10 +1292,10 @@ mod tests {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
         assert_eq!(sc.transfer_function(), Transfer::Srgb);
 
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         assert_eq!(sc.transfer_function(), Transfer::Pq);
 
-        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG_YCBCR_FULL);
         assert_eq!(
             sc.transfer_function(),
             Transfer::Hlg(zenpixels::HlgMode::Scene)
@@ -1380,7 +1389,7 @@ mod tests {
         let icc = alloc::vec![0u8; 128];
         let sc = SourceColor::default()
             .with_icc_profile(icc)
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
         assert_eq!(sc.color_authority, ColorAuthority::Icc);
         assert!(sc.icc_profile.is_some());
@@ -1391,7 +1400,7 @@ mod tests {
     #[test]
     fn spec_avif_nclx_only() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Cicp);
         assert_eq!(sc.color_authority, ColorAuthority::Cicp);
         assert!(sc.cicp.is_some());
@@ -1444,7 +1453,7 @@ mod tests {
     #[test]
     fn mismatch_icc_authority_no_icc_profile() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
         // Authority says ICC, but only CICP present — codec bug.
         // The present CICP carrier is the fallback.
@@ -1513,12 +1522,12 @@ mod tests {
     #[test]
     fn to_color_context_icc_authoritative_no_icc_keeps_cicp_fallback() {
         let sc = SourceColor::default()
-            .with_cicp(Cicp::BT2100_PQ)
+            .with_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_color_authority(ColorAuthority::Icc);
         let ctx = sc.authoritative_origin();
         // ICC was authoritative but absent — fall back to CICP.
         assert!(ctx.icc.is_none());
-        assert_eq!(ctx.cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(ctx.cicp, Some(Cicp::BT2100_PQ_YCBCR_FULL));
     }
 
     #[test]

@@ -1244,7 +1244,7 @@ mod pull_dispatch_tests {
                 (demand.pass, demand.first, demand.label, demand.final_pass),
                 (2, 3, 7, true)
             );
-            assert_eq!((demand.rows.width(), demand.rows.rows()), (2, 2));
+            assert_eq!((demand.rows.width(), demand.rows.height()), (2, 2));
             if self.fail {
                 return Err(RowFillError);
             }

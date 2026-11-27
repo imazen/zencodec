@@ -1791,7 +1791,7 @@ mod tokio_drivers {
             Ok(zencodec::encode::OutputTiming::streaming(0))
         }
         fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), EncErr> {
-            for r in 0..rows.rows() {
+            for r in 0..rows.height() {
                 self.out.extend_from_slice(rows.row(r));
             }
             let pending = self.out.len() - self.drained;

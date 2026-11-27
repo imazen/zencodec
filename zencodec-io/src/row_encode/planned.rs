@@ -45,7 +45,7 @@ impl<S: Source> Input<'_, S> {
         }
         if let Self::Raster { pixels, .. } = self
             && (pixels.width() != desc.width
-                || pixels.rows() != desc.height
+                || pixels.height() != desc.height
                 || pixels.format() != &desc.descriptor
                 || pixels.facts().depth.is_some_and(|claim| {
                     desc.exact_depth.is_none_or(|declared| {
@@ -67,7 +67,7 @@ impl<S: Source> Input<'_, S> {
     ) -> Result<(), Cause> {
         match self {
             Self::Raster { pixels, .. } => {
-                for y in 0..rows.rows() {
+                for y in 0..rows.height() {
                     check(control)?;
                     rows.row_mut(y).copy_from_slice(pixels.row(first + y));
                 }
@@ -221,7 +221,7 @@ impl<S: Source> Filler<'_, S> {
             ..
         } = demand;
         check(self.control)?;
-        let count = rows.rows();
+        let count = rows.height();
         if rows.width() != self.desc.width
             || rows.format() != &self.desc.descriptor
             || count == 0
@@ -242,7 +242,7 @@ impl<S: Source> Filler<'_, S> {
         self.validate()?;
         let external = pass == 0 || matches!(self.store, RawStore::None);
         if external {
-            let stride = rows.stride();
+            let stride = rows.stride_bytes();
             let destination = PixelViewMut::new(
                 rows.as_strided_bytes_mut(),
                 self.desc.width,

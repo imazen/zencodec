@@ -73,7 +73,7 @@ impl RowMetadata {
             .facts
             .depth
             .zip(other.facts.depth)
-            .and_then(|(a, b)| crate::sample::ExactDepth::union(a, b));
+            .and_then(|(a, b)| crate::sample::ExactDepth::union_disjoint_regions(a, b));
         self.facts.float = self.facts.float.intersect(other.facts.float);
         self.facts.all_opaque &= other.facts.all_opaque;
         self.facts.all_grayscale &= other.facts.all_grayscale;
@@ -344,7 +344,7 @@ mod tests {
             let y = strip * 8;
             let h = 8;
             let mut ps = sink.provide_next_buffer(y, h, width, desc.clone()).unwrap();
-            assert_eq!(ps.stride(), 30);
+            assert_eq!(ps.stride_bytes(), 30);
             for row in 0..h {
                 let row_data = ps.row_mut(row);
                 assert_eq!(row_data.len(), width as usize * bpp);
@@ -396,9 +396,9 @@ mod tests {
             let ps = sink
                 .provide_next_buffer(0, 8, 10, PixelFormat::RGB8_SRGB)
                 .unwrap();
-            assert_eq!(ps.stride(), 30);
+            assert_eq!(ps.stride_bytes(), 30);
             assert_eq!(ps.width(), 10);
-            assert_eq!(ps.rows(), 8);
+            assert_eq!(ps.height(), 8);
             sink.finish().unwrap();
         }
 
@@ -510,9 +510,9 @@ mod tests {
         let ps = sink
             .provide_next_buffer(0, 4, 10, PixelFormat::RGBA8_SRGB)
             .unwrap();
-        assert_eq!(ps.stride(), 64);
+        assert_eq!(ps.stride_bytes(), 64);
         assert_eq!(ps.width(), 10);
-        assert_eq!(ps.rows(), 4);
+        assert_eq!(ps.height(), 4);
         assert_eq!(ps.format().clone(), PixelFormat::RGBA8_SRGB);
     }
 

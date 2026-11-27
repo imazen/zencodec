@@ -622,10 +622,10 @@ pub fn check_read_at_contract(
 fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, PixelFormat, Vec<u8>) {
     let ps = out.pixels();
     let mut bytes = Vec::new();
-    for y in 0..ps.rows() {
+    for y in 0..ps.height() {
         bytes.extend_from_slice(ps.row(y));
     }
-    (ps.width(), ps.rows(), ps.format().clone(), bytes)
+    (ps.width(), ps.height(), ps.format().clone(), bytes)
 }
 
 /// Verify the `seekable` capability flag in both directions. A decoder
@@ -752,10 +752,10 @@ impl PassSink {
         if let Some((meta, buf)) = self.current.take() {
             let s = buf.as_view();
             let mut packed = Vec::new();
-            for r in 0..s.rows() {
+            for r in 0..s.height() {
                 packed.extend_from_slice(s.row(r));
             }
-            self.batches.push((meta, s.rows(), packed));
+            self.batches.push((meta, s.height(), packed));
         }
     }
 }

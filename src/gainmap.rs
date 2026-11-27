@@ -771,7 +771,7 @@ impl DecodedGainMap {
             ChannelOrder::Rgb => 3,
             _ => return Err(GainMapIngestError::Layout),
         };
-        if !matches!(spec.color, ColorSpace::Untagged { channels: count, alpha: AlphaMode::None } if count == channels)
+        if !matches!(spec.color, ColorSpace::Untagged { total_channels: count, alpha: AlphaMode::None } if count == channels)
             || pixels.width() == 0
             || pixels.height() == 0
         {
@@ -1848,9 +1848,9 @@ mod tests {
     #[test]
     fn info_builder() {
         let info = GainMapInfo::new(GainMapParams::default(), 256, 256, 1)
-            .with_alternate_cicp(Cicp::BT2100_PQ)
+            .with_alternate_cicp(Cicp::BT2100_PQ_YCBCR_FULL)
             .with_alternate_icc(alloc::vec![1, 2, 3]);
-        assert_eq!(info.alternate_cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(info.alternate_cicp, Some(Cicp::BT2100_PQ_YCBCR_FULL));
         assert_eq!(info.alternate_icc.as_deref(), Some([1, 2, 3].as_slice()));
     }
 
@@ -2303,7 +2303,7 @@ mod tests {
     #[test]
     fn gainmap_info_clone_and_equality() {
         let info = GainMapInfo::new(GainMapParams::default(), 512, 256, 3)
-            .with_alternate_cicp(Cicp::BT2100_PQ);
+            .with_alternate_cicp(Cicp::BT2100_PQ_YCBCR_FULL);
         let clone = info.clone();
         assert_eq!(info, clone);
 

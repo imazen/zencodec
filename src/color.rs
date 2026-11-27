@@ -499,7 +499,7 @@ mod tests {
         match source.authoritative() {
             Some(AuthoritativeColor::Icc(profile)) => ColorSpace::Icc {
                 profile: profile.clone(),
-                channels: 3,
+                color_channels: 3,
                 alpha: zenpixels::AlphaMode::None,
                 intent: zenpixels::RenderingIntent::RelativeColorimetric,
             },
@@ -548,7 +548,7 @@ mod tests {
             PixelFormat::new(
                 SampleLayout::GRAY8,
                 ColorSpace::Untagged {
-                    channels: 1,
+                    total_channels: 1,
                     alpha: AlphaMode::None,
                 },
             ),
@@ -557,7 +557,7 @@ mod tests {
         let dual = DualLayerHdrView::new(
             base.as_view(),
             gain.as_view(),
-            zenpixels::GainMapMetadata::symmetric(3.0),
+            zenpixels::GainMapMetadata::sdr_to_hdr_stops(3.0).unwrap(),
             None,
             zenpixels::Orientation::Identity,
         )

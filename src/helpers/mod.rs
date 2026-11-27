@@ -52,13 +52,13 @@ pub fn copy_rows_to_sink(
     pixels: &zenpixels::PixelView<'_>,
 ) -> Result<(), SinkError> {
     meta.y
-        .checked_add(pixels.rows())
+        .checked_add(pixels.height())
         .ok_or_else(|| SinkError::from("copied rows exceed the row coordinate range"))?;
     let max_rows = sink.max_buffer_rows().get();
     let metadata = crate::sink::RowMetadata::from_view(pixels);
     let mut offset = 0;
-    while offset < pixels.rows() {
-        let rows = max_rows.min(pixels.rows() - offset);
+    while offset < pixels.height() {
+        let rows = max_rows.min(pixels.height() - offset);
         let mut part = meta;
         part.y += offset;
         let mut dst = sink.provide_buffer_with_metadata(
@@ -68,7 +68,8 @@ pub fn copy_rows_to_sink(
             pixels.format().clone(),
             &metadata,
         )?;
-        if dst.width() != pixels.width() || dst.rows() != rows || dst.format() != pixels.format() {
+        if dst.width() != pixels.width() || dst.height() != rows || dst.format() != pixels.format()
+        {
             return Err("sink returned a buffer with a different geometry or descriptor".into());
         }
         for row in 0..rows {
@@ -110,7 +111,7 @@ where
     let ps = output.pixels();
     let desc = ps.format().clone();
     let w = ps.width();
-    let h = ps.rows();
+    let h = ps.height();
 
     sink.begin(w, h, desc.clone()).map_err(wrap_sink_error)?;
 
@@ -152,7 +153,7 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
     let ps = frame.pixels();
     let desc = ps.format().clone();
     let w = ps.width();
-    let h = ps.rows();
+    let h = ps.height();
 
     sink.begin(w, h, desc.clone()).map_err(D::wrap_sink_error)?;
     copy_rows_to_sink(sink, crate::decode::BatchMeta::final_rows(0), ps)

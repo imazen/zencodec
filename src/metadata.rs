@@ -932,7 +932,7 @@ mod tests {
     fn diffuse_white_survives_retaining_policies() {
         // Exercise the decode-info -> encode-metadata boundary with a source
         // anchor different from the conventional 203-nit fallback.
-        let white = DiffuseWhite::new(100.0);
+        let white = DiffuseWhite::new(100.0).unwrap();
         let mut info = crate::ImageInfo::new(1, 1, crate::ImageFormat::Png);
         info.source_color.diffuse_white = Some(white);
         let metadata = Metadata::from(&info);
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn diffuse_white_alone_is_not_empty() {
-        let metadata = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0));
+        let metadata = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0).unwrap());
         assert!(!metadata.is_empty());
         assert!(metadata.clear_diffuse_white().is_empty());
     }

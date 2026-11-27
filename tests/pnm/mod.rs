@@ -142,7 +142,7 @@ impl Encoder for PnmEnc {
     fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput, At<PnmError>> {
         let desc = pixels.format().clone();
         let w = pixels.width();
-        let h = pixels.rows();
+        let h = pixels.height();
 
         let is_rgb = desc.layout.order == zenpixels::ChannelOrder::Rgb
             && desc.layout.sample == zenpixels::SampleType::U8;

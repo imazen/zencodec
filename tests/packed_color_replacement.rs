@@ -53,7 +53,7 @@ impl PackedImageOwner for Owner {
                     zenpixels::SampleLayout::RGB8,
                     ColorSpace::Icc {
                         profile: Arc::from(profile.as_ref()),
-                        channels: 3,
+                        color_channels: 3,
                         alpha: zenpixels::AlphaMode::None,
                         intent: zenpixels::RenderingIntent::RelativeColorimetric,
                     },

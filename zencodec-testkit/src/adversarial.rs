@@ -369,11 +369,11 @@ pub fn check_decode_preferences<D: DecoderConfig + 'static>(
                         .map_err(|error| fail(CHECK, error.to_string()))?
                 };
                 let Some((y, rows)) = batch else { break };
-                if y != next || rows.rows() == 0 {
+                if y != next || rows.height() == 0 {
                     return Err(fail(CHECK, "unexpected pull coordinates"));
                 }
                 let span = expected
-                    .sub_rows(y, rows.rows())
+                    .sub_rows(y, rows.height())
                     .map_err(|error| fail(CHECK, error.to_string()))?;
                 if grab_ref(&rows) != grab_ref(&span) {
                     return Err(fail(
@@ -381,9 +381,9 @@ pub fn check_decode_preferences<D: DecoderConfig + 'static>(
                         format!("pull pixels or spec differ from reference at row {y}"),
                     ));
                 }
-                next += rows.rows();
+                next += rows.height();
             }
-            if next != expected.rows() {
+            if next != expected.height() {
                 return Err(fail(CHECK, "pull decode ended with incomplete rows"));
             }
         }
@@ -568,8 +568,8 @@ where
     <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     const CHECK: &str = "animation begin admission";
-    let (width, height) = (accepted.width(), accepted.rows());
-    if (rejected.width(), rejected.rows()) != (width, height)
+    let (width, height) = (accepted.width(), accepted.height());
+    if (rejected.width(), rejected.height()) != (width, height)
         || accepted.format() == rejected.format()
     {
         return Err(fail(

@@ -261,7 +261,7 @@ fn gray_renderer_rejects_range_transfer_and_crop_before_touching_destination() {
     for (color, crop, success) in [
         (Cicp::SRGB, false, true),
         (Cicp::new(1, 13, 0, false), false, false),
-        (Cicp::BT2100_PQ, false, false),
+        (Cicp::BT2100_PQ_YCBCR_FULL, false, false),
         (Cicp::SRGB, true, false),
     ] {
         let mut geometry = FrameGeometry::full(2, 1);

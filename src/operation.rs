@@ -660,7 +660,7 @@ impl EncodeRequest {
         offers.extend(jobs.iter().map(PreparedEncode::offer));
         let facts = EncodeFacts {
             width: pixels.width(),
-            height: pixels.rows(),
+            height: pixels.height(),
             descriptor: pixels.format().clone(),
         };
         let (selected, record) = policy::choose_encode(
@@ -704,7 +704,7 @@ mod descriptor_diagnostics {
             SampleLayout::RGB8,
             ColorSpace::Icc {
                 profile: marker.clone(),
-                channels: 3,
+                color_channels: 3,
                 alpha: AlphaMode::None,
                 intent: RenderingIntent::RelativeColorimetric,
             },

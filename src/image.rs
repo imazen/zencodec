@@ -436,24 +436,29 @@ impl<'a> CodePlane<'a> {
         index: usize,
     ) -> Result<crate::sample::CodePlane<'a>, crate::sample::CodePlaneError> {
         use crate::sample::{CodePlane, CodePlaneError};
+        use zenpixels::sample::InterleavedCodeLayout;
 
         match self.plane {
             AnyPlane::U8(p) => CodePlane::component_from_u8(
                 p.into_strided_samples(),
-                p.width(),
-                p.height(),
-                p.stride(),
-                self.components,
-                index,
+                InterleavedCodeLayout {
+                    width_words: p.width(),
+                    height: p.height(),
+                    stride_words: p.stride(),
+                    component_count: self.components,
+                    component_index: index,
+                },
                 self.encoding,
             ),
             AnyPlane::U16(p) => CodePlane::component_from_u16(
                 p.into_strided_samples(),
-                p.width(),
-                p.height(),
-                p.stride(),
-                self.components,
-                index,
+                InterleavedCodeLayout {
+                    width_words: p.width(),
+                    height: p.height(),
+                    stride_words: p.stride(),
+                    component_count: self.components,
+                    component_index: index,
+                },
                 self.encoding,
             ),
             AnyPlane::F32(_) => Err(CodePlaneError::StorageMismatch),
@@ -485,7 +490,7 @@ impl Samples<'_> {
     /// two words per spatial position; its role records the order.
     pub fn dimensions(&self) -> (usize, usize) {
         match self {
-            Self::Pixels(p) => (p.width() as usize, p.rows() as usize),
+            Self::Pixels(p) => (p.width() as usize, p.height() as usize),
             Self::Values(p) => (p.width as usize, p.height as usize),
             Self::Codes(p) => (p.width(), p.height()),
             Self::Float { plane, .. } => (plane.width(), plane.height()),
@@ -510,7 +515,7 @@ impl Samples<'_> {
     /// Distance between row starts in bytes.
     pub fn stride_bytes(&self) -> usize {
         match self {
-            Self::Pixels(p) => p.stride(),
+            Self::Pixels(p) => p.stride_bytes(),
             Self::Values(p) => p.stride,
             Self::Codes(p) => p.stride_bytes(),
             Self::Float { plane, .. } => plane.stride() * core::mem::size_of::<f32>(),
