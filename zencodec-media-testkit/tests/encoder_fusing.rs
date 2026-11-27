@@ -69,9 +69,12 @@ impl VideoEncoder for ControlledEncoder {
         self.check(pulse)?;
         self.inner.receive(pulse)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<Self::Error>> {
-        self.owned.check()?;
-        self.inner.end_input()
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Self::Error>> {
+        self.check(pulse)?;
+        self.inner.end_input(pulse)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.inner.output_config()
@@ -300,7 +303,10 @@ impl VideoEncoder for Loose {
         self.call(1)?;
         Ok(Receive::NeedInput)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<NativeError>> {
+    fn end_input(
+        &mut self,
+        _: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<NativeError>> {
         self.call(2)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
@@ -318,7 +324,7 @@ fn frame() -> Frame {
     decoder.configure(&config, Some(&NoPulse)).unwrap();
     let mut packet = Packet::from_vec(toy_payload(&[&[1, 2, 3, 4]], false)).unwrap();
     decoder.send(&mut packet, Some(&NoPulse)).unwrap();
-    decoder.end_input().unwrap();
+    decoder.end_input(Some(&NoPulse)).unwrap();
     let Receive::Ready(frame) = decoder.receive(Some(&NoPulse)).unwrap() else {
         panic!("frame fixture")
     };
@@ -333,7 +339,7 @@ fn invoke<E: VideoEncoder + ?Sized>(
     match method {
         0 => encoder.send(frame, Some(&NoPulse)).map(|_| ()),
         1 => encoder.receive(Some(&NoPulse)).map(|_| ()),
-        _ => encoder.end_input(),
+        _ => encoder.end_input(Some(&NoPulse)),
     }
 }
 
@@ -503,7 +509,7 @@ fn a_panicking_stop_poisoned_decoder_reopens_only_after_reset() {
         decoder.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
-    decoder.reset().unwrap();
+    decoder.reset(Some(&NoPulse)).unwrap();
     assert!(matches!(
         decoder.receive(Some(&NoPulse)),
         Ok(Receive::NeedInput)

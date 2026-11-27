@@ -14,7 +14,10 @@ use zenpixels::{
     Cicp, ColorOrigin, ColorSpace, FormatCow, HdrMetadata, PixelFormat, PixelView, Primaries,
     RenderingIntent, SignalRange, Transfer,
 };
-use zenpixels_convert::{CmsBackend, ConvertError, ConvertPolicy, RowPlan};
+use zenpixels_convert::{
+    CmsBackend, CmsBinding, CmsChoice, CmsQuote, ColorServices, ConvertError, ConvertPolicy,
+    RowPlan,
+};
 
 /// Current means current samples, not the original file's pre-transform space.
 /// Explicit targets never consult opaque source extensions for color authority.
@@ -161,8 +164,11 @@ pub struct Renderer {
     pub request: RenderRequest,
     /// Managed output budget; excludes native codec and CMS workspace.
     pub storage: StorageBudget,
-    /// Optional color-management implementation. Unsupported conversions fail.
+    /// Optional legacy CMS handle. Prefer [`color_services`](Self::color_services) for
+    /// named CMS bindings, strict no-ICC mode, and shared tone mapping.
     pub cms: Option<Arc<dyn CmsBackend>>,
+    /// Shared color-management and tone-mapping service bundle.
+    pub color_services: ColorServices,
 }
 impl Renderer {
     /// Render to sRGB RGBA8 over the full oriented canvas by default.
@@ -173,6 +179,7 @@ impl Renderer {
             request: RenderRequest::default(),
             storage,
             cms: None,
+            color_services: ColorServices::inherit(),
         }
     }
     /// Replace the reusable output requirements.
@@ -182,7 +189,15 @@ impl Renderer {
     }
     /// Supply a CMS for profile conversions that require one.
     pub fn with_cms(mut self, cms: Arc<dyn CmsBackend>) -> Self {
+        let binding = CmsBinding::new("custom.cms", "unknown", cms.clone(), CmsQuote::new());
+        self.color_services = self.color_services.with_cms(CmsChoice::Use(binding));
         self.cms = Some(cms);
+        self
+    }
+    /// Supply explicit [`ColorServices`] (named CMS binding, `StrictNoIcc`, and/or tone mapper).
+    pub fn with_color_services(mut self, services: ColorServices) -> Self {
+        self.cms = services.cms.binding().map(|b| b.backend().clone());
+        self.color_services = services;
         self
     }
 
@@ -305,8 +320,14 @@ impl Renderer {
     ) -> Result<ImageOutput, At<RenderFailure>> {
         let control = pulse.unwrap_or(&zencodec::NoPulse);
         check(control).map_err(|e| fail(RenderStage::ColorPlan, e))?;
-        let mut policy = self.request.conversion.clone();
-        if let Some(cms) = &self.cms {
+        let mut policy = self
+            .request
+            .conversion
+            .clone()
+            .with_color_services(&self.color_services);
+        if matches!(self.color_services.cms, CmsChoice::Inherit)
+            && let Some(cms) = &self.cms
+        {
             policy = policy.with_cms(cms.clone());
         }
         // Prepare the actual transform before allocating projected samples.

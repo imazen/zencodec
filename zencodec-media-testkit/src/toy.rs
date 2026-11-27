@@ -698,12 +698,17 @@ impl VideoDecoder for ToyDecoder {
         Ok(Receive::NeedInput)
     }
 
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn end_input(
+        &mut self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.ended = true;
         Ok(())
     }
 
-    fn reset(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn reset(&mut self, stop: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.hold.clear();
         self.ready.clear();
         self.last = None;
@@ -859,7 +864,11 @@ impl VideoEncoder for ToyEncoder {
         Ok(Receive::NeedInput)
     }
 
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
+    fn end_input(
+        &mut self,
+        stop: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<ToyError>> {
+        stop.unwrap_or(&zencodec::NoPulse).check()?;
         self.ended = true;
         Ok(())
     }

@@ -191,10 +191,15 @@ impl VideoDecoder for Queued {
             .pop_front()
             .map_or(Receive::EndOfStream, Receive::Ready))
     }
-    fn end_input(&mut self) -> Result<(), SessionError<Native>> {
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(3)
     }
-    fn reset(&mut self) -> Result<(), SessionError<Native>> {
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<Native>> {
+        self.check_pulse(pulse);
         self.call(4)?;
         self.frames.clear();
         Ok(())
@@ -341,8 +346,14 @@ fn assert_finished<R: zencodec::operation::OperationPolicy>(
         decoder.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
-    assert!(matches!(decoder.end_input(), Err(SessionError::Finished)));
-    assert!(matches!(decoder.reset(), Err(SessionError::Finished)));
+    assert!(matches!(
+        decoder.end_input(Some(&NoPulse)),
+        Err(SessionError::Finished)
+    ));
+    assert!(matches!(
+        decoder.reset(Some(&NoPulse)),
+        Err(SessionError::Finished)
+    ));
     assert_eq!(packet.bytes(), &[1]);
 }
 
@@ -500,8 +511,8 @@ fn native_failure_in_every_work_method_is_terminal_with_original_cause() {
             0 => decoder.configure(&config(), Some(&NoPulse)),
             1 => decoder.send(&mut packet, Some(&NoPulse)).map(|_| ()),
             2 => decoder.receive(Some(&NoPulse)).map(|_| ()),
-            3 => decoder.end_input(),
-            _ => decoder.reset(),
+            3 => decoder.end_input(Some(&NoPulse)),
+            _ => decoder.reset(Some(&NoPulse)),
         }
         .unwrap_err();
         assert_eq!(zencodec::find_cause::<Native>(&error).unwrap().0, method);
@@ -686,8 +697,8 @@ fn required_unknown_workspace_refuses_every_native_entry_before_effects() {
                 .send(&mut Packet::from_vec(vec![1]).unwrap(), None)
                 .map(|_| ()),
             2 => decoder.receive(None).map(|_| ()),
-            3 => decoder.end_input(),
-            _ => decoder.reset(),
+            3 => decoder.end_input(None),
+            _ => decoder.reset(None),
         }
         .unwrap_err();
         assert_eq!(calls.load(Ordering::SeqCst), 0, "entry {entry}");

@@ -234,14 +234,17 @@ impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
             Ok(output)
         })
     }
-    fn end_input(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(None, |decoder, _, report| {
-            decoder.end_input().map_err(|e| native(e, report))
+    fn end_input(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> Result<(), SessionError<Error>> {
+        self.run(pulse, |decoder, _, report| {
+            decoder.end_input(pulse).map_err(|e| native(e, report))
         })
     }
-    fn reset(&mut self) -> Result<(), SessionError<Error>> {
-        self.run(None, |decoder, _, report| {
-            decoder.reset().map_err(|e| native(e, report))
+    fn reset(&mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<Error>> {
+        self.run(pulse, |decoder, _, report| {
+            decoder.reset(pulse).map_err(|e| native(e, report))
         })
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {

@@ -218,13 +218,14 @@ where
             }
         }
     }
-    dec.end_input()
+    dec.end_input(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("end_input: {e:?}")))?;
-    dec.end_input()
+    dec.end_input(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("second end_input: {e:?}")))?;
     loop {
         match dec.receive(Some(&NoPulse)) {
             Ok(Receive::Ready(f)) => lazy.push(f),
+            Ok(Receive::Progress { .. }) => continue,
             Ok(Receive::EndOfStream) => break,
             other => return Err(fail(CHECK, format!("drain: {other:?}"))),
         }
@@ -274,7 +275,7 @@ where
     let first = decode_eager(&mut dec, packets).map_err(|e| fail(CHECK, e))?;
     let held = first[0].clone();
     let mapping = held.map().map_err(|e| fail(CHECK, e.to_string()))?;
-    dec.reset()
+    dec.reset(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("reset: {e:?}")))?;
     let after_reset = decode_eager(&mut dec, packets).map_err(|e| fail(CHECK, e))?;
     drop(dec);
@@ -307,7 +308,7 @@ where
         Err(SessionError::Finished) => {}
         other => return Err(fail(CHECK, format!("after cancellation: {other:?}"))),
     }
-    dec.reset()
+    dec.reset(Some(&NoPulse))
         .map_err(|e| fail(CHECK, format!("reset after cancellation: {e:?}")))?;
     if !matches!(dec.receive(Some(&NoPulse)), Ok(Receive::NeedInput)) {
         return Err(fail(CHECK, "reset did not reopen the session"));
@@ -362,12 +363,13 @@ where
                 }
             }
         }
-        enc.end_input()
-            .and_then(|()| enc.end_input())
+        enc.end_input(Some(&NoPulse))
+            .and_then(|()| enc.end_input(Some(&NoPulse)))
             .map_err(|e| fail(CHECK, format!("end_input: {e:?}")))?;
         loop {
             match enc.receive(Some(&NoPulse)) {
                 Ok(Receive::Ready(p)) => out.push(keep(p)),
+                Ok(Receive::Progress { .. }) => continue,
                 Ok(Receive::EndOfStream) => break,
                 other => return Err(fail(CHECK, format!("drain: {other:?}"))),
             }

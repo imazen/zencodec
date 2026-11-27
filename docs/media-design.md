@@ -104,10 +104,8 @@ copy. Its `FrameInterpretation` (geometry with crop and render size,
 subsampling, siting, sample encoding, plane roles, colour claims, epoch) is
 immutable and shared, so a queued frame keeps the interpretation it was
 decoded under. A frame is a presentation occurrence: AV1 show-existing is
-`Frame::represent`, sharing the picture with other timing. The planar view
-lives here, not in zenpixels, until a second consumer adopts it; depth and
-placement use zenpixels' `SampleEncoding` once it publishes (a local mirror
-until then).
+`Frame::represent`, sharing the picture with other timing. The planar view lives in `zencodec::plane`; depth and placement use
+`zenpixels::sample::SampleEncoding` directly.
 
 **Packets and tracks.** `Packet` has private fields and an owned or shared
 payload taken on accept; timestamps optional; container random-access
@@ -190,4 +188,4 @@ static capability flags.
    sample-exact claim.
 
 Nothing in `zencodec-media` publishes before step 3 proves it with a real
-codec and container, and zenpixels publishes `SampleEncoding`.
+codec and container.

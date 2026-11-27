@@ -81,6 +81,12 @@ use crate::{
 };
 
 mod collection;
+pub mod role;
+
+pub use role::{
+    EncodedTransformFactory, EncodedTransformRole, FactoryRole, ImageDecodeRole,
+    ImageEncodeFactory, ImageEncodeRole, NamedFactory, RegistrationError, RegistrationId,
+};
 
 // ===========================================================================
 // Internal entries — shared templates with per-operation config cloning
@@ -88,68 +94,52 @@ mod collection;
 //
 // `DynDecoderConfig` / `DynEncoderConfig` are deliberately left untouched
 // (adding a required method would break any manual implementor). The set
-// instead captures clone/fidelity capability at registration time, where the
-// concrete type — and its `Clone` bound from `DecoderConfig`/`EncoderConfig`
+// instead captures clone/fidelity/Send capability at registration time, where
+// the concrete type — and its `Clone` bound from `DecoderConfig`/`EncoderConfig`
 // — is still known.
 
-trait DecoderEntry: DynDecoderConfig {
-    fn as_dyn(&self) -> &dyn DynDecoderConfig;
-}
+struct LocalImageEncodeFactory<C>(Arc<C>);
 
-impl<C> DecoderEntry for C
-where
-    C: DecoderConfig + 'static,
-{
-    fn as_dyn(&self) -> &dyn DynDecoderConfig {
-        self
-    }
-}
-
-trait EncoderEntry: Send + Sync {
-    fn as_dyn(&self) -> &dyn DynEncoderConfig;
-    fn send_job(
-        &self,
-        _fidelity: Option<Fidelity>,
-    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
-        Err(CodecSetError::EncoderJobNotSend(self.as_dyn().format()))
-    }
-}
-
-impl<C> EncoderEntry for C
+impl<C> ImageEncodeFactory for LocalImageEncodeFactory<C>
 where
     C: EncoderConfig + 'static,
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn as_dyn(&self) -> &dyn DynEncoderConfig {
-        self
+    fn config(&self) -> &dyn DynEncoderConfig {
+        &*self.0
     }
 }
 
 // Registration captures Send while the concrete job type is still known.
-// Legacy entries remain available for thread-affine jobs.
-struct SendEncoderEntry<C>(C);
-impl<C> EncoderEntry for SendEncoderEntry<C>
+// Local entries remain available for thread-affine jobs.
+struct SendImageEncodeFactory<C>(Arc<C>);
+
+impl<C> ImageEncodeFactory for SendImageEncodeFactory<C>
 where
     C: EncoderConfig + 'static,
     C::Job: Send,
     <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn as_dyn(&self) -> &dyn DynEncoderConfig {
-        &self.0
+    fn config(&self) -> &dyn DynEncoderConfig {
+        &*self.0
     }
+
+    fn supports_send_job(&self) -> bool {
+        true
+    }
+
     fn send_job(
         &self,
         fidelity: Option<Fidelity>,
     ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
         let config = match fidelity {
-            Some(target) => self
-                .0
+            Some(target) => (*self.0)
                 .clone()
                 .try_with_fidelity(target)
                 .map_err(|error| CodecSetError::Codec(Box::new(error)))?,
-            None => self.0.clone(),
+            None => (*self.0).clone(),
         };
         Ok(crate::traits::erase_send_job(config.job()))
     }
@@ -241,11 +231,18 @@ impl From<BoxedError> for CodecSetError {
 // CodecSet
 // ===========================================================================
 
+#[derive(Clone)]
+struct RegisteredDecoder {
+    config: Arc<dyn DynDecoderConfig>,
+    admitted_formats: Vec<ImageFormat>,
+}
+
 #[derive(Clone, Default)]
 struct Registrations {
-    decoders: Vec<Arc<dyn DecoderEntry>>,
-    encoders: Vec<Arc<dyn EncoderEntry>>,
+    decoders: Vec<RegisteredDecoder>,
+    encoders: Vec<Arc<dyn ImageEncodeFactory>>,
     collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
+    roles: role::RoleStore,
 }
 
 /// A runtime set of codecs with one entry point per operation.
@@ -290,9 +287,13 @@ impl CodecSet {
     /// If several registered decoders claim the same format, the first
     /// registered wins.
     pub fn with_decoder(mut self, config: impl DecoderConfig + 'static) -> Self {
+        let admitted_formats = config.formats().to_vec();
         Arc::make_mut(&mut self.registrations)
             .decoders
-            .push(Arc::new(config));
+            .push(RegisteredDecoder {
+                config: Arc::new(config),
+                admitted_formats,
+            });
         self
     }
 
@@ -310,7 +311,7 @@ impl CodecSet {
     {
         Arc::make_mut(&mut self.registrations)
             .encoders
-            .push(Arc::new(config));
+            .push(Arc::new(LocalImageEncodeFactory(Arc::new(config))));
         self
     }
 
@@ -328,8 +329,237 @@ impl CodecSet {
     {
         Arc::make_mut(&mut self.registrations)
             .encoders
-            .push(Arc::new(SendEncoderEntry(config)));
+            .push(Arc::new(SendImageEncodeFactory(Arc::new(config))));
         self
+    }
+
+    /// Register a typed provider factory under role `R` serving `keys`.
+    ///
+    /// Rejects empty `keys` ([`RegistrationError::EmptyKeys`]) and duplicate
+    /// [`RegistrationId`]s within the same role ([`RegistrationError::DuplicateId`]).
+    /// Repeated keys in a single registration are deduplicated in first-seen order.
+    /// Downstream crates (such as `zencodec-media`) define roles without modifying
+    /// `zencodec`.
+    ///
+    /// When `R` is [`ImageDecodeRole`] or [`ImageEncodeRole`], this method also
+    /// appends the provider to the legacy first-wins decoder/encoder list so
+    /// [`detect`](Self::detect), [`can_decode`](Self::can_decode), and
+    /// [`can_encode`](Self::can_encode) stay synchronized with named registrations.
+    /// Prefer [`with_named_decoder`](Self::with_named_decoder),
+    /// [`with_named_encoder`](Self::with_named_encoder), and
+    /// [`with_named_send_encoder`](Self::with_named_send_encoder) for concrete image
+    /// codec configs so keys always match the config's declared formats.
+    pub fn with_role<R: FactoryRole>(
+        mut self,
+        keys: impl IntoIterator<Item = R::Key>,
+        entry: NamedFactory<R>,
+    ) -> Result<Self, RegistrationError> {
+        let mut collected: Vec<R::Key> = Vec::new();
+        for key in keys {
+            if !collected.contains(&key) {
+                collected.push(key);
+            }
+        }
+        if collected.is_empty() {
+            return Err(RegistrationError::EmptyKeys);
+        }
+
+        // Validate image role keys against each provider's declared formats so ranked
+        // and legacy tables share the exact same admitted format authority.
+        let mirror_decoder = if let Some(dec) =
+            (&entry as &dyn core::any::Any).downcast_ref::<NamedFactory<ImageDecodeRole>>()
+        {
+            let supported = dec.factory.formats();
+            let mut admitted = Vec::with_capacity(collected.len());
+            for key in &collected {
+                let fmt = *(key as &dyn core::any::Any)
+                    .downcast_ref::<ImageFormat>()
+                    .expect("ImageDecodeRole::Key is ImageFormat");
+                if !supported.contains(&fmt) {
+                    return Err(RegistrationError::UnsupportedKey);
+                }
+                admitted.push(fmt);
+            }
+            Some(RegisteredDecoder {
+                config: Arc::clone(&dec.factory),
+                admitted_formats: admitted,
+            })
+        } else {
+            None
+        };
+        let mirror_encoder = if let Some(enc) =
+            (&entry as &dyn core::any::Any).downcast_ref::<NamedFactory<ImageEncodeRole>>()
+        {
+            let supported = enc.factory.config().format();
+            for key in &collected {
+                let fmt = *(key as &dyn core::any::Any)
+                    .downcast_ref::<ImageFormat>()
+                    .expect("ImageEncodeRole::Key is ImageFormat");
+                if fmt != supported {
+                    return Err(RegistrationError::UnsupportedKey);
+                }
+            }
+            Some(Arc::clone(&enc.factory))
+        } else {
+            None
+        };
+
+        let regs = Arc::make_mut(&mut self.registrations);
+        regs.roles.insert::<R>(collected, entry)?;
+        if let Some(dec) = mirror_decoder {
+            regs.decoders.push(dec);
+        }
+        if let Some(enc) = mirror_encoder {
+            regs.encoders.push(enc);
+        }
+        Ok(self)
+    }
+
+    /// Iterate over all named factories registered for `key` under role `R`, in
+    /// registration order.
+    ///
+    /// Clones `key` into the iterator so the returned iterator borrows only `self`.
+    pub fn factories<R: FactoryRole>(
+        &self,
+        key: &R::Key,
+    ) -> impl Iterator<Item = &NamedFactory<R>> + '_ {
+        let target = key.clone();
+        self.registrations
+            .roles
+            .table::<R>()
+            .into_iter()
+            .flat_map(|t| t.entries.iter())
+            .filter(move |(k, _)| k == &target)
+            .map(|(_, entry)| entry)
+    }
+
+    /// Iterate over every `(key, factory)` pair registered under role `R`, in
+    /// registration order.
+    pub fn role_entries<R: FactoryRole>(
+        &self,
+    ) -> impl Iterator<Item = (&R::Key, &NamedFactory<R>)> + '_ {
+        self.registrations
+            .roles
+            .table::<R>()
+            .into_iter()
+            .flat_map(|t| t.entries.iter())
+            .map(|(k, entry)| (k, entry))
+    }
+
+    /// Register a named decoder config both in [`ImageDecodeRole`] for multi-provider
+    /// routing and in the legacy first-wins decoder list.
+    pub fn with_named_decoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: DecoderConfig + 'static,
+    {
+        let keys: Vec<ImageFormat> = config.formats().to_vec();
+        let entry = NamedFactory::<ImageDecodeRole>::new(
+            id,
+            revision,
+            Arc::new(config) as Arc<dyn DynDecoderConfig>,
+        );
+        self.with_role::<ImageDecodeRole>(keys, entry)
+    }
+
+    /// Register a named thread-local encoder config both in [`ImageEncodeRole`] for
+    /// multi-provider routing and in the legacy first-wins encoder list.
+    ///
+    /// The registered [`ImageEncodeFactory`] reports `supports_send_job() == false` and
+    /// refuses [`ImageEncodeFactory::send_job`] with [`CodecSetError::EncoderJobNotSend`].
+    pub fn with_named_encoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: EncoderConfig + 'static,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        let fmt = config.format();
+        let factory: Arc<dyn ImageEncodeFactory> =
+            Arc::new(LocalImageEncodeFactory(Arc::new(config)));
+        let entry = NamedFactory::<ImageEncodeRole>::new(id, revision, factory);
+        self.with_role::<ImageEncodeRole>([fmt], entry)
+    }
+
+    /// Register a named `Send`-job encoder config both in [`ImageEncodeRole`] for
+    /// multi-provider routing and in the legacy first-wins encoder list.
+    ///
+    /// The registered [`ImageEncodeFactory`] preserves `Send` job construction via
+    /// [`ImageEncodeFactory::send_job`] for this specific provider even when it is
+    /// not the first encoder registered for its format.
+    pub fn with_named_send_encoder<C>(
+        self,
+        id: RegistrationId,
+        revision: &'static str,
+        config: C,
+    ) -> Result<Self, RegistrationError>
+    where
+        C: EncoderConfig + 'static,
+        C::Job: Send,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        let fmt = config.format();
+        let factory: Arc<dyn ImageEncodeFactory> =
+            Arc::new(SendImageEncodeFactory(Arc::new(config)));
+        let entry = NamedFactory::<ImageEncodeRole>::new(id, revision, factory);
+        self.with_role::<ImageEncodeRole>([fmt], entry)
+    }
+
+    /// Legacy enumeration of all registered decoder configs (anonymous and named)
+    /// serving `format`, in registration order.
+    ///
+    /// For ranked multi-provider routing with stable provider IDs and revisions, use
+    /// [`factories::<ImageDecodeRole>`](Self::factories).
+    pub fn decoders_for(
+        &self,
+        format: ImageFormat,
+    ) -> impl Iterator<Item = &dyn DynDecoderConfig> + '_ {
+        self.registrations
+            .decoders
+            .iter()
+            .filter(move |d| d.admitted_formats.contains(&format))
+            .map(|d| &*d.config)
+    }
+
+    /// Legacy enumeration of all registered encoder configs (anonymous and named)
+    /// serving `format`, in registration order.
+    ///
+    /// Returns bare [`DynEncoderConfig`] templates without `Send`-job construction or
+    /// provider IDs. For ranked multi-provider routing preserving per-provider `Send`
+    /// capability, use [`factories::<ImageEncodeRole>`](Self::factories).
+    pub fn encoders_for(
+        &self,
+        format: ImageFormat,
+    ) -> impl Iterator<Item = &dyn DynEncoderConfig> + '_ {
+        self.registrations
+            .encoders
+            .iter()
+            .filter(move |e| e.config().format() == format)
+            .map(|e| e.config())
+    }
+
+    /// Returns `true` when any operation-level defaults (`limits`, `pulse`,
+    /// `decode_policy`, or `encode_policy`) are stamped on this set.
+    ///
+    /// Engines that require a registration-only [`CodecSet`] (managing per-run
+    /// limits, pulses, and policies externally) check this method to reject
+    /// pre-stamped sets.
+    #[inline]
+    #[must_use]
+    pub fn has_operation_defaults(&self) -> bool {
+        self.limits.is_some()
+            || self.pulse.is_some()
+            || self.decode_policy.is_some()
+            || self.encode_policy.is_some()
     }
 
     // --- Operation defaults -------------------------------------------------
@@ -380,12 +610,12 @@ impl CodecSet {
 
     /// The registered decoder config for `format`, if any.
     pub fn decoder_for(&self, format: ImageFormat) -> Option<&dyn DynDecoderConfig> {
-        self.decoder_entry(format).map(|e| e.as_dyn())
+        self.decoder_entry(format)
     }
 
     /// The registered encoder config for `format`, if any.
     pub fn encoder_for(&self, format: ImageFormat) -> Option<&dyn DynEncoderConfig> {
-        self.encoder_entry(format).map(|e| e.as_dyn())
+        self.encoder_entry(format).map(|e| e.config())
     }
 
     /// Formats with a registered decoder, in registration order.
@@ -395,7 +625,7 @@ impl CodecSet {
         self.registrations
             .decoders
             .iter()
-            .flat_map(|d| d.formats().iter().copied())
+            .flat_map(|d| d.admitted_formats.iter().copied())
     }
 
     /// Formats with a registered encoder, in registration order.
@@ -403,7 +633,7 @@ impl CodecSet {
         self.registrations
             .encoders
             .iter()
-            .map(|e| e.as_dyn().format())
+            .map(|e| e.config().format())
     }
 
     /// Detect the input's format from magic bytes, consulting only formats
@@ -422,7 +652,7 @@ impl CodecSet {
             }
         }
         for decoder in &self.registrations.decoders {
-            for &format in decoder.formats() {
+            for &format in &decoder.admitted_formats {
                 if let ImageFormat::Custom(def) = format
                     && (def.detect)(data)
                 {
@@ -629,7 +859,7 @@ impl CodecSet {
         self.registrations
             .decoders
             .iter()
-            .map(|d| d.capabilities().access_pattern())
+            .map(|d| d.config.capabilities().access_pattern())
             .fold(crate::source::AccessPattern::Sequential, |a, b| {
                 a.most_demanding(b)
             })
@@ -675,7 +905,7 @@ impl CodecSet {
         let config = self
             .encoder_entry(format)
             .ok_or(CodecSetError::NoEncoder(format))?
-            .as_dyn();
+            .config();
         let mut job = match fidelity {
             Some(target) => config
                 .try_fidelity_job(target)
@@ -950,19 +1180,19 @@ impl CodecSet {
 
     // --- Internals ----------------------------------------------------------
 
-    fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DecoderEntry> {
+    fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DynDecoderConfig> {
         self.registrations
             .decoders
             .iter()
-            .find(|d| d.formats().contains(&format))
-            .map(|b| &**b)
+            .find(|d| d.admitted_formats.contains(&format))
+            .map(|b| &*b.config)
     }
 
-    fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn EncoderEntry> {
+    fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn ImageEncodeFactory> {
         self.registrations
             .encoders
             .iter()
-            .find(|e| e.as_dyn().format() == format)
+            .find(|e| e.config().format() == format)
             .map(|b| &**b)
     }
 }

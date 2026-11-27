@@ -172,11 +172,7 @@ impl InputRequest {
                 input.offset == offset
                     && (input.bytes.len() >= min_len || input.total_len == Some(input.end()))
             }
-            Self::Range(r) => {
-                input.offset == r.offset
-                    && (input.bytes.len() as u64 >= r.length
-                        || input.total_len == Some(input.end()))
-            }
+            Self::Range(r) => input.offset == r.offset && (input.bytes.len() as u64) >= r.length,
             Self::Len => input.total_len.is_some(),
         }
     }

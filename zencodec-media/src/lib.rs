@@ -39,6 +39,7 @@ pub mod limits;
 pub mod output;
 pub mod packet;
 pub mod policy;
+pub mod registry;
 pub mod session;
 /// Owned finite video encoding with admitted compressed staging (requires `std`).
 #[cfg(feature = "std")]
@@ -46,4 +47,5 @@ pub mod staged;
 /// Explicit memory/disk compressed packet staging (requires `std`).
 #[cfg(feature = "std")]
 pub mod staging;
+pub mod timeline;
 pub mod track;

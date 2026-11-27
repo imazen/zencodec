@@ -645,3 +645,234 @@ fn registered_custom_formats_survive_exact_allowlists_and_decode_pixels() {
         .collect();
     assert_eq!(actual, PIXELS);
 }
+
+#[test]
+fn named_ranked_send_encoder_retains_send_on_second_provider_and_unifies_role_queries() {
+    use std::sync::Arc;
+    use zencodec::encode::{EncodeCapabilities, Fidelity, FidelityTargetError};
+    use zencodec::{ImageDecodeRole, ImageEncodeRole, NamedFactory, RegistrationId};
+
+    #[derive(Clone)]
+    struct TaggedEncoder {
+        tag: &'static str,
+        inner: ReferenceEncoderConfig,
+    }
+    impl EncoderConfig for TaggedEncoder {
+        type Error = RefError;
+        type Job = RefEncodeJob;
+        fn format() -> ImageFormat {
+            ImageFormat::Pnm
+        }
+        fn supported_pixel_formats() -> &'static [PixelFormat] {
+            <ReferenceEncoderConfig as EncoderConfig>::supported_pixel_formats()
+        }
+        fn capabilities() -> &'static EncodeCapabilities {
+            <ReferenceEncoderConfig as EncoderConfig>::capabilities()
+        }
+        fn job(self) -> Self::Job {
+            self.inner.job()
+        }
+        fn try_with_fidelity(self, target: Fidelity) -> Result<Self, FidelityTargetError> {
+            Ok(Self {
+                tag: self.tag,
+                inner: self.inner.try_with_fidelity(target)?,
+            })
+        }
+    }
+
+    // 1. Raw `with_role::<ImageDecodeRole>` must populate legacy `can_decode`, `detect`,
+    //    and `decodable_formats` so there is no split-brain between named and legacy tables.
+    let raw_dec_entry = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.zcr.raw_role",
+        "1.0.0",
+        Arc::new(ReferenceZcrDecoderConfig),
+    )
+    .unwrap();
+    let custom = ImageFormat::Custom(&ZCR_FORMAT);
+    let raw_set = CodecSet::new()
+        .with_role::<ImageDecodeRole>([custom], raw_dec_entry)
+        .unwrap();
+    assert!(raw_set.can_decode(custom));
+    assert_eq!(
+        raw_set.decodable_formats().collect::<Vec<_>>(),
+        vec![custom]
+    );
+
+    // 2. Mixed anonymous + named local (1st named) + named Send (2nd named) for ImageFormat::Pnm:
+    //    - Legacy `encoder_for` / `encode` picks the 1st provider ("anon-first").
+    //    - Ranked `factories::<ImageEncodeRole>(&ImageFormat::Pnm)` returns named #1 (local,
+    //      refuses `send_job`) and named #2 (`Send`, constructs a real `Send` job that encodes!).
+    let set = CodecSet::new()
+        .with_encoder(TaggedEncoder {
+            tag: "anon-first",
+            inner: ReferenceEncoderConfig::new(),
+        })
+        .with_named_encoder(
+            RegistrationId::new("org.imazen.pnm.local_first").unwrap(),
+            "1.0.0",
+            TaggedEncoder {
+                tag: "named-local",
+                inner: ReferenceEncoderConfig::new(),
+            },
+        )
+        .unwrap()
+        .with_named_send_encoder(
+            RegistrationId::new("org.imazen.pnm.send_second").unwrap(),
+            "2.0.0",
+            TaggedEncoder {
+                tag: "named-send",
+                inner: ReferenceEncoderConfig::new(),
+            },
+        )
+        .unwrap();
+
+    // Legacy first-wins still picks the anonymous first registration ("anon-first").
+    let legacy_first = set
+        .encoder_for(ImageFormat::Pnm)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TaggedEncoder>()
+        .unwrap();
+    assert_eq!(legacy_first.tag, "anon-first");
+    assert_eq!(set.encoders_for(ImageFormat::Pnm).count(), 3);
+
+    // Ranked role table exposes named providers in order with per-provider Send capability!
+    let ranked: Vec<_> = set
+        .factories::<ImageEncodeRole>(&ImageFormat::Pnm)
+        .collect();
+    assert_eq!(ranked.len(), 2);
+    assert_eq!(ranked[0].id.as_str(), "org.imazen.pnm.local_first");
+    assert_eq!(
+        ranked[0]
+            .factory
+            .config()
+            .as_any()
+            .downcast_ref::<TaggedEncoder>()
+            .unwrap()
+            .tag,
+        "named-local"
+    );
+    assert!(!ranked[0].factory.supports_send_job());
+    assert!(matches!(
+        ranked[0].factory.send_job(None),
+        Err(CodecSetError::EncoderJobNotSend(ImageFormat::Pnm))
+    ));
+
+    assert_eq!(ranked[1].id.as_str(), "org.imazen.pnm.send_second");
+    assert_eq!(
+        ranked[1]
+            .factory
+            .config()
+            .as_any()
+            .downcast_ref::<TaggedEncoder>()
+            .unwrap()
+            .tag,
+        "named-send"
+    );
+    assert!(ranked[1].factory.supports_send_job());
+    let send_job = ranked[1].factory.send_job(None).unwrap();
+    // Prove the returned job is actually Send by moving it to another thread and encoding!
+    let encoded = std::thread::spawn(move || send_job.encode(rgb_pixels(&PIXELS, W, H)))
+        .join()
+        .unwrap()
+        .unwrap();
+    assert_eq!(encoded.format(), ImageFormat::Pnm);
+    assert!(!encoded.data().is_empty());
+    assert!(raw_set.detect(encoded.data()).is_some());
+}
+
+#[test]
+fn raw_image_role_validates_keys_and_enforces_admitted_format_subset_uniformly() {
+    use std::sync::Arc;
+    use zencodec::decode::DecodeCapabilities;
+    use zencodec::encode::DynEncoderConfig;
+    use zencodec::{
+        ImageDecodeRole, ImageEncodeFactory, ImageEncodeRole, NamedFactory, RegistrationError,
+    };
+    use zencodec_testkit::reference::RefDecodeJob;
+
+    struct LocalEnc(ReferenceEncoderConfig);
+    impl ImageEncodeFactory for LocalEnc {
+        fn config(&self) -> &dyn DynEncoderConfig {
+            &self.0
+        }
+    }
+
+    #[derive(Clone)]
+    struct MultiFormatDecoder;
+    impl DecoderConfig for MultiFormatDecoder {
+        type Error = RefError;
+        type Job<'a> = RefDecodeJob;
+        fn formats() -> &'static [ImageFormat] {
+            static FORMATS: [ImageFormat; 2] = [ImageFormat::Pnm, ImageFormat::Custom(&ZCR_FORMAT)];
+            &FORMATS
+        }
+        fn supported_pixel_formats() -> &'static [PixelFormat] {
+            <ReferenceZcrDecoderConfig as DecoderConfig>::supported_pixel_formats()
+        }
+        fn capabilities() -> &'static DecodeCapabilities {
+            <ReferenceZcrDecoderConfig as DecoderConfig>::capabilities()
+        }
+        fn job<'a>(self) -> Self::Job<'a> {
+            ReferenceZcrDecoderConfig.job()
+        }
+    }
+
+    // 1. Registering a decoder or encoder under an unsupported format key MUST be rejected.
+    let bad_dec = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.bad.dec",
+        "1.0.0",
+        Arc::new(ReferenceDecoderConfig),
+    )
+    .unwrap();
+    assert!(matches!(
+        CodecSet::new().with_role::<ImageDecodeRole>([ImageFormat::Jpeg], bad_dec),
+        Err(RegistrationError::UnsupportedKey)
+    ));
+
+    let bad_enc = NamedFactory::<ImageEncodeRole>::try_new(
+        "org.imazen.bad.enc",
+        "1.0.0",
+        Arc::new(LocalEnc(ReferenceEncoderConfig::new())),
+    )
+    .unwrap();
+    assert!(matches!(
+        CodecSet::new().with_role::<ImageEncodeRole>([ImageFormat::Png], bad_enc),
+        Err(RegistrationError::UnsupportedKey)
+    ));
+
+    // 2. Registering a multi-format decoder (`[Pnm, ZCR]`) under the subset `[Pnm]` MUST
+    //    expose ONLY `Pnm` through BOTH ranked `factories::<ImageDecodeRole>` AND legacy
+    //    `can_decode`, `detect`, `decodable_formats`, and `decoders_for`.
+    let custom = ImageFormat::Custom(&ZCR_FORMAT);
+    let subset_entry = NamedFactory::<ImageDecodeRole>::try_new(
+        "org.imazen.multi.pnm_only",
+        "1.0.0",
+        Arc::new(MultiFormatDecoder),
+    )
+    .unwrap();
+    let set = CodecSet::new()
+        .with_role::<ImageDecodeRole>([ImageFormat::Pnm], subset_entry)
+        .unwrap();
+
+    assert!(set.can_decode(ImageFormat::Pnm));
+    assert!(!set.can_decode(custom));
+    assert_eq!(
+        set.decodable_formats().collect::<Vec<_>>(),
+        vec![ImageFormat::Pnm]
+    );
+    assert_eq!(set.decoders_for(ImageFormat::Pnm).count(), 1);
+    assert_eq!(set.decoders_for(custom).count(), 0);
+    assert_eq!(
+        set.factories::<ImageDecodeRole>(&ImageFormat::Pnm).count(),
+        1
+    );
+    assert_eq!(set.factories::<ImageDecodeRole>(&custom).count(), 0);
+
+    // PNM magic matches, while ZCR1 magic is NOT advertised by legacy detect!
+    assert_eq!(set.detect(b"P6\n2 2\n255\n"), Some(ImageFormat::Pnm));
+    let zcr_bytes = ReferenceEncoderConfig::new()
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .unwrap();
+    assert_eq!(set.detect(zcr_bytes.data()), None);
+}

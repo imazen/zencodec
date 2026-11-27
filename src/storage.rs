@@ -10,6 +10,7 @@ use alloc::{collections::TryReserveError, sync::Arc, vec::Vec};
 use core::{
     fmt,
     mem::size_of,
+    num::NonZeroUsize,
     ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -158,6 +159,37 @@ impl StorageBudget {
         })
     }
 
+    /// Reserve byte and object-slot capacity for a foreign/native backing owner
+    /// without allocating a [`Vec`].
+    ///
+    /// Keep the returned [`StorageReservation`] attached to the backing owner (for
+    /// example inside an `Arc` shared by views) so the charge is released atomically
+    /// only after the last view drops. Zero bytes still occupies `objects` slots.
+    pub fn reserve_backing(
+        &self,
+        bytes: usize,
+        objects: NonZeroUsize,
+    ) -> Result<StorageReservation, StorageError> {
+        let obj_count = objects.get();
+        add_bounded(&self.0.objects, obj_count, self.0.max_objects).ok_or(
+            StorageError::Objects {
+                limit: self.0.max_objects,
+            },
+        )?;
+        if add_bounded(&self.0.bytes, bytes, self.0.max_bytes).is_none() {
+            self.0.objects.fetch_sub(obj_count, Ordering::Release);
+            return Err(StorageError::Bytes {
+                requested: bytes,
+                limit: self.0.max_bytes,
+            });
+        }
+        Ok(StorageReservation {
+            budget: self.clone(),
+            bytes,
+            objects: obj_count,
+        })
+    }
+
     fn reserve(&self, bytes: usize) -> Result<Reservation, StorageError> {
         add_bounded(&self.0.objects, 1, self.0.max_objects).ok_or(StorageError::Objects {
             limit: self.0.max_objects,
@@ -194,6 +226,54 @@ fn add_bounded(counter: &AtomicUsize, amount: usize, limit: usize) -> Option<()>
         }
     }
 }
+/// Opaque RAII reservation for a foreign or native backing allocation charged
+/// against a [`StorageBudget`].
+///
+/// Created by [`StorageBudget::reserve_backing`]. Dropping the reservation
+/// releases its byte and object-slot charges via two separate atomic counter
+/// updates. Attach it to the shared backing owner (not per-slice) so cloned
+/// views never double-charge.
+pub struct StorageReservation {
+    budget: StorageBudget,
+    bytes: usize,
+    objects: usize,
+}
+
+impl StorageReservation {
+    /// Bytes reserved by this guard.
+    #[inline]
+    #[must_use]
+    pub const fn reserved_bytes(&self) -> usize {
+        self.bytes
+    }
+
+    /// Object slots reserved by this guard.
+    #[inline]
+    #[must_use]
+    pub const fn reserved_objects(&self) -> usize {
+        self.objects
+    }
+}
+
+impl Drop for StorageReservation {
+    fn drop(&mut self) {
+        self.budget.0.bytes.fetch_sub(self.bytes, Ordering::Release);
+        self.budget
+            .0
+            .objects
+            .fetch_sub(self.objects, Ordering::Release);
+    }
+}
+
+impl fmt::Debug for StorageReservation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StorageReservation")
+            .field("reserved_bytes", &self.bytes)
+            .field("reserved_objects", &self.objects)
+            .finish_non_exhaustive()
+    }
+}
+
 struct Reservation {
     budget: StorageBudget,
     bytes: usize,

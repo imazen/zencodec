@@ -86,6 +86,7 @@ mod output_buffer;
 pub mod output_patch;
 pub mod plane;
 mod policy;
+pub mod resources;
 pub mod sample;
 mod set;
 mod sink;
@@ -124,7 +125,12 @@ pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
 pub use resolution::ResolutionError;
-pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
+pub use resources::JobResources;
+pub use set::{
+    CodecSet, CodecSetError, CodecSetIncrementalDecoder, EncodedTransformFactory,
+    EncodedTransformRole, FactoryRole, ImageDecodeRole, ImageEncodeFactory, ImageEncodeRole,
+    NamedFactory, RegistrationError, RegistrationId, TranscodeBarrier,
+};
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;

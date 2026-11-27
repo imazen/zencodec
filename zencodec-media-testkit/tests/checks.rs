@@ -243,11 +243,11 @@ impl VideoDecoder for GreedyDecoder {
     ) -> Result<Receive<Frame>, SessionError<ToyError>> {
         self.0.receive(s)
     }
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
-        self.0.end_input()
+    fn end_input(&mut self, s: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<ToyError>> {
+        self.0.end_input(s)
     }
-    fn reset(&mut self) -> Result<(), SessionError<ToyError>> {
-        self.0.reset()
+    fn reset(&mut self, s: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<ToyError>> {
+        self.0.reset(s)
     }
     fn stream_info(&self) -> Option<&VideoStreamInfo> {
         self.0.stream_info()
@@ -286,8 +286,8 @@ impl VideoEncoder for AmnesiacEncoder {
             other => other,
         })
     }
-    fn end_input(&mut self) -> Result<(), SessionError<ToyError>> {
-        self.0.end_input()
+    fn end_input(&mut self, s: Option<&dyn zencodec::Pulse>) -> Result<(), SessionError<ToyError>> {
+        self.0.end_input(s)
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.0.output_config()

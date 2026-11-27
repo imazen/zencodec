@@ -59,7 +59,7 @@ use zenpixels::{PixelBuf, PixelFormat, PixelViewMut};
 
 use crate::admission::{self, InputError};
 use crate::drive::{DriveOptions, Progressor};
-use crate::window::{ProtocolViolation, Window, check_need, read_target};
+use crate::window::{ProtocolViolation, Window, check_consumed, check_need, read_target};
 
 // ───────────────────────────── sources and compute ─────────────────────────────
 
@@ -412,6 +412,9 @@ where
             Err(e) => break Err(BatchFail::Step(e)),
         };
         steps += 1;
+        if let Err(v) = check_consumed(p.consumed, input.bytes.len()) {
+            break Err(BatchFail::Protocol(v));
+        }
         progress.observe(&decoder, &p.event);
         if p.event == Event::Need
             && let Err(v) = check_need(decoder.requested(), &input, p.consumed)
@@ -569,6 +572,7 @@ pub struct AsyncCursor {
     fetched: Vec<(u64, Vec<u8>)>,
     started: bool,
     steps_since_yield: usize,
+    pending_request: Option<InputRequest>,
 }
 
 impl AsyncCursor {
@@ -580,6 +584,7 @@ impl AsyncCursor {
             fetched: Vec::new(),
             started: false,
             steps_since_yield: 0,
+            pending_request: None,
         }
     }
 
@@ -588,6 +593,121 @@ impl AsyncCursor {
         self.window
             .capacity()
             .saturating_add(admission::capacity(&self.fetched))
+    }
+
+    /// Validate that `access` can satisfy a reposition requiring `required` access
+    /// and starting at `first_request`, preserving usable unread buffered bytes on
+    /// forward/in-window repositions, retaining `first_request` to be fulfilled before
+    /// the next stage step, and refusing before mutating state if the underlying
+    /// source cannot satisfy the target or any missing tail.
+    pub fn bind_reposition(
+        &mut self,
+        access: &zencodec::source::SourceAccess,
+        required: zencodec::source::AccessPattern,
+        first_request: InputRequest,
+    ) -> Result<(), InputError> {
+        if !access.satisfies(required) {
+            return Err(InputError::Limit {
+                needed: 1,
+                limit: 0,
+            });
+        }
+        let known_total = self.window.total.or(access.known_len);
+        let (target_offset, needed_end) = match first_request {
+            InputRequest::Len => {
+                if known_total.is_none()
+                    && !access.satisfies(zencodec::source::AccessPattern::RandomAccess)
+                {
+                    return Err(InputError::Limit {
+                        needed: 1,
+                        limit: 0,
+                    });
+                }
+                if self.window.total.is_none() {
+                    self.window.total = access.known_len;
+                }
+                self.pending_request = Some(InputRequest::Len);
+                return Ok(());
+            }
+            InputRequest::AtLeast { offset, min_len } => {
+                let req_len = min_len.max(1) as u64;
+                let end = offset.checked_add(req_len).ok_or(InputError::Limit {
+                    needed: u64::MAX,
+                    limit: usize::MAX,
+                })?;
+                if let Some(total) = known_total
+                    && offset > total
+                {
+                    return Err(InputError::Limit {
+                        needed: offset,
+                        limit: usize::try_from(total).unwrap_or(usize::MAX),
+                    });
+                }
+                (offset, end)
+            }
+            InputRequest::Range(r) => {
+                let end = r.offset.checked_add(r.length).ok_or(InputError::Limit {
+                    needed: u64::MAX,
+                    limit: usize::MAX,
+                })?;
+                if let Some(total) = known_total
+                    && end > total
+                {
+                    return Err(InputError::Limit {
+                        needed: end,
+                        limit: usize::try_from(total).unwrap_or(usize::MAX),
+                    });
+                }
+                (r.offset, end)
+            }
+            _ => {
+                return Err(InputError::Limit {
+                    needed: 1,
+                    limit: 0,
+                });
+            }
+        };
+
+        let mut high_water = self.window.end();
+        for (off, buf) in &self.fetched {
+            high_water = high_water.max(off.saturating_add(buf.len() as u64));
+        }
+
+        let retained_end =
+            if target_offset >= self.window.base() && target_offset < self.window.end() {
+                self.window.end()
+            } else if let Some((off, buf)) = self.fetched.iter().find(|(off, buf)| {
+                target_offset >= *off && target_offset < off.saturating_add(buf.len() as u64)
+            }) {
+                off.saturating_add(buf.len() as u64)
+            } else {
+                target_offset
+            };
+
+        if retained_end < needed_end && retained_end < high_water {
+            let back = high_water - retained_end;
+            if !access
+                .satisfies(zencodec::source::AccessPattern::BoundedBacktrack { window_bytes: back })
+            {
+                return Err(InputError::Limit {
+                    needed: back,
+                    limit: 0,
+                });
+            }
+        }
+
+        if retained_end > target_offset {
+            self.window.position(target_offset, &mut self.fetched);
+            self.fetched.clear();
+        } else {
+            self.fetched.clear();
+            self.window.reset_to(target_offset);
+        }
+        if self.window.total.is_none() {
+            self.window.total = access.known_len;
+        }
+        self.pending_request = Some(first_request);
+        Ok(())
     }
 
     /// Step `stage` until it produces an output, awaiting `source` for every
@@ -605,7 +725,26 @@ impl AsyncCursor {
         use crate::{DriveFailure, Step, Yield};
         if !self.started {
             self.started = true;
-            self.window.total = source.len_hint();
+            if self.window.total.is_none() {
+                self.window.total = source.len_hint();
+            }
+        }
+        if let Some(req) = self.pending_request {
+            fill::<_, core::convert::Infallible>(
+                source,
+                &mut self.window,
+                &mut self.fetched,
+                &[req],
+                self.opts,
+            )
+            .await
+            .map_err(|e| match e {
+                AsyncDriveError::Source(e) => DriveFailure::Source(e),
+                AsyncDriveError::Protocol(p) => DriveFailure::Protocol(p),
+                AsyncDriveError::Input(e) => DriveFailure::Input(e),
+                _ => DriveFailure::Protocol(ProtocolViolation::EmptyRequest),
+            })?;
+            self.pending_request = None;
         }
         loop {
             if self.steps_since_yield == self.opts.work_quota.max_steps() {
@@ -615,6 +754,7 @@ impl AsyncCursor {
             let input = self.window.input();
             let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             self.steps_since_yield += 1;
+            check_consumed(p.consumed, input.bytes.len()).map_err(DriveFailure::Protocol)?;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;

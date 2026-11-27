@@ -9,8 +9,11 @@
 #![forbid(unsafe_code)]
 extern crate alloc;
 pub mod geometry;
+#[cfg(feature = "media")]
+pub mod media;
 mod render;
 pub use render::{ColorTarget, RenderFailure, RenderRequest, RenderStage, Renderer};
+pub use zenpixels_convert::{CmsBinding, CmsChoice, ColorServices};
 
 /// Render an existing selection with default sRGB RGBA8 output.
 /// The collection's stored policy runs once on the final rendered image.

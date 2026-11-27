@@ -2110,8 +2110,17 @@ fn a_decoder_that_overclaims_a_fetched_range_does_not_panic_the_driver() {
         step: 0,
         req: Vec::new(),
     };
-    // The fetched-buffer offset is clamped like the window's: the drive
-    // ends (here at Done) instead of indexing past the fetched bytes.
+    // Claiming more bytes than offered is a typed protocol violation rather
+    // than silent clamping or an out-of-bounds panic.
     let r = drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default());
-    assert!(r.is_ok(), "{r:?}");
+    assert!(
+        matches!(
+            r,
+            Err(DriveError::Protocol(ProtocolViolation::OverConsumed {
+                consumed: 108,
+                offered: 8
+            }))
+        ),
+        "{r:?}"
+    );
 }

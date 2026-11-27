@@ -125,6 +125,9 @@ pub enum Refusal {
     Terminal,
     /// No input frame completed policy admission. Empty output is unsupported.
     NoAdmittedFrames,
+    /// Encoder reported consecutive `Receive::Progress` steps past the bounded
+    /// progress allowance without emitting a packet or transitioning state.
+    ProgressLimitExceeded,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -140,12 +143,26 @@ fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
         .check()
         .map_err(|reason| At::wrap(zencodec::CodecError::new(None, reason.into())).into())
 }
+fn account_staged_progress(
+    steps: &mut u32,
+    work_units: core::num::NonZeroU32,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<(), Cause> {
+    pulse.advance(u64::from(work_units.get()));
+    check(pulse)?;
+    *steps = steps.saturating_add(1);
+    if *steps > crate::session::DEFAULT_MAX_CONSECUTIVE_PROGRESS_STEPS {
+        return Err(invalid(Refusal::ProgressLimitExceeded));
+    }
+    Ok(())
+}
 fn same_config(a: &CodecConfig, b: &CodecConfig) -> bool {
     a.codec == b.codec
         && a.private == b.private
         && a.epoch == b.epoch
         && a.time_base == b.time_base
         && a.video == b.video
+        && a.timing == b.timing
 }
 struct State<E, M, D> {
     encoder: E,
@@ -228,7 +245,8 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
                 .video
                 .ok_or_else(|| invalid(Refusal::VideoConfigurationRequired))?;
             let mut track = TrackInfo::video(0, config.codec.clone(), config.time_base, video)
-                .with_config_epoch(config.epoch);
+                .with_config_epoch(config.epoch)
+                .with_timing((*config.timing).clone());
             if let Some(private) = &config.private {
                 track = track.with_codec_private(private.clone());
             }
@@ -363,19 +381,45 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
                 check(local_pulse)?;
                 match state.encoder.send(&converted, pulse)? {
                     SendStatus::Accepted => break,
-                    SendStatus::ReceivePending => match state.encoder.receive(pulse)? {
-                        Receive::Ready(packet) => {
-                            stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
+                    SendStatus::ReceivePending => {
+                        let mut progress_steps = 0u32;
+                        loop {
+                            check(local_pulse)?;
+                            match state.encoder.receive(pulse)? {
+                                Receive::Ready(packet) => {
+                                    stage_packet(
+                                        &mut state.packets,
+                                        packet,
+                                        &state.output,
+                                        local_pulse,
+                                    )?;
+                                    check(local_pulse)?;
+                                    break;
+                                }
+                                Receive::Progress { work_units } => {
+                                    account_staged_progress(
+                                        &mut progress_steps,
+                                        work_units,
+                                        local_pulse,
+                                    )?;
+                                }
+                                _ => return Err(invalid(Refusal::ReceivePendingWithoutPacket)),
+                            }
                         }
-                        _ => return Err(invalid(Refusal::ReceivePendingWithoutPacket)),
-                    },
+                    }
                 }
             }
+            let mut progress_steps = 0u32;
             loop {
                 check(local_pulse)?;
                 match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
+                        progress_steps = 0;
+                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?;
+                        check(local_pulse)?;
+                    }
+                    Receive::Progress { work_units } => {
+                        account_staged_progress(&mut progress_steps, work_units, local_pulse)?;
                     }
                     Receive::NeedInput => break,
                     Receive::EndOfStream => return Err(invalid(Refusal::EarlyEnd)),
@@ -412,12 +456,18 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             if state.previous.is_none() {
                 return Err(invalid(Refusal::NoAdmittedFrames));
             }
-            state.encoder.end_input()?;
+            state.encoder.end_input(pulse)?;
+            let mut progress_steps = 0u32;
             loop {
                 check(local_pulse)?;
                 match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?
+                        progress_steps = 0;
+                        stage_packet(&mut state.packets, packet, &state.output, local_pulse)?;
+                        check(local_pulse)?;
+                    }
+                    Receive::Progress { work_units } => {
+                        account_staged_progress(&mut progress_steps, work_units, local_pulse)?;
                     }
                     Receive::EndOfStream => break,
                     Receive::NeedInput => {

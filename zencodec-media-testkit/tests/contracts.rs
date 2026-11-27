@@ -259,8 +259,8 @@ fn receive_pending_keeps_the_packet_and_guarantees_output() {
         SendStatus::Accepted
     );
     // Drain: end_input is idempotent, EndOfStream is stable.
-    dec.end_input().unwrap();
-    dec.end_input().unwrap();
+    dec.end_input(Some(&NoPulse)).unwrap();
+    dec.end_input(Some(&NoPulse)).unwrap();
     let mut n = 0;
     loop {
         match dec.receive(Some(&NoPulse)).unwrap() {
@@ -369,20 +369,20 @@ fn an_old_mapping_survives_more_decoding_reset_and_decoder_drop() {
         Some(&NoPulse),
     )
     .unwrap();
-    dec.end_input().unwrap();
+    dec.end_input(Some(&NoPulse)).unwrap();
     let Receive::Ready(first) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
     let mapping = first.map().unwrap();
     let plane = mapping.plane(0).unwrap();
     // Keep the mapping while the decoder decodes more, resets and is dropped.
-    dec.reset().unwrap();
+    dec.reset(Some(&NoPulse)).unwrap();
     dec.send(
         &mut packet(toy_payload(&[&gray(5)], false), 0, true),
         Some(&NoPulse),
     )
     .unwrap();
-    dec.end_input().unwrap();
+    dec.end_input(Some(&NoPulse)).unwrap();
     let Receive::Ready(second) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
@@ -438,7 +438,7 @@ fn a_queued_frame_keeps_the_interpretation_it_was_decoded_under() {
         ),
         "a packet from the old epoch is refused"
     );
-    dec.end_input().unwrap();
+    dec.end_input(Some(&NoPulse)).unwrap();
     let Receive::Ready(old) = dec.receive(Some(&NoPulse)).unwrap() else {
         panic!()
     };
@@ -469,7 +469,7 @@ fn cancellation_is_terminal_until_reset() {
         dec.receive(Some(&NoPulse)),
         Err(SessionError::Finished)
     ));
-    dec.reset().unwrap();
+    dec.reset(Some(&NoPulse)).unwrap();
     assert!(matches!(
         dec.receive(Some(&NoPulse)),
         Ok(Receive::NeedInput)
@@ -732,7 +732,7 @@ fn seek_by_time_reports_the_actual_pts_and_random_access_evidence() {
     );
     assert_eq!(r.ordinal, 4);
     let mut dec = ToyDecoder::new(8);
-    dec.reset().unwrap();
+    dec.reset(Some(&NoPulse)).unwrap();
     dec.configure(&CodecConfig::from(&dem.tracks()[0]), Some(&NoPulse))
         .unwrap();
     let (mut packets_read, mut discarded, mut shown) = (0u64, 0u64, Vec::new());
